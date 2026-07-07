@@ -1,56 +1,38 @@
 const fs = require("fs")
 const path = require("path")
 
-const iconSets = [
-  ["", "24/outline"],
-  ["-solid", "24/solid"],
-  ["-mini", "20/solid"],
-  ["-micro", "16/solid"]
-]
-
-function readIcons() {
-  const icons = {}
-  const optimizedDir = path.join(__dirname, "../../deps/heroicons/optimized")
-
-  for (const [suffix, subdir] of iconSets) {
-    const iconDir = path.join(optimizedDir, subdir)
-
-    if (!fs.existsSync(iconDir)) {
-      continue
-    }
-
-    for (const file of fs.readdirSync(iconDir)) {
-      if (!file.endsWith(".svg")) {
-        continue
+module.exports = function ({ matchComponents, theme }) {
+  let iconsDir = path.join(__dirname, "../../deps/heroicons/optimized")
+  let values = {}
+  let icons = [
+    ["", "/24/outline"],
+    ["-solid", "/24/solid"],
+    ["-mini", "/20/solid"],
+  ]
+  icons.forEach(([suffix, dir]) => {
+    fs.readdirSync(path.join(iconsDir, dir)).forEach(file => {
+      let name = path.basename(file, ".svg") + suffix
+      values[name] = { name, fullPath: path.join(iconsDir, dir, file) }
+    })
+  })
+  matchComponents({
+    "hero": ({ name, fullPath }) => {
+      let content = fs.readFileSync(fullPath).toString().replace(/\r?\n|\r/g, "")
+      let size = theme("spacing.6")
+      if (name.endsWith("-mini")) {
+        size = theme("spacing.5")
       }
-
-      const name = file.replace(/\.svg$/, "") + suffix
-      const svg = fs
-        .readFileSync(path.join(iconDir, file), "utf8")
-        .replace(/\r?\n|\r/g, "")
-      icons[name] = encodeURIComponent(svg)
-    }
-  }
-
-  return icons
-}
-
-module.exports = function ({ matchComponents }) {
-  matchComponents(
-    {
-      hero: (svg) => ({
-        "--hero": `url("data:image/svg+xml;utf8,${svg}")`,
-        "-webkit-mask": "var(--hero)",
-        "mask": "var(--hero)",
-        "-webkit-mask-repeat": "no-repeat",
+      return {
+        [`--hero-${name}`]: `url('data:image/svg+xml;utf8,${content}')`,
+        "-webkit-mask": `var(--hero-${name})`,
+        "mask": `var(--hero-${name})`,
         "mask-repeat": "no-repeat",
-        "-webkit-mask-size": "100% 100%",
-        "mask-size": "100% 100%",
         "background-color": "currentColor",
+        "vertical-align": "middle",
         "display": "inline-block",
-        "vertical-align": "middle"
-      })
-    },
-    { values: readIcons() }
-  )
+        "width": size,
+        "height": size
+      }
+    }
+  }, { values })
 }
