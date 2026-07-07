@@ -107,7 +107,7 @@ After deploying or updating the Helm chart with the public ALB enabled, operator
 3. **Verify blocked endpoints are rejected with `403 Forbidden`**:
    * Test Grafana (expect `403 Forbidden`):
      ```bash
-     curl -i http://<ALB_DNS_NAME>/grafana
+     curl -i http://<ALB_DNS_NAME>/grafana/
      ```
    * Test Jaeger UI (expect `403 Forbidden`):
      ```bash
