@@ -115,7 +115,7 @@ After deploying or updating the Helm chart with the public ALB enabled, operator
      ```
    * Test Load Generator (expect `403 Forbidden`):
      ```bash
-     curl -i http://<ALB_DNS_NAME>/loadgen
+     curl -i http://<ALB_DNS_NAME>/loadgen/
      ```
 
 ---
