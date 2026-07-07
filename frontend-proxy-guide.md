@@ -77,10 +77,10 @@ When the public ALB is active, the following access control routing rules are en
 * **Blocked Surfaces (FORBIDDEN - Returns 403 Access Denied)**:
   * `/grafana` (Grafana Dashboards)
   * `/jaeger` (Jaeger Tracing UI)
-  * `/loadgen` (Locust Load Generator UI)
+  * `/loadgen/` (Locust Load Generator UI)
   * `/feature` (Flagd feature flag UI)
-  * `/flagservice` (Flagd API gateway)
-  * `/otlp-http` (OpenTelemetry Collector ingestion endpoint)
+  * `/flagservice/` (Flagd API gateway)
+  * `/otlp-http/` (OpenTelemetry Collector ingestion endpoint)
 
 ---
 
