@@ -18,7 +18,7 @@ Thực hiện các công việc sau trong repo `techx-corp-platform`:
 - Cập nhật hướng dẫn vận hành mô tả rõ cách thức hoạt động của public ALB Ingress và các điều kiện tiên quyết.
 - Storefront hoạt động bình thường qua DNS của ALB (hiển thị trang chủ, tải ảnh từ `/images/*` và lấy dữ liệu API từ `/api/*`).
 - Các đường dẫn nội bộ và quản trị bị chặn hoàn toàn và trả về mã lỗi `403 Forbidden` khi truy cập qua ALB DNS.
-- Tài liệu vận hành ghi nhận rõ ràng lộ trình nâng cấp lên HTTPS/ACM trong tương lai gần để đảm bảo an toàn dữ liệu truyền truyền trên mạng internet công cộng.
+- Tài liệu vận hành ghi nhận rõ ràng lộ trình nâng cấp lên HTTPS/ACM trong tương lai gần để đảm bảo an toàn dữ liệu truyền trên mạng internet công cộng.
 
 ## Kiểm thử / xác minh
 1. Xác minh tài liệu hướng dẫn vận hành đã được cập nhật đầy đủ thông tin về ALB Ingress.
