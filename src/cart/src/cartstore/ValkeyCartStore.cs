@@ -135,7 +135,7 @@ public class ValkeyCartStore : ICartStore
 
         if (_logger.IsEnabled(LogLevel.Information))
         {
-            _logger.LogInformation("AddItemAsync called with userId={userId}, productId={productId}, quantity={quantity}", userId, productId, quantity);
+            _logger.LogInformation("AddItemAsync called with productId={productId}, quantity={quantity}", productId, quantity);
         }
 
         try
@@ -187,7 +187,7 @@ public class ValkeyCartStore : ICartStore
     {
         if (_logger.IsEnabled(LogLevel.Information))
         {
-            _logger.LogInformation("EmptyCartAsync called with userId={userId}", userId);
+            _logger.LogInformation("EmptyCartAsync called");
         }
         try
         {
@@ -210,7 +210,7 @@ public class ValkeyCartStore : ICartStore
 
         if (_logger.IsEnabled(LogLevel.Information))
         {
-            _logger.LogInformation("GetCartAsync called with userId={userId}", userId);
+            _logger.LogInformation("GetCartAsync called");
         }
 
         try
