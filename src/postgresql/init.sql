@@ -13,7 +13,7 @@ CREATE TABLE accounting."order" (
 );
 
 CREATE TABLE accounting.shipping (
-    shipping_tracking_id TEXT PRIMARY KEY,
+    shipping_tracking_id TEXT NOT NULL,
     shipping_cost_currency_code TEXT NOT NULL,
     shipping_cost_units BIGINT NOT NULL,
     shipping_cost_nanos INT NOT NULL,
@@ -23,6 +23,8 @@ CREATE TABLE accounting.shipping (
     country TEXT,
     zip_code TEXT,
     order_id TEXT NOT NULL,
+    transaction_type VARCHAR(10) NOT NULL DEFAULT 'CHARGE',
+    PRIMARY KEY (shipping_tracking_id, transaction_type),
     FOREIGN KEY (order_id) REFERENCES accounting."order"(order_id) ON DELETE CASCADE
 );
 
@@ -33,7 +35,8 @@ CREATE TABLE accounting.orderitem (
     product_id TEXT NOT NULL,
     quantity INT NOT NULL,
     order_id TEXT NOT NULL,
-    PRIMARY KEY (order_id, product_id),
+    transaction_type VARCHAR(10) NOT NULL DEFAULT 'CHARGE',
+    PRIMARY KEY (order_id, product_id, transaction_type),
     FOREIGN KEY (order_id) REFERENCES accounting."order"(order_id) ON DELETE CASCADE
 );
 
