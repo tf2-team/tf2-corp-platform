@@ -631,8 +631,13 @@ services:
         limits:
           memory: 20M
     restart: unless-stopped
+    stop_grace_period: 1m
     ports:
       - "${VALKEY_PORT}"
+    volumes:
+      - ./src/valkey-cart/valkey.conf:/etc/valkey/valkey.conf
+      - valkey-cart-data:/data
+    command: ["valkey-server", "/etc/valkey/valkey.conf"]
     logging: *logging
 
 
@@ -784,3 +789,6 @@ services:
       timeout: 10s
       retries: 10
     logging: *logging
+
+volumes:
+  valkey-cart-data:
