@@ -45,7 +45,6 @@ module.exports.charge = async request => {
   } = request.creditCard;
   const currentMonth = new Date().getMonth() + 1;
   const currentYear = new Date().getFullYear();
-  const lastFourDigits = number.substr(-4);
   const transactionId = uuidv4();
 
   const card = cardValidator(number);
@@ -68,7 +67,7 @@ module.exports.charge = async request => {
   }
 
   if ((currentYear * 12 + currentMonth) > (year * 12 + month)) {
-    throw new Error(`The credit card (ending ${lastFourDigits}) expired on ${month}/${year}.`);
+    throw new Error('The credit card is expired.');
   }
 
   // Check baggage for synthetic_request=true, and add charged attribute accordingly
@@ -80,7 +79,7 @@ module.exports.charge = async request => {
   }
 
   const { units, nanos, currencyCode } = request.amount;
-  logger.info({ transactionId, cardType, lastFourDigits, amount: { units, nanos, currencyCode }, loyalty_level }, 'Transaction complete.');
+  logger.info({ transactionId, cardType, amount: { units, nanos, currencyCode }, loyalty_level }, 'Transaction complete.');
   transactionsCounter.add(1, { 'app.payment.currency': currencyCode });
   span.end();
 

@@ -68,7 +68,7 @@ def generate_response(product_id):
     else:
         product_review_summary = product_review_summaries.get(product_id)
 
-    app.logger.info(f"product_review_summary is: {product_review_summary}")
+    app.logger.info(f"product_review_summary loaded for product_id: {product_id}, present: {product_review_summary is not None}")
 
     return product_review_summary
 
@@ -91,11 +91,11 @@ def chat_completions():
     model = data.get('model', 'techx-llm')
     tools = data.get('tools', None)
 
-    app.logger.info(f"Received a chat completion request: '{messages}'")
+    app.logger.info(f"Received a chat completion request with message_count: {len(messages)}, model: {model}")
 
     last_message = messages[-1]["content"]
 
-    app.logger.info(f"last_message is: '{last_message}'")
+    app.logger.info(f"last_message_length is: {len(last_message)}")
 
     if 'What age(s) is this recommended for?' in last_message:
         response_text = 'This product is recommended for ages 7 and above.'
@@ -166,7 +166,7 @@ def chat_completions():
         return build_response(model, messages, response_text)
 
 def build_response(model, messages, response_text):
-    app.logger.info(f"Processing a response: '{response_text}'")
+    app.logger.info(f"Processing a response with length: {len(response_text or '')}")
 
     response = {
         "id": f"chatcmpl-mock-{int(time.time())}",
@@ -215,7 +215,7 @@ if __name__ == '__main__':
     product_review_summaries = load_product_review_summaries(product_review_summaries_file_path)
     inaccurate_product_review_summaries = load_product_review_summaries(inaccurate_product_review_summaries_file_path)
 
-    app.logger.info(product_review_summaries)
+    app.logger.info(f"Loaded product review summaries count: {len(product_review_summaries)}")
 
     print("OpenAI API server starting on http://localhost:8000")
     print("Set your OpenAI base URL to: http://localhost:8000/v1")
