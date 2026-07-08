@@ -732,6 +732,7 @@ services:
         limits:
           memory: 620M
     restart: unless-stopped
+    stop_grace_period: 1m
     environment:
       - KAFKA_ADVERTISED_LISTENERS=PLAINTEXT://${KAFKA_HOST}:9092
       - KAFKA_LISTENERS=PLAINTEXT://${KAFKA_HOST}:9092,CONTROLLER://${KAFKA_HOST}:9093
@@ -741,8 +742,13 @@ services:
       - OTEL_RESOURCE_ATTRIBUTES
       - OTEL_SERVICE_NAME=kafka
       - KAFKA_HEAP_OPTS=-Xmx400m -Xms400m
+      - KAFKA_LOG_RETENTION_HOURS=72
+      - KAFKA_LOG_SEGMENT_BYTES=104857600
+      - KAFKA_MIN_INSYNC_REPLICAS=1
       # Workaround on OSX for https://bugs.openjdk.org/browse/JDK-8345296
       - _JAVA_OPTIONS
+    volumes:
+      - kafka-data:/opt/kafka/data
     healthcheck:
       test: nc -z kafka 9092
       start_period: 10s
@@ -782,8 +788,9 @@ services:
     deploy:
       resources:
         limits:
-          memory: 80M
+          memory: 200M
     restart: unless-stopped
+    stop_grace_period: 1m
     ports:
       - ${POSTGRES_PORT}
     environment:
@@ -792,6 +799,13 @@ services:
       - POSTGRES_DB
     volumes:
       - ./src/postgresql/init.sql:/docker-entrypoint-initdb.d/init.sql
+      - postgresql-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U root -d ${POSTGRES_DB}"]
+      start_period: 10s
+      interval: 5s
+      timeout: 5s
+      retries: 5
     logging: *logging
 
   # Valkey used by Cart service
@@ -802,10 +816,21 @@ services:
     deploy:
       resources:
         limits:
-          memory: 20M
+          memory: 40M
     restart: unless-stopped
+    stop_grace_period: 1m
     ports:
       - "${VALKEY_PORT}"
+    volumes:
+      - ./src/valkey-cart/valkey.conf:/etc/valkey/valkey.conf
+      - valkey-cart-data:/data
+    command: ["valkey-server", "/etc/valkey/valkey.conf"]
+    healthcheck:
+      test: ["CMD", "valkey-cli", "ping"]
+      start_period: 5s
+      interval: 5s
+      timeout: 3s
+      retries: 5
     logging: *logging
 
 
@@ -958,3 +983,8 @@ services:
       timeout: 10s
       retries: 10
     logging: *logging
+
+volumes:
+  valkey-cart-data:
+  postgresql-data:
+  kafka-data:

@@ -352,3 +352,9 @@ message DeleteFlagRequest {
 }
 
 message DeleteFlagResponse {}
+
+message OrderCancelled {
+    string order_id = 1;
+    string reason = 2;
+}
+

@@ -7,7 +7,7 @@ using System.ComponentModel.DataAnnotations.Schema;
 namespace Accounting;
 
 [Table("shipping", Schema = "accounting")]
-[PrimaryKey(nameof(ShippingTrackingId))]
+[PrimaryKey(nameof(ShippingTrackingId), nameof(TransactionType))]
 internal class ShippingEntity
 {
 
@@ -30,10 +30,12 @@ internal class ShippingEntity
     public required string ZipCode { get; set; }
 
     public required string OrderId { get; set; }
+
+    public string TransactionType { get; set; } = "CHARGE";
 }
 
 [Table("orderitem", Schema = "accounting")]
-[PrimaryKey(nameof(ProductId), nameof(OrderId))]
+[PrimaryKey(nameof(ProductId), nameof(OrderId), nameof(TransactionType))]
 internal class OrderItemEntity
 {
     public required string ItemCostCurrencyCode { get; set; }
@@ -47,6 +49,8 @@ internal class OrderItemEntity
     public required int Quantity { get; set; }
 
     public required string OrderId { get; set; }
+
+    public string TransactionType { get; set; } = "CHARGE";
 }
 
 [Table("order", Schema = "accounting")]
