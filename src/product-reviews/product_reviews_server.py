@@ -101,7 +101,7 @@ class ProductReviewService(demo_pb2_grpc.ProductReviewServiceServicer):
         return product_reviews
 
     def AskProductAIAssistant(self, request, context):
-        logger.info(f"Receive AskProductAIAssistant for product id:{request.product_id}, question: {request.question}")
+        logger.info(f"Receive AskProductAIAssistant for product id:{request.product_id}, question_length: {len(request.question)}")
         ai_assistant_response = get_ai_assistant_response(request.product_id, request.question)
 
         return ai_assistant_response
@@ -124,7 +124,7 @@ def get_product_reviews(request_product_id):
         records = fetch_product_reviews_from_db(request_product_id)
 
         for row in records:
-            logger.info(f"  username: {row[0]}, description: {row[1]}, score: {str(row[2])}")
+            logger.info(f"  review loaded for product_id: {request_product_id}, score: {str(row[2])}")
             product_reviews.product_reviews.add(
                     username=row[0],
                     description=row[1],
@@ -159,7 +159,7 @@ def get_ai_assistant_response(request_product_id, question):
         ai_assistant_response = demo_pb2.AskProductAIAssistantResponse()
 
         span.set_attribute("app.product.id", request_product_id)
-        span.set_attribute("app.product.question", question)
+        span.set_attribute("app.product.question_length", len(question))
 
         llm_rate_limit_error = check_feature_flag("llmRateLimitError")
         logger.info(f"llmRateLimitError feature flag: {llm_rate_limit_error}")
@@ -225,7 +225,7 @@ def get_ai_assistant_response(request_product_id, question):
         response_message = initial_response.choices[0].message
         tool_calls = response_message.tool_calls
 
-        logger.info(f"Response message: {response_message}")
+        logger.info("Received initial AI assistant response")
 
         # Check if the model wants to call a tool
         if tool_calls:
@@ -245,13 +245,13 @@ def get_ai_assistant_response(request_product_id, question):
                     function_response = fetch_product_reviews(
                         product_id=function_args.get("product_id")
                     )
-                    logger.info(f"Function response for fetch_product_reviews: '{function_response}'")
+                    logger.info(f"Function response for fetch_product_reviews loaded for product_id: {function_args.get('product_id')}")
 
                 elif function_name == "fetch_product_info":
                     function_response = fetch_product_info(
                         product_id=function_args.get("product_id")
                     )
-                    logger.info(f"Function response for fetch_product_info: '{function_response}'")
+                    logger.info(f"Function response for fetch_product_info loaded for product_id: {function_args.get('product_id')}")
 
                 else:
                     raise Exception(f'Received unexpected tool call request: {function_name}')
@@ -287,7 +287,7 @@ def get_ai_assistant_response(request_product_id, question):
                     }
                 )
 
-            logger.info(f"Invoking the LLM with the following messages: '{messages}'")
+            logger.info(f"Invoking the LLM with {len(messages)} messages")
 
             final_response = client.chat.completions.create(
                 model=llm_model,
@@ -298,10 +298,10 @@ def get_ai_assistant_response(request_product_id, question):
 
             ai_assistant_response.response = result
 
-            logger.info(f"Returning an AI assistant response: '{result}'")
+            logger.info(f"Returning an AI assistant response with length: {len(result or '')}")
 
         else:
-            logger.info(f"Returning an AI assistant response: '{response_message}'")
+            logger.info(f"Returning an AI assistant response with length: {len(response_message.content or '')}")
             ai_assistant_response.response = response_message.content
 
         # Collect metrics for this service
@@ -312,7 +312,7 @@ def get_ai_assistant_response(request_product_id, question):
 def fetch_product_info(product_id):
     try:
         product = product_catalog_stub.GetProduct(demo_pb2.GetProductRequest(id=product_id))
-        logger.info(f"product_catalog_stub.GetProduct returned: '{product}'")
+        logger.info(f"product_catalog_stub.GetProduct returned product_id: '{product_id}'")
         json_str = MessageToJson(product)
         return json_str
     except Exception as e:
