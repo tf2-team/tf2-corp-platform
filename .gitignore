@@ -30,6 +30,7 @@ out/
 build
 next-env.d.ts
 composer.lock
+!src/quote/composer.lock
 .venv
 .dockerhub.env
 .ghcr.env

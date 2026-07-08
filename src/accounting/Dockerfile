@@ -22,15 +22,16 @@ RUN dotnet publish "./Accounting.csproj" -r linux-$TARGETARCH -c $BUILD_CONFIGUR
 # -----------------------------------------------------------------------------
 
 FROM mcr.microsoft.com/dotnet/aspnet:10.0
-USER app
+USER 10001:10001
 WORKDIR /app
 COPY --from=publish /app/publish .
 
 USER root
 RUN mkdir -p "/var/log/opentelemetry/dotnet"
-RUN chown app "/var/log/opentelemetry/dotnet"
-RUN chown app "/app/instrument.sh"
-USER app
+RUN chown 10001:10001 "/var/log/opentelemetry/dotnet"
+RUN chmod +x "/app/instrument.sh" && chown 10001:10001 "/app/instrument.sh"
+USER 10001:10001
+RUN test -x /app/instrument.sh
 ENV OTEL_DOTNET_AUTO_TRACES_ADDITIONAL_SOURCES=Accounting.Consumer
 
 ENTRYPOINT ["./instrument.sh", "dotnet", "Accounting.dll"]

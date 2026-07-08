@@ -1,16 +1,22 @@
+# syntax=docker/dockerfile:1.7
 # Copyright The OpenTelemetry Authors
 # SPDX-License-Identifier: Apache-2.0
 
 
 FROM docker.io/library/python:3.12-alpine3.22 AS build-venv
 
+ENV PIP_DEFAULT_TIMEOUT=120 \
+    PIP_RETRIES=10 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1
+
 RUN apk update && \
     apk add gcc g++ linux-headers
 
 COPY ./src/llm/requirements.txt requirements.txt
 
-RUN python -m venv venv && \
-    venv/bin/pip install --no-cache-dir -r requirements.txt
+RUN --mount=type=cache,id=techx-pip-cache,target=/root/.cache/pip,sharing=locked \
+    python -m venv venv && \
+    venv/bin/pip install -r requirements.txt
 
 FROM docker.io/library/python:3.12-alpine3.22
 

@@ -8,21 +8,25 @@ FROM docker.io/library/composer:2.8.12 AS vendor
 
 WORKDIR /tmp/
 
-COPY ./src/quote/composer.json composer.json
+COPY ./src/quote/composer.json ./src/quote/composer.lock ./
+COPY ./src/quote/src/ src/
 
 RUN composer install \
-    --ignore-platform-reqs \
+    --ignore-platform-req=ext-pcntl \
+    --ignore-platform-req=ext-opentelemetry \
     --no-interaction \
     --no-plugins \
     --no-scripts \
     --no-dev \
-    --prefer-dist
+    --prefer-dist \
+    --classmap-authoritative
 
 FROM docker.io/library/php:8.4-cli-alpine3.22
 
 COPY --from=installer /usr/bin/install-php-extensions /usr/local/bin/
 
-RUN install-php-extensions opcache pcntl protobuf opentelemetry
+RUN install-php-extensions pcntl protobuf-4.33.6 opentelemetry-1.2.1 \
+    && php -m | grep -E '^(pcntl|protobuf|opentelemetry)$'
 
 WORKDIR /var/www
 
