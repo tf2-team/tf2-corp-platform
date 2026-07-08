@@ -26,7 +26,7 @@ internal class DBContext : DbContext
 
 internal class Consumer : IDisposable
 {
-    private const string TopicName = "orders";
+    private static readonly string[] SubscribedTopics = new[] { "orders", "orders-cancelled" };
 
     private ILogger _logger;
     private IConsumer<string, byte[]> _consumer;
@@ -42,7 +42,7 @@ internal class Consumer : IDisposable
             ?? throw new InvalidOperationException("The KAFKA_ADDR environment variable is not set.");
 
         _consumer = BuildConsumer(servers);
-        _consumer.Subscribe(TopicName);
+        _consumer.Subscribe(SubscribedTopics);
 
        if (_logger.IsEnabled(LogLevel.Information))
        {
@@ -64,7 +64,14 @@ internal class Consumer : IDisposable
                 {
                     using var activity = MyActivitySource.StartActivity("order-consumed",  ActivityKind.Internal);
                     var consumeResult = _consumer.Consume();
-                    ProcessMessage(consumeResult.Message);
+                    if (consumeResult.Topic == "orders")
+                    {
+                        ProcessMessage(consumeResult.Message);
+                    }
+                    else if (consumeResult.Topic == "orders-cancelled")
+                    {
+                        ProcessCancelledMessage(consumeResult.Message);
+                    }
                 }
                 catch (ConsumeException e)
                 {
@@ -109,7 +116,8 @@ internal class Consumer : IDisposable
                     ItemCostNanos = item.Cost.Nanos,
                     ProductId = item.Item.ProductId,
                     Quantity = item.Item.Quantity,
-                    OrderId = order.OrderId
+                    OrderId = order.OrderId,
+                    TransactionType = "CHARGE"
                 };
 
                 _dbContext.Add(orderItem);
@@ -126,7 +134,8 @@ internal class Consumer : IDisposable
                 State = order.ShippingAddress.State,
                 Country = order.ShippingAddress.Country,
                 ZipCode = order.ShippingAddress.ZipCode,
-                OrderId = order.OrderId
+                OrderId = order.OrderId,
+                TransactionType = "CHARGE"
             };
             _dbContext.Add(shipping);
             _dbContext.SaveChanges();
@@ -134,6 +143,77 @@ internal class Consumer : IDisposable
         catch (Exception ex)
         {
             _logger.LogError(ex, "Order parsing failed:");
+        }
+    }
+
+    private void ProcessCancelledMessage(Message<string, byte[]> message)
+    {
+        try
+        {
+            var cancelled = OrderCancelled.Parser.ParseFrom(message.Value);
+            if (_logger.IsEnabled(LogLevel.Information))
+            {
+                _logger.LogInformation("OrderCancelled message received for OrderId: {orderId}, Reason: {reason}", cancelled.OrderId, cancelled.Reason);
+            }
+
+            if (_dbContext == null)
+            {
+                return;
+            }
+
+            // Find existing CHARGE records to reverse
+            var originalItems = _dbContext.CartItems.Where(x => x.OrderId == cancelled.OrderId && x.TransactionType == "CHARGE").ToList();
+            var originalShipping = _dbContext.Shipping.Where(x => x.OrderId == cancelled.OrderId && x.TransactionType == "CHARGE").ToList();
+
+            if (originalItems.Count == 0 && originalShipping.Count == 0)
+            {
+                _logger.LogWarning("Original order items or shipping not found for cancelled order: {orderId}", cancelled.OrderId);
+                return;
+            }
+
+            foreach (var item in originalItems)
+            {
+                var refundItem = new OrderItemEntity
+                {
+                    ItemCostCurrencyCode = item.ItemCostCurrencyCode,
+                    ItemCostUnits = -item.ItemCostUnits,
+                    ItemCostNanos = -item.ItemCostNanos,
+                    ProductId = item.ProductId,
+                    Quantity = -item.Quantity,
+                    OrderId = item.OrderId,
+                    TransactionType = "REFUND"
+                };
+                _dbContext.Add(refundItem);
+            }
+
+            foreach (var shipping in originalShipping)
+            {
+                var refundShipping = new ShippingEntity
+                {
+                    ShippingTrackingId = shipping.ShippingTrackingId,
+                    ShippingCostCurrencyCode = shipping.ShippingCostCurrencyCode,
+                    ShippingCostUnits = -shipping.ShippingCostUnits,
+                    ShippingCostNanos = -shipping.ShippingCostNanos,
+                    StreetAddress = shipping.StreetAddress,
+                    City = shipping.City,
+                    State = shipping.State,
+                    Country = shipping.Country,
+                    ZipCode = shipping.ZipCode,
+                    OrderId = shipping.OrderId,
+                    TransactionType = "REFUND"
+                };
+                _dbContext.Add(refundShipping);
+            }
+
+            _dbContext.SaveChanges();
+            if (_logger.IsEnabled(LogLevel.Information))
+            {
+                _logger.LogInformation("Successfully recorded compensating transaction (REFUND) for order: {orderId}", cancelled.OrderId);
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to process cancelled order message:");
         }
     }
 
@@ -158,3 +238,4 @@ internal class Consumer : IDisposable
         _consumer?.Dispose();
     }
 }
+

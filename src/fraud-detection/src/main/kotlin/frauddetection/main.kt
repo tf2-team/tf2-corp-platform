@@ -7,8 +7,13 @@ package frauddetection
 
 import org.apache.kafka.clients.consumer.ConsumerConfig.*
 import org.apache.kafka.clients.consumer.KafkaConsumer
+import org.apache.kafka.clients.producer.KafkaProducer
+import org.apache.kafka.clients.producer.ProducerConfig
+import org.apache.kafka.clients.producer.ProducerRecord
 import org.apache.kafka.common.serialization.ByteArrayDeserializer
+import org.apache.kafka.common.serialization.ByteArraySerializer
 import org.apache.kafka.common.serialization.StringDeserializer
+import org.apache.kafka.common.serialization.StringSerializer
 import org.apache.logging.log4j.LogManager
 import org.apache.logging.log4j.Logger
 import oteldemo.Demo.*
@@ -49,25 +54,66 @@ fun main() {
         subscribe(listOf(topic))
     }
 
+    val producerProps = Properties()
+    producerProps[ProducerConfig.BOOTSTRAP_SERVERS_CONFIG] = bootstrapServers
+    producerProps[ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG] = StringSerializer::class.java.name
+    producerProps[ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG] = ByteArraySerializer::class.java.name
+    val producer = KafkaProducer<String, ByteArray>(producerProps)
+
     var totalCount = 0L
 
     consumer.use {
-        while (true) {
-            totalCount = consumer
-                .poll(ofMillis(100))
-                .fold(totalCount) { accumulator, record ->
-                    val newCount = accumulator + 1
-                    if (getFeatureFlagValue("kafkaQueueProblems") > 0) {
-                        logger.info("FeatureFlag 'kafkaQueueProblems' is enabled, sleeping 1 second")
-                        Thread.sleep(1000)
+        producer.use {
+            while (true) {
+                totalCount = consumer
+                    .poll(ofMillis(100))
+                    .fold(totalCount) { accumulator, record ->
+                        val newCount = accumulator + 1
+                        if (getFeatureFlagValue("kafkaQueueProblems") > 0) {
+                            logger.info("FeatureFlag 'kafkaQueueProblems' is enabled, sleeping 1 second")
+                            Thread.sleep(1000)
+                        }
+                        val orders = OrderResult.parseFrom(record.value())
+                        logger.info("Consumed record with orderId: ${orders.orderId}, and updated total count to: $newCount")
+
+                        // Fraud detection: check if total cost exceeds $100
+                        var totalUnits = orders.shippingCost.units
+                        var totalNanos = orders.shippingCost.nanos
+                        for (orderItem in orders.itemsList) {
+                            val qty = orderItem.item.quantity
+                            totalUnits += orderItem.cost.units * qty
+                            totalNanos += orderItem.cost.nanos * qty
+                        }
+                        val totalAmount = totalUnits.toDouble() + (totalNanos.toDouble() / 1_000_000_000.0)
+
+                        if (totalAmount > 100.0) {
+                            logger.warn("Fraud detected: Order ${orders.orderId} total amount $totalAmount exceeds $100. Publishing OrderCancelled event.")
+                            val orderCancelled = OrderCancelled.newBuilder()
+                                .setOrderId(orders.orderId)
+                                .setReason("Order total amount $totalAmount exceeds $100 threshold")
+                                .build()
+
+                            val producerRecord = ProducerRecord<String, ByteArray>(
+                                "orders-cancelled",
+                                orders.orderId,
+                                orderCancelled.toByteArray()
+                            )
+                            producer.send(producerRecord) { metadata, exception ->
+                                if (exception != null) {
+                                    logger.error("Failed to send OrderCancelled for order: ${orders.orderId}", exception)
+                                } else {
+                                    logger.info("Sent OrderCancelled event to orders-cancelled topic for order: ${orders.orderId}")
+                                }
+                            }
+                        }
+
+                        newCount
                     }
-                    val orders = OrderResult.parseFrom(record.value())
-                    logger.info("Consumed record with orderId: ${orders.orderId}, and updated total count to: $newCount")
-                    newCount
-                }
+            }
         }
     }
 }
+
 
 /**
 * Retrieves the status of a feature flag from the Feature Flag service.
