@@ -16,7 +16,7 @@ http {
     otel_span_name image-provider;
 
 
-    include mime.types;
+    include /etc/nginx/mime.types;
     sendfile on;
     server {
         listen ${IMAGE_PROVIDER_PORT};

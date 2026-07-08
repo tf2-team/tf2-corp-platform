@@ -20,11 +20,18 @@ COPY --from=build-venv /venv/ /venv/
 
 WORKDIR /app
 
-COPY ./src/recommendation/demo_pb2_grpc.py demo_pb2_grpc.py
-COPY ./src/recommendation/demo_pb2.py demo_pb2.py
-COPY ./src/recommendation/logger.py logger.py
-COPY ./src/recommendation/metrics.py metrics.py
-COPY ./src/recommendation/recommendation_server.py recommendation_server.py
+RUN addgroup -g 10001 -S appgroup && \
+    adduser -u 10001 -S -G appgroup appuser
+
+COPY --chown=appuser:appgroup ./src/recommendation/demo_pb2_grpc.py demo_pb2_grpc.py
+COPY --chown=appuser:appgroup ./src/recommendation/demo_pb2.py demo_pb2.py
+COPY --chown=appuser:appgroup ./src/recommendation/logger.py logger.py
+COPY --chown=appuser:appgroup ./src/recommendation/metrics.py metrics.py
+COPY --chown=appuser:appgroup ./src/recommendation/recommendation_server.py recommendation_server.py
+
+RUN chown -R appuser:appgroup /app
+
+USER 10001
 
 EXPOSE ${RECOMMENDATION_PORT}
 ENTRYPOINT [ "/venv/bin/opentelemetry-instrument", "/venv/bin/python", "recommendation_server.py" ]

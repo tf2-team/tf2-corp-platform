@@ -83,13 +83,18 @@ ENV LANGUAGE=en_US:en
 ENV LC_ALL=en_US.UTF-8
 
 WORKDIR "/app"
-RUN chown nobody /app
+
+RUN groupadd -g 10001 appgroup && \
+    useradd -r -u 10001 -g appgroup appuser && \
+    chown -R appuser:appgroup /app
 
 # set runner ENV
 ENV MIX_ENV="prod"
 
 # Only copy the final release from the build stage
-COPY --from=builder --chown=nobody:root /app/_build/${MIX_ENV}/rel/flagd_ui ./
+COPY --from=builder --chown=appuser:appgroup /app/_build/${MIX_ENV}/rel/flagd_ui ./
+
+USER 10001
 
 EXPOSE ${FLAGD_UI_PORT}
 

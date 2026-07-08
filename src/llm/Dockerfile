@@ -18,9 +18,16 @@ COPY --from=build-venv /venv/ /venv/
 
 WORKDIR /app
 
-COPY ./src/llm/app.py app.py
-COPY ./src/llm/product-review-summaries/product-review-summaries.json product-review-summaries.json
-COPY ./src/llm/product-review-summaries/inaccurate-product-review-summaries.json inaccurate-product-review-summaries.json
+RUN addgroup -g 10001 -S appgroup && \
+    adduser -u 10001 -S -G appgroup appuser
+
+COPY --chown=appuser:appgroup ./src/llm/app.py app.py
+COPY --chown=appuser:appgroup ./src/llm/product-review-summaries/product-review-summaries.json product-review-summaries.json
+COPY --chown=appuser:appgroup ./src/llm/product-review-summaries/inaccurate-product-review-summaries.json inaccurate-product-review-summaries.json
+
+RUN chown -R appuser:appgroup /app
+
+USER 10001
 
 EXPOSE ${LLM_PORT}
 ENTRYPOINT [ "/venv/bin/python", "app.py" ]
