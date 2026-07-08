@@ -29,18 +29,10 @@ coverage
 out/
 build
 next-env.d.ts
-vendor/
-!src/flagd-ui/assets/vendor/
-!src/flagd-ui/assets/vendor/*.js
 composer.lock
 .venv
 .dockerhub.env
 .ghcr.env
-!.env
-!.env.override
-!.env.local
-!*.env
-!*.env.*
 
 src/frontend/cypress/videos
 src/frontend/cypress/screenshots
