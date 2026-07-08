@@ -19,7 +19,7 @@ Khi chúng ta tách biệt môi trường (Dịch vụ giám sát nằm ở name
 
 Phương án định tuyến chéo namespace (cross-namespace routing) đã được áp dụng trực tiếp vào cấu hình deploy:
 
-* **File cấu hình:** **[phase3/deploy/values-app-stamp.yaml](file:///Users/enma/Downloads/Coding/Cloud_Engineer/Unitled/capstone-p/cap-phase3/phase3/deploy/values-app-stamp.yaml)**
+* **File cấu hình:** **phase3/deploy/values-app-stamp.yaml**
 * **Khối cấu hình bổ sung:**
 
   ```yaml
