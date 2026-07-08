@@ -27,9 +27,16 @@ ARG _JAVA_OPTIONS
 
 WORKDIR /usr/src/app/
 
-COPY --from=builder /usr/src/app/ ./
-ADD --chmod=644 https://github.com/open-telemetry/opentelemetry-java-instrumentation/releases/download/v$OTEL_JAVA_AGENT_VERSION/opentelemetry-javaagent.jar /usr/src/app/opentelemetry-javaagent.jar
+RUN groupadd -g 10001 appgroup && \
+    useradd -r -u 10001 -g appgroup appuser
+
+COPY --from=builder --chown=appuser:appgroup /usr/src/app/ ./
+ADD --chmod=644 --chown=appuser:appgroup https://github.com/open-telemetry/opentelemetry-java-instrumentation/releases/download/v$OTEL_JAVA_AGENT_VERSION/opentelemetry-javaagent.jar /usr/src/app/opentelemetry-javaagent.jar
 ENV JAVA_TOOL_OPTIONS=-javaagent:/usr/src/app/opentelemetry-javaagent.jar
+
+RUN chown -R appuser:appgroup /usr/src/app
+
+USER 10001
 
 EXPOSE ${AD_PORT}
 ENTRYPOINT [ "./build/install/techx-corp-ad/bin/Ad" ]

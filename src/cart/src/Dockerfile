@@ -33,7 +33,15 @@ RUN dotnet publish ./src/cart.csproj -r linux-musl-$TARGETARCH --no-restore -o /
 FROM mcr.microsoft.com/dotnet/runtime-deps:10.0-alpine3.22
 
 WORKDIR /usr/src/app/
-COPY --from=builder /cart/ ./
+
+RUN addgroup -g 10001 -S appgroup && \
+    adduser -u 10001 -S -G appgroup appuser
+
+COPY --from=builder --chown=appuser:appgroup /cart/ ./
+
+RUN chown -R appuser:appgroup /usr/src/app
+
+USER 10001
 
 ENV DOTNET_HOSTBUILDER__RELOADCONFIGONCHANGE=false
 

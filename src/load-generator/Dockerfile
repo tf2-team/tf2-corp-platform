@@ -14,9 +14,19 @@ RUN pip install --prefix="/reqs" -r requirements.txt
 
 FROM base
 WORKDIR /usr/src/app/
+
+RUN groupadd -g 10001 appgroup && \
+    useradd -r -u 10001 -g appgroup appuser
+
 COPY --from=builder /reqs /usr/local
 ENV PLAYWRIGHT_BROWSERS_PATH=/opt/pw-browsers
 RUN playwright install --with-deps chromium
-COPY ./src/load-generator/locustfile.py .
-COPY ./src/load-generator/people.json .
+
+COPY --chown=appuser:appgroup ./src/load-generator/locustfile.py .
+COPY --chown=appuser:appgroup ./src/load-generator/people.json .
+
+RUN chown -R appuser:appgroup /usr/src/app /opt/pw-browsers
+
+USER 10001
+
 ENTRYPOINT ["locust", "--skip-log-setup"]

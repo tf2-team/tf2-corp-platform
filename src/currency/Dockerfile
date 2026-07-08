@@ -50,8 +50,16 @@ RUN mkdir -p build && cd build \
 
 FROM base AS release
 
-COPY --from=builder /usr/local /usr/local
+WORKDIR /app
+
+RUN addgroup -g 10001 -S appgroup && \
+    adduser -u 10001 -S -G appgroup appuser && \
+    chown -R appuser:appgroup /app
+
+COPY --from=builder --chown=appuser:appgroup /usr/local /usr/local
+
+USER 10001
 
 EXPOSE ${CURRENCY_PORT}
 
-ENTRYPOINT ["sh", "-c", "./usr/local/bin/currency ${CURRENCY_PORT}"]
+ENTRYPOINT ["sh", "-c", "/usr/local/bin/currency ${CURRENCY_PORT}"]
