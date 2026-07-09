@@ -239,7 +239,7 @@ func main() {
 		// Start background Kafka consumer group
 		go func() {
 			config := sarama.NewConfig()
-			config.Consumer.Offsets.Initial = sarama.OffsetEarliest
+			config.Consumer.Offsets.Initial = sarama.OffsetOldest
 			config.Version = kafka.ProtocolVersion
 
 			consumerGroup, err := sarama.NewConsumerGroup([]string{svc.kafkaBrokerSvcAddr}, "checkout-group", config)
@@ -814,15 +814,88 @@ func (c *ApprovedOrderConsumer) ConsumeClaim(session sarama.ConsumerGroupSession
 			c.checkoutSvc.KafkaProducerClient.Input() <- &shippedMsg
 			logger.Info(fmt.Sprintf("Published shipped order event to orders-shipped for ID: %s", order.OrderId))
 		} else if msg.Topic == "orders-cancelled" {
-			var cancelled pb.OrderCancelled
-			if err := proto.Unmarshal(msg.Value, &cancelled); err != nil {
-				logger.Error(fmt.Sprintf("Failed to unmarshal cancelled order: %+v", err))
+			orderID, reason, err := parseOrderCancelledBytes(msg.Value)
+			if err != nil {
+				logger.Error(fmt.Sprintf("Failed to dynamically parse cancelled order: %+v", err))
 				session.MarkMessage(msg, "")
 				continue
 			}
-			logger.Info(fmt.Sprintf("Received OrderCancelled in checkout for ID: %s, Reason: %s. Voiding authorization.", cancelled.OrderId, cancelled.Reason))
+			logger.Info(fmt.Sprintf("Received OrderCancelled in checkout for ID: %s, Reason: %s. Voiding authorization.", orderID, reason))
 		}
 		session.MarkMessage(msg, "")
 	}
 	return nil
+}
+
+func parseOrderCancelledBytes(data []byte) (string, string, error) {
+	var orderID, reason string
+	idx := 0
+	for idx < len(data) {
+		// Read varint tag
+		var tagNum uint64
+		var shift uint
+		for {
+			if idx >= len(data) {
+				return "", "", fmt.Errorf("truncated tag varint")
+			}
+			b := data[idx]
+			idx++
+			tagNum |= uint64(b&0x7F) << shift
+			if b&0x80 == 0 {
+				break
+			}
+			shift += 7
+		}
+		tag := tagNum >> 3
+		wireType := tagNum & 0x7
+
+		if wireType == 2 {
+			// Read varint length
+			var lengthNum uint64
+			shift = 0
+			for {
+				if idx >= len(data) {
+					return "", "", fmt.Errorf("truncated length varint")
+				}
+				b := data[idx]
+				idx++
+				lengthNum |= uint64(b&0x7F) << shift
+				if b&0x80 == 0 {
+					break
+				}
+				shift += 7
+			}
+			length := int(lengthNum)
+			if idx+length > len(data) {
+				return "", "", fmt.Errorf("malformed length field")
+			}
+			val := string(data[idx : idx+length])
+			idx += length
+
+			if tag == 1 {
+				orderID = val
+			} else if tag == 2 {
+				reason = val
+			}
+		} else {
+			// Skip other wire types (0: varint, 1: 64-bit, 5: 32-bit)
+			if wireType == 0 {
+				for {
+					if idx >= len(data) {
+						break
+					}
+					b := data[idx]
+					idx++
+					if b&0x80 == 0 {
+						break
+					}
+				}
+			} else if wireType == 1 {
+				idx += 8
+			} else if wireType == 5 {
+				idx += 4
+			}
+		}
+	}
+	return orderID, reason, nil
 }
