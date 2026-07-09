@@ -26,7 +26,7 @@ internal class DBContext : DbContext
 
 internal class Consumer : IDisposable
 {
-    private static readonly string[] SubscribedTopics = new[] { "orders", "orders-cancelled" };
+    private static readonly string[] SubscribedTopics = new[] { "orders", "orders-cancelled", "orders-shipped" };
 
     private ILogger _logger;
     private IConsumer<string, byte[]> _consumer;
@@ -69,6 +69,10 @@ internal class Consumer : IDisposable
                     {
                         ProcessCancelledMessage(consumeResult.Message);
                     }
+                    else if (consumeResult.Topic == "orders-shipped")
+                    {
+                        ProcessShippedMessage(consumeResult.Message);
+                    }
                 }
                 catch (ConsumeException e)
                 {
@@ -100,9 +104,17 @@ internal class Consumer : IDisposable
             }
 
             using var dbContext = new DBContext();
+            var existingOrder = dbContext.Orders.Find(order.OrderId);
+            if (existingOrder != null)
+            {
+                _logger.LogWarning("Order {orderId} already exists in database. Skipping duplicate processing.", order.OrderId);
+                return;
+            }
+
             var orderEntity = new OrderEntity
             {
-                Id = order.OrderId
+                Id = order.OrderId,
+                Status = "PENDING"
             };
             dbContext.Add(orderEntity);
             foreach (var item in order.Items)
@@ -160,6 +172,21 @@ internal class Consumer : IDisposable
             }
 
             using var dbContext = new DBContext();
+            var order = dbContext.Orders.Find(cancelled.OrderId);
+            if (order == null)
+            {
+                _logger.LogWarning("Order {orderId} not found in database for cancellation.", cancelled.OrderId);
+                return;
+            }
+
+            if (order.Status == "CANCELLED" || order.Status == "REFUNDED")
+            {
+                _logger.LogWarning("Order {orderId} is already in status {status}. Skipping duplicate cancellation.", cancelled.OrderId, order.Status);
+                return;
+            }
+
+            order.Status = "CANCELLED";
+
             // Find existing CHARGE records to reverse
             var originalItems = dbContext.CartItems.Where(x => x.OrderId == cancelled.OrderId && x.TransactionType == "CHARGE").ToList();
             var originalShipping = dbContext.Shipping.Where(x => x.OrderId == cancelled.OrderId && x.TransactionType == "CHARGE").ToList();
@@ -213,6 +240,53 @@ internal class Consumer : IDisposable
         catch (Exception ex)
         {
             _logger.LogError(ex, "Failed to process cancelled order message:");
+        }
+    }
+
+    private void ProcessShippedMessage(Message<string, byte[]> message)
+    {
+        try
+        {
+            var order = OrderResult.Parser.ParseFrom(message.Value);
+            if (_logger.IsEnabled(LogLevel.Information))
+            {
+                _logger.LogInformation("OrderShipped message received for OrderId: {orderId}, TrackingId: {trackingId}", order.OrderId, order.ShippingTrackingId);
+            }
+
+            if (Environment.GetEnvironmentVariable("DB_CONNECTION_STRING") == null)
+            {
+                return;
+            }
+
+            using var dbContext = new DBContext();
+            var orderEntity = dbContext.Orders.Find(order.OrderId);
+            if (orderEntity == null)
+            {
+                _logger.LogWarning("Order {orderId} not found for shipment completion.", order.OrderId);
+                return;
+            }
+
+            if (orderEntity.Status == "COMPLETED" || orderEntity.Status == "CANCELLED")
+            {
+                _logger.LogWarning("Order {orderId} is already in status {status}. Skipping shipment update.", order.OrderId, orderEntity.Status);
+                return;
+            }
+
+            orderEntity.Status = "COMPLETED";
+
+            // Update shipping tracking id
+            var shippingRecords = dbContext.Shipping.Where(x => x.OrderId == order.OrderId && x.TransactionType == "CHARGE").ToList();
+            foreach (var ship in shippingRecords)
+            {
+                ship.ShippingTrackingId = order.ShippingTrackingId;
+            }
+
+            dbContext.SaveChanges();
+            _logger.LogInformation("Successfully completed shipment and updated order {orderId} status to COMPLETED.", order.OrderId);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to process shipped order message:");
         }
     }
 

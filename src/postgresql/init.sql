@@ -9,7 +9,8 @@ GRANT USAGE ON SCHEMA accounting TO otelu;
 
 -- Accounting Service: create tables
 CREATE TABLE accounting."order" (
-    order_id TEXT PRIMARY KEY
+    order_id TEXT PRIMARY KEY,
+    status VARCHAR(20) NOT NULL DEFAULT 'PENDING'
 );
 
 CREATE TABLE accounting.shipping (

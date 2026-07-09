@@ -60,4 +60,6 @@ internal class OrderEntity
     [Column("order_id")]
     public required string Id { get; set; }
 
+    [Column("status")]
+    public string Status { get; set; } = "PENDING";
 }
