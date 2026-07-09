@@ -42,8 +42,11 @@ export const NavBarBrand = styled(Link)`
   padding: 0;
 `;
 
+// Served by image-provider via envoy /images/* (see src/image-provider/static/).
+// Prefer techx-corp-logo.png when present; fall back name is still deployed as
+// opentelemetry-demo-logo.png for backwards compatibility with older images.
 export const BrandImg = styled.img.attrs({
-  src: '/images/techx-corp-logo.png',
+  src: '/images/opentelemetry-demo-logo.png',
 })`
   width: 280px;
   height: auto;

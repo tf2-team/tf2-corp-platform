@@ -1,20 +1,16 @@
 // Copyright The OpenTelemetry Authors
 // SPDX-License-Identifier: Apache-2.0
 /*
-  * We connect to image-provider through the envoy proxy, straight from the browser, for this we need to know the current hostname and port.
-  * During building and serverside rendering, these are undefined so we use some conditionals and default values.
-  */
-let hostname = "localhost";
-let port = 8080;
-let protocol = "http";
-
-if (typeof window !== "undefined" && window.location) {
-  hostname = window.location.hostname;
-  port = window.location.port ? parseInt(window.location.port, 10) : (window.location.protocol === "https:" ? 443 : 80);
-  protocol = window.location.protocol.slice(0, -1); // Remove trailing ':'
-}
-
+ * Always emit same-origin relative URLs so SSR HTML and client hydration match.
+ * Baking host:port at module load (e.g. localhost:8080) breaks the public ALB
+ * and triggers React hydration error #418 / net::ERR_CONNECTION_REFUSED.
+ *
+ * Envoy routes:
+ *   /images/*  → image-provider
+ *   /icons/*   → frontend (Next.js public/)
+ * image-provider serves files as-is; ?w=&q= are kept for Next Image API compat.
+ */
 export default function imageLoader({ src, width, quality }) {
-  // We pass down the optimisation request to the image-provider service here, without this, nextJs would try to use internal optimiser which is not working with the external image-provider.
-  return `${protocol}://${hostname}:${port}/${src}?w=${width}&q=${quality || 75}`
+  const path = src.startsWith('/') ? src : `/${src}`;
+  return `${path}?w=${width}&q=${quality || 75}`;
 }
