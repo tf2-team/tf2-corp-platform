@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/bin/sh
 # Copyright The OpenTelemetry Authors
 # SPDX-License-Identifier: Apache-2.0
 # Backup script for postgresql in docker-compose
