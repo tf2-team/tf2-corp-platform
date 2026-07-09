@@ -5,7 +5,7 @@ import { NextPage } from 'next';
 import Head from 'next/head';
 import Link from 'next/link';
 import { useRouter } from 'next/router';
-import { useMemo } from 'react';
+import { useMemo, useEffect, useState } from 'react';
 import Ad from '../../../../components/Ad';
 import Button from '../../../../components/Button';
 import Layout from '../../../../components/Layout';
@@ -26,24 +26,24 @@ const emptyAddress = {
 
 const Checkout: NextPage = () => {
   const { query } = useRouter();
-  // query.order is only present client-side after placeOrder navigation.
-  // SSR / hard refresh has no order payload — avoid crashing on undefined address.
-  const order = useMemo(() => {
-    try {
-      return JSON.parse((query.order || '{}') as string) as Partial<IProductCheckout>;
-    } catch {
-      return {} as Partial<IProductCheckout>;
-    }
-  }, [query.order]);
+  const [isMounted, setIsMounted] = useState(false);
 
-  const {
-    orderId,
-    items = [],
-    shippingAddress = emptyAddress,
-    shippingCost = { units: 0, currencyCode: 'USD', nanos: 0 },
-  } = order;
+  useEffect(() => {
+    setIsMounted(true);
+  }, []);
+
+  const orderData = useMemo(() => {
+    if (!isMounted || !query.order) return null;
+    try {
+      return JSON.parse(query.order as string) as IProductCheckout;
+    } catch {
+      return null;
+    }
+  }, [isMounted, query.order]);
 
   const orderTotal = useMemo<Money>(() => {
+    if (!orderData) return { units: 0, nanos: 0, currencyCode: 'USD' };
+    const { items = [], shippingCost = { units: 0, currencyCode: 'USD', nanos: 0 } } = orderData;
     const itemsTotal = items.reduce((acc, { item, cost = { units: 0, nanos: 0, currencyCode: 'USD' } }) => {
       return {
         units: acc.units + (cost.units || 0) * (item?.quantity || 0),
@@ -60,7 +60,13 @@ const Checkout: NextPage = () => {
       nanos: totalNanos % 1000000000,
       currencyCode: shippingCost.currencyCode || 'USD',
     };
-  }, [items, shippingCost]);
+  }, [orderData]);
+
+  if (!isMounted || !orderData) {
+    return null;
+  }
+
+  const { orderId, items = [], shippingAddress, shippingCost = { units: 0, currencyCode: 'USD', nanos: 0 } } = orderData;
 
   return (
     <AdProvider
