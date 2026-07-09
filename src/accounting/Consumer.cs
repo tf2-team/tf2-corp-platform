@@ -31,7 +31,6 @@ internal class Consumer : IDisposable
     private ILogger _logger;
     private IConsumer<string, byte[]> _consumer;
     private bool _isListening;
-    private DBContext? _dbContext;
     private static readonly ActivitySource MyActivitySource = new("Accounting.Consumer");
 
     public Consumer(ILogger<Consumer> logger)
@@ -48,8 +47,6 @@ internal class Consumer : IDisposable
        {
            _logger.LogInformation("Connecting to Kafka: {servers}", servers);
        }
-
-        _dbContext = Environment.GetEnvironmentVariable("DB_CONNECTION_STRING") == null ? null : new DBContext();
     }
 
     public void StartListening()
@@ -97,16 +94,17 @@ internal class Consumer : IDisposable
             var order = OrderResult.Parser.ParseFrom(message.Value);
             Log.OrderReceivedMessage(_logger, order);
 
-            if (_dbContext == null)
+            if (Environment.GetEnvironmentVariable("DB_CONNECTION_STRING") == null)
             {
                 return;
             }
 
+            using var dbContext = new DBContext();
             var orderEntity = new OrderEntity
             {
                 Id = order.OrderId
             };
-            _dbContext.Add(orderEntity);
+            dbContext.Add(orderEntity);
             foreach (var item in order.Items)
             {
                 var orderItem = new OrderItemEntity
@@ -120,7 +118,7 @@ internal class Consumer : IDisposable
                     TransactionType = "CHARGE"
                 };
 
-                _dbContext.Add(orderItem);
+                dbContext.Add(orderItem);
             }
 
             var shipping = new ShippingEntity
@@ -137,8 +135,8 @@ internal class Consumer : IDisposable
                 OrderId = order.OrderId,
                 TransactionType = "CHARGE"
             };
-            _dbContext.Add(shipping);
-            _dbContext.SaveChanges();
+            dbContext.Add(shipping);
+            dbContext.SaveChanges();
         }
         catch (Exception ex)
         {
@@ -156,14 +154,15 @@ internal class Consumer : IDisposable
                 _logger.LogInformation("OrderCancelled message received for OrderId: {orderId}, Reason: {reason}", cancelled.OrderId, cancelled.Reason);
             }
 
-            if (_dbContext == null)
+            if (Environment.GetEnvironmentVariable("DB_CONNECTION_STRING") == null)
             {
                 return;
             }
 
+            using var dbContext = new DBContext();
             // Find existing CHARGE records to reverse
-            var originalItems = _dbContext.CartItems.Where(x => x.OrderId == cancelled.OrderId && x.TransactionType == "CHARGE").ToList();
-            var originalShipping = _dbContext.Shipping.Where(x => x.OrderId == cancelled.OrderId && x.TransactionType == "CHARGE").ToList();
+            var originalItems = dbContext.CartItems.Where(x => x.OrderId == cancelled.OrderId && x.TransactionType == "CHARGE").ToList();
+            var originalShipping = dbContext.Shipping.Where(x => x.OrderId == cancelled.OrderId && x.TransactionType == "CHARGE").ToList();
 
             if (originalItems.Count == 0 && originalShipping.Count == 0)
             {
@@ -183,7 +182,7 @@ internal class Consumer : IDisposable
                     OrderId = item.OrderId,
                     TransactionType = "REFUND"
                 };
-                _dbContext.Add(refundItem);
+                dbContext.Add(refundItem);
             }
 
             foreach (var shipping in originalShipping)
@@ -202,10 +201,10 @@ internal class Consumer : IDisposable
                     OrderId = shipping.OrderId,
                     TransactionType = "REFUND"
                 };
-                _dbContext.Add(refundShipping);
+                dbContext.Add(refundShipping);
             }
 
-            _dbContext.SaveChanges();
+            dbContext.SaveChanges();
             if (_logger.IsEnabled(LogLevel.Information))
             {
                 _logger.LogInformation("Successfully recorded compensating transaction (REFUND) for order: {orderId}", cancelled.OrderId);
