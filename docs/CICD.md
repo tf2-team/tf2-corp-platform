@@ -145,8 +145,29 @@ docker buildx bake -f docker-compose.yml --push \
 | Images pushed to wrong registry | `IMAGE_NAME` env var missing on GitHub Environment |
 | Compose missing Dockerfile path | `.env` not sourced before bake |
 
+## Image promotion → GitOps (REL-09)
+
+Platform CI **build & push only**. Deploy is Argo CD reading `techx-corp-chart`.
+
+Because the chart uses a **global** `default.image.tag` for all nested services:
+
+1. **Rebuild and push the full bake set** with the same tag (do not advance the global tag after a partial service bake).
+2. **Verify** every required ECR repository has that tag.
+3. Only then open a PR on the chart repo updating `values-dev.yaml` or `values-prod.yaml`.
+4. After merge, Argo CD syncs (`argocd app wait … --timeout 600`).
+
+Do **not** open the values PR in parallel with an incomplete push.
+
+```text
+Build (all services) → Push → Verify tags → Checks → Chart values PR → Merge → Argo sync
+```
+
+See chart runbook: `techx-corp-chart/docs/operations/gitops-argocd.md`.
+
+Future automation (Phase 6): workflow job that runs ECR describe-images for the catalog, then opens the chart PR.
+
 ## Out of scope
 
-- Helm upgrade / smoke tests (`techx-corp-chart`)
-- Path-filtered partial image builds
+- Direct Helm upgrade from this repo (chart / Argo CD owns deploy)
+- Path-filtered partial image builds **while using a global tag** (unsafe for promotion)
 - Full e2e / tracetest in PR CI
