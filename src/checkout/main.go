@@ -235,6 +235,35 @@ func main() {
 		if err != nil {
 			logger.Error(err.Error())
 		}
+
+		// Start background Kafka consumer group
+		go func() {
+			config := sarama.NewConfig()
+			config.Consumer.Offsets.Initial = sarama.OffsetOldest
+			config.Version = kafka.ProtocolVersion
+
+			consumerGroup, err := sarama.NewConsumerGroup([]string{svc.kafkaBrokerSvcAddr}, "checkout-group", config)
+			if err != nil {
+				logger.Error(fmt.Sprintf("Failed to create consumer group: %+v", err))
+				return
+			}
+			defer consumerGroup.Close()
+
+			handler := &ApprovedOrderConsumer{checkoutSvc: svc}
+			topics := []string{"orders-approved", "orders-cancelled"}
+			logger.Info(fmt.Sprintf("Starting consumer group for topics: %v", topics))
+
+			ctx := context.Background()
+			for {
+				err := consumerGroup.Consume(ctx, topics, handler)
+				if err != nil {
+					logger.Error(fmt.Sprintf("Error in consumer group Consume: %+v", err))
+				}
+				if ctx.Err() != nil {
+					return
+				}
+			}
+		}()
 	}
 
 	logger.Info(fmt.Sprintf("service config: %+v", svc))
@@ -313,7 +342,7 @@ func (cs *checkout) PlaceOrder(ctx context.Context, req *pb.PlaceOrderRequest) (
 
 	prep, err := cs.prepareOrderItemsAndShippingQuoteFromCart(ctx, req.UserId, req.UserCurrency, req.Address)
 	if err != nil {
-		return nil, status.Errorf(codes.Internal, err.Error())
+		return nil, status.Error(codes.Internal, err.Error())
 	}
 	span.AddEvent("prepared")
 
@@ -339,12 +368,10 @@ func (cs *checkout) PlaceOrder(ctx context.Context, req *pb.PlaceOrderRequest) (
 		slog.String("transaction_id", txID),
 	)
 
-	shippingTrackingID, err := cs.shipOrder(ctx, req.Address, prep.cartItems)
-	if err != nil {
-		return nil, status.Errorf(codes.Unavailable, "shipping error: %+v", err)
-	}
+	// In pre-auth/hold, shipping is deferred until after fraud check.
+	shippingTrackingID := "PENDING_SHIPPING"
 	shippingTrackingAttribute := attribute.String("app.shipping.tracking.id", shippingTrackingID)
-	span.AddEvent("shipped", trace.WithAttributes(shippingTrackingAttribute))
+	span.AddEvent("hold", trace.WithAttributes(shippingTrackingAttribute))
 
 	_ = cs.emptyUserCart(ctx, req.UserId)
 
@@ -726,4 +753,149 @@ func (cs *checkout) getIntFeatureFlag(ctx context.Context, featureFlagName strin
 	)
 
 	return int(featureFlagValue)
+}
+
+type ApprovedOrderConsumer struct {
+	checkoutSvc *checkout
+}
+
+func (c *ApprovedOrderConsumer) Setup(sarama.ConsumerGroupSession) error {
+	return nil
+}
+
+func (c *ApprovedOrderConsumer) Cleanup(sarama.ConsumerGroupSession) error {
+	return nil
+}
+
+func (c *ApprovedOrderConsumer) ConsumeClaim(session sarama.ConsumerGroupSession, claim sarama.ConsumerGroupClaim) error {
+	for msg := range claim.Messages() {
+		logger.Info(fmt.Sprintf("Received approved/cancelled order message from topic: %s", msg.Topic))
+		ctx := session.Context()
+		if msg.Topic == "orders-approved" {
+			var order pb.OrderResult
+			if err := proto.Unmarshal(msg.Value, &order); err != nil {
+				logger.Error(fmt.Sprintf("Failed to unmarshal approved order: %+v", err))
+				session.MarkMessage(msg, "")
+				continue
+			}
+
+			logger.Info(fmt.Sprintf("Processing approved order shipment for ID: %s", order.OrderId))
+			
+			// Extract cart items
+			cartItems := make([]*pb.CartItem, len(order.Items))
+			for i, item := range order.Items {
+				cartItems[i] = item.Item
+			}
+
+			// Call shipping service
+			trackingID, err := c.checkoutSvc.shipOrder(ctx, order.ShippingAddress, cartItems)
+			if err != nil {
+				logger.Error(fmt.Sprintf("Failed to ship approved order %s: %+v", order.OrderId, err))
+				session.MarkMessage(msg, "")
+				continue
+			}
+
+			logger.Info(fmt.Sprintf("Order %s shipped successfully. Tracking ID: %s", order.OrderId, trackingID))
+			order.ShippingTrackingId = trackingID
+
+			// Publish to orders-shipped
+			shippedMessage, err := proto.Marshal(&order)
+			if err != nil {
+				logger.Error(fmt.Sprintf("Failed to marshal shipped order: %+v", err))
+				session.MarkMessage(msg, "")
+				continue
+			}
+
+			shippedMsg := sarama.ProducerMessage{
+				Topic: "orders-shipped",
+				Value: sarama.ByteEncoder(shippedMessage),
+			}
+			
+			c.checkoutSvc.KafkaProducerClient.Input() <- &shippedMsg
+			logger.Info(fmt.Sprintf("Published shipped order event to orders-shipped for ID: %s", order.OrderId))
+		} else if msg.Topic == "orders-cancelled" {
+			orderID, reason, err := parseOrderCancelledBytes(msg.Value)
+			if err != nil {
+				logger.Error(fmt.Sprintf("Failed to dynamically parse cancelled order: %+v", err))
+				session.MarkMessage(msg, "")
+				continue
+			}
+			logger.Info(fmt.Sprintf("Received OrderCancelled in checkout for ID: %s, Reason: %s. Voiding authorization.", orderID, reason))
+		}
+		session.MarkMessage(msg, "")
+	}
+	return nil
+}
+
+func parseOrderCancelledBytes(data []byte) (string, string, error) {
+	var orderID, reason string
+	idx := 0
+	for idx < len(data) {
+		// Read varint tag
+		var tagNum uint64
+		var shift uint
+		for {
+			if idx >= len(data) {
+				return "", "", fmt.Errorf("truncated tag varint")
+			}
+			b := data[idx]
+			idx++
+			tagNum |= uint64(b&0x7F) << shift
+			if b&0x80 == 0 {
+				break
+			}
+			shift += 7
+		}
+		tag := tagNum >> 3
+		wireType := tagNum & 0x7
+
+		if wireType == 2 {
+			// Read varint length
+			var lengthNum uint64
+			shift = 0
+			for {
+				if idx >= len(data) {
+					return "", "", fmt.Errorf("truncated length varint")
+				}
+				b := data[idx]
+				idx++
+				lengthNum |= uint64(b&0x7F) << shift
+				if b&0x80 == 0 {
+					break
+				}
+				shift += 7
+			}
+			length := int(lengthNum)
+			if idx+length > len(data) {
+				return "", "", fmt.Errorf("malformed length field")
+			}
+			val := string(data[idx : idx+length])
+			idx += length
+
+			if tag == 1 {
+				orderID = val
+			} else if tag == 2 {
+				reason = val
+			}
+		} else {
+			// Skip other wire types (0: varint, 1: 64-bit, 5: 32-bit)
+			if wireType == 0 {
+				for {
+					if idx >= len(data) {
+						break
+					}
+					b := data[idx]
+					idx++
+					if b&0x80 == 0 {
+						break
+					}
+				}
+			} else if wireType == 1 {
+				idx += 8
+			} else if wireType == 5 {
+				idx += 4
+			}
+		}
+	}
+	return orderID, reason, nil
 }

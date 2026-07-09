@@ -60,55 +60,176 @@ fun main() {
     producerProps[ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG] = ByteArraySerializer::class.java.name
     val producer = KafkaProducer<String, ByteArray>(producerProps)
 
+    val redisAddr = System.getenv("REDIS_ADDR") ?: "valkey-cart:6379"
+    val redisParts = redisAddr.split(":")
+    val redisHost = redisParts[0]
+    val redisPort = if (redisParts.size > 1) redisParts[1].toInt() else 6379
+    logger.info("Connecting to Valkey/Redis at $redisHost:$redisPort")
+    val jedis = try {
+        redis.clients.jedis.Jedis(redisHost, redisPort).apply {
+            ping()
+        }
+    } catch (e: Exception) {
+        logger.error("Could not connect to Valkey/Redis, velocity check will be bypassed: ", e)
+        null
+    }
+
     var totalCount = 0L
 
     consumer.use {
         producer.use {
-            while (true) {
-                totalCount = consumer
-                    .poll(ofMillis(100))
-                    .fold(totalCount) { accumulator, record ->
-                        val newCount = accumulator + 1
-                        if (getFeatureFlagValue("kafkaQueueProblems") > 0) {
-                            logger.info("FeatureFlag 'kafkaQueueProblems' is enabled, sleeping 1 second")
-                            Thread.sleep(1000)
-                        }
-                        val orders = OrderResult.parseFrom(record.value())
-                        logger.info("Consumed record with orderId: ${orders.orderId}, and updated total count to: $newCount")
+            jedis?.use {
+                while (true) {
+                    totalCount = consumer
+                        .poll(ofMillis(100))
+                        .fold(totalCount) { accumulator, record ->
+                            val newCount = accumulator + 1
+                            if (getFeatureFlagValue("kafkaQueueProblems") > 0) {
+                                logger.info("FeatureFlag 'kafkaQueueProblems' is enabled, sleeping 1 second")
+                                Thread.sleep(1000)
+                            }
+                            val orders = OrderResult.parseFrom(record.value())
+                            logger.info("Consumed record with orderId: ${orders.orderId}, and updated total count to: $newCount")
 
-                        // Fraud detection: check if total cost exceeds $100
-                        var totalUnits = orders.shippingCost.units
-                        var totalNanos = orders.shippingCost.nanos
-                        for (orderItem in orders.itemsList) {
-                            val qty = orderItem.item.quantity
-                            totalUnits += orderItem.cost.units * qty
-                            totalNanos += orderItem.cost.nanos * qty
-                        }
-                        val totalAmount = totalUnits.toDouble() + (totalNanos.toDouble() / 1_000_000_000.0)
-
-                        if (totalAmount > 100.0) {
-                            logger.warn("Fraud detected: Order ${orders.orderId} total amount $totalAmount exceeds $100. Publishing OrderCancelled event.")
-                            val orderCancelled = OrderCancelled.newBuilder()
-                                .setOrderId(orders.orderId)
-                                .setReason("Order total amount $totalAmount exceeds $100 threshold")
-                                .build()
-
-                            val producerRecord = ProducerRecord<String, ByteArray>(
-                                "orders-cancelled",
-                                orders.orderId,
-                                orderCancelled.toByteArray()
-                            )
-                            producer.send(producerRecord) { metadata, exception ->
-                                if (exception != null) {
-                                    logger.error("Failed to send OrderCancelled for order: ${orders.orderId}", exception)
-                                } else {
-                                    logger.info("Sent OrderCancelled event to orders-cancelled topic for order: ${orders.orderId}")
+                            // 1. Velocity check per street address
+                            val addressKey = orders.shippingAddress.streetAddress
+                            var isFraud = false
+                            if (addressKey != null && addressKey.isNotBlank()) {
+                                try {
+                                    val key = "fraud:velocity:${addressKey.replace(" ", "_")}"
+                                    val count = jedis.incr(key)
+                                    if (count == 1L) {
+                                        jedis.expire(key, 3600) // TTL 1 hour
+                                    }
+                                    if (count > 5) {
+                                        isFraud = true
+                                        logger.warn("Velocity fraud detected for address '$addressKey': $count orders/hour (Limit: 5).")
+                                    }
+                                } catch (e: Exception) {
+                                    logger.error("Failed to perform velocity check in Valkey, failing open: ", e)
                                 }
                             }
-                        }
 
-                        newCount
-                    }
+                            // 2. Dynamic feature flag score threshold check or amount check
+                            val threshold = getFeatureFlagValue("fraud_threshold_score")
+                            var totalUnits = orders.shippingCost.units
+                            var totalNanos = orders.shippingCost.nanos
+                            for (orderItem in orders.itemsList) {
+                                val qty = orderItem.item.quantity
+                                totalUnits += orderItem.cost.units * qty
+                                totalNanos += orderItem.cost.nanos * qty
+                            }
+                            val totalAmount = totalUnits.toDouble() + (totalNanos.toDouble() / 1_000_000_000.0)
+
+                            val limit = if (threshold > 0) threshold.toDouble() else 1000.0 // default limit to $1000 to avoid false positives in demo
+                            if (totalAmount > limit) {
+                                isFraud = true
+                                logger.warn("Amount fraud detected: Order ${orders.orderId} total amount $totalAmount exceeds limit $limit.")
+                            }
+
+                            if (isFraud) {
+                                logger.warn("Order ${orders.orderId} rejected. Publishing OrderCancelled event.")
+                                val orderCancelled = OrderCancelled.newBuilder()
+                                    .setOrderId(orders.orderId)
+                                    .setReason("Fraud detected by Velocity Check or Amount Limit ($limit)")
+                                    .build()
+
+                                val producerRecord = ProducerRecord<String, ByteArray>(
+                                    "orders-cancelled",
+                                    orders.orderId,
+                                    orderCancelled.toByteArray()
+                                )
+                                producer.send(producerRecord) { _, exception ->
+                                    if (exception != null) {
+                                        logger.error("Failed to send OrderCancelled for order: ${orders.orderId}", exception)
+                                    } else {
+                                        logger.info("Sent OrderCancelled event to orders-cancelled topic for order: ${orders.orderId}")
+                                    }
+                                }
+                            } else {
+                                logger.info("Order ${orders.orderId} approved. Publishing OrderApproved event.")
+                                val producerRecord = ProducerRecord<String, ByteArray>(
+                                    "orders-approved",
+                                    orders.orderId,
+                                    record.value() // Forward the original OrderResult payload
+                                )
+                                producer.send(producerRecord) { _, exception ->
+                                    if (exception != null) {
+                                        logger.error("Failed to send OrderApproved for order: ${orders.orderId}", exception)
+                                    } else {
+                                        logger.info("Sent OrderApproved event to orders-approved topic for order: ${orders.orderId}")
+                                    }
+                                }
+                            }
+
+                            newCount
+                        }
+                }
+            } ?: run {
+                // Valkey/Redis bypass mode
+                while (true) {
+                    totalCount = consumer
+                        .poll(ofMillis(100))
+                        .fold(totalCount) { accumulator, record ->
+                            val newCount = accumulator + 1
+                            if (getFeatureFlagValue("kafkaQueueProblems") > 0) {
+                                logger.info("FeatureFlag 'kafkaQueueProblems' is enabled, sleeping 1 second")
+                                Thread.sleep(1000)
+                            }
+                            val orders = OrderResult.parseFrom(record.value())
+                            logger.info("Consumed record with orderId: ${orders.orderId}, and updated total count to: $newCount")
+
+                            val threshold = getFeatureFlagValue("fraud_threshold_score")
+                            var totalUnits = orders.shippingCost.units
+                            var totalNanos = orders.shippingCost.nanos
+                            for (orderItem in orders.itemsList) {
+                                val qty = orderItem.item.quantity
+                                totalUnits += orderItem.cost.units * qty
+                                totalNanos += orderItem.cost.nanos * qty
+                            }
+                            val totalAmount = totalUnits.toDouble() + (totalNanos.toDouble() / 1_000_000_000.0)
+
+                            val limit = if (threshold > 0) threshold.toDouble() else 1000.0
+                            val isFraud = totalAmount > limit
+
+                            if (isFraud) {
+                                logger.warn("Order ${orders.orderId} rejected. Publishing OrderCancelled event.")
+                                val orderCancelled = OrderCancelled.newBuilder()
+                                    .setOrderId(orders.orderId)
+                                    .setReason("Fraud detected by Amount Limit ($limit)")
+                                    .build()
+
+                                val producerRecord = ProducerRecord<String, ByteArray>(
+                                    "orders-cancelled",
+                                    orders.orderId,
+                                    orderCancelled.toByteArray()
+                                )
+                                producer.send(producerRecord) { _, exception ->
+                                    if (exception != null) {
+                                        logger.error("Failed to send OrderCancelled for order: ${orders.orderId}", exception)
+                                    } else {
+                                        logger.info("Sent OrderCancelled event to orders-cancelled topic for order: ${orders.orderId}")
+                                    }
+                                }
+                            } else {
+                                logger.info("Order ${orders.orderId} approved. Publishing OrderApproved event.")
+                                val producerRecord = ProducerRecord<String, ByteArray>(
+                                    "orders-approved",
+                                    orders.orderId,
+                                    record.value()
+                                )
+                                producer.send(producerRecord) { _, exception ->
+                                    if (exception != null) {
+                                        logger.error("Failed to send OrderApproved for order: ${orders.orderId}", exception)
+                                    } else {
+                                        logger.info("Sent OrderApproved event to orders-approved topic for order: ${orders.orderId}")
+                                    }
+                                }
+                            }
+
+                            newCount
+                        }
+                }
             }
         }
     }

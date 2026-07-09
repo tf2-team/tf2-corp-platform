@@ -58,24 +58,24 @@ Managed in **`techx-corp-infra`** via module `modules/github-actions-ecr`:
 
 | Environment stack | Role name | GitHub Environment | ECR repo | Creates OIDC provider? |
 |---|---|---|---|---|
-| `enviroments/production` | `techx-gha-platform-prod` | `production` | `techx-corp` | yes (account singleton) |
-| `enviroments/development` | `techx-gha-platform-dev` | `development` | `techx-dev-corp` | no (looks up existing) |
+| `environments/production` | `techx-gha-platform-prod` | `production` | `techx-corp` | yes (account singleton) |
+| `environments/development` | `techx-gha-platform-dev` | `development` | `techx-dev-corp` | no (looks up existing) |
 
 Apply production first (creates `token.actions.githubusercontent.com` OIDC provider), then development:
 
 ```bash
-terraform -chdir=enviroments/production plan -out=prod.tfplan
-terraform -chdir=enviroments/production apply "prod.tfplan"
+terraform -chdir=environments/production plan -out=prod.tfplan
+terraform -chdir=environments/production apply "prod.tfplan"
 
-terraform -chdir=enviroments/development plan -out=dev.tfplan
-terraform -chdir=enviroments/development apply "dev.tfplan"
+terraform -chdir=environments/development plan -out=dev.tfplan
+terraform -chdir=environments/development apply "dev.tfplan"
 ```
 
 Read role ARNs:
 
 ```bash
-terraform -chdir=enviroments/production output github_actions_ecr_role_arn
-terraform -chdir=enviroments/development output github_actions_ecr_role_arn
+terraform -chdir=environments/production output github_actions_ecr_role_arn
+terraform -chdir=environments/development output github_actions_ecr_role_arn
 ```
 
 Trust subjects include the GitHub Environment **and** branch refs (`main` / tags for prod, `techx-dev-corp` for dev).
