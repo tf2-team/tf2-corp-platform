@@ -125,11 +125,11 @@ build-multiplatform-and-push:
 
 .PHONY: clean-images
 clean-images:
-	@docker rmi $(shell docker images --filter=reference="nghiadaulau/techx-corp:1.0-*" -q); \
+	@docker rmi $$(docker images --filter=reference="*/techx-corp/*" --filter=reference="*/techx-dev-corp/*" -q) 2>/dev/null; \
     if [ $$? -ne 0 ]; \
     then \
     	echo; \
-        echo "Failed to removed 1 or more TechX Corp Platform images."; \
+        echo "Failed to remove 1 or more TechX Corp Platform images."; \
         echo "Check to ensure the Demo is not running by executing: make stop"; \
         false; \
     fi

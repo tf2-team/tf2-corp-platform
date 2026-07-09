@@ -2,75 +2,119 @@
 
 > [!NOTE]
 > **Vai trò của Repository này (`techx-corp-platform`):**
-> Repository này chịu trách nhiệm chính về việc đóng gói mã nguồn ứng dụng, build và push Docker images cho toàn bộ các dịch vụ microservices lên AWS ECR Registry.
+> Repository này chịu trách nhiệm chính về việc đóng gói mã nguồn ứng dụng, build và push Docker images cho toàn bộ các dịch vụ microservices lên AWS ECR Registry theo quy ước **`[REGISTRY]/[PROJECT]/[SERVICE]:[VERSION]`**.
 
 ---
 
 ## 1. Mục tiêu (Objectives)
-Tài liệu này cung cấp hướng dẫn từng bước để triển khai toàn bộ nền tảng TechX Corp lên môi trường Production trên AWS EKS. Quy trình bao gồm:
-- Khởi tạo hạ tầng cơ sở và Remote State bằng Terraform.
+
+Tài liệu này cung cấp hướng dẫn từng bước để triển khai toàn bộ nền tảng TechX Corp lên AWS EKS. Quy trình bao gồm:
+
+- Khởi tạo hạ tầng cơ sở và Remote State bằng Terraform (`techx-corp-infra`).
+- Tạo **nested ECR repositories** (`techx-corp/*`, `techx-dev-corp/*`) và IAM role GitHub Actions OIDC.
 - Triển khai EKS Cluster và cấu hình AWS Load Balancer Controller.
-- Build và Push Docker images của các microservices lên AWS ECR.
-- Triển khai ứng dụng bằng Helm với chế độ High Availability, Ingress ALB, kiểm tra bảo mật route và cơ chế rollback tự động/thủ công.
+- Build và Push Docker images (CI/CD hoặc thủ công).
+- Triển khai ứng dụng bằng Helm (`techx-corp-chart`) với ALB, smoke test và rollback an toàn.
 
 ## 2. Bản đồ Repository (Repository Map)
-Hệ thống TechX Corp được chia thành 3 repository chuyên biệt:
-- **`techx-corp-platform`**: Chứa mã nguồn ứng dụng microservices, Dockerfiles, cấu hình Docker Compose / Buildx để đóng gói hình ảnh ứng dụng.
-- **`techx-corp-infra`**: Quản lý cơ sở hạ tầng dưới dạng mã (IaC) sử dụng Terraform để thiết lập VPC, EKS cluster, ECR registries, IAM roles và chính sách bảo mật.
-- **`techx-corp-chart`**: Chứa Helm chart của ứng dụng để triển khai lên Kubernetes, định nghĩa các Ingress public ALB, chạy script kiểm tra khói (Smoke Test) và cấu hình các chính sách nâng cấp an toàn.
+
+| Repository | Vai trò |
+|---|---|
+| **`techx-corp-platform`** | Mã nguồn microservices, Dockerfiles, Compose/Buildx, GitHub Actions build/push |
+| **`techx-corp-infra`** | Terraform: VPC, EKS, nested ECR, GitHub OIDC roles, ALB Controller IAM |
+| **`techx-corp-chart`** | Helm chart, public ALB values, smoke test, rollout/rollback |
 
 ## 3. Điều kiện tiên quyết (Prerequisites)
-Trước khi bắt đầu, hãy đảm bảo toán tử (operator) đã đáp ứng các điều kiện sau:
-- **Tài khoản AWS**: Quyền truy cập quản trị vào tài khoản AWS ID `493499579600` tại vùng `us-east-1`.
-- **AWS CLI**: Đã cài đặt và cấu hình credentials hợp lệ với profile AWS phù hợp.
-- **Terraform**: Phiên bản `>= 1.10.0` (Khuyến nghị sử dụng v1.15.7), AWS provider `~> 5.0`.
-- **Docker & Buildx**: Docker Engine đang hoạt động và hỗ trợ Buildx (để build/push multi-architecture images).
-- **Helm**: Phiên bản `v3` trở lên.
-- **kubectl**: Đã cài đặt để quản trị cluster Kubernetes.
 
-## 4. Các Hằng số & Cấu hình Hệ thống (Constants & Configurations)
-Quy trình triển khai sử dụng các hằng số cố định sau. Toán tử KHÔNG ĐƯỢC THAY ĐỔI các giá trị này để đảm bảo tính nhất quán trên môi trường production:
-- **AWS Account ID**: `493499579600`
-- **AWS Region**: `us-east-1`
-- **Project Name**: `techx`
-- **EKS Cluster Name**: `techx-tf2`
-- **ECR Repository**: `493499579600.dkr.ecr.us-east-1.amazonaws.com/techx-corp`
-- **Kubernetes Namespace mặc định**: `techx-corp` (Lưu ý: Mặc định triển khai ứng dụng vào namespace này. Nếu đã deploy tài nguyên demo vào một namespace khác từ trước, toán tử có thể ghi đè namespace tương ứng trong các câu lệnh).
-- **Đường dẫn môi trường Live (Bảo toàn lỗi chính tả)**: `enviroments/production`
+- **AWS Account**: `493499579600`, region `us-east-1`
+- **AWS CLI**, **Terraform** `>= 1.10.0` (khuyến nghị `v1.15.7`), provider `~> 5.0`
+- **Docker & Buildx** (multi-arch)
+- **Helm** v3+, **kubectl**
+- **GitHub** (repo `tmcmanhcuong/tf2-corp-platform`) đã cấu hình Environments + OIDC (xem [CICD.md](./CICD.md))
+
+## 4. Các Hằng số & Cấu hình Hệ thống
+
+### Production
+
+| Hằng số | Giá trị |
+|---|---|
+| AWS Account / Region | `493499579600` / `us-east-1` |
+| Project (infra) | `techx` |
+| EKS Cluster | `techx-tf2` |
+| ECR project prefix | `techx-corp` |
+| Image base (`IMAGE_NAME` / Helm `repository`) | `493499579600.dkr.ecr.us-east-1.amazonaws.com/techx-corp` |
+| Git branch → CD | `main` (hoặc tag `v*`) |
+| GitHub Environment | `production` |
+| Namespace | `techx-corp` |
+| Terraform path | `enviroments/production` (giữ chính tả thư mục) |
+
+### Development
+
+| Hằng số | Giá trị |
+|---|---|
+| ECR project prefix | `techx-dev-corp` |
+| Image base | `493499579600.dkr.ecr.us-east-1.amazonaws.com/techx-dev-corp` |
+| Git branch → CD | `techx-dev-corp` |
+| GitHub Environment | `development` |
+| Terraform path | `enviroments/development` |
+
+### Quy ước đặt tên image (bắt buộc)
+
+```text
+[REGISTRY]/[PROJECT]/[SERVICE]:[VERSION]
+```
+
+Ví dụ:
+
+```text
+493499579600.dkr.ecr.us-east-1.amazonaws.com/techx-corp/ad:sha-a1b2c3d
+493499579600.dkr.ecr.us-east-1.amazonaws.com/techx-corp/checkout:sha-a1b2c3d
+493499579600.dkr.ecr.us-east-1.amazonaws.com/techx-dev-corp/frontend:sha-a1b2c3d
+```
+
+| Thành phần | Ý nghĩa | Ví dụ |
+|---|---|---|
+| `REGISTRY` | ECR registry host | `493499579600.dkr.ecr.us-east-1.amazonaws.com` |
+| `PROJECT` | Prefix ECR (môi trường) | `techx-corp`, `techx-dev-corp` |
+| `SERVICE` | Tên microservice | `ad`, `checkout`, `frontend` |
+| `VERSION` | Tag phiên bản | `sha-a1b2c3d`, `v1.2.3` |
+
+Compose / bake:
+
+```text
+${IMAGE_NAME}/<service>:${DEMO_VERSION}
+# IMAGE_NAME = REGISTRY/PROJECT (không gồm service)
+```
+
+Helm:
+
+```text
+default.image.repository = REGISTRY/PROJECT
+default.image.tag        = VERSION
+# Chart tự append /SERVICE → REGISTRY/PROJECT/SERVICE:VERSION
+```
+
+> **Lưu ý:** Định dạng cũ `REGISTRY/PROJECT:VERSION-SERVICE` (ví dụ `techx-corp:1.0-ad`) **không còn dùng**.
 
 ---
 
 ## Phase 1: Terraform Bootstrapping & Production Provisioning
+
 *Thực hiện tại repository `techx-corp-infra`*
 
 > [!CAUTION]
 > **Quy tắc an toàn Terraform:**
-> 1. **KHÔNG COMMIT file state cục bộ (`*.tfstate`, `*.tfstate.backup`)** lên Git vì chúng chứa thông tin nhạy cảm ở dạng văn bản rõ. Đảm bảo `.gitignore` đã chặn các file này.
-> 2. **KHÔNG COMMIT file cấu hình backend thực tế (`backend.hcl`)** chứa thông tin cụ thể về bucket và state key.
-> 3. **KHÔNG CHẠY apply trực tiếp không có plan review (`terraform apply`)**. Mọi thay đổi trên production bắt buộc phải chạy thông qua việc tạo plan trước (`terraform plan -out=prod.tfplan`), review cẩn thận, sau đó apply chính xác file plan đó (`terraform apply "prod.tfplan"`).
+> 1. **KHÔNG COMMIT** `*.tfstate`, `*.tfstate.backup`.
+> 2. **KHÔNG COMMIT** `backend.hcl` thật.
+> 3. **Luôn** `plan -out=...` → review → `apply` file plan (không `apply` trực tiếp trên production).
 
-### Bước 1: Khởi tạo S3 Remote State Bucket (Bootstrap)
-Bước này tạo hạ tầng lưu trữ S3 Bucket và KMS Key phục vụ cho việc quản lý Remote State tập trung.
+### Bước 1: Bootstrap Remote State (S3)
 
-1. Comment hoặc để trống block backend trong `bootstrap/provider.tf` (đã thực hiện mặc định).
-2. Khởi tạo thư mục bootstrap:
-   ```bash
-   terraform -chdir=bootstrap init
-   ```
-3. Tạo plan lưu trữ:
-   * PowerShell:
-     ```powershell
-     terraform -chdir=bootstrap plan "-out=bootstrap.tfplan"
-     ```
-   * CMD / Bash:
-     ```bash
-     terraform -chdir=bootstrap plan -out=bootstrap.tfplan
-     ```
-4. Áp dụng plan để tạo tài nguyên trên AWS:
-   ```bash
-   terraform -chdir=bootstrap apply "bootstrap.tfplan"
-   ```
-5. Tạo file cấu hình `bootstrap/backend.hcl` (KHÔNG commit file này):
+1. `terraform -chdir=bootstrap init`
+2. `terraform -chdir=bootstrap plan -out=bootstrap.tfplan`
+3. `terraform -chdir=bootstrap apply "bootstrap.tfplan"`
+4. Tạo `bootstrap/backend.hcl` (không commit):
+
    ```hcl
    bucket       = "techx-tf-state-493499579600-us-east-1"
    key          = "bootstrap/terraform.tfstate"
@@ -78,283 +122,262 @@ Bước này tạo hạ tầng lưu trữ S3 Bucket và KMS Key phục vụ cho 
    encrypt      = true
    use_lockfile = true
    ```
-6. Bỏ comment block `backend "s3" {}` trong `bootstrap/provider.tf` và di chuyển state file lên S3:
-   * PowerShell:
-     ```powershell
-     terraform -chdir=bootstrap init "-migrate-state" "-force-copy" "-backend-config=backend.hcl"
-     ```
-   * CMD / Bash:
-     ```bash
-     terraform -chdir=bootstrap init -migrate-state -force-copy -backend-config=backend.hcl
-     ```
-7. Xác minh di chuyển thành công bằng cách liệt kê tài nguyên:
+
+5. Bật backend S3 và migrate state:
+
    ```bash
+   terraform -chdir=bootstrap init -migrate-state -force-copy -backend-config=backend.hcl
    terraform -chdir=bootstrap state list
    ```
-   Sau khi xác nhận thành công, hãy xóa file `bootstrap/terraform.tfstate` cục bộ.
 
-### Bước 2: Triển khai Hạ tầng Production
-Chúng ta tiến hành tạo VPC, EKS Cluster (`techx-tf2`), ECR Registry, và các IAM roles cho môi trường Production.
+### Bước 2: Provision production (VPC, EKS, nested ECR, GHA OIDC)
 
-1. Tạo file cấu hình `enviroments/production/backend.hcl` (KHÔNG commit file này):
-   ```hcl
-   bucket       = "techx-tf-state-493499579600-us-east-1"
-   key          = "production/terraform.tfstate"
-   region       = "us-east-1"
-   encrypt      = true
-   use_lockfile = true
-   ```
-2. Đảm bảo cấu hình backend trong `enviroments/production/provider.tf` đã được bật:
-   ```hcl
-   backend "s3" {
-     key          = "production/terraform.tfstate"
-     encrypt      = true
-     use_lockfile = true
-   }
-   ```
-3. Khởi tạo backend cho môi trường Production:
-   * PowerShell:
-     ```powershell
-     terraform -chdir=enviroments/production init "-backend-config=backend.hcl"
-     ```
-   * CMD / Bash:
-     ```bash
-     terraform -chdir=enviroments/production init -backend-config=backend.hcl
-     ```
-4. Kiểm tra lỗi cú pháp và format:
-   ```bash
-   terraform -chdir=enviroments/production fmt -check
-   terraform -chdir=enviroments/production validate
-   ```
-5. Thực hiện tạo plan triển khai:
-   * PowerShell:
-     ```powershell
-     terraform -chdir=enviroments/production plan "-out=prod.tfplan"
-     ```
-   * CMD / Bash:
-     ```bash
-     terraform -chdir=enviroments/production plan -out=prod.tfplan
-     ```
-6. Review kỹ lưỡng nội dung plan, sau đó apply plan lên AWS:
-   ```bash
-   terraform -chdir=enviroments/production apply "prod.tfplan"
-   ```
+Terraform production tạo:
+
+- VPC + EKS (`techx-tf2`)
+- **Nested ECR**: `techx-corp/<service>` cho toàn bộ catalog platform
+- **GitHub Actions OIDC provider** + role `techx-gha-platform-prod` (push ECR)
+- IAM ALB Controller
+
+```bash
+# backend.hcl (không commit)
+# key = "production/terraform.tfstate"
+
+terraform -chdir=enviroments/production init -backend-config=backend.hcl
+terraform -chdir=enviroments/production fmt -check
+terraform -chdir=enviroments/production validate
+terraform -chdir=enviroments/production plan -out=prod.tfplan
+# Review plan — đặc biệt các aws_ecr_repository nested
+terraform -chdir=enviroments/production apply "prod.tfplan"
+```
+
+Outputs hữu ích:
+
+```bash
+terraform -chdir=enviroments/production output ecr_image_base_url
+terraform -chdir=enviroments/production output ecr_service_names
+terraform -chdir=enviroments/production output github_actions_ecr_role_arn
+```
+
+### Bước 3 (tuỳ chọn): Provision development
+
+```bash
+terraform -chdir=enviroments/development init -backend-config=backend.hcl
+terraform -chdir=enviroments/development plan -out=dev.tfplan
+terraform -chdir=enviroments/development apply "dev.tfplan"
+
+terraform -chdir=enviroments/development output ecr_image_base_url
+# → .../techx-dev-corp
+terraform -chdir=enviroments/development output github_actions_ecr_role_arn
+```
+
+Gán output `github_actions_ecr_role_arn` vào GitHub Environment variable **`AWS_ROLE_ARN`**, và `ecr_image_base_url` vào **`IMAGE_NAME`** (xem [CICD.md](./CICD.md)).
 
 ---
 
-## Phase 2: EKS Kubeconfig & AWS Load Balancer Controller Installation
-*Thực hiện tại môi trường shell quản trị*
+## Phase 2: EKS Kubeconfig & AWS Load Balancer Controller
 
-Sau khi hạ tầng EKS đã được tạo thành công, ta cần kết nối và cài đặt AWS Load Balancer Controller để quản lý Ingress ALB.
-
-### Bước 1: Cấu hình Kubeconfig
-Chạy lệnh sau để tạo/cập nhật file cấu hình kết nối kubectl tới EKS Cluster `techx-tf2`:
 ```bash
 aws eks update-kubeconfig --region us-east-1 --name techx-tf2
-```
-Kiểm tra kết nối tới cluster:
-```bash
 kubectl get nodes
 ```
 
-### Bước 2: Cài đặt AWS Load Balancer Controller
-1. Thêm EKS Helm repository:
-   ```bash
-   helm repo add eks https://aws.github.io/eks-charts
-   helm repo update
-   ```
-2. Lấy giá trị IAM Role ARN từ output của Terraform ở Phase 1:
-   ```bash
-   terraform -chdir=enviroments/production output aws_load_balancer_controller_role_arn
-   ```
-   Hoặc chạy trực tiếp lệnh Helm được sinh ra tự động từ output của Terraform:
-   ```bash
-   terraform -chdir=enviroments/production output -raw aws_load_balancer_controller_helm_command
-   ```
-   *Lệnh Helm mẫu sinh ra bởi Terraform:*
-   ```bash
-   helm upgrade --install aws-load-balancer-controller eks/aws-load-balancer-controller \
-     -n kube-system \
-     --set clusterName=techx-tf2 \
-     --set serviceAccount.create=true \
-     --set serviceAccount.name=aws-load-balancer-controller \
-     --set serviceAccount.annotations.eks\.amazonaws\.com/role-arn=arn:aws:iam::493499579600:role/techx-tf2-alb-controller
-   ```
-3. Kiểm tra trạng thái hoạt động của controller:
-   ```bash
-   kubectl get deployment -n kube-system aws-load-balancer-controller
-   ```
+```bash
+helm repo add eks https://aws.github.io/eks-charts && helm repo update
+terraform -chdir=enviroments/production output -raw aws_load_balancer_controller_helm_command
+# Chạy lệnh Helm in ra, sau đó:
+kubectl get deployment -n kube-system aws-load-balancer-controller
+```
 
 ---
 
 ## Phase 3: Docker Image Build & Push
+
 *Thực hiện tại repository `techx-corp-platform`*
 
-> [!IMPORTANT]
-> **Lưu ý về file `.env.override`:**
-> File cấu hình cục bộ `techx-corp-platform/.env.override` hiện tại đang được theo dõi trên Git trỏ tới repo test (`493499579600.dkr.ecr.us-east-1.amazonaws.com/test`). Do đó, nếu chạy trực tiếp các lệnh `make` thô, hình ảnh sẽ bị đẩy nhầm vào registry `/test`.
-> Để triển khai môi trường Production, toán tử bắt buộc phải thực hiện một trong hai cách dưới đây:
-> - **Cách 1 (Khuyến nghị trong CI/CD)**: Sử dụng các biến môi trường trực tiếp từ shell hoặc chạy trực tiếp lệnh `docker buildx bake` với các tham số ghi đè.
-> - **Cách 2**: Kiểm tra và chỉnh sửa file `.env.override` cục bộ trỏ tới registry production trước khi chạy lệnh `make`.
+> [!TIP]
+> **Khuyến nghị — GitHub Actions** (`.github/workflows/build-and-push.yml`):
+>
+> | Trigger | GitHub Environment | ECR PROJECT |
+> |---|---|---|
+> | push `main` / tag `v*` | `production` | `techx-corp` |
+> | push branch `techx-dev-corp` | `development` | `techx-dev-corp` |
+> | `workflow_dispatch` | chọn thủ công | theo environment |
+>
+> Tag CI: `sha-<7-char>` trên branch; tên tag git (ví dụ `v1.2.3`) khi push tag.  
+> Chi tiết OIDC / Environments: **[CICD.md](./CICD.md)**.
 
-### Bước 1: Đăng nhập vào AWS ECR Production
-Chạy lệnh xác thực Docker với ECR trong region `us-east-1`:
+> [!IMPORTANT]
+> **`.env.override`** có thể trỏ registry test (`.../test`).  
+> CI **không** source `.env.override`. Khi chạy tay: ghi đè `IMAGE_NAME` / `DEMO_VERSION` qua env, hoặc sửa `.env.override` cẩn thận.
+
+### Bước 0 (ưu tiên): CI/CD
+
+1. Setup GitHub Environments (`AWS_ROLE_ARN`, `IMAGE_NAME`) theo [CICD.md](./CICD.md).
+2. Push `main` (prod) hoặc `techx-dev-corp` (dev), hoặc Run workflow.
+3. Xác minh:
+
+   ```bash
+   aws ecr describe-images --repository-name techx-corp/ad --region us-east-1 --max-items 5
+   # dev: techx-dev-corp/ad
+   ```
+
+### Bước 1: Login ECR (thủ công)
+
 ```bash
-aws ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin 493499579600.dkr.ecr.us-east-1.amazonaws.com
+aws ecr get-login-password --region us-east-1 \
+  | docker login --username AWS --password-stdin 493499579600.dkr.ecr.us-east-1.amazonaws.com
 ```
 
-### Bước 2: Thực hiện Build & Push hình ảnh dịch vụ
-Sử dụng các hằng số quy định: `IMAGE_NAME=493499579600.dkr.ecr.us-east-1.amazonaws.com/techx-corp`, `IMAGE_VERSION=1.0`, và `DEMO_VERSION=1.0`.
+### Bước 2: Build & push (thủ công)
 
-#### Cách 1: Sử dụng Docker CLI & Buildx Bake trực tiếp (Không dùng Makefile)
-1. Tạo một multiplatform builder nếu chưa có:
-   ```bash
-   docker buildx create --name techx-corp-builder --bootstrap --use --driver docker-container --config ./buildkitd.toml
-   ```
-2. Build và Push trực tiếp bằng Docker Buildx Bake để tối ưu hóa caching và song song hóa:
-   ```bash
-   IMAGE_NAME=493499579600.dkr.ecr.us-east-1.amazonaws.com/techx-corp IMAGE_VERSION=1.0 DEMO_VERSION=1.0 docker buildx bake -f docker-compose.yml --push --set "*.platform=linux/amd64,linux/arm64"
-   ```
+```bash
+docker buildx create --name techx-corp-builder --bootstrap --use \
+  --driver docker-container --config ./buildkitd.toml
 
-#### Cách 2: Sử dụng Makefile (Sau khi cập nhật cấu hình)
-1. Cập nhật nội dung file `.env.override` cục bộ thành:
-   ```env
-   IMAGE_NAME=493499579600.dkr.ecr.us-east-1.amazonaws.com/techx-corp
-   IMAGE_VERSION=1.0
-   DEMO_VERSION=1.0
-   ```
-2. Khởi tạo builder:
-   ```bash
-   make create-multiplatform-builder
-   ```
-3. Thực hiện build và push multiplatform:
-   ```bash
-   make build-multiplatform-and-push
-   ```
+IMAGE_NAME=493499579600.dkr.ecr.us-east-1.amazonaws.com/techx-corp \
+IMAGE_VERSION=sha-manual DEMO_VERSION=sha-manual \
+docker buildx bake -f docker-compose.yml --push \
+  --set "*.platform=linux/amd64,linux/arm64"
+```
+
+Kết quả mẫu: `.../techx-corp/ad:sha-manual`, `.../techx-corp/checkout:sha-manual`, …
+
+Hoặc Makefile sau khi set `.env.override`:
+
+```env
+IMAGE_NAME=493499579600.dkr.ecr.us-east-1.amazonaws.com/techx-corp
+IMAGE_VERSION=sha-manual
+DEMO_VERSION=sha-manual
+```
+
+```bash
+make create-multiplatform-builder
+make build-multiplatform-and-push
+```
 
 ---
 
 ## Phase 4: Helm Deploy
+
 *Thực hiện tại repository `techx-corp-chart`*
 
-Quy trình nâng cấp/triển khai ứng dụng an toàn sử dụng các tham số bắt buộc để đảm bảo tính sẵn sàng cao, kiểm tra trạng thái và tự động rollback khi gặp lỗi.
+Chart render image:
 
-### Bước 1: Nâng cấp / Cài đặt Helm Release
-Để triển khai ứng dụng, toán tử chạy lệnh nâng cấp tích hợp file cấu hình Ingress ALB công cộng (`values-public-alb.yaml`) và chỉ định ECR repo production:
+```text
+{{ default.image.repository }}/{{ service }}:{{ default.image.tag }}
+→ 493499579600.dkr.ecr.us-east-1.amazonaws.com/techx-corp/ad:sha-a1b2c3d
+```
 
 ```bash
 helm upgrade --install techx-corp techx-corp-chart \
   -n techx-corp --create-namespace \
   -f techx-corp-chart/values-public-alb.yaml \
   --set default.image.repository=493499579600.dkr.ecr.us-east-1.amazonaws.com/techx-corp \
+  --set default.image.tag=sha-a1b2c3d \
   --wait --atomic --timeout 10m --history-max 10
 ```
 
-*Ý nghĩa của các tham số an toàn:*
-- `-f techx-corp-chart/values-public-alb.yaml`: Kích hoạt public ALB Ingress cho component `frontend-proxy`.
-- `--set default.image.repository=...`: Ghi đè địa chỉ ECR registry sang địa chỉ production cụ thể vùng `us-east-1`.
-- `--wait`: Bắt buộc Helm chờ tất cả Pods chuyển sang trạng thái `Ready`, các PVCs được gán và các Ingress/Services hoạt động trước khi báo thành công.
-- `--atomic`: Nếu có bất kỳ lỗi nào xảy ra trong quá trình triển khai hoặc hết thời gian timeout, Helm sẽ tự động rollback release về phiên bản chạy ổn định gần nhất trước đó.
-- `--timeout 10m`: Cung cấp thời gian tối đa 10 phút để tải ảnh từ ECR và khởi động các database/broker (như PostgreSQL, Kafka, Valkey).
-- `--history-max 10`: Giới hạn lưu trữ tối đa 10 revision để tránh ConfigMap bloating trong Kubernetes.
+- `repository` = **REGISTRY/PROJECT** (không có `/service`)
+- `tag` = **VERSION only** (không còn suffix `-service`)
+- `--wait --atomic --timeout 10m --history-max 10`: sẵn sàng cao + auto-rollback
+
+### Toggle ALB path block only (release already installed)
+
+If the chart is already deployed, flip storefront path blocking without changing images:
+
+```bash
+# ON  — BLOCK /grafana /jaeger /loadgen /feature /flagservice /otlp-http (HTTP 403)
+helm upgrade techx-corp techx-corp-chart \
+  -n techx-corp \
+  --reuse-values \
+  --set components.frontend-proxy.publicAlb.blockSensitivePaths=true \
+  --wait --timeout 5m
+
+# OFF — allow all paths to frontend-proxy
+helm upgrade techx-corp techx-corp-chart \
+  -n techx-corp \
+  --reuse-values \
+  --set components.frontend-proxy.publicAlb.blockSensitivePaths=false \
+  --wait --timeout 5m
+```
+
+Chi tiết posture + verify: `techx-corp-chart/docs/DEPLOYMENT.md` (Phase 4 — *Storefront ALB path blocking*).
 
 ---
 
 ## Phase 5: Verification & Access
-*Thực hiện tại repository `techx-corp-chart`*
 
-Sau khi Helm báo trạng thái triển khai thành công, toán tử cần xác minh hệ thống hoạt động bình thường.
-
-### Bước 1: Lấy địa chỉ Application Load Balancer (ALB)
-AWS Load Balancer Controller sẽ phân bổ một ALB công cộng. Lấy hostname của ALB:
 ```bash
-kubectl get ingress frontend-proxy-public -n techx-corp -o jsonpath='{.status.loadBalancer.ingress[0].hostname}'
+kubectl get ingress frontend-proxy-public -n techx-corp \
+  -o jsonpath='{.status.loadBalancer.ingress[0].hostname}'
 ```
-*Lưu ý: Có thể mất từ 2-5 phút để AWS hoàn tất việc tạo ALB và phân giải DNS.*
 
-### Bước 2: Chạy Smoke Test xác thực ứng dụng & Tính năng Chặn Route
-Chạy script kiểm thử khói để tự động hóa các bước kiểm tra (truy cập homepage, lấy danh sách sản phẩm, thêm vào giỏ hàng, checkout và xác thực route-blocking):
+Smoke test:
 
-1. **Kiểm tra thông qua Port-Forward cục bộ** (Tiện lợi để kiểm tra API nội bộ):
-   ```bash
-   bash techx-corp-chart/scripts/smoke-test.sh --namespace techx-corp
-   ```
-2. **Kiểm tra trực tiếp qua Public ALB** (Bao gồm cả xác minh ALB Ingress route-blocking các đường dẫn nhạy cảm như `/grafana`, `/jaeger`, `/loadgen`):
-   ```bash
-   # Lấy địa chỉ ALB DNS
-   ALB_DNS=$(kubectl get ingress frontend-proxy-public -n techx-corp -o jsonpath='{.status.loadBalancer.ingress[0].hostname}')
-   
-   # Chạy smoke test hướng vào ALB
-   bash techx-corp-chart/scripts/smoke-test.sh --namespace techx-corp --alb-host "$ALB_DNS"
-   ```
-   Nếu tính năng chặn route (ALB route-blocking) cấu hình đúng, các request truy cập vào `/grafana` hay `/jaeger` qua ALB công cộng sẽ nhận mã lỗi `HTTP 403 Forbidden` và script smoke-test sẽ hiển thị trạng thái `✔ Route /grafana is blocked (HTTP 403)`.
+```bash
+bash techx-corp-chart/scripts/smoke-test.sh --namespace techx-corp
+
+ALB_DNS=$(kubectl get ingress frontend-proxy-public -n techx-corp \
+  -o jsonpath='{.status.loadBalancer.ingress[0].hostname}')
+bash techx-corp-chart/scripts/smoke-test.sh --namespace techx-corp --alb-host "$ALB_DNS"
+```
+
+Route công cộng nhạy cảm (`/grafana`, `/jaeger`, `/loadgen`) qua ALB phải trả **HTTP 403**.
 
 ---
 
 ## Phase 6: Rollback & Safety
-Trường hợp xảy ra lỗi ứng dụng ở bước Smoke Test hoặc hệ thống bị giảm hiệu năng đột ngột sau nâng cấp, toán tử cần nhanh chóng đưa hệ thống về trạng thái ổn định.
 
-### Cơ chế Rollback Helm
-1. **Kiểm tra lịch sử các phiên bản** để tìm revision chạy tốt trước đó:
-   ```bash
-   helm history techx-corp -n techx-corp
-   ```
-2. **Thực hiện lệnh rollback** về revision mong muốn (ví dụ revision `5`):
-   ```bash
-   helm rollback techx-corp 5 -n techx-corp --wait --timeout 10m
-   ```
-3. **Xác minh trạng thái rollout** của các thành phần critical:
-   ```bash
-   kubectl -n techx-corp rollout status deploy/frontend-proxy --timeout=300s
-   ```
-   ```bash
-   kubectl -n techx-corp rollout status deploy/frontend --timeout=300s
-   ```
-   ```bash
-   kubectl -n techx-corp rollout status deploy/checkout --timeout=300s
-   ```
-   ```bash
-   kubectl -n techx-corp rollout status deploy/payment --timeout=300s
-   ```
-4. **Chạy lại Smoke Test** để chắc chắn dịch vụ storefront đã hoạt động bình thường:
-   ```bash
-   bash techx-corp-chart/scripts/smoke-test.sh --namespace techx-corp
-   ```
+```bash
+helm history techx-corp -n techx-corp
+helm rollback techx-corp 5 -n techx-corp --wait --timeout 10m
+
+kubectl -n techx-corp rollout status deploy/frontend-proxy --timeout=300s
+kubectl -n techx-corp rollout status deploy/frontend --timeout=300s
+kubectl -n techx-corp rollout status deploy/checkout --timeout=300s
+kubectl -n techx-corp rollout status deploy/payment --timeout=300s
+
+bash techx-corp-chart/scripts/smoke-test.sh --namespace techx-corp
+```
 
 ---
 
-## Troubleshooting Notes (Lưu ý xử lý sự cố)
+## Troubleshooting
 
-### 1. Lỗi kẹt State Lock trong Terraform
-Nếu tiến trình bị ngắt đột ngột và nhận thông báo lỗi lock state S3:
-- Xác định `ID Lock` từ thông báo lỗi.
-- Chạy lệnh giải phóng lock thủ công sau khi chắc chắn không có tiến trình nào khác đang chạy:
-  ```bash
-  terraform -chdir=enviroments/production force-unlock <LOCK_ID>
-  ```
+### 1. Terraform state lock
 
-### 2. Lỗi AWS Load Balancer Controller không tạo ALB
-- Kiểm tra log của controller trong namespace `kube-system`:
-  ```bash
-  kubectl logs -n kube-system -l app.kubernetes.io/name=aws-load-balancer-controller --tail=100
-  ```
-- Lỗi phổ biến thường do thiếu tag trên các Subnet của VPC để ALB tự động nhận diện (auto-discovery). Đảm bảo public subnet có tag `kubernetes.io/role/elb = 1` và private subnet có tag `kubernetes.io/role/internal-elb = 1`. Các tag này đã được module VPC của Terraform tự động cấu hình mặc định.
+```bash
+terraform -chdir=enviroments/production force-unlock <LOCK_ID>
+```
 
-### 3. Lỗi ErrImagePull hoặc ImagePullBackOff
-- Xác nhận toán tử đã push đúng Docker image với tag định dạng: `493499579600.dkr.ecr.us-east-1.amazonaws.com/techx-corp:1.0-<service-name>`.
-- Kiểm tra EKS node có quyền pull image từ ECR không (quyền `AmazonEC2ContainerRegistryReadOnly` trên IAM Role của EKS Worker Nodes).
+### 2. ALB không tạo
 
-### 4. Lỗi S3 Backend Versioning & State Corruption
-Nếu file remote state bị lỗi hoặc hỏng:
-1. Xem lịch sử các version của `production/terraform.tfstate`:
-   ```bash
-   aws s3api list-object-versions --bucket techx-tf-state-493499579600-us-east-1 --prefix production/terraform.tfstate
-   ```
-2. Tải về phiên bản ổn định trước đó:
-   ```bash
-   aws s3api get-object --bucket techx-tf-state-493499579600-us-east-1 --key production/terraform.tfstate --version-id <version-id> restored_state.tfstate
-   ```
-3. Đẩy đè version tốt lên S3:
-   ```bash
-   terraform -chdir=enviroments/production state push restored_state.tfstate
-   ```
+```bash
+kubectl logs -n kube-system -l app.kubernetes.io/name=aws-load-balancer-controller --tail=100
+```
+
+Kiểm tra tag subnet: `kubernetes.io/role/elb=1` (public), `kubernetes.io/role/internal-elb=1` (private).
+
+### 3. ErrImagePull / ImagePullBackOff
+
+- Image phải là `.../techx-corp/<service>:<version>` (không phải `.../techx-corp:<version>-<service>`).
+- Repo ECR nested đã được Terraform tạo: `aws ecr describe-repositories --repository-names techx-corp/ad`.
+- Node role có `AmazonEC2ContainerRegistryReadOnly`.
+- Helm `default.image.tag` khớp tag đã push (ví dụ `sha-a1b2c3d`).
+
+### 4. State S3 hỏng
+
+```bash
+aws s3api list-object-versions --bucket techx-tf-state-493499579600-us-east-1 \
+  --prefix production/terraform.tfstate
+# get-object + terraform state push khi cần khôi phục
+```
+
+---
+
+## Tài liệu liên quan
+
+- [CICD.md](./CICD.md) — GitHub Actions, OIDC, Environments  
+- `techx-corp-infra` — Terraform modules `ecr`, `github-actions-ecr`  
+- `techx-corp-chart` — Helm values + smoke test  

@@ -1,0 +1,151 @@
+# Copyright The OpenTelemetry Authors
+# SPDX-License-Identifier: Apache-2.0
+name: Build and push images
+
+on:
+  push:
+    branches: [main, techx-dev-corp]
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      target_environment:
+        description: Target GitHub Environment (maps to ECR via environment variables)
+        required: true
+        type: choice
+        options:
+          - development
+          - production
+
+# Mapping:
+#   main / tags v*   → production  → ECR techx-corp
+#   techx-dev-corp   → development → ECR techx-dev-corp
+#   workflow_dispatch → chosen environment
+concurrency:
+  group: build-push-${{ github.event_name == 'workflow_dispatch' && inputs.target_environment || (startsWith(github.ref, 'refs/tags/v') && 'production' || (github.ref == 'refs/heads/main' && 'production' || 'development')) }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  build-and-push:
+    name: Build and push (${{ github.event_name == 'workflow_dispatch' && inputs.target_environment || (startsWith(github.ref, 'refs/tags/v') && 'production' || (github.ref == 'refs/heads/main' && 'production' || 'development')) }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    environment: ${{ github.event_name == 'workflow_dispatch' && inputs.target_environment || (startsWith(github.ref, 'refs/tags/v') && 'production' || (github.ref == 'refs/heads/main' && 'production' || 'development')) }}
+    env:
+      AWS_REGION: ${{ vars.AWS_REGION || 'us-east-1' }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Free disk space
+        run: |
+          set -euo pipefail
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL || true
+          sudo docker image prune -af || true
+          df -h
+
+      - name: Resolve image version
+        id: version
+        run: |
+          set -euo pipefail
+          SHORT_SHA="$(echo "${GITHUB_SHA}" | cut -c1-7)"
+          if [[ "${GITHUB_REF}" == refs/tags/v* ]]; then
+            # Prefer release tags as-is (e.g. v1.2.3); also publish sha form via bake tag only once
+            VERSION="${GITHUB_REF_NAME}"
+          else
+            # Convention: REGISTRY/PROJECT/SERVICE:sha-<shortsha>
+            VERSION="sha-${SHORT_SHA}"
+          fi
+          echo "version=${VERSION}" >> "${GITHUB_OUTPUT}"
+          echo "short_sha=${SHORT_SHA}" >> "${GITHUB_OUTPUT}"
+          echo "Resolved IMAGE_VERSION/DEMO_VERSION=${VERSION}"
+
+      - name: Validate environment configuration
+        run: |
+          set -euo pipefail
+          if [[ -z "${{ vars.AWS_ROLE_ARN }}" ]]; then
+            echo "::error::GitHub Environment variable AWS_ROLE_ARN is not set. See docs/CICD.md."
+            exit 1
+          fi
+          if [[ -z "${{ vars.IMAGE_NAME }}" ]]; then
+            echo "::error::GitHub Environment variable IMAGE_NAME is not set. See docs/CICD.md."
+            exit 1
+          fi
+          echo "IMAGE_NAME=${{ vars.IMAGE_NAME }}"
+          echo "AWS_ROLE_ARN is configured"
+
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Login to Amazon ECR
+        id: ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+        with:
+          driver-opts: |
+            image=moby/buildkit:buildx-stable-1
+
+      - name: Create multiplatform builder
+        run: |
+          set -euo pipefail
+          docker buildx rm techx-corp-builder 2>/dev/null || true
+          docker buildx create \
+            --name techx-corp-builder \
+            --bootstrap \
+            --use \
+            --driver docker-container \
+            --config ./buildkitd.toml
+
+      - name: Build and push (buildx bake)
+        run: |
+          set -euo pipefail
+          # Load Dockerfile paths and build args from committed .env.
+          # Do NOT source .env.override (may point at the test registry).
+          set -a
+          # shellcheck disable=SC1091
+          source .env
+          set +a
+
+          export IMAGE_NAME="${{ vars.IMAGE_NAME }}"
+          export IMAGE_VERSION="${{ steps.version.outputs.version }}"
+          export DEMO_VERSION="${{ steps.version.outputs.version }}"
+
+          echo "Baking images:"
+          echo "  IMAGE_NAME=${IMAGE_NAME}"
+          echo "  IMAGE_VERSION=${IMAGE_VERSION}"
+          echo "  DEMO_VERSION=${DEMO_VERSION}"
+          echo "  platforms=linux/amd64,linux/arm64"
+
+          docker buildx bake -f docker-compose.yml --push \
+            --set "*.platform=linux/amd64,linux/arm64"
+
+      - name: Job summary
+        if: always()
+        run: |
+          {
+            echo "## Build and push summary"
+            echo ""
+            echo "| Field | Value |"
+            echo "|---|---|"
+            echo "| Environment | \`${{ github.event_name == 'workflow_dispatch' && inputs.target_environment || (startsWith(github.ref, 'refs/tags/v') && 'production' || (github.ref == 'refs/heads/main' && 'production' || 'development')) }}\` |"
+            echo "| IMAGE_NAME | \`${{ vars.IMAGE_NAME }}\` |"
+            echo "| Tag (DEMO_VERSION) | \`${{ steps.version.outputs.version }}\` |"
+            echo "| Commit | \`${{ steps.version.outputs.short_sha }}\` |"
+            echo "| Ref | \`${{ github.ref }}\` |"
+            echo ""
+            echo "Image pattern: \`\${IMAGE_NAME}/<service>:\${DEMO_VERSION}\`"
+            echo "Example: \`${{ vars.IMAGE_NAME }}/ad:${{ steps.version.outputs.version }}\`"
+            echo ""
+            echo "Operator setup: \`docs/CICD.md\`"
+          } >> "${GITHUB_STEP_SUMMARY}"
