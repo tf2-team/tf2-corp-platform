@@ -177,6 +177,9 @@ Gán output `github_actions_ecr_role_arn` vào GitHub Environment variable **`AW
 
 ## Phase 2: EKS Kubeconfig & AWS Load Balancer Controller
 
+Terraform output `aws_load_balancer_controller_helm_command` installs the controller with **IRSA**, **`region`**, and **`vpcId`**.  
+Do not omit `region`/`vpcId`: without them the controller falls back to EC2 IMDS and often fails on EKS with `ec2imds GetMetadata context deadline exceeded` (IMDSv2 hop limit).
+
 ```bash
 aws eks update-kubeconfig --region us-east-1 --name techx-tf2
 kubectl get nodes
@@ -184,10 +187,55 @@ kubectl get nodes
 
 ```bash
 helm repo add eks https://aws.github.io/eks-charts && helm repo update
+
+# Production or development — use matching environment
 terraform -chdir=environments/production output -raw aws_load_balancer_controller_helm_command
-# Chạy lệnh Helm in ra, sau đó:
+# Run the printed helm upgrade --install (includes region + vpcId + role-arn)
+
 kubectl get deployment -n kube-system aws-load-balancer-controller
+kubectl -n kube-system rollout status deployment/aws-load-balancer-controller --timeout=120s
+kubectl logs -n kube-system -l app.kubernetes.io/name=aws-load-balancer-controller --tail=50
+# Healthy: version log line. Unhealthy: failed to get VPC ID / ec2imds deadline exceeded
 ```
+
+---
+
+## Phase 2a: Secrets Manager + ESO (SEC-05)
+
+App chart defaults use `secretKeyRef` (no production passwords in Git). Infra owns ASM shells + ESO IRSA.
+
+```bash
+# From techx-corp-infra
+terraform -chdir=environments/production apply
+
+# Bootstrap ASM (current live creds only — not new random DB passwords)
+# Always use full extension (.ps1 / .cmd / .sh)
+./scripts/bootstrap-asm-secrets.sh techx-corp/production us-east-1          # bash / Git Bash / WSL
+# Windows PowerShell:  .\scripts\bootstrap-asm-secrets.ps1 techx-corp/production us-east-1
+# Windows CMD:         scripts\bootstrap-asm-secrets.cmd techx-corp/production us-east-1
+
+# Install ESO (do not interrupt --wait; leave shell open until STATUS=deployed)
+helm repo add external-secrets https://charts.external-secrets.io && helm repo update
+terraform -chdir=environments/production output -raw external_secrets_helm_command
+# run printed command, then:
+helm status external-secrets -n external-secrets   # expect STATUS: deployed
+
+# ClusterSecretStore
+terraform -chdir=environments/production output -raw external_secrets_cluster_secret_store_manifest | kubectl apply -f -
+kubectl get clustersecretstore aws-secretsmanager
+
+# secrets-chart → wait Ready → app chart
+```
+
+If Helm reports `another operation (install/upgrade/rollback) is in progress`:
+
+```bash
+helm status external-secrets -n external-secrets   # often pending-install
+helm uninstall external-secrets -n external-secrets --wait
+# re-run external_secrets_helm_command
+```
+
+Runbook: `techx-corp-chart/docs/operations/external-secrets.md` · infra: `techx-corp-infra/docs/DEPLOYMENT.md` Phase 2a + troubleshooting §5.
 
 ---
 
@@ -351,13 +399,18 @@ bash techx-corp-chart/scripts/smoke-test.sh --namespace techx-corp
 terraform -chdir=environments/production force-unlock <LOCK_ID>
 ```
 
-### 2. ALB không tạo
+### 2. ALB không tạo / controller CrashLoop
 
 ```bash
 kubectl logs -n kube-system -l app.kubernetes.io/name=aws-load-balancer-controller --tail=100
+kubectl get sa aws-load-balancer-controller -n kube-system -o yaml
 ```
 
-Kiểm tra tag subnet: `kubernetes.io/role/elb=1` (public), `kubernetes.io/role/internal-elb=1` (private).
+| Symptom | Fix |
+|---|---|
+| `failed to get VPC ID` / `ec2imds GetMetadata` / `context deadline exceeded` | Reinstall from Terraform output (must set `--set region=…` and `--set vpcId=…`). See Phase 2. |
+| Missing `eks.amazonaws.com/role-arn` on SA | Re-run helm command from `aws_load_balancer_controller_helm_command` |
+| Controller Ready but no ALB | Subnet tags: `kubernetes.io/role/elb=1` (public), `kubernetes.io/role/internal-elb=1` (private) |
 
 ### 3. ErrImagePull / ImagePullBackOff
 
