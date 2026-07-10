@@ -22,10 +22,10 @@ GitHub Actions builds multi-arch images and pushes them to AWS ECR via OIDC.
 | Trigger | Environment | What |
 |---|---|---|
 | PR | — | lint + unit tests (`ci.yml`) |
-| push `main` / tag `v*` | `production` | full publish → `…/techx-corp/<service>:<version>` |
-| push branch `techx-dev-corp` | `development` | full publish → `…/techx-dev-corp/<service>:<version>` |
-| docs-only branch push | — | publishing skipped (`docs/**`, `README.md`, `frontend-proxy-guide.md`) |
-| manual dispatch | chosen | matching environment |
+| push `main` with `src/**` changes / tag `v*` | `production` | full publish → `…/techx-corp/<service>:<version>` |
+| push `techx-dev-corp` with `src/**` changes | `development` | full publish → `…/techx-dev-corp/<service>:<version>` |
+| branch push without `src/**` changes | — | publishing skipped (docs, workflows, compose/bake-only, etc.) |
+| manual dispatch | chosen | matching environment (use for republish without `src/` edits) |
 
 - **20 release images** defined in `docker-bake.hcl` (group `release`); `opensearch` is local-only.
 - **Registry cache:** `${IMAGE_NAME}/<service>:buildcache` (not a deployable tag).

@@ -250,10 +250,10 @@ Runbook: `techx-corp-chart/docs/operations/external-secrets.md` · infra: `techx
 >
 > | Trigger | GitHub Environment | ECR PROJECT |
 > |---|---|---|
-> | push `main` / tag `v*` | `production` | `techx-corp` |
-> | push branch `techx-dev-corp` | `development` | `techx-dev-corp` |
-> | docs-only branch push | — | **skipped** (`docs/**`, `README.md`, `frontend-proxy-guide.md`) |
-> | `workflow_dispatch` | chọn thủ công | theo environment |
+> | push `main` with `src/**` / tag `v*` | `production` | `techx-corp` |
+> | push `techx-dev-corp` with `src/**` | `development` | `techx-dev-corp` |
+> | branch push without `src/**` | — | **skipped** |
+> | `workflow_dispatch` | chọn thủ công | theo environment (republish khi chỉ sửa bake/compose/CI) |
 >
 > Tag CI: `sha-<7-char>` trên branch; tên tag git (ví dụ `v1.2.3`) khi push tag.  
 > Catalog: 20 release images trong `docker-bake.hcl`; cache tag `${IMAGE_NAME}/<service>:buildcache`.  

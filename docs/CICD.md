@@ -8,7 +8,7 @@ Helm deploy stays in `techx-corp-chart`.
 | Workflow | File | When | What |
 |---|---|---|---|
 | CI | `.github/workflows/ci.yml` | `pull_request` to `main` / `techx-dev-corp`; also `workflow_call` | Lint + selective unit tests |
-| Build & Push | `.github/workflows/build-and-push.yml` | `push` to `main` / `techx-dev-corp` (non-docs), tags `v*`, `workflow_dispatch` | Gated multi-arch bake → ECR → verify |
+| Build & Push | `.github/workflows/build-and-push.yml` | `push` to `main` / `techx-dev-corp` with changes under `src/**`, tags `v*`, `workflow_dispatch` | Gated multi-arch bake → ECR → verify |
 
 ### Job graph (Build & Push)
 
@@ -26,15 +26,19 @@ Failing CI never reaches AWS authentication or image push.
 
 This workflow is **read-only** toward the chart repository: it does not create PRs or deploy Helm resources (v1).
 
-### Documentation-only branch pushes
+### Path filter (branch pushes)
 
-On branch pushes (`main`, `techx-dev-corp`), the publishing workflow is skipped entirely when only these paths change:
+On branch pushes (`main`, `techx-dev-corp`), the publishing workflow runs **only** when at least one file under:
 
-- `docs/**`
-- `README.md`
-- `frontend-proxy-guide.md`
+```text
+src/**
+```
 
-Git tag pushes (`v*`) and manual `workflow_dispatch` always run the full pipeline (no partial service promotion).
+changes. Examples that **do not** start a branch publish: docs, README, workflows, `docker-bake.hcl`, `docker-compose.yml`, `Makefile`, root config.
+
+Any matching `src/**` change still builds and pushes the **full 20-image release set** (not a single service), because Helm uses one global image tag.
+
+Git tag pushes (`v*`) and manual `workflow_dispatch` always run the full pipeline (no path filter). Use **workflow_dispatch** when you need to republish after bake/Compose/CI-only changes without touching `src/`.
 
 ### Environment mapping (Build & Push)
 
