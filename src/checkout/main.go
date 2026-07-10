@@ -435,6 +435,9 @@ func (cs *checkout) prepareOrderItemsAndShippingQuoteFromCart(ctx context.Contex
 	if err != nil {
 		return out, fmt.Errorf("cart failure: %+v", err)
 	}
+	if len(cartItems) == 0 {
+		return out, fmt.Errorf("cart is empty")
+	}
 	orderItems, err := cs.prepOrderItems(ctx, cartItems, userCurrency)
 	if err != nil {
 		return out, fmt.Errorf("failed to prepare order: %+v", err)
@@ -478,11 +481,59 @@ func mustCreateClient(svcAddr string) *grpc.ClientConn {
 	return c
 }
 
+// shipping HTTP DTOs match src/shipping GetQuoteRequest / ShipOrderRequest.
+// Do not marshal protobuf messages with encoding/json: nil slices become null and
+// omitempty drops empty address fields, both of which cause shipping HTTP 400.
+type shippingCartItem struct {
+	ProductID string `json:"product_id"`
+	Quantity  uint32 `json:"quantity"`
+}
+
+type shippingAddress struct {
+	StreetAddress string `json:"street_address"`
+	City          string `json:"city"`
+	State         string `json:"state"`
+	Country       string `json:"country"`
+	ZipCode       string `json:"zip_code"`
+}
+
+type shippingRequest struct {
+	Address *shippingAddress   `json:"address"`
+	Items   []shippingCartItem `json:"items"`
+}
+
+func buildShippingRequestPayload(address *pb.Address, items []*pb.CartItem) ([]byte, error) {
+	req := shippingRequest{
+		// Always a JSON array ([]), never null — shipping requires Vec<CartItem>.
+		Items: make([]shippingCartItem, 0, len(items)),
+	}
+	if address != nil {
+		req.Address = &shippingAddress{
+			StreetAddress: address.GetStreetAddress(),
+			City:          address.GetCity(),
+			State:         address.GetState(),
+			Country:       address.GetCountry(),
+			ZipCode:       address.GetZipCode(),
+		}
+	}
+	for _, item := range items {
+		if item == nil {
+			continue
+		}
+		qty := item.GetQuantity()
+		if qty < 0 {
+			return nil, fmt.Errorf("invalid cart item quantity: %d", qty)
+		}
+		req.Items = append(req.Items, shippingCartItem{
+			ProductID: item.GetProductId(),
+			Quantity:  uint32(qty),
+		})
+	}
+	return json.Marshal(req)
+}
+
 func (cs *checkout) quoteShipping(ctx context.Context, address *pb.Address, items []*pb.CartItem) (*pb.Money, error) {
-	quotePayload, err := json.Marshal(map[string]interface{}{
-		"address": address,
-		"items":   items,
-	})
+	quotePayload, err := buildShippingRequestPayload(address, items)
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal ship order request: %+v", err)
 	}
@@ -520,7 +571,11 @@ func (cs *checkout) getUserCart(ctx context.Context, userID string) ([]*pb.CartI
 	if err != nil {
 		return nil, fmt.Errorf("failed to get user cart during checkout: %+v", err)
 	}
-	return cart.GetItems(), nil
+	items := cart.GetItems()
+	if items == nil {
+		return []*pb.CartItem{}, nil
+	}
+	return items, nil
 }
 
 func (cs *checkout) emptyUserCart(ctx context.Context, userID string) error {
@@ -599,10 +654,7 @@ func (cs *checkout) sendOrderConfirmation(ctx context.Context, email string, ord
 }
 
 func (cs *checkout) shipOrder(ctx context.Context, address *pb.Address, items []*pb.CartItem) (string, error) {
-	shipPayload, err := json.Marshal(map[string]interface{}{
-		"address": address,
-		"items":   items,
-	})
+	shipPayload, err := buildShippingRequestPayload(address, items)
 	if err != nil {
 		return "", fmt.Errorf("failed to marshal ship order request: %+v", err)
 	}
