@@ -22,6 +22,9 @@ async fn main() -> std::io::Result<()> {
         }
     };
 
+
+    
+
     let port: u16 = env::var("SHIPPING_PORT")
         .expect("$SHIPPING_PORT is not set")
         .parse()
