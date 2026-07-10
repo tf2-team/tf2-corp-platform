@@ -119,12 +119,16 @@ jobs:
           mapfile -t LOCAL_ONLY < <(printf '%s' "${LOCAL_ONLY_JSON}" | jq -r '.[]')
 
           # Compose build targets (requires committed .env for Dockerfile vars).
+          # Preserve step env placeholders: `set -a; source .env` would otherwise
+          # overwrite them with local defaults (e.g. DEMO_VERSION=latest).
+          CI_IMAGE_NAME="${IMAGE_NAME}"
+          CI_DEMO_VERSION="${DEMO_VERSION}"
           set -a
           # shellcheck disable=SC1091
           source .env
           set +a
-          # Override after sourcing so bake validation uses fixed placeholders.
-          export IMAGE_NAME DEMO_VERSION
+          export IMAGE_NAME="${CI_IMAGE_NAME}"
+          export DEMO_VERSION="${CI_DEMO_VERSION}"
 
           mapfile -t COMPOSE_BUILDS < <(
             docker compose -f docker-compose.yml config --format json \
@@ -321,7 +325,7 @@ jobs:
       id-token: write
     strategy:
       fail-fast: false
-      max-parallel: 4
+      max-parallel: 20
       matrix:
         service: ${{ fromJson(needs.prepare.outputs.services) }}
     env:
@@ -371,18 +375,32 @@ jobs:
           set -euo pipefail
           # Load Dockerfile paths and build args from committed .env.
           # Do NOT source .env.override (may point at the test registry).
+          #
+          # Critical: .env sets DEMO_VERSION=latest and a default IMAGE_NAME for
+          # local Compose. Those must NOT clobber the immutable release identity
+          # resolved by prepare (sha-<7> / v*) or the environment's IMAGE_NAME.
+          # Previously `set -a; source .env` overwrote both, so images landed in
+          # ECR only as :latest while verify-ecr looked for :sha-XXXXXXX.
+          CI_IMAGE_NAME="${IMAGE_NAME}"
+          CI_DEMO_VERSION="${DEMO_VERSION}"
+          CI_IMAGE_VERSION="${IMAGE_VERSION}"
+
           set -a
           # shellcheck disable=SC1091
           source .env
           set +a
 
-          export IMAGE_NAME DEMO_VERSION IMAGE_VERSION
+          # Override local Compose defaults from .env with the CI release identity.
+          export IMAGE_NAME="${CI_IMAGE_NAME}"
+          export DEMO_VERSION="${CI_DEMO_VERSION}"
+          export IMAGE_VERSION="${CI_IMAGE_VERSION}"
 
           echo "Baking service=${SERVICE}"
           echo "  IMAGE_NAME=${IMAGE_NAME}"
           echo "  DEMO_VERSION=${DEMO_VERSION}"
           echo "  platforms=linux/amd64,linux/arm64 (from docker-bake.hcl)"
           echo "  cache=${IMAGE_NAME}/${SERVICE}:buildcache"
+          echo "  runtime_tag=${IMAGE_NAME}/${SERVICE}:${DEMO_VERSION}"
 
           docker buildx bake -f docker-compose.yml -f docker-bake.hcl "${SERVICE}" --push
 

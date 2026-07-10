@@ -74,6 +74,8 @@ ${IMAGE_NAME}/<service>:${DEMO_VERSION}
 | push `main` / `techx-dev-corp` / dispatch | `sha-<7-char-sha>` (e.g. `sha-a1b2c3d`) |
 | tag `v1.2.3` | git tag name (e.g. `v1.2.3`) |
 
+**CI release identity vs local `.env`:** committed `.env` keeps `DEMO_VERSION=latest` (and a default `IMAGE_NAME`) for local Compose. The build job loads Dockerfile-related vars from `.env`, then **overrides** them with the prepare-resolved `IMAGE_NAME` / `DEMO_VERSION` / `IMAGE_VERSION` so ECR receives immutable tags (`sha-*` or `v*`).
+
 ### Release catalog (20 images)
 
 Defined in `docker-bake.hcl` group `release` (layered over `docker-compose.yml`):
