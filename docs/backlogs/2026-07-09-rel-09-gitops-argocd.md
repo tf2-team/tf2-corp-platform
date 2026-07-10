@@ -40,10 +40,11 @@ Build ALL services → Push ECR → Verify every required tag exists
 
 ## Acceptance Criteria
 
-- [ ] `docs/CICD.md` mô tả clear contract rebuild-all + verify-before-PR.
-- [ ] (Phase 6) Workflow/job verify ECR tags trước khi tạo PR chart.
-- [ ] Không path-filtered partial bake khi vẫn dùng global tag cho promotion.
-- [ ] Tài liệu: không mở values PR khi push chưa xong.
+- [x] `docs/CICD.md` mô tả clear contract rebuild-all + verify-before-PR.
+- [x] Workflow job **Verify ECR** (`aws ecr describe-images` cho full release catalog) trước khi **release-ready** — gate cho manual chart PR.
+- [ ] (Phase 6 / follow-up) Automated chart PR creation after successful verify (still pending).
+- [x] Không path-filtered partial bake khi vẫn dùng global tag cho promotion (docs-only skip is all-or-nothing).
+- [x] Tài liệu: không mở values PR khi push chưa xong / `release-ready` chưa xanh.
 
 ## Kiểm thử / xác minh
 

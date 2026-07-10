@@ -282,7 +282,7 @@ internal class Consumer : IDisposable
             }
 
             dbContext.SaveChanges();
-            _logger.LogInformation("Successfully completed shipment and updated order {orderId} status to COMPLETED.", order.OrderId);
+            Log.ShipmentCompleted(_logger, order.OrderId);
         }
         catch (Exception ex)
         {

@@ -5,8 +5,9 @@ name: CI
 on:
   pull_request:
     branches: [main, techx-dev-corp]
-  push:
-    branches: [main, techx-dev-corp]
+  # Called by build-and-push.yml so lint/unit tests gate image publishing.
+  # Standalone branch-push trigger removed to avoid duplicated CI runs.
+  workflow_call:
 
 concurrency:
   group: ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
@@ -21,16 +22,19 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        # actions/checkout@v4.3.1
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
 
       - name: Setup Go
-        uses: actions/setup-go@v5
+        # actions/setup-go@v5.6.0
+        uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff
         with:
           go-version: "1.24.x"
           cache-dependency-path: internal/tools/go.sum
 
       - name: Setup Node
-        uses: actions/setup-node@v4
+        # actions/setup-node@v4.4.0
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with:
           node-version: "22"
           cache: npm
@@ -62,18 +66,21 @@ jobs:
             workdir: src/cart
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        # actions/checkout@v4.3.1
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
 
       - name: Setup Go
         if: matrix.kind == 'go'
-        uses: actions/setup-go@v5
+        # actions/setup-go@v5.6.0
+        uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff
         with:
           go-version: "1.24.x"
           cache-dependency-path: ${{ matrix.workdir }}/go.sum
 
       - name: Setup .NET
         if: matrix.kind == 'dotnet'
-        uses: actions/setup-dotnet@v4
+        # actions/setup-dotnet@v4.3.1
+        uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9
         with:
           dotnet-version: "10.0.x"
 

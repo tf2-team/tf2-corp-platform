@@ -246,13 +246,18 @@ Runbook: `techx-corp-chart/docs/operations/external-secrets.md` · infra: `techx
 > [!TIP]
 > **Khuyến nghị — GitHub Actions** (`.github/workflows/build-and-push.yml`):
 >
+> **Job graph:** `CI → prepare → AWS/ECR preflight → build matrix (20 services, max-parallel 4) → verify ECR → release-ready`
+>
 > | Trigger | GitHub Environment | ECR PROJECT |
 > |---|---|---|
 > | push `main` / tag `v*` | `production` | `techx-corp` |
 > | push branch `techx-dev-corp` | `development` | `techx-dev-corp` |
+> | docs-only branch push | — | **skipped** (`docs/**`, `README.md`, `frontend-proxy-guide.md`) |
 > | `workflow_dispatch` | chọn thủ công | theo environment |
 >
 > Tag CI: `sha-<7-char>` trên branch; tên tag git (ví dụ `v1.2.3`) khi push tag.  
+> Catalog: 20 release images trong `docker-bake.hcl`; cache tag `${IMAGE_NAME}/<service>:buildcache`.  
+> Chỉ khi job **release-ready** xanh mới được mở PR values chart (thủ công).  
 > Chi tiết OIDC / Environments: **[CICD.md](./CICD.md)**.
 
 > [!IMPORTANT]
@@ -262,12 +267,15 @@ Runbook: `techx-corp-chart/docs/operations/external-secrets.md` · infra: `techx
 ### Bước 0 (ưu tiên): CI/CD
 
 1. Setup GitHub Environments (`AWS_ROLE_ARN`, `IMAGE_NAME`) theo [CICD.md](./CICD.md).
-2. Push `main` (prod) hoặc `techx-dev-corp` (dev), hoặc Run workflow.
-3. Xác minh:
+2. Push `techx-dev-corp` (dev) trước; promote production chỉ sau khi development pass.
+3. Xác minh workflow: 20 job build riêng, không quá 4 concurrent; job **Verify ECR** + **Release ready** xanh.
+4. Xác minh tag runtime (và tùy chọn `buildcache`):
 
    ```bash
-   aws ecr describe-images --repository-name techx-corp/ad --region us-east-1 --max-items 5
+   aws ecr describe-images --repository-name techx-corp/ad \
+     --image-ids imageTag=sha-<7char> --region us-east-1
    # dev: techx-dev-corp/ad
+   # lặp cho đủ 20 service trong catalog release trước khi mở chart PR
    ```
 
 ### Bước 1: Login ECR (thủ công)
@@ -285,11 +293,10 @@ docker buildx create --name techx-corp-builder --bootstrap --use \
 
 IMAGE_NAME=493499579600.dkr.ecr.us-east-1.amazonaws.com/techx-corp \
 IMAGE_VERSION=sha-manual DEMO_VERSION=sha-manual \
-docker buildx bake -f docker-compose.yml --push \
-  --set "*.platform=linux/amd64,linux/arm64"
+docker buildx bake -f docker-compose.yml -f docker-bake.hcl release --push
 ```
 
-Kết quả mẫu: `.../techx-corp/ad:sha-manual`, `.../techx-corp/checkout:sha-manual`, …
+Kết quả mẫu: `.../techx-corp/ad:sha-manual` + cache `.../techx-corp/ad:buildcache`, …
 
 Hoặc Makefile sau khi set `.env.override`:
 
@@ -301,7 +308,7 @@ DEMO_VERSION=sha-manual
 
 ```bash
 make create-multiplatform-builder
-make build-multiplatform-and-push
+make build-multiplatform-and-push   # bake group "release" (20 services)
 ```
 
 ---

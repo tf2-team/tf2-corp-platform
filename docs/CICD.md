@@ -7,8 +7,34 @@ Helm deploy stays in `techx-corp-chart`.
 
 | Workflow | File | When | What |
 |---|---|---|---|
-| CI | `.github/workflows/ci.yml` | `pull_request` / `push` to `main`, `techx-dev-corp` | Lint + selective unit tests |
-| Build & Push | `.github/workflows/build-and-push.yml` | `push` to `main` / `techx-dev-corp`, tags `v*`, `workflow_dispatch` | Multi-arch `docker buildx bake` → ECR |
+| CI | `.github/workflows/ci.yml` | `pull_request` to `main` / `techx-dev-corp`; also `workflow_call` | Lint + selective unit tests |
+| Build & Push | `.github/workflows/build-and-push.yml` | `push` to `main` / `techx-dev-corp` (non-docs), tags `v*`, `workflow_dispatch` | Gated multi-arch bake → ECR → verify |
+
+### Job graph (Build & Push)
+
+```text
+CI (reusable lint + unit tests)
+  → prepare          # env, tag, service matrix, bake catalog validation
+  → AWS/ECR preflight  # OIDC + verify 20 ECR repositories
+  → build matrix     # 20 services, max-parallel: 4, fail-fast: false
+  → verify ECR       # describe-images for every release tag
+  → release-ready    # if: always(); sole gate for manual chart values PR
+```
+
+Failing CI never reaches AWS authentication or image push.  
+`release-ready` succeeds only when **all** of CI, prepare, preflight, build, and verify-ecr succeed. That job is the only signal that permits a **manual** `techx-corp-chart` values PR.
+
+This workflow is **read-only** toward the chart repository: it does not create PRs or deploy Helm resources (v1).
+
+### Documentation-only branch pushes
+
+On branch pushes (`main`, `techx-dev-corp`), the publishing workflow is skipped entirely when only these paths change:
+
+- `docs/**`
+- `README.md`
+- `frontend-proxy-guide.md`
+
+Git tag pushes (`v*`) and manual `workflow_dispatch` always run the full pipeline (no partial service promotion).
 
 ### Environment mapping (Build & Push)
 
@@ -44,9 +70,47 @@ ${IMAGE_NAME}/<service>:${DEMO_VERSION}
 | push `main` / `techx-dev-corp` / dispatch | `sha-<7-char-sha>` (e.g. `sha-a1b2c3d`) |
 | tag `v1.2.3` | git tag name (e.g. `v1.2.3`) |
 
-Platforms: `linux/amd64,linux/arm64` (same as `docs/DEPLOYMENT.md` Phase 3).
+### Release catalog (20 images)
 
-CI does **not** run full multi-arch bake (too slow). e2e / Cypress / tracetest are out of scope for PR CI.
+Defined in `docker-bake.hcl` group `release` (layered over `docker-compose.yml`):
+
+| Service |
+|---|
+| accounting, ad, cart, checkout, currency, email |
+| flagd-ui, fraud-detection, frontend, frontend-proxy |
+| image-provider, kafka, llm, load-generator, payment |
+| product-catalog, product-reviews, quote, recommendation, shipping |
+
+`opensearch` is classified under bake group `local-only`: Compose builds a customized image for local demos, while Helm deploys the external OpenSearch chart dependency. It is **not** pushed by CI.
+
+`prepare` asserts `release ∪ local-only` equals all Compose build targets (21), with no duplicates or overlap. A newly added Compose build target must be classified in `docker-bake.hcl`.
+
+### Registry cache
+
+Each release target imports and exports BuildKit registry cache at:
+
+```text
+${IMAGE_NAME}/<service>:buildcache
+```
+
+Export uses `mode=max`, OCI media types, and an image manifest.  
+**`buildcache` is a movable cache artifact only** — never a Helm-deployable runtime tag. Deploy only uses immutable release tags (`sha-*` or `v*`).
+
+Platforms: `linux/amd64` and `linux/arm64` (QEMU on `ubuntu-latest`).
+
+Build matrix settings:
+
+| Setting | Value |
+|---|---|
+| `fail-fast` | `false` |
+| `max-parallel` | `4` |
+| runner | `ubuntu-latest` |
+| `timeout-minutes` | `120` per service |
+| builder | Buildx + `buildkitd.toml` (`max-parallelism = 4`) |
+
+Environment-level concurrency uses `cancel-in-progress: false` so a canceled publish cannot leave a partially populated global tag.
+
+PR CI does **not** run multi-arch bake. e2e / Cypress / tracetest are out of scope for PR CI.
 
 ---
 
@@ -80,6 +144,8 @@ terraform -chdir=environments/development output github_actions_ecr_role_arn
 
 Trust subjects include the GitHub Environment **and** branch refs (`main` / tags for prod, `techx-dev-corp` for dev).
 
+OIDC only — no long-lived AWS access keys.
+
 ### 3. GitHub Environments
 
 In the GitHub repo **Settings → Environments**:
@@ -93,19 +159,20 @@ Do **not** put the service name in `IMAGE_NAME`; bake appends `/<service>:<versi
 
 Optional repository variable: `AWS_REGION=us-east-1` (workflows default to `us-east-1` if unset).
 
-No long-lived AWS access keys are required.
-
 ### 4. First dry run
 
-1. Merge workflow files to `main`.
-2. Dry-run development: push to branch `techx-dev-corp`, or Actions → **Build and push images** → `development`.
-3. Confirm images:
+1. Merge workflow / bake changes to the development branch.
+2. Dry-run development: push to `techx-dev-corp`, or Actions → **Build and push images** → `development`.
+3. Confirm all 20 runtime tags and cache tags, for example:
 
    ```bash
-   aws ecr describe-images --repository-name techx-dev-corp --region us-east-1 --max-items 5
+   aws ecr describe-images --repository-name techx-dev-corp/ad \
+     --image-ids imageTag=sha-<7char> --region us-east-1
+   # also expect tag buildcache on each service repository
    ```
 
-4. Production: merge/push `main` (or tag `v*` / protected dispatch) → `techx-corp`.
+4. Confirm the workflow summary shows **Release ready** before any chart PR.
+5. Production: merge/push `main` (or tag `v*` / protected dispatch) only after development passes → `techx-corp`.
 
 ---
 
@@ -128,10 +195,34 @@ export IMAGE_NAME=493499579600.dkr.ecr.us-east-1.amazonaws.com/techx-corp
 export IMAGE_VERSION=sha-manual
 export DEMO_VERSION=sha-manual
 
-docker buildx bake -f docker-compose.yml --push \
-  --set "*.platform=linux/amd64,linux/arm64"
-# Produces: .../techx-corp/ad:sha-manual , .../techx-corp/checkout:sha-manual , ...
+# Release group only (20 services + registry cache)
+docker buildx bake -f docker-compose.yml -f docker-bake.hcl release --push
+# Produces: .../techx-corp/ad:sha-manual + .../techx-corp/ad:buildcache , ...
 ```
+
+Makefile (after setting `.env.override`):
+
+```bash
+make create-multiplatform-builder
+make build-multiplatform-and-push   # invokes bake group "release"
+```
+
+Local non-push Compose builds (`make build`, `make start`) are unchanged and use BuildKit’s local cache.
+
+---
+
+## Failure recovery
+
+| Failure | Recovery |
+|---|---|
+| CI (lint/unit) fails | Fix code; re-run. No AWS auth or images pushed. |
+| prepare catalog assert fails | Classify new Compose build targets in `docker-bake.hcl` (`release` or `local-only`). |
+| preflight missing ECR repo | Create nested repo via `techx-corp-infra` ECR module; re-run. |
+| Individual matrix build fails | Re-run failed jobs or full workflow; `fail-fast: false` keeps other services building. |
+| verify-ecr reports missing tags | Re-run build for missing services or full workflow; do **not** open chart PR. |
+| release-ready red | Treat as not promotable; no chart values PR. |
+
+Rollback of this CI design: revert workflow, `docker-bake.hcl`, Makefile, and docs. Existing `:buildcache` tags may remain or be deleted; they do not affect deployed SHA/version tags.
 
 ---
 
@@ -144,30 +235,42 @@ docker buildx bake -f docker-compose.yml --push \
 | Bake OOM / disk full | Runner disk; workflow frees space — re-run or use larger runner |
 | Images pushed to wrong registry | `IMAGE_NAME` env var missing on GitHub Environment |
 | Compose missing Dockerfile path | `.env` not sourced before bake |
+| Catalog mismatch in prepare | New Compose `build:` service not listed in bake release/local-only |
 
 ## Image promotion → GitOps (REL-09)
 
-Platform CI **build & push only**. Deploy is Argo CD reading `techx-corp-chart`.
+Platform CI **build & push + ECR verify only**. Deploy is Argo CD reading `techx-corp-chart`.
 
 Because the chart uses a **global** `default.image.tag` for all nested services:
 
-1. **Rebuild and push the full bake set** with the same tag (do not advance the global tag after a partial service bake).
-2. **Verify** every required ECR repository has that tag.
-3. Only then open a PR on the chart repo updating `values-dev.yaml` or `values-prod.yaml`.
+1. **Rebuild and push the full release set** (20 services) with the same tag.
+2. **Wait for `release-ready`** (includes ECR `describe-images` for every service).
+3. Only then open a **manual** PR on the chart repo updating `values-dev.yaml` or `values-prod.yaml`.
 4. After merge, Argo CD syncs (`argocd app wait … --timeout 600`).
 
-Do **not** open the values PR in parallel with an incomplete push.
+Do **not** open the values PR while any matrix job or verification is incomplete.
 
 ```text
-Build (all services) → Push → Verify tags → Checks → Chart values PR → Merge → Argo sync
+CI → prepare → preflight → build (all 20) → verify ECR → release-ready
+  → manual chart values PR → merge → Argo sync
 ```
 
 See chart runbook: `techx-corp-chart/docs/operations/gitops-argocd.md`.
 
-Future automation (Phase 6): workflow job that runs ECR describe-images for the catalog, then opens the chart PR.
+Automated chart PR creation remains a follow-up (Phase 6); ECR verification is implemented in this workflow.
 
-## Out of scope
+## Security notes
 
-- Direct Helm upgrade from this repo (chart / Argo CD owns deploy)
-- Path-filtered partial image builds **while using a global tag** (unsafe for promotion)
+- Actions pinned to full commit SHAs (major-version patch pins) with version comments.
+- Weekly Dependabot updates for `github-actions` (`.github/dependabot.yml`).
+- `id-token: write` only on preflight, build, and verify-ecr jobs.
+- GitHub expressions passed into shell steps via quoted environment variables.
+- OIDC authentication only; no long-lived AWS keys.
+
+## Out of scope (v1)
+
+- Automated chart PR creation or Helm deploy from this repo
+- Path-filtered partial image builds while using a global tag (unsafe for promotion)
+- Per-service Helm runtime tags / movable runtime tags
+- Native multi-arch runners, image security gates, SBOM/provenance, Cosign
 - Full e2e / tracetest in PR CI

@@ -15,14 +15,21 @@ full observability stack (metrics, logs, traces, dashboards).
 Kubernetes deploy: use the Helm chart in `../techx-corp-chart`.
 
 ## CI/CD
-GitHub Actions builds multi-arch images and pushes them to AWS ECR via OIDC:
+GitHub Actions builds multi-arch images and pushes them to AWS ECR via OIDC.
 
-| Trigger | Environment | ECR |
+**Job graph:** `CI → prepare → AWS/ECR preflight → 20-service matrix (max-parallel 4) → verify ECR → release-ready`
+
+| Trigger | Environment | What |
 |---|---|---|
-| PR / push | — | lint + unit tests only |
-| push `main` / tag `v*` | `production` | `…/techx-corp/<service>:<version>` |
-| push branch `techx-dev-corp` | `development` | `…/techx-dev-corp/<service>:<version>` |
+| PR | — | lint + unit tests (`ci.yml`) |
+| push `main` / tag `v*` | `production` | full publish → `…/techx-corp/<service>:<version>` |
+| push branch `techx-dev-corp` | `development` | full publish → `…/techx-dev-corp/<service>:<version>` |
+| docs-only branch push | — | publishing skipped (`docs/**`, `README.md`, `frontend-proxy-guide.md`) |
 | manual dispatch | chosen | matching environment |
+
+- **20 release images** defined in `docker-bake.hcl` (group `release`); `opensearch` is local-only.
+- **Registry cache:** `${IMAGE_NAME}/<service>:buildcache` (not a deployable tag).
+- **`release-ready`** is the sole gate for a **manual** chart values PR (no automated chart PR/deploy in v1).
 
 Image format: `[REGISTRY]/[PROJECT]/[SERVICE]:[VERSION]`  
 (e.g. `…/techx-dev-corp/ad:sha-a1b2c3d`).

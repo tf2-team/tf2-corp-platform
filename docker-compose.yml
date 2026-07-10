@@ -24,8 +24,6 @@ services:
     build:
       context: ./
       dockerfile: ${ACCOUNTING_DOCKERFILE}
-      cache_from:
-        - ${IMAGE_NAME}/accounting:${IMAGE_VERSION}
     deploy:
       resources:
         limits:
@@ -53,8 +51,6 @@ services:
     build:
       context: ./
       dockerfile: ${AD_DOCKERFILE}
-      cache_from:
-        - ${IMAGE_NAME}/ad:${IMAGE_VERSION}
       args:
         OTEL_JAVA_AGENT_VERSION: ${OTEL_JAVA_AGENT_VERSION}
     deploy:
@@ -89,8 +85,6 @@ services:
     build:
       context: ./
       dockerfile: ${CART_DOCKERFILE}
-      cache_from:
-        - ${IMAGE_NAME}/cart:${IMAGE_VERSION}
     deploy:
       resources:
         limits:
@@ -124,8 +118,6 @@ services:
     build:
       context: ./
       dockerfile: ${CHECKOUT_DOCKERFILE}
-      cache_from:
-        - ${IMAGE_NAME}/checkout:${IMAGE_VERSION}
     deploy:
       resources:
         limits:
@@ -177,8 +169,6 @@ services:
     build:
       context: ./
       dockerfile: ${CURRENCY_DOCKERFILE}
-      cache_from:
-        - ${IMAGE_NAME}/currency:${IMAGE_VERSION}
       args:
         OPENTELEMETRY_CPP_VERSION: ${OPENTELEMETRY_CPP_VERSION}
     deploy:
@@ -208,8 +198,6 @@ services:
     build:
       context: ./
       dockerfile: ${EMAIL_DOCKERFILE}
-      cache_from:
-        - ${IMAGE_NAME}/email:${IMAGE_VERSION}
     deploy:
       resources:
         limits:
@@ -238,8 +226,6 @@ services:
     build:
       context: ./
       dockerfile: ${FRAUD_DOCKERFILE}
-      cache_from:
-        - ${IMAGE_NAME}/fraud-detection:${IMAGE_VERSION}
       args:
         OTEL_JAVA_AGENT_VERSION: ${OTEL_JAVA_AGENT_VERSION}
     deploy:
@@ -271,8 +257,6 @@ services:
     build:
       context: ./
       dockerfile: ${FRONTEND_DOCKERFILE}
-      cache_from:
-        - ${IMAGE_NAME}/frontend:${IMAGE_VERSION}
     deploy:
       resources:
         limits:
@@ -333,8 +317,6 @@ services:
     build:
       context: ./
       dockerfile: ${FRONTEND_PROXY_DOCKERFILE}
-      cache_from:
-        - ${IMAGE_NAME}/frontend-proxy:${IMAGE_VERSION}
     deploy:
       resources:
         limits:
@@ -386,8 +368,6 @@ services:
     build:
       context: ./
       dockerfile: ${IMAGE_PROVIDER_DOCKERFILE}
-      cache_from:
-        - ${IMAGE_NAME}/image-provider:${IMAGE_VERSION}
     deploy:
       resources:
         limits:
@@ -413,8 +393,6 @@ services:
     build:
       context: ./
       dockerfile: ${LOAD_GENERATOR_DOCKERFILE}
-      cache_from:
-        - ${IMAGE_NAME}/load-generator:${IMAGE_VERSION}
     deploy:
       resources:
         limits:
@@ -452,8 +430,6 @@ services:
     build:
       context: ./
       dockerfile: ${PAYMENT_DOCKERFILE}
-      cache_from:
-        - ${IMAGE_NAME}/payment:${IMAGE_VERSION}
     deploy:
       resources:
         limits:
@@ -484,8 +460,6 @@ services:
     build:
       context: ./
       dockerfile: ${PRODUCT_CATALOG_DOCKERFILE}
-      cache_from:
-        - ${IMAGE_NAME}/product-catalog:${IMAGE_VERSION}
     deploy:
       resources:
         limits:
@@ -520,8 +494,6 @@ services:
     build:
       context: ./
       dockerfile: ${PRODUCT_REVIEWS_DOCKERFILE}
-      cache_from:
-        - ${IMAGE_NAME}/product-reviews:${IMAGE_VERSION}
     deploy:
       resources:
         limits:
@@ -565,8 +537,6 @@ services:
     build:
       context: ./
       dockerfile: ${QUOTE_DOCKERFILE}
-      cache_from:
-        - ${IMAGE_NAME}/quote:${IMAGE_VERSION}
     deploy:
       resources:
         limits:
@@ -595,8 +565,6 @@ services:
     build:
       context: ./
       dockerfile: ${RECOMMENDATION_DOCKERFILE}
-      cache_from:
-        - ${IMAGE_NAME}/recommendation:${IMAGE_VERSION}
     deploy:
       resources:
         limits:
@@ -631,8 +599,6 @@ services:
     build:
       context: ./
       dockerfile: ${SHIPPING_DOCKERFILE}
-      cache_from:
-        - ${IMAGE_NAME}/shipping:${IMAGE_VERSION}
     deploy:
       resources:
         limits:
@@ -691,8 +657,6 @@ services:
     build:
       context: ./
       dockerfile: ${FLAGD_UI_DOCKERFILE}
-      cache_from:
-        - ${IMAGE_NAME}/flagd-ui:${IMAGE_VERSION}
     deploy:
       resources:
         limits:
@@ -723,8 +687,6 @@ services:
     build:
       context: ./
       dockerfile: ${KAFKA_DOCKERFILE}
-      cache_from:
-        - ${IMAGE_NAME}/kafka:${IMAGE_VERSION}
       args:
         OTEL_JAVA_AGENT_VERSION: ${OTEL_JAVA_AGENT_VERSION}
     deploy:
@@ -764,8 +726,6 @@ services:
     build:
       context: ./
       dockerfile: ${LLM_DOCKERFILE}
-      cache_from:
-        - ${IMAGE_NAME}/llm:${IMAGE_VERSION}
     deploy:
       resources:
         limits:
@@ -950,8 +910,6 @@ services:
     build:
       context: ./
       dockerfile: ${OPENSEARCH_DOCKERFILE}
-      cache_from:
-        - ${IMAGE_NAME}/opensearch:${IMAGE_VERSION}
     deploy:
       resources:
         limits:

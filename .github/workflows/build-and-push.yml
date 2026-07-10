@@ -2,9 +2,18 @@
 # SPDX-License-Identifier: Apache-2.0
 name: Build and push images
 
+# Job graph: CI → prepare → AWS/ECR preflight → 20-service build matrix → verify ECR → release-ready
+# Platform is read-only toward techx-corp-chart (no chart PRs or Helm deploys in v1).
+
 on:
   push:
     branches: [main, techx-dev-corp]
+    # Skip documentation-only branch pushes (entire workflow; no partial promotion).
+    # Tag pushes (v*) are not path-filtered the same way when listed under tags.
+    paths-ignore:
+      - "docs/**"
+      - "README.md"
+      - "frontend-proxy-guide.md"
     tags: ["v*"]
   workflow_dispatch:
     inputs:
@@ -21,24 +30,307 @@ on:
 #   techx-dev-corp   → development → ECR techx-dev-corp
 #   workflow_dispatch → chosen environment
 concurrency:
+  # Environment-scoped so prod/dev publishes do not cancel each other.
+  # yamllint disable-line rule:line-length
   group: build-push-${{ github.event_name == 'workflow_dispatch' && inputs.target_environment || (startsWith(github.ref, 'refs/tags/v') && 'production' || (github.ref == 'refs/heads/main' && 'production' || 'development')) }}
+  # Do not cancel a running publish: a partial global tag set is unsafe for Helm promotion.
   cancel-in-progress: false
 
 permissions:
   contents: read
-  id-token: write
 
 jobs:
-  build-and-push:
-    name: Build and push (${{ github.event_name == 'workflow_dispatch' && inputs.target_environment || (startsWith(github.ref, 'refs/tags/v') && 'production' || (github.ref == 'refs/heads/main' && 'production' || 'development')) }})
+  # ---------------------------------------------------------------------------
+  # 1. Reusable CI — lint + unit tests must pass before any AWS auth or push
+  # ---------------------------------------------------------------------------
+  ci:
+    name: CI
+    uses: ./.github/workflows/ci.yml
+
+  # ---------------------------------------------------------------------------
+  # 2. prepare — resolve env/tag/matrix; validate bake catalog
+  # ---------------------------------------------------------------------------
+  prepare:
+    name: Prepare
+    needs: [ci]
     runs-on: ubuntu-latest
-    timeout-minutes: 180
-    environment: ${{ github.event_name == 'workflow_dispatch' && inputs.target_environment || (startsWith(github.ref, 'refs/tags/v') && 'production' || (github.ref == 'refs/heads/main' && 'production' || 'development')) }}
+    timeout-minutes: 15
+    outputs:
+      target_environment: ${{ steps.resolve.outputs.target_environment }}
+      version: ${{ steps.resolve.outputs.version }}
+      short_sha: ${{ steps.resolve.outputs.short_sha }}
+      services: ${{ steps.catalog.outputs.services }}
+      service_count: ${{ steps.catalog.outputs.service_count }}
+    steps:
+      - name: Checkout
+        # actions/checkout@v4.3.1
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+
+      - name: Resolve environment and image version
+        id: resolve
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          REF: ${{ github.ref }}
+          REF_NAME: ${{ github.ref_name }}
+          SHA: ${{ github.sha }}
+          DISPATCH_ENV: ${{ inputs.target_environment }}
+        run: |
+          set -euo pipefail
+          SHORT_SHA="$(printf '%s' "${SHA}" | cut -c1-7)"
+
+          if [[ "${EVENT_NAME}" == "workflow_dispatch" ]]; then
+            TARGET_ENV="${DISPATCH_ENV}"
+          elif [[ "${REF}" == refs/tags/v* ]]; then
+            TARGET_ENV="production"
+          elif [[ "${REF}" == "refs/heads/main" ]]; then
+            TARGET_ENV="production"
+          else
+            TARGET_ENV="development"
+          fi
+
+          if [[ "${REF}" == refs/tags/v* ]]; then
+            VERSION="${REF_NAME}"
+          else
+            VERSION="sha-${SHORT_SHA}"
+          fi
+
+          {
+            echo "target_environment=${TARGET_ENV}"
+            echo "version=${VERSION}"
+            echo "short_sha=${SHORT_SHA}"
+          } >> "${GITHUB_OUTPUT}"
+
+          echo "target_environment=${TARGET_ENV}"
+          echo "version=${VERSION}"
+          echo "short_sha=${SHORT_SHA}"
+
+      - name: Validate release catalog and bake definition
+        id: catalog
+        env:
+          IMAGE_NAME: "validate.example/techx-corp"
+          DEMO_VERSION: "catalog-check"
+        run: |
+          set -euo pipefail
+
+          # Canonical release set (must match docker-bake.hcl group "release").
+          RELEASE_JSON='["accounting","ad","cart","checkout","currency","email","flagd-ui","fraud-detection","frontend","frontend-proxy","image-provider","kafka","llm","load-generator","payment","product-catalog","product-reviews","quote","recommendation","shipping"]'
+          LOCAL_ONLY_JSON='["opensearch"]'
+
+          mapfile -t RELEASE < <(printf '%s' "${RELEASE_JSON}" | jq -r '.[]')
+          mapfile -t LOCAL_ONLY < <(printf '%s' "${LOCAL_ONLY_JSON}" | jq -r '.[]')
+
+          # Compose build targets (requires committed .env for Dockerfile vars).
+          set -a
+          # shellcheck disable=SC1091
+          source .env
+          set +a
+          # Override after sourcing so bake validation uses fixed placeholders.
+          export IMAGE_NAME DEMO_VERSION
+
+          mapfile -t COMPOSE_BUILDS < <(
+            docker compose -f docker-compose.yml config --format json \
+              | jq -r '.services | to_entries[] | select(.value.build != null) | .key' \
+              | sort -u
+          )
+
+          # release ∪ local-only must equal all compose build targets (no overlap/dupes).
+          declare -A SEEN=()
+          UNION=()
+          for s in "${RELEASE[@]}" "${LOCAL_ONLY[@]}"; do
+            if [[ -n "${SEEN[$s]+x}" ]]; then
+              echo "::error::Duplicate classification for service '${s}'"
+              exit 1
+            fi
+            SEEN[$s]=1
+            UNION+=("${s}")
+          done
+
+          mapfile -t UNION_SORTED < <(printf '%s\n' "${UNION[@]}" | sort -u)
+          mapfile -t COMPOSE_SORTED < <(printf '%s\n' "${COMPOSE_BUILDS[@]}" | sort -u)
+
+          if [[ "${#UNION_SORTED[@]}" -ne "${#COMPOSE_SORTED[@]}" ]]; then
+            echo "::error::Catalog size mismatch: release∪local-only=${#UNION_SORTED[@]} compose-builds=${#COMPOSE_SORTED[@]}"
+            echo "release∪local-only: ${UNION_SORTED[*]}"
+            echo "compose builds:     ${COMPOSE_SORTED[*]}"
+            exit 1
+          fi
+
+          for i in "${!UNION_SORTED[@]}"; do
+            if [[ "${UNION_SORTED[$i]}" != "${COMPOSE_SORTED[$i]}" ]]; then
+              echo "::error::Catalog mismatch at index ${i}: classified='${UNION_SORTED[$i]}' compose='${COMPOSE_SORTED[$i]}'"
+              echo "A newly added Compose build target must be classified in docker-bake.hcl (release or local-only)."
+              exit 1
+            fi
+          done
+
+          if [[ "${#RELEASE[@]}" -ne 20 ]]; then
+            echo "::error::Expected 20 release services, got ${#RELEASE[@]}"
+            exit 1
+          fi
+
+          # Validate bake merge and print release definition.
+          BAKE_RAW="$(docker buildx bake -f docker-compose.yml -f docker-bake.hcl release --print)"
+          BAKE_JSON="${BAKE_RAW#"${BAKE_RAW%%\{*}"}"
+          if [[ -z "${BAKE_JSON}" || "${BAKE_JSON:0:1}" != "{" ]]; then
+            echo "::error::Failed to parse bake --print JSON"
+            echo "${BAKE_RAW}"
+            exit 1
+          fi
+          echo "${BAKE_JSON}" | jq -e '.group.release.targets | length == 20' >/dev/null
+
+          mapfile -t BAKE_TARGETS < <(echo "${BAKE_JSON}" | jq -r '.group.release.targets[]' | sort -u)
+          if [[ "${#BAKE_TARGETS[@]}" -ne 20 ]]; then
+            echo "::error::Bake release group has ${#BAKE_TARGETS[@]} unique targets (want 20)"
+            exit 1
+          fi
+
+          for svc in "${RELEASE[@]}"; do
+            platforms="$(echo "${BAKE_JSON}" | jq -r --arg t "${svc}" '
+              .target[$t].platforms // empty | if type == "array" then join(",") else . end
+            ')"
+            if [[ "${platforms}" != *"linux/amd64"* ]] || [[ "${platforms}" != *"linux/arm64"* ]]; then
+              echo "::error::Target '${svc}' missing required platforms (got: ${platforms})"
+              exit 1
+            fi
+
+            expected_ref="${IMAGE_NAME}/${svc}:buildcache"
+            # bake --print may emit cache entries as CSV strings or as objects {type,ref,...}.
+            cache_from_ok="$(echo "${BAKE_JSON}" | jq -r --arg t "${svc}" --arg ref "${expected_ref}" '
+              [.target[$t]["cache-from"] // empty | if type == "array" then .[] else . end]
+              | map(if type == "object" then .ref // empty else tostring end)
+              | any(. == $ref or contains($ref))
+            ')"
+            cache_to_ok="$(echo "${BAKE_JSON}" | jq -r --arg t "${svc}" --arg ref "${expected_ref}" '
+              [.target[$t]["cache-to"] // empty | if type == "array" then .[] else . end]
+              | map(if type == "object" then
+                  ((.ref // "") == $ref or ((.ref // "") | tostring | contains($ref)))
+                  and ((.mode // "") == "max" or (.mode // "") == "MAX")
+                else
+                  (tostring | contains($ref) and contains("mode=max"))
+                end)
+              | any(.)
+            ')"
+            if [[ "${cache_from_ok}" != "true" ]]; then
+              echo "::error::Target '${svc}' cache-from missing ${expected_ref}"
+              echo "${BAKE_JSON}" | jq --arg t "${svc}" '.target[$t]["cache-from"]'
+              exit 1
+            fi
+            if [[ "${cache_to_ok}" != "true" ]]; then
+              echo "::error::Target '${svc}' cache-to missing ${expected_ref} with mode=max"
+              echo "${BAKE_JSON}" | jq --arg t "${svc}" '.target[$t]["cache-to"]'
+              exit 1
+            fi
+          done
+
+          # opensearch must not be in the release group.
+          if echo "${BAKE_JSON}" | jq -e '.group.release.targets | index("opensearch")' >/dev/null 2>&1; then
+            echo "::error::opensearch must not be in the release group"
+            exit 1
+          fi
+
+          SERVICES_OUT="$(printf '%s' "${RELEASE_JSON}" | jq -c '.')"
+          {
+            echo "services=${SERVICES_OUT}"
+            echo "service_count=${#RELEASE[@]}"
+          } >> "${GITHUB_OUTPUT}"
+
+          echo "Catalog OK: ${#RELEASE[@]} release + ${#LOCAL_ONLY[@]} local-only = ${#COMPOSE_SORTED[@]} compose builds"
+          echo "Release services: ${RELEASE[*]}"
+
+  # ---------------------------------------------------------------------------
+  # 3. preflight — OIDC + ECR repository checks before expensive matrix jobs
+  # ---------------------------------------------------------------------------
+  preflight:
+    name: AWS/ECR preflight
+    needs: [prepare]
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment: ${{ needs.prepare.outputs.target_environment }}
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      AWS_REGION: ${{ vars.AWS_REGION || 'us-east-1' }}
+    steps:
+      - name: Validate environment configuration
+        env:
+          AWS_ROLE_ARN: ${{ vars.AWS_ROLE_ARN }}
+          IMAGE_NAME: ${{ vars.IMAGE_NAME }}
+          TARGET_ENV: ${{ needs.prepare.outputs.target_environment }}
+        run: |
+          set -euo pipefail
+          if [[ -z "${AWS_ROLE_ARN}" ]]; then
+            echo "::error::GitHub Environment variable AWS_ROLE_ARN is not set on '${TARGET_ENV}'. See docs/CICD.md."
+            exit 1
+          fi
+          if [[ -z "${IMAGE_NAME}" ]]; then
+            echo "::error::GitHub Environment variable IMAGE_NAME is not set on '${TARGET_ENV}'. See docs/CICD.md."
+            exit 1
+          fi
+          echo "IMAGE_NAME=${IMAGE_NAME}"
+          echo "AWS_ROLE_ARN is configured for environment ${TARGET_ENV}"
+
+      - name: Configure AWS credentials (OIDC)
+        # aws-actions/configure-aws-credentials@v4.3.1
+        uses: aws-actions/configure-aws-credentials@7474bc4690e29a8392af63c5b98e7449536d5c3a
+        with:
+          role-to-assume: ${{ vars.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Verify ECR repositories for release catalog
+        env:
+          IMAGE_NAME: ${{ vars.IMAGE_NAME }}
+          SERVICES_JSON: ${{ needs.prepare.outputs.services }}
+        run: |
+          set -euo pipefail
+          # IMAGE_NAME = REGISTRY/PROJECT (e.g. 123.dkr.ecr.region.amazonaws.com/techx-dev-corp)
+          PROJECT="${IMAGE_NAME#*/}"
+          if [[ -z "${PROJECT}" || "${PROJECT}" == "${IMAGE_NAME}" ]]; then
+            echo "::error::IMAGE_NAME must be REGISTRY/PROJECT, got: ${IMAGE_NAME}"
+            exit 1
+          fi
+
+          mapfile -t SERVICES < <(printf '%s' "${SERVICES_JSON}" | jq -r '.[]')
+          MISSING=()
+          for svc in "${SERVICES[@]}"; do
+            REPO="${PROJECT}/${svc}"
+            if ! aws ecr describe-repositories --repository-names "${REPO}" --region "${AWS_REGION}" >/dev/null 2>&1; then
+              MISSING+=("${REPO}")
+            else
+              echo "OK repository ${REPO}"
+            fi
+          done
+
+          if [[ "${#MISSING[@]}" -gt 0 ]]; then
+            echo "::error::Missing ECR repositories (${#MISSING[@]}):"
+            printf '  - %s\n' "${MISSING[@]}"
+            exit 1
+          fi
+          echo "All ${#SERVICES[@]} ECR repositories exist under project ${PROJECT}"
+
+  # ---------------------------------------------------------------------------
+  # 4. build matrix — one bake target per job, max-parallel 4
+  # ---------------------------------------------------------------------------
+  build:
+    name: Build ${{ matrix.service }}
+    needs: [prepare, preflight]
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    environment: ${{ needs.prepare.outputs.target_environment }}
+    permissions:
+      contents: read
+      id-token: write
+    strategy:
+      fail-fast: false
+      max-parallel: 4
+      matrix:
+        service: ${{ fromJson(needs.prepare.outputs.services) }}
     env:
       AWS_REGION: ${{ vars.AWS_REGION || 'us-east-1' }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        # actions/checkout@v4.3.1
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
 
       - name: Free disk space
         run: |
@@ -47,67 +339,35 @@ jobs:
           sudo docker image prune -af || true
           df -h
 
-      - name: Resolve image version
-        id: version
-        run: |
-          set -euo pipefail
-          SHORT_SHA="$(echo "${GITHUB_SHA}" | cut -c1-7)"
-          if [[ "${GITHUB_REF}" == refs/tags/v* ]]; then
-            # Prefer release tags as-is (e.g. v1.2.3); also publish sha form via bake tag only once
-            VERSION="${GITHUB_REF_NAME}"
-          else
-            # Convention: REGISTRY/PROJECT/SERVICE:sha-<shortsha>
-            VERSION="sha-${SHORT_SHA}"
-          fi
-          echo "version=${VERSION}" >> "${GITHUB_OUTPUT}"
-          echo "short_sha=${SHORT_SHA}" >> "${GITHUB_OUTPUT}"
-          echo "Resolved IMAGE_VERSION/DEMO_VERSION=${VERSION}"
-
-      - name: Validate environment configuration
-        run: |
-          set -euo pipefail
-          if [[ -z "${{ vars.AWS_ROLE_ARN }}" ]]; then
-            echo "::error::GitHub Environment variable AWS_ROLE_ARN is not set. See docs/CICD.md."
-            exit 1
-          fi
-          if [[ -z "${{ vars.IMAGE_NAME }}" ]]; then
-            echo "::error::GitHub Environment variable IMAGE_NAME is not set. See docs/CICD.md."
-            exit 1
-          fi
-          echo "IMAGE_NAME=${{ vars.IMAGE_NAME }}"
-          echo "AWS_ROLE_ARN is configured"
-
       - name: Configure AWS credentials (OIDC)
-        uses: aws-actions/configure-aws-credentials@v4
+        # aws-actions/configure-aws-credentials@v4.3.1
+        uses: aws-actions/configure-aws-credentials@7474bc4690e29a8392af63c5b98e7449536d5c3a
         with:
           role-to-assume: ${{ vars.AWS_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
 
       - name: Login to Amazon ECR
-        id: ecr
-        uses: aws-actions/amazon-ecr-login@v2
+        # aws-actions/amazon-ecr-login@v2.1.6
+        uses: aws-actions/amazon-ecr-login@d539f0932e70871a027e9d5a9d8fc38589180a64
 
       - name: Set up QEMU
-        uses: docker/setup-qemu-action@v3
+        # docker/setup-qemu-action@v3.7.0
+        uses: docker/setup-qemu-action@c7c53464625b32c7a7e944ae62b3e17d2b600130
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+        # docker/setup-buildx-action@v3.12.0
+        uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f
         with:
           driver-opts: |
             image=moby/buildkit:buildx-stable-1
+          buildkitd-config: ./buildkitd.toml
 
-      - name: Create multiplatform builder
-        run: |
-          set -euo pipefail
-          docker buildx rm techx-corp-builder 2>/dev/null || true
-          docker buildx create \
-            --name techx-corp-builder \
-            --bootstrap \
-            --use \
-            --driver docker-container \
-            --config ./buildkitd.toml
-
-      - name: Build and push (buildx bake)
+      - name: Build and push service
+        env:
+          IMAGE_NAME: ${{ vars.IMAGE_NAME }}
+          DEMO_VERSION: ${{ needs.prepare.outputs.version }}
+          IMAGE_VERSION: ${{ needs.prepare.outputs.version }}
+          SERVICE: ${{ matrix.service }}
         run: |
           set -euo pipefail
           # Load Dockerfile paths and build args from committed .env.
@@ -117,35 +377,166 @@ jobs:
           source .env
           set +a
 
-          export IMAGE_NAME="${{ vars.IMAGE_NAME }}"
-          export IMAGE_VERSION="${{ steps.version.outputs.version }}"
-          export DEMO_VERSION="${{ steps.version.outputs.version }}"
+          export IMAGE_NAME DEMO_VERSION IMAGE_VERSION
 
-          echo "Baking images:"
+          echo "Baking service=${SERVICE}"
           echo "  IMAGE_NAME=${IMAGE_NAME}"
-          echo "  IMAGE_VERSION=${IMAGE_VERSION}"
           echo "  DEMO_VERSION=${DEMO_VERSION}"
-          echo "  platforms=linux/amd64,linux/arm64"
+          echo "  platforms=linux/amd64,linux/arm64 (from docker-bake.hcl)"
+          echo "  cache=${IMAGE_NAME}/${SERVICE}:buildcache"
 
-          docker buildx bake -f docker-compose.yml --push \
-            --set "*.platform=linux/amd64,linux/arm64"
+          docker buildx bake -f docker-compose.yml -f docker-bake.hcl "${SERVICE}" --push
 
       - name: Job summary
         if: always()
+        env:
+          IMAGE_NAME: ${{ vars.IMAGE_NAME }}
+          DEMO_VERSION: ${{ needs.prepare.outputs.version }}
+          SERVICE: ${{ matrix.service }}
+          SHORT_SHA: ${{ needs.prepare.outputs.short_sha }}
+          TARGET_ENV: ${{ needs.prepare.outputs.target_environment }}
         run: |
           {
-            echo "## Build and push summary"
+            echo "## Build ${SERVICE}"
             echo ""
             echo "| Field | Value |"
             echo "|---|---|"
-            echo "| Environment | \`${{ github.event_name == 'workflow_dispatch' && inputs.target_environment || (startsWith(github.ref, 'refs/tags/v') && 'production' || (github.ref == 'refs/heads/main' && 'production' || 'development')) }}\` |"
-            echo "| IMAGE_NAME | \`${{ vars.IMAGE_NAME }}\` |"
-            echo "| Tag (DEMO_VERSION) | \`${{ steps.version.outputs.version }}\` |"
-            echo "| Commit | \`${{ steps.version.outputs.short_sha }}\` |"
-            echo "| Ref | \`${{ github.ref }}\` |"
-            echo ""
-            echo "Image pattern: \`\${IMAGE_NAME}/<service>:\${DEMO_VERSION}\`"
-            echo "Example: \`${{ vars.IMAGE_NAME }}/ad:${{ steps.version.outputs.version }}\`"
-            echo ""
-            echo "Operator setup: \`docs/CICD.md\`"
+            echo "| Environment | \`${TARGET_ENV}\` |"
+            echo "| Service | \`${SERVICE}\` |"
+            echo "| Image | \`${IMAGE_NAME}/${SERVICE}:${DEMO_VERSION}\` |"
+            echo "| Cache | \`${IMAGE_NAME}/${SERVICE}:buildcache\` |"
+            echo "| Commit | \`${SHORT_SHA}\` |"
           } >> "${GITHUB_STEP_SUMMARY}"
+
+  # ---------------------------------------------------------------------------
+  # 5. verify ECR — only after every matrix entry succeeds
+  # ---------------------------------------------------------------------------
+  verify-ecr:
+    name: Verify ECR tags
+    needs: [prepare, preflight, build]
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    environment: ${{ needs.prepare.outputs.target_environment }}
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      AWS_REGION: ${{ vars.AWS_REGION || 'us-east-1' }}
+    steps:
+      - name: Configure AWS credentials (OIDC)
+        # aws-actions/configure-aws-credentials@v4.3.1
+        uses: aws-actions/configure-aws-credentials@7474bc4690e29a8392af63c5b98e7449536d5c3a
+        with:
+          role-to-assume: ${{ vars.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Describe every promoted release tag
+        env:
+          IMAGE_NAME: ${{ vars.IMAGE_NAME }}
+          DEMO_VERSION: ${{ needs.prepare.outputs.version }}
+          SERVICES_JSON: ${{ needs.prepare.outputs.services }}
+        run: |
+          set -euo pipefail
+          PROJECT="${IMAGE_NAME#*/}"
+          mapfile -t SERVICES < <(printf '%s' "${SERVICES_JSON}" | jq -r '.[]')
+
+          MISSING=()
+          FOUND=()
+          {
+            echo "## ECR verification for \`${DEMO_VERSION}\`"
+            echo ""
+            echo "| Service | Repository | Digest |"
+            echo "|---|---|---|"
+          } >> "${GITHUB_STEP_SUMMARY}"
+
+          for svc in "${SERVICES[@]}"; do
+            REPO="${PROJECT}/${svc}"
+            if DESC="$(aws ecr describe-images \
+              --repository-name "${REPO}" \
+              --image-ids "imageTag=${DEMO_VERSION}" \
+              --region "${AWS_REGION}" \
+              --output json 2>/dev/null)"; then
+              DIGEST="$(printf '%s' "${DESC}" | jq -r '.imageDetails[0].imageDigest // "unknown"')"
+              FOUND+=("${svc}")
+              echo "| \`${svc}\` | \`${REPO}\` | \`${DIGEST}\` |" >> "${GITHUB_STEP_SUMMARY}"
+              echo "OK ${REPO}:${DEMO_VERSION} digest=${DIGEST}"
+            else
+              MISSING+=("${svc}")
+              echo "| \`${svc}\` | \`${REPO}\` | **MISSING** |" >> "${GITHUB_STEP_SUMMARY}"
+              echo "MISSING ${REPO}:${DEMO_VERSION}"
+            fi
+          done
+
+          {
+            echo ""
+            echo "Found: ${#FOUND[@]} / ${#SERVICES[@]}"
+          } >> "${GITHUB_STEP_SUMMARY}"
+
+          if [[ "${#MISSING[@]}" -gt 0 ]]; then
+            echo "::error::Missing ECR images for tag ${DEMO_VERSION} (${#MISSING[@]}): ${MISSING[*]}"
+            exit 1
+          fi
+          echo "All ${#SERVICES[@]} release images present for tag ${DEMO_VERSION}"
+
+  # ---------------------------------------------------------------------------
+  # 6. release-ready — sole gate for the manual techx-corp-chart values PR
+  # ---------------------------------------------------------------------------
+  release-ready:
+    name: Release ready
+    if: always()
+    needs: [ci, prepare, preflight, build, verify-ecr]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Evaluate release gate
+        env:
+          CI_RESULT: ${{ needs.ci.result }}
+          PREPARE_RESULT: ${{ needs.prepare.result }}
+          PREFLIGHT_RESULT: ${{ needs.preflight.result }}
+          BUILD_RESULT: ${{ needs.build.result }}
+          VERIFY_RESULT: ${{ needs.verify-ecr.result }}
+          VERSION: ${{ needs.prepare.outputs.version }}
+          SHORT_SHA: ${{ needs.prepare.outputs.short_sha }}
+          TARGET_ENV: ${{ needs.prepare.outputs.target_environment }}
+          SERVICE_COUNT: ${{ needs.prepare.outputs.service_count }}
+        run: |
+          set -euo pipefail
+          {
+            echo "## Release-ready gate"
+            echo ""
+            echo "| Job | Result |"
+            echo "|---|---|"
+            echo "| ci | \`${CI_RESULT}\` |"
+            echo "| prepare | \`${PREPARE_RESULT}\` |"
+            echo "| preflight | \`${PREFLIGHT_RESULT}\` |"
+            echo "| build | \`${BUILD_RESULT}\` |"
+            echo "| verify-ecr | \`${VERIFY_RESULT}\` |"
+            echo ""
+            echo "| Field | Value |"
+            echo "|---|---|"
+            echo "| Environment | \`${TARGET_ENV}\` |"
+            echo "| Tag | \`${VERSION}\` |"
+            echo "| Commit | \`${SHORT_SHA}\` |"
+            echo "| Services | \`${SERVICE_COUNT}\` |"
+            echo ""
+            echo "This job is the sole signal that permits a **manual** techx-corp-chart values PR."
+            echo "This workflow does **not** open chart PRs or deploy Helm resources."
+          } >> "${GITHUB_STEP_SUMMARY}"
+
+          FAILED=0
+          for pair in "ci:${CI_RESULT}" "prepare:${PREPARE_RESULT}" "preflight:${PREFLIGHT_RESULT}" "build:${BUILD_RESULT}" "verify-ecr:${VERIFY_RESULT}"; do
+            name="${pair%%:*}"
+            result="${pair#*:}"
+            if [[ "${result}" != "success" ]]; then
+              echo "::error::Release gate failed: job '${name}' result='${result}' (want success)"
+              FAILED=1
+            fi
+          done
+
+          if [[ "${FAILED}" -ne 0 ]]; then
+            echo "Release is NOT ready. Do not open a chart values PR."
+            exit 1
+          fi
+
+          echo "Release is ready for manual chart values PR (tag=${VERSION}, env=${TARGET_ENV})."
