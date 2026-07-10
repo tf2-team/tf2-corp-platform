@@ -15,8 +15,8 @@ Helm deploy stays in `techx-corp-chart`.
 ```text
 CI (reusable lint + unit tests)
   → prepare          # env, tag, service matrix, bake catalog validation
-  → AWS/ECR preflight  # OIDC + verify 20 ECR repositories
-  → build matrix     # 20 services, max-parallel: 4, fail-fast: false
+  → AWS/ECR preflight  # OIDC + verify 21 ECR repositories
+  → build matrix     # 21 services, max-parallel: 4, fail-fast: false
   → verify ECR       # describe-images for every release tag
   → release-ready    # if: always(); sole gate for manual chart values PR
 ```
@@ -36,7 +36,7 @@ src/**
 
 changes. Examples that **do not** start a branch publish: docs, README, workflows, `docker-bake.hcl`, `docker-compose.yml`, `Makefile`, root config.
 
-Any matching `src/**` change still builds and pushes the **full 20-image release set** (not a single service), because Helm uses one global image tag.
+Any matching `src/**` change still builds and pushes the **full 21-image release set** (not a single service), because Helm uses one global image tag (plus matching `opensearch.image.tag`).
 
 Git tag pushes (`v*`) and manual `workflow_dispatch` always run the full pipeline (no path filter). Use **workflow_dispatch** when you need to republish after bake/Compose/CI-only changes without touching `src/`.
 
@@ -76,7 +76,7 @@ ${IMAGE_NAME}/<service>:${DEMO_VERSION}
 
 **CI release identity vs local `.env`:** committed `.env` keeps `DEMO_VERSION=latest` (and a default `IMAGE_NAME`) for local Compose. The build job loads Dockerfile-related vars from `.env`, then **overrides** them with the prepare-resolved `IMAGE_NAME` / `DEMO_VERSION` / `IMAGE_VERSION` so ECR receives immutable tags (`sha-*` or `v*`).
 
-### Release catalog (20 images)
+### Release catalog (21 images)
 
 Defined in `docker-bake.hcl` group `release` (layered over `docker-compose.yml`):
 
@@ -84,12 +84,12 @@ Defined in `docker-bake.hcl` group `release` (layered over `docker-compose.yml`)
 |---|
 | accounting, ad, cart, checkout, currency, email |
 | flagd-ui, fraud-detection, frontend, frontend-proxy |
-| image-provider, kafka, llm, load-generator, payment |
+| image-provider, kafka, llm, load-generator, opensearch, payment |
 | product-catalog, product-reviews, quote, recommendation, shipping |
 
-`opensearch` is classified under bake group `local-only`: Compose builds a customized image for local demos, while Helm deploys the external OpenSearch chart dependency. It is **not** pushed by CI.
+`opensearch` is a **customized** image (`src/opensearch/Dockerfile`, based on `opensearchproject/opensearch:3.2.0` with unused plugins removed). CI pushes it to ECR; Helm’s OpenSearch subchart pulls that image (not the public Docker Hub image).
 
-`prepare` asserts `release ∪ local-only` equals all Compose build targets (21), with no duplicates or overlap. A newly added Compose build target must be classified in `docker-bake.hcl`.
+`prepare` asserts `release` equals all Compose build targets (21), with no duplicates or missing services. A newly added Compose build target must be listed in `docker-bake.hcl` group `release`.
 
 ### Registry cache
 
@@ -169,7 +169,7 @@ Optional repository variable: `AWS_REGION=us-east-1` (workflows default to `us-e
 
 1. Merge workflow / bake changes to the development branch.
 2. Dry-run development: push to `techx-dev-corp`, or Actions → **Build and push images** → `development`.
-3. Confirm all 20 runtime tags and cache tags, for example:
+3. Confirm all 21 runtime tags and cache tags, for example:
 
    ```bash
    aws ecr describe-images --repository-name techx-dev-corp/ad \
@@ -201,7 +201,7 @@ export IMAGE_NAME=493499579600.dkr.ecr.us-east-1.amazonaws.com/techx-corp
 export IMAGE_VERSION=sha-manual
 export DEMO_VERSION=sha-manual
 
-# Release group only (20 services + registry cache)
+# Release group only (21 services + registry cache)
 docker buildx bake -f docker-compose.yml -f docker-bake.hcl release --push
 # Produces: .../techx-corp/ad:sha-manual + .../techx-corp/ad:buildcache , ...
 ```
@@ -222,7 +222,7 @@ Local non-push Compose builds (`make build`, `make start`) are unchanged and use
 | Failure | Recovery |
 |---|---|
 | CI (lint/unit) fails | Fix code; re-run. No AWS auth or images pushed. |
-| prepare catalog assert fails | Classify new Compose build targets in `docker-bake.hcl` (`release` or `local-only`). |
+| prepare catalog assert fails | Add new Compose build targets to `docker-bake.hcl` group `release`. |
 | preflight missing ECR repo | Create nested repo via `techx-corp-infra` ECR module; re-run. |
 | Individual matrix build fails | Re-run failed jobs or full workflow; `fail-fast: false` keeps other services building. |
 | verify-ecr reports missing tags | Re-run build for missing services or full workflow; do **not** open chart PR. |
@@ -241,7 +241,7 @@ Rollback of this CI design: revert workflow, `docker-bake.hcl`, Makefile, and do
 | Bake OOM / disk full | Runner disk; workflow frees space — re-run or use larger runner |
 | Images pushed to wrong registry | `IMAGE_NAME` env var missing on GitHub Environment |
 | Compose missing Dockerfile path | `.env` not sourced before bake |
-| Catalog mismatch in prepare | New Compose `build:` service not listed in bake release/local-only |
+| Catalog mismatch in prepare | New Compose `build:` service not listed in bake group `release` |
 
 ## Image promotion → GitOps (REL-09)
 
@@ -249,15 +249,15 @@ Platform CI **build & push + ECR verify only**. Deploy is Argo CD reading `techx
 
 Because the chart uses a **global** `default.image.tag` for all nested services:
 
-1. **Rebuild and push the full release set** (20 services) with the same tag.
+1. **Rebuild and push the full release set** (21 services, including `opensearch`) with the same tag.
 2. **Wait for `release-ready`** (includes ECR `describe-images` for every service).
-3. Only then open a **manual** PR on the chart repo updating `values-dev.yaml` or `values-prod.yaml`.
+3. Only then open a **manual** PR on the chart repo updating `values-dev.yaml` or `values-prod.yaml` (`default.image.tag` **and** `opensearch.image.tag` / repository).
 4. After merge, Argo CD syncs (`argocd app wait … --timeout 600`).
 
 Do **not** open the values PR while any matrix job or verification is incomplete.
 
 ```text
-CI → prepare → preflight → build (all 20) → verify ECR → release-ready
+CI → prepare → preflight → build (all 21) → verify ECR → release-ready
   → manual chart values PR → merge → Argo sync
 ```
 

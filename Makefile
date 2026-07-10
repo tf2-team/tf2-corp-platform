@@ -121,7 +121,7 @@ build-multiplatform:
 .PHONY: build-multiplatform-and-push
 build-multiplatform-and-push:
     # Because buildx bake does not support --env-file yet, we need to load it into the environment first.
-    # Pushes only the release group (20 deployable services); see docker-bake.hcl.
+    # Pushes only the release group (21 deployable services, including opensearch); see docker-bake.hcl.
 	set -a; . ./.env.override; set +a && docker buildx bake -f docker-compose.yml -f docker-bake.hcl release --push
 
 .PHONY: clean-images

@@ -2,14 +2,14 @@
 # SPDX-License-Identifier: Apache-2.0
 name: Build and push images
 
-# Job graph: CI → prepare → AWS/ECR preflight → 20-service build matrix → verify ECR → release-ready
+# Job graph: CI → prepare → AWS/ECR preflight → 21-service build matrix → verify ECR → release-ready
 # Platform is read-only toward techx-corp-chart (no chart PRs or Helm deploys in v1).
 
 on:
   push:
     branches: [main, techx-dev-corp]
     # Branch pushes: only when application sources under src/ change.
-    # Still builds the full 20-image release set (global Helm tag contract; no partial promotion).
+    # Still builds the full 21-image release set (global Helm tag contract; no partial promotion).
     # Tag pushes (v*) and workflow_dispatch always run (no path filter on those entry points).
     paths:
       - "src/**"
@@ -112,11 +112,9 @@ jobs:
           set -euo pipefail
 
           # Canonical release set (must match docker-bake.hcl group "release").
-          RELEASE_JSON='["accounting","ad","cart","checkout","currency","email","flagd-ui","fraud-detection","frontend","frontend-proxy","image-provider","kafka","llm","load-generator","payment","product-catalog","product-reviews","quote","recommendation","shipping"]'
-          LOCAL_ONLY_JSON='["opensearch"]'
+          RELEASE_JSON='["accounting","ad","cart","checkout","currency","email","flagd-ui","fraud-detection","frontend","frontend-proxy","image-provider","kafka","llm","load-generator","opensearch","payment","product-catalog","product-reviews","quote","recommendation","shipping"]'
 
           mapfile -t RELEASE < <(printf '%s' "${RELEASE_JSON}" | jq -r '.[]')
-          mapfile -t LOCAL_ONLY < <(printf '%s' "${LOCAL_ONLY_JSON}" | jq -r '.[]')
 
           # Compose build targets (requires committed .env for Dockerfile vars).
           # Preserve step env placeholders: `set -a; source .env` would otherwise
@@ -136,38 +134,36 @@ jobs:
               | sort -u
           )
 
-          # release ∪ local-only must equal all compose build targets (no overlap/dupes).
+          # release must equal all compose build targets (no missing/extra services).
           declare -A SEEN=()
-          UNION=()
-          for s in "${RELEASE[@]}" "${LOCAL_ONLY[@]}"; do
+          for s in "${RELEASE[@]}"; do
             if [[ -n "${SEEN[$s]+x}" ]]; then
               echo "::error::Duplicate classification for service '${s}'"
               exit 1
             fi
             SEEN[$s]=1
-            UNION+=("${s}")
           done
 
-          mapfile -t UNION_SORTED < <(printf '%s\n' "${UNION[@]}" | sort -u)
+          mapfile -t RELEASE_SORTED < <(printf '%s\n' "${RELEASE[@]}" | sort -u)
           mapfile -t COMPOSE_SORTED < <(printf '%s\n' "${COMPOSE_BUILDS[@]}" | sort -u)
 
-          if [[ "${#UNION_SORTED[@]}" -ne "${#COMPOSE_SORTED[@]}" ]]; then
-            echo "::error::Catalog size mismatch: release∪local-only=${#UNION_SORTED[@]} compose-builds=${#COMPOSE_SORTED[@]}"
-            echo "release∪local-only: ${UNION_SORTED[*]}"
-            echo "compose builds:     ${COMPOSE_SORTED[*]}"
+          if [[ "${#RELEASE_SORTED[@]}" -ne "${#COMPOSE_SORTED[@]}" ]]; then
+            echo "::error::Catalog size mismatch: release=${#RELEASE_SORTED[@]} compose-builds=${#COMPOSE_SORTED[@]}"
+            echo "release:        ${RELEASE_SORTED[*]}"
+            echo "compose builds: ${COMPOSE_SORTED[*]}"
             exit 1
           fi
 
-          for i in "${!UNION_SORTED[@]}"; do
-            if [[ "${UNION_SORTED[$i]}" != "${COMPOSE_SORTED[$i]}" ]]; then
-              echo "::error::Catalog mismatch at index ${i}: classified='${UNION_SORTED[$i]}' compose='${COMPOSE_SORTED[$i]}'"
-              echo "A newly added Compose build target must be classified in docker-bake.hcl (release or local-only)."
+          for i in "${!RELEASE_SORTED[@]}"; do
+            if [[ "${RELEASE_SORTED[$i]}" != "${COMPOSE_SORTED[$i]}" ]]; then
+              echo "::error::Catalog mismatch at index ${i}: release='${RELEASE_SORTED[$i]}' compose='${COMPOSE_SORTED[$i]}'"
+              echo "A newly added Compose build target must be listed in docker-bake.hcl group release."
               exit 1
             fi
           done
 
-          if [[ "${#RELEASE[@]}" -ne 20 ]]; then
-            echo "::error::Expected 20 release services, got ${#RELEASE[@]}"
+          if [[ "${#RELEASE[@]}" -ne 21 ]]; then
+            echo "::error::Expected 21 release services, got ${#RELEASE[@]}"
             exit 1
           fi
 
@@ -179,11 +175,11 @@ jobs:
             echo "${BAKE_RAW}"
             exit 1
           fi
-          echo "${BAKE_JSON}" | jq -e '.group.release.targets | length == 20' >/dev/null
+          echo "${BAKE_JSON}" | jq -e '.group.release.targets | length == 21' >/dev/null
 
           mapfile -t BAKE_TARGETS < <(echo "${BAKE_JSON}" | jq -r '.group.release.targets[]' | sort -u)
-          if [[ "${#BAKE_TARGETS[@]}" -ne 20 ]]; then
-            echo "::error::Bake release group has ${#BAKE_TARGETS[@]} unique targets (want 20)"
+          if [[ "${#BAKE_TARGETS[@]}" -ne 21 ]]; then
+            echo "::error::Bake release group has ${#BAKE_TARGETS[@]} unique targets (want 21)"
             exit 1
           fi
 
@@ -225,9 +221,9 @@ jobs:
             fi
           done
 
-          # opensearch must not be in the release group.
-          if echo "${BAKE_JSON}" | jq -e '.group.release.targets | index("opensearch")' >/dev/null 2>&1; then
-            echo "::error::opensearch must not be in the release group"
+          # Customized OpenSearch must be part of the release set (Helm pulls from ECR).
+          if ! echo "${BAKE_JSON}" | jq -e '.group.release.targets | index("opensearch")' >/dev/null 2>&1; then
+            echo "::error::opensearch must be in the release group"
             exit 1
           fi
 
@@ -237,7 +233,7 @@ jobs:
             echo "service_count=${#RELEASE[@]}"
           } >> "${GITHUB_OUTPUT}"
 
-          echo "Catalog OK: ${#RELEASE[@]} release + ${#LOCAL_ONLY[@]} local-only = ${#COMPOSE_SORTED[@]} compose builds"
+          echo "Catalog OK: ${#RELEASE[@]} release = ${#COMPOSE_SORTED[@]} compose builds"
           echo "Release services: ${RELEASE[*]}"
 
   # ---------------------------------------------------------------------------
@@ -325,7 +321,7 @@ jobs:
       id-token: write
     strategy:
       fail-fast: false
-      max-parallel: 20
+      max-parallel: 21
       matrix:
         service: ${{ fromJson(needs.prepare.outputs.services) }}
     env:

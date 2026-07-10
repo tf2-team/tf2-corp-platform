@@ -18,7 +18,7 @@ variable "DEMO_VERSION" {
   default = "dev"
 }
 
-# Exactly the 20 deployable services pushed to ECR by CI.
+# Exactly the 21 deployable services pushed to ECR by CI (includes customized OpenSearch).
 group "release" {
   targets = [
     "accounting",
@@ -35,6 +35,7 @@ group "release" {
     "kafka",
     "llm",
     "load-generator",
+    "opensearch",
     "payment",
     "product-catalog",
     "product-reviews",
@@ -42,12 +43,6 @@ group "release" {
     "recommendation",
     "shipping",
   ]
-}
-
-# Compose builds a customized OpenSearch image for local demos.
-# Helm deploys the external OpenSearch chart dependency — not this image.
-group "local-only" {
-  targets = ["opensearch"]
 }
 
 target "_release-common" {
@@ -194,7 +189,10 @@ target "shipping" {
   cache-to   = ["type=registry,ref=${IMAGE_NAME}/shipping:buildcache,mode=max,oci-mediatypes=true,image-manifest=true"]
 }
 
-# Local-only: no multi-arch / registry cache contract required for CI release.
+# Customized OpenSearch (plugins stripped in src/opensearch/Dockerfile); used by Compose and Helm.
 target "opensearch" {
-  tags = ["${IMAGE_NAME}/opensearch:${DEMO_VERSION}"]
+  inherits   = ["_release-common"]
+  tags       = ["${IMAGE_NAME}/opensearch:${DEMO_VERSION}"]
+  cache-from = ["type=registry,ref=${IMAGE_NAME}/opensearch:buildcache"]
+  cache-to   = ["type=registry,ref=${IMAGE_NAME}/opensearch:buildcache,mode=max,oci-mediatypes=true,image-manifest=true"]
 }

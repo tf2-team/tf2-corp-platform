@@ -17,7 +17,7 @@ Kubernetes deploy: use the Helm chart in `../techx-corp-chart`.
 ## CI/CD
 GitHub Actions builds multi-arch images and pushes them to AWS ECR via OIDC.
 
-**Job graph:** `CI → prepare → AWS/ECR preflight → 20-service matrix (max-parallel 4) → verify ECR → release-ready`
+**Job graph:** `CI → prepare → AWS/ECR preflight → 21-service matrix (max-parallel 4) → verify ECR → release-ready`
 
 | Trigger | Environment | What |
 |---|---|---|
@@ -27,7 +27,7 @@ GitHub Actions builds multi-arch images and pushes them to AWS ECR via OIDC.
 | branch push without `src/**` changes | — | publishing skipped (docs, workflows, compose/bake-only, etc.) |
 | manual dispatch | chosen | matching environment (use for republish without `src/` edits) |
 
-- **20 release images** defined in `docker-bake.hcl` (group `release`); `opensearch` is local-only.
+- **21 release images** defined in `docker-bake.hcl` (group `release`), including customized `opensearch`.
 - **Registry cache:** `${IMAGE_NAME}/<service>:buildcache` (not a deployable tag).
 - **`release-ready`** is the sole gate for a **manual** chart values PR (no automated chart PR/deploy in v1).
 
