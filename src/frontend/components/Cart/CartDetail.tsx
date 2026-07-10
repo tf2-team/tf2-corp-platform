@@ -11,8 +11,6 @@ import { useCart } from '../../providers/Cart.provider';
 import { useCurrency } from '../../providers/Currency.provider';
 import * as S from '../../styles/Cart.styled';
 
-const { userId } = SessionGateway.getSession();
-
 const CartDetail = () => {
   const {
     cart: { items },
@@ -35,6 +33,8 @@ const CartDetail = () => {
       creditCardExpirationYear,
       creditCardNumber,
     }: IFormData) => {
+      // Resolve at submit time so checkout uses the same localStorage session as cart APIs.
+      const { userId } = SessionGateway.getSession();
       const order = await placeOrder({
         userId,
         email,

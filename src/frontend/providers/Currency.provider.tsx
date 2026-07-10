@@ -6,8 +6,6 @@ import { useQuery } from '@tanstack/react-query';
 import ApiGateway from '../gateways/Api.gateway';
 import SessionGateway from '../gateways/Session.gateway';
 
-const { currencyCode } = SessionGateway.getSession();
-
 interface IContext {
   currencyCodeList: string[];
   setSelectedCurrency(currency: string): void;
@@ -31,10 +29,11 @@ const CurrencyProvider = ({ children }: IProps) => {
     queryKey: ['currency'],
     queryFn: ApiGateway.getSupportedCurrencyList
   });
-  const [selectedCurrency, setSelectedCurrency] = useState<string>('');
+  // Default USD for SSR; hydrate from localStorage session after mount.
+  const [selectedCurrency, setSelectedCurrency] = useState<string>('USD');
 
   useEffect(() => {
-    setSelectedCurrency(currencyCode);
+    setSelectedCurrency(SessionGateway.getSession().currencyCode || 'USD');
   }, []);
 
   const onSelectCurrency = useCallback((currencyCode: string) => {
