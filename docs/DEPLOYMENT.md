@@ -246,7 +246,7 @@ Runbook: `techx-corp-chart/docs/operations/external-secrets.md` · infra: `techx
 > [!TIP]
 > **Khuyến nghị — GitHub Actions** (`.github/workflows/build-and-push.yml`):
 >
-> **Job graph:** `CI → prepare → AWS/ECR preflight → build matrix (21 services, max-parallel 4) → verify ECR → release-ready`
+> **Job graph:** `CI → prepare → AWS/ECR preflight → build matrix (21) → verify ECR → release-ready → update-chart-dev (dev only)`
 >
 > | Trigger | GitHub Environment | ECR PROJECT |
 > |---|---|---|
@@ -257,8 +257,8 @@ Runbook: `techx-corp-chart/docs/operations/external-secrets.md` · infra: `techx
 >
 > Tag CI: `sha-<7-char>` trên branch; tên tag git (ví dụ `v1.2.3`) khi push tag.  
 > Catalog: 21 release images trong `docker-bake.hcl` (gồm customized `opensearch`); cache tag `${IMAGE_NAME}/<service>:buildcache`.  
-> Chỉ khi job **release-ready** xanh mới được mở PR values chart (thủ công).  
-> Chi tiết OIDC / Environments: **[CICD.md](./CICD.md)**.
+> Sau **release-ready** xanh: **dev** auto direct-push `values-dev.yaml` tag (secret `CHART_REPO_TOKEN`); **prod** vẫn mở PR values chart thủ công.  
+> Chi tiết OIDC / Environments / chart token: **[CICD.md](./CICD.md)**.
 
 > [!IMPORTANT]
 > **`.env.override`** có thể trỏ registry test (`.../test`).  
@@ -266,16 +266,17 @@ Runbook: `techx-corp-chart/docs/operations/external-secrets.md` · infra: `techx
 
 ### Bước 0 (ưu tiên): CI/CD
 
-1. Setup GitHub Environments (`AWS_ROLE_ARN`, `IMAGE_NAME`) theo [CICD.md](./CICD.md).
+1. Setup GitHub Environments (`AWS_ROLE_ARN`, `IMAGE_NAME`) và secret `CHART_REPO_TOKEN` theo [CICD.md](./CICD.md).
 2. Push `techx-dev-corp` (dev) trước; promote production chỉ sau khi development pass.
-3. Xác minh workflow: 21 job build riêng; job **Verify ECR** + **Release ready** xanh.
+3. Xác minh workflow: 21 job build riêng; job **Verify ECR** + **Release ready** xanh; dev có thêm **Update chart values-dev tag**.
 4. Xác minh tag runtime (và tùy chọn `buildcache`):
 
    ```bash
    aws ecr describe-images --repository-name techx-corp/ad \
      --image-ids imageTag=sha-<7char> --region us-east-1
    # dev: techx-dev-corp/ad
-   # lặp cho đủ 21 service trong catalog release (gồm opensearch) trước khi mở chart PR
+   # lặp cho đủ 21 service trong catalog release (gồm opensearch)
+   # dev: chart values-dev.yaml default.image.tag được bot push sau release-ready
    ```
 
 ### Bước 1: Login ECR (thủ công)

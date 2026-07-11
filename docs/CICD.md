@@ -8,7 +8,7 @@ Helm deploy stays in `techx-corp-chart`.
 | Workflow | File | When | What |
 |---|---|---|---|
 | CI | `.github/workflows/ci.yml` | `pull_request` to `main` / `techx-dev-corp`; also `workflow_call` | Lint + selective unit tests |
-| Build & Push | `.github/workflows/build-and-push.yml` | `push` to `main` / `techx-dev-corp` with changes under `src/**`, tags `v*`, `workflow_dispatch` | Gated multi-arch bake → ECR → verify |
+| Build & Push | `.github/workflows/build-and-push.yml` | `push` to `main` / `techx-dev-corp` with changes under `src/**`, tags `v*`, `workflow_dispatch` | Gated multi-arch bake → ECR → verify → (dev) chart tag promote |
 
 ### Job graph (Build & Push)
 
@@ -18,13 +18,19 @@ CI (reusable lint + unit tests)
   → AWS/ECR preflight  # OIDC + verify 21 ECR repositories
   → build matrix     # 21 services, max-parallel: 4, fail-fast: false
   → verify ECR       # describe-images for every release tag
-  → release-ready    # if: always(); sole gate for manual chart values PR
+  → release-ready    # if: always(); sole gate for chart promotion
+  → update-chart-dev # development only: direct-push values-dev.yaml tag
 ```
 
 Failing CI never reaches AWS authentication or image push.  
-`release-ready` succeeds only when **all** of CI, prepare, preflight, build, and verify-ecr succeed. That job is the only signal that permits a **manual** `techx-corp-chart` values PR.
+`release-ready` succeeds only when **all** of CI, prepare, preflight, build, and verify-ecr succeed.
 
-This workflow is **read-only** toward the chart repository: it does not create PRs or deploy Helm resources (v1).
+| Environment | After `release-ready` |
+|---|---|
+| `development` | Job **update-chart-dev** direct-pushes `default.image.tag` in chart `values-dev.yaml` on branch `techx-dev-corp` |
+| `production` | Still **manual** chart values PR (`values-prod.yaml`); no automated chart write |
+
+The workflow does **not** deploy Helm resources or call Argo CD APIs. Dev promotion relies on Argo CD auto-sync reading the chart Git commit.
 
 ### Path filter (branch pushes)
 
@@ -165,7 +171,29 @@ Do **not** put the service name in `IMAGE_NAME`; bake appends `/<service>:<versi
 
 Optional repository variable: `AWS_REGION=us-east-1` (workflows default to `us-east-1` if unset).
 
-### 4. First dry run
+### 4. Chart promote token (dev automation)
+
+For **update-chart-dev** to write to the chart repository after a successful development publish:
+
+1. Create a **fine-grained PAT** (recommended) or classic PAT with:
+   - Resource: chart repo only (`tmcmanhcuong/tf2-corp-chart`, or your fork)
+   - Permission: **Contents: Read and write**
+2. In the **platform** GitHub repo (**Settings → Secrets and variables → Actions**):
+   - Secret **`CHART_REPO_TOKEN`** = the PAT
+   - Optional variables (defaults shown):
+
+| Variable | Default | Purpose |
+|---|---|---|
+| `CHART_REPO` | `tmcmanhcuong/tf2-corp-chart` | Chart GitHub `owner/repo` |
+| `CHART_BRANCH` | `techx-dev-corp` | Branch that Argo CD dev Application tracks |
+
+3. Ensure branch `techx-dev-corp` on the chart repo **allows** the bot account to push (no “require PR” rule that blocks the PAT, or use a ruleset bypass for that identity).
+
+Without `CHART_REPO_TOKEN`, development builds still publish images and pass `release-ready`, but **update-chart-dev fails** until the secret is set.
+
+Production chart promotion remains manual (no token write to `values-prod.yaml`).
+
+### 5. First dry run
 
 1. Merge workflow / bake changes to the development branch.
 2. Dry-run development: push to `techx-dev-corp`, or Actions → **Build and push images** → `development`.
@@ -177,8 +205,9 @@ Optional repository variable: `AWS_REGION=us-east-1` (workflows default to `us-e
    # also expect tag buildcache on each service repository
    ```
 
-4. Confirm the workflow summary shows **Release ready** before any chart PR.
-5. Production: merge/push `main` (or tag `v*` / protected dispatch) only after development passes → `techx-corp`.
+4. Confirm the workflow summary shows **Release ready**, then **Chart values-dev update** with the new tag.
+5. Confirm chart `values-dev.yaml` on `techx-dev-corp` has `default.image.tag: "sha-<7char>"`.
+6. Production: merge/push `main` (or tag `v*` / protected dispatch) only after development passes → `techx-corp`; open a **manual** chart values PR for prod.
 
 ---
 
@@ -225,8 +254,10 @@ Local non-push Compose builds (`make build`, `make start`) are unchanged and use
 | prepare catalog assert fails | Add new Compose build targets to `docker-bake.hcl` group `release`. |
 | preflight missing ECR repo | Create nested repo via `techx-corp-infra` ECR module; re-run. |
 | Individual matrix build fails | Re-run failed jobs or full workflow; `fail-fast: false` keeps other services building. |
-| verify-ecr reports missing tags | Re-run build for missing services or full workflow; do **not** open chart PR. |
-| release-ready red | Treat as not promotable; no chart values PR. |
+| verify-ecr reports missing tags | Re-run build for missing services or full workflow; do **not** promote chart values. |
+| release-ready red | Treat as not promotable; `update-chart-dev` is skipped. |
+| update-chart-dev fails: missing `CHART_REPO_TOKEN` | Add the secret (see §4); re-run failed job or full workflow. |
+| update-chart-dev fails: push rejected / protected branch | Allow the PAT identity to push to `techx-dev-corp`, or temporarily open a manual values commit. |
 
 Rollback of this CI design: revert workflow, `docker-bake.hcl`, Makefile, and docs. Existing `:buildcache` tags may remain or be deleted; they do not affect deployed SHA/version tags.
 
@@ -245,25 +276,29 @@ Rollback of this CI design: revert workflow, `docker-bake.hcl`, Makefile, and do
 
 ## Image promotion → GitOps (REL-09)
 
-Platform CI **build & push + ECR verify only**. Deploy is Argo CD reading `techx-corp-chart`.
+Platform CI builds, pushes, and verifies images. Deploy is Argo CD reading the chart repo (Git desired state).
 
-Because the chart uses a **global** `default.image.tag` for all nested services:
+Because the chart uses a **global** `default.image.tag` for all nested services (including first-party `opensearch`):
 
 1. **Rebuild and push the full release set** (21 services, including `opensearch`) with the same tag.
 2. **Wait for `release-ready`** (includes ECR `describe-images` for every service).
-3. Only then open a **manual** PR on the chart repo updating `values-dev.yaml` or `values-prod.yaml` (`default.image.tag` **and** `opensearch.image.tag` / repository).
-4. After merge, Argo CD syncs (`argocd app wait … --timeout 600`).
+3. **Development:** job **update-chart-dev** direct-pushes `default.image.tag` in `values-dev.yaml` on chart branch `techx-dev-corp` (requires `CHART_REPO_TOKEN`).
+4. **Production:** open a **manual** PR on the chart repo updating `values-prod.yaml` (`default.image.tag` only).
+5. Argo CD auto-syncs (dev Application `techx-corp-dev`); optional wait: `argocd app wait techx-corp-dev --sync --health --timeout 600`.
 
-Do **not** open the values PR while any matrix job or verification is incomplete.
+Do **not** promote chart values while any matrix job or verification is incomplete.
 
 ```text
+# Development
 CI → prepare → preflight → build (all 21) → verify ECR → release-ready
-  → manual chart values PR → merge → Argo sync
+  → update-chart-dev (direct push values-dev.yaml) → Argo auto-sync
+
+# Production
+CI → prepare → preflight → build (all 21) → verify ECR → release-ready
+  → manual values-prod.yaml PR → merge → Argo sync
 ```
 
 See chart runbook: `techx-corp-chart/docs/operations/gitops-argocd.md`.
-
-Automated chart PR creation remains a follow-up (Phase 6); ECR verification is implemented in this workflow.
 
 ## Security notes
 
@@ -275,7 +310,8 @@ Automated chart PR creation remains a follow-up (Phase 6); ECR verification is i
 
 ## Out of scope (v1)
 
-- Automated chart PR creation or Helm deploy from this repo
+- Automated **production** chart PR / write to `values-prod.yaml`
+- Helm/kubectl deploy or Argo CD API calls from this repo
 - Path-filtered partial image builds while using a global tag (unsafe for promotion)
 - Per-service Helm runtime tags / movable runtime tags
 - Native multi-arch runners, image security gates, SBOM/provenance, Cosign

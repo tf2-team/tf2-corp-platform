@@ -2,8 +2,11 @@
 # SPDX-License-Identifier: Apache-2.0
 name: Build and push images
 
-# Job graph: CI → prepare → AWS/ECR preflight → 21-service build matrix → verify ECR → release-ready
-# Platform is read-only toward techx-corp-chart (no chart PRs or Helm deploys in v1).
+# Job graph: CI → prepare → AWS/ECR preflight → 21-service build matrix → verify ECR
+#            → release-ready → update-chart-dev (development only)
+# Dev: after release-ready, direct-push default.image.tag to chart repo values-dev.yaml
+#      on branch techx-dev-corp (requires secret CHART_REPO_TOKEN).
+# Prod: still manual chart values PR (no automated write to values-prod.yaml).
 
 on:
   push:
@@ -492,7 +495,7 @@ jobs:
           echo "All ${#SERVICES[@]} release images present for tag ${DEMO_VERSION}"
 
   # ---------------------------------------------------------------------------
-  # 6. release-ready — sole gate for the manual techx-corp-chart values PR
+  # 6. release-ready — sole gate for chart promotion (auto-dev or manual-prod)
   # ---------------------------------------------------------------------------
   release-ready:
     name: Release ready
@@ -533,8 +536,12 @@ jobs:
             echo "| Commit | \`${SHORT_SHA}\` |"
             echo "| Services | \`${SERVICE_COUNT}\` |"
             echo ""
-            echo "This job is the sole signal that permits a **manual** techx-corp-chart values PR."
-            echo "This workflow does **not** open chart PRs or deploy Helm resources."
+            if [[ "${TARGET_ENV}" == "development" ]]; then
+              echo "On success, **update-chart-dev** will direct-push \`default.image.tag\` to the chart repo."
+            else
+              echo "Production: this gate permits a **manual** chart values PR only (no automated chart write)."
+            fi
+            echo "This workflow does **not** deploy Helm resources or open production chart PRs."
           } >> "${GITHUB_STEP_SUMMARY}"
 
           FAILED=0
@@ -548,8 +555,191 @@ jobs:
           done
 
           if [[ "${FAILED}" -ne 0 ]]; then
-            echo "Release is NOT ready. Do not open a chart values PR."
+            echo "Release is NOT ready. Do not promote chart values."
             exit 1
           fi
 
-          echo "Release is ready for manual chart values PR (tag=${VERSION}, env=${TARGET_ENV})."
+          echo "Release is ready (tag=${VERSION}, env=${TARGET_ENV})."
+
+  # ---------------------------------------------------------------------------
+  # 7. update-chart-dev — direct-push image tag to chart values-dev.yaml
+  #    Runs only after release-ready succeeds for the development environment.
+  #    Requires repository secret CHART_REPO_TOKEN (contents:write on chart repo).
+  # ---------------------------------------------------------------------------
+  update-chart-dev:
+    name: Update chart values-dev tag
+    needs: [prepare, release-ready]
+    if: >
+      needs.release-ready.result == 'success' &&
+      needs.prepare.outputs.target_environment == 'development'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    env:
+      # Override via repository variables if remotes/branch names differ.
+      CHART_REPO: ${{ vars.CHART_REPO || 'tmcmanhcuong/tf2-corp-chart' }}
+      CHART_BRANCH: ${{ vars.CHART_BRANCH || 'techx-dev-corp' }}
+      VERSION: ${{ needs.prepare.outputs.version }}
+      SHORT_SHA: ${{ needs.prepare.outputs.short_sha }}
+      PLATFORM_SHA: ${{ github.sha }}
+      PLATFORM_RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+    steps:
+      - name: Require CHART_REPO_TOKEN
+        env:
+          CHART_REPO_TOKEN: ${{ secrets.CHART_REPO_TOKEN }}
+        run: |
+          set -euo pipefail
+          if [[ -z "${CHART_REPO_TOKEN}" ]]; then
+            echo "::error::Secret CHART_REPO_TOKEN is not set. Create a fine-grained PAT (or classic PAT) with contents:write on ${CHART_REPO}, add it as a repository secret, then re-run. See docs/CICD.md."
+            exit 1
+          fi
+
+      - name: Checkout chart repository
+        # actions/checkout@v7.0.0
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
+        with:
+          repository: ${{ env.CHART_REPO }}
+          ref: ${{ env.CHART_BRANCH }}
+          token: ${{ secrets.CHART_REPO_TOKEN }}
+          path: chart
+          # Fetch enough history for rebase retries against concurrent pushes.
+          fetch-depth: 20
+
+      - name: Update default.image.tag and push
+        working-directory: chart
+        run: |
+          set -euo pipefail
+
+          FILE="values-dev.yaml"
+          if [[ ! -f "${FILE}" ]]; then
+            echo "::error::${FILE} not found in ${CHART_REPO}@${CHART_BRANCH}"
+            exit 1
+          fi
+
+          # Precise in-place update of default.image.tag only (preserve comments/layout).
+          python3 - <<'PY'
+          import os
+          import re
+          import sys
+          from pathlib import Path
+
+          path = Path("values-dev.yaml")
+          text = path.read_text(encoding="utf-8")
+          version = os.environ["VERSION"]
+
+          pattern = re.compile(
+              r"(^default:\n"
+              r"  image:\n"
+              r"    repository:[^\n]+\n"
+              r"(?:    #[^\n]*\n)*"
+              r"    tag:\s*)\"[^\"]*\"",
+              re.MULTILINE,
+          )
+          match = pattern.search(text)
+          if not match:
+              print(
+                  "::error::Could not locate default.image.tag under default.image in values-dev.yaml",
+                  file=sys.stderr,
+              )
+              sys.exit(1)
+
+          current_match = re.search(r'tag:\s*"([^"]*)"', match.group(0))
+          current = current_match.group(1) if current_match else ""
+          print(f"current_tag={current}")
+          print(f"new_tag={version}")
+
+          if current == version:
+              Path(".tag-unchanged").write_text("1", encoding="utf-8")
+              print("Tag already up to date; no commit needed.")
+              sys.exit(0)
+
+          new_text, n = pattern.subn(rf'\1"{version}"', text, count=1)
+          if n != 1:
+              print(f"::error::Expected 1 replacement, got {n}", file=sys.stderr)
+              sys.exit(1)
+
+          path.write_text(new_text, encoding="utf-8")
+          print(f"Updated default.image.tag: {current} → {version}")
+          PY
+
+          if [[ -f .tag-unchanged ]]; then
+            {
+              echo "## Chart values-dev update"
+              echo ""
+              echo "No change: \`default.image.tag\` already \`${VERSION}\` on \`${CHART_REPO}@${CHART_BRANCH}\`."
+            } >> "${GITHUB_STEP_SUMMARY}"
+            exit 0
+          fi
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          git add "${FILE}"
+          if git diff --cached --quiet; then
+            echo "Working tree clean after update; nothing to commit."
+            exit 0
+          fi
+
+          git commit -m "chore(dev): promote image tag to ${VERSION}" \
+            -m "Automated by platform build after release-ready." \
+            -m "Platform commit: ${PLATFORM_SHA}" \
+            -m "Workflow: ${PLATFORM_RUN_URL}"
+
+          # checkout action already configured origin with CHART_REPO_TOKEN credentials.
+          # Retry push with rebase if another bot/human commit landed first.
+          ATTEMPTS=5
+          for attempt in $(seq 1 "${ATTEMPTS}"); do
+            if git push origin "HEAD:${CHART_BRANCH}"; then
+              echo "Pushed default.image.tag=${VERSION} to ${CHART_REPO}@${CHART_BRANCH}"
+              {
+                echo "## Chart values-dev update"
+                echo ""
+                echo "| Field | Value |"
+                echo "|---|---|"
+                echo "| Repository | \`${CHART_REPO}\` |"
+                echo "| Branch | \`${CHART_BRANCH}\` |"
+                echo "| File | \`values-dev.yaml\` |"
+                echo "| Tag | \`${VERSION}\` |"
+                echo "| Mode | direct push |"
+                echo ""
+                echo "Argo CD (\`techx-corp-dev\`) will auto-sync after this commit lands."
+              } >> "${GITHUB_STEP_SUMMARY}"
+              exit 0
+            fi
+            echo "Push rejected (attempt ${attempt}/${ATTEMPTS}); pulling with rebase..."
+            git fetch origin "${CHART_BRANCH}"
+            git rebase "origin/${CHART_BRANCH}"
+
+            # Re-apply tag after rebase in case remote also touched values-dev.yaml.
+            python3 - <<'PY'
+          import os
+          import re
+          import sys
+          from pathlib import Path
+
+          path = Path("values-dev.yaml")
+          text = path.read_text(encoding="utf-8")
+          version = os.environ["VERSION"]
+          pattern = re.compile(
+              r"(^default:\n"
+              r"  image:\n"
+              r"    repository:[^\n]+\n"
+              r"(?:    #[^\n]*\n)*"
+              r"    tag:\s*)\"[^\"]*\"",
+              re.MULTILINE,
+          )
+          if not pattern.search(text):
+              print("::error::values-dev.yaml lost default.image.tag after rebase", file=sys.stderr)
+              sys.exit(1)
+          path.write_text(pattern.sub(rf'\1"{version}"', text, count=1), encoding="utf-8")
+          PY
+            git add "${FILE}"
+            if ! git diff --cached --quiet; then
+              # Keep a single promote commit on top after resolving concurrent updates.
+              git commit --amend --no-edit
+            fi
+          done
+
+          echo "::error::Failed to push to ${CHART_REPO}@${CHART_BRANCH} after ${ATTEMPTS} attempts"
+          exit 1

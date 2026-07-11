@@ -31,10 +31,10 @@ Build ALL services → Push ECR → Verify every required tag exists
 ```
 
 3. **Phase 6 (automation)**  
-   - Job sau `build-and-push` thành công:  
-     - `aws ecr describe-images` cho list service catalog  
-     - Mở PR chart (bot) cập nhật `default.image.tag`  
-   - Prod PR: required review; dev có thể auto-merge tùy policy  
+   - Job sau `release-ready` thành công (development):  
+     - `aws ecr describe-images` đã pass cho full catalog  
+     - **Direct push** chart `values-dev.yaml` (`default.image.tag`) lên branch `techx-dev-corp`  
+   - Prod: vẫn **manual** PR `values-prod.yaml` (required review)  
 
 4. **Không** gọi Helm/kubectl deploy từ platform workflow v1.
 
@@ -42,9 +42,10 @@ Build ALL services → Push ECR → Verify every required tag exists
 
 - [x] `docs/CICD.md` mô tả clear contract rebuild-all + verify-before-PR.
 - [x] Workflow job **Verify ECR** (`aws ecr describe-images` cho full release catalog) trước khi **release-ready** — gate cho manual chart PR.
-- [ ] (Phase 6 / follow-up) Automated chart PR creation after successful verify (still pending).
+- [x] (Phase 6) Automated **dev** chart tag promote after `release-ready` (`update-chart-dev` direct-push to `values-dev.yaml`).
+- [ ] (Follow-up) Optional automated **prod** chart PR for `values-prod.yaml` with required review.
 - [x] Không path-filtered partial bake khi vẫn dùng global tag cho promotion (`src/**` gate is all-or-nothing full catalog rebuild).
-- [x] Tài liệu: không mở values PR khi push chưa xong / `release-ready` chưa xanh.
+- [x] Tài liệu: không promote values khi push chưa xong / `release-ready` chưa xanh.
 
 ## Kiểm thử / xác minh
 
@@ -69,4 +70,4 @@ aws ecr describe-images --repository-name techx-corp/ad \
 
 ## English Summary
 
-Platform-level REL-09: enforce full multi-service bake + ECR verification before any chart values PR that advances the global image tag; optional Phase 6 automation to open the chart PR after successful push.
+Platform-level REL-09: enforce full multi-service bake + ECR verification before advancing the global image tag. Phase 6 (dev): after `release-ready`, direct-push `values-dev.yaml` tag to the chart branch tracked by Argo CD. Production remains a manual chart values PR.
