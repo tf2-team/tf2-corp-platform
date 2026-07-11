@@ -831,6 +831,8 @@ func (c *ApprovedOrderConsumer) ConsumeClaim(session sarama.ConsumerGroupSession
 				continue
 			}
 
+			// Trigger test cicd
+
 			logger.Info(fmt.Sprintf("Processing approved order shipment for ID: %s", order.OrderId))
 			
 			// Extract cart items
