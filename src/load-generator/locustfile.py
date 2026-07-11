@@ -111,6 +111,8 @@ people_file = open('people.json')
 people = json.load(people_file)
 
 class WebsiteUser(HttpUser):
+    # Keep HTTP traffic dominant; browser (Playwright) users are much heavier.
+    weight = int(os.environ.get("LOCUST_HTTP_USER_WEIGHT", "9"))
     wait_time = between(1, 10)
 
     def __init__(self, *args, **kwargs):
@@ -238,16 +240,20 @@ browser_traffic_enabled = os.environ.get("LOCUST_BROWSER_TRAFFIC_ENABLED", "").l
 
 if browser_traffic_enabled:
     class WebsiteBrowserUser(PlaywrightUser):
+        weight = int(os.environ.get("LOCUST_BROWSER_USER_WEIGHT", "1"))
         headless = True  # to use a headless browser, without a GUI
 
-        def __init__(self, *args, **kwargs):
-            super().__init__(*args, **kwargs)
-            self.tracer = trace.get_tracer(__name__)
+        # IMPORTANT: Do not set instance attrs in __init__ after super().__init__().
+        # PlaywrightUser.__init__ does copy.copy(self) into sub_users *before* this
+        # subclass body would run post-super assignments. Tasks execute on those
+        # copies, so attrs like self.tracer would be missing and every TASK fails
+        # with AttributeError (near-zero response time, 100% fail rate).
 
         @task
         @pw
         async def open_cart_page_and_change_currency(self, page: PageWithRetry):
-            with self.tracer.start_as_current_span("browser_change_currency", context=Context()):
+            tracer = trace.get_tracer(__name__)
+            with tracer.start_as_current_span("browser_change_currency", context=Context()):
                 try:
                     page.on("console", lambda msg: print(msg.text))
                     await page.route('**/*', add_baggage_header)
@@ -261,11 +267,19 @@ if browser_traffic_enabled:
         @task
         @pw
         async def add_product_to_cart(self, page: PageWithRetry):
-            with self.tracer.start_as_current_span("browser_add_to_cart", context=Context()):
+            tracer = trace.get_tracer(__name__)
+            with tracer.start_as_current_span("browser_add_to_cart", context=Context()):
                 try:
                     page.on("console", lambda msg: print(msg.text))
                     await page.route('**/*', add_baggage_header)
                     await page.goto("/", wait_until="domcontentloaded")
+                    # Product cards are client-rendered; wait for catalog image XHR
+                    # before clicking so we do not race empty product list.
+                    await page.wait_for_event(
+                        "response",
+                        predicate=lambda r: "/images/products/RoofBinoculars.jpg" in r.url and r.status == 200,
+                        timeout=15000,
+                    )
                     await page.click('p:has-text("Roof Binoculars")')
                     await page.wait_for_load_state("domcontentloaded")
                     await page.click('button:has-text("Add To Cart")')
