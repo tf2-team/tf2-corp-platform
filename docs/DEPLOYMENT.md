@@ -266,10 +266,23 @@ Runbook: `techx-corp-chart/docs/operations/external-secrets.md` · infra: `techx
 
 ### Bước 0 (ưu tiên): CI/CD
 
-1. Setup GitHub Environments (`AWS_ROLE_ARN`, `IMAGE_NAME`) và secret `CHART_REPO_TOKEN` theo [CICD.md](./CICD.md).
-2. Push `techx-dev-corp` (dev) trước; promote production chỉ sau khi development pass.
-3. Xác minh workflow: 21 job build riêng; job **Verify ECR** + **Release ready** xanh; dev có thêm **Update chart values-dev tag**.
-4. Xác minh tag runtime (và tùy chọn `buildcache`):
+1. Setup GitHub Environments (`AWS_ROLE_ARN`, `IMAGE_NAME`) theo [CICD.md](./CICD.md).
+2. **Dev chart auto-promote (one-time operator setup)** — chi tiết đầy đủ: [CICD.md §4 Operator setup](./CICD.md#4-operator-setup--chart-promote-token-dev-automation):
+
+   | Step | Action |
+   |---|---|
+   | A | Create fine-grained PAT (chart repo only, **Contents: Read and write**) |
+   | B | Platform repo secret **`CHART_REPO_TOKEN`** = PAT |
+   | C | Optional vars `CHART_REPO` / `CHART_BRANCH` (defaults usually OK) |
+   | D | Chart branch `techx-dev-corp` allows that PAT identity to **direct push** |
+   | E | Dry-run publish `development` → job **Update chart values-dev tag** green |
+
+   Auth: push uses the **PAT** (not platform `GITHUB_TOKEN`); commit author may show as `github-actions[bot]`.  
+   Prod chart tag still requires a **manual** values PR.
+
+3. Push `techx-dev-corp` (dev) trước; promote production chỉ sau khi development pass.
+4. Xác minh workflow: 21 job build riêng; job **Verify ECR** + **Release ready** xanh; dev có thêm **Update chart values-dev tag**.
+5. Xác minh tag runtime (và tùy chọn `buildcache`):
 
    ```bash
    aws ecr describe-images --repository-name techx-corp/ad \

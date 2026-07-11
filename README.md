@@ -34,8 +34,11 @@ GitHub Actions builds multi-arch images and pushes them to AWS ECR via OIDC.
 Image format: `[REGISTRY]/[PROJECT]/[SERVICE]:[VERSION]`  
 (e.g. `…/techx-dev-corp/ad:sha-a1b2c3d`).
 
-Setup (IAM OIDC roles, GitHub Environment variables): **[docs/CICD.md](docs/CICD.md)**.  
-End-to-end production runbook: **[docs/DEPLOYMENT.md](docs/DEPLOYMENT.md)**.
+Setup:
+
+* IAM OIDC roles, GitHub Environment variables: **[docs/CICD.md](docs/CICD.md)**
+* Dev chart auto-promote (PAT / `CHART_REPO_TOKEN` / branch rules): **[docs/CICD.md §4 Operator setup](docs/CICD.md#4-operator-setup--chart-promote-token-dev-automation)**
+* End-to-end production runbook: **[docs/DEPLOYMENT.md](docs/DEPLOYMENT.md)**
 
 ## Run locally
 ```sh

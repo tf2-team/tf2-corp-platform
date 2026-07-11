@@ -55,6 +55,7 @@ Alternatives rejected:
 3. Precise in-place update of the `default.image.tag` scalar under `default.image`.
 4. Commit message references platform SHA and workflow run URL for audit.
 5. Updated `docs/CICD.md`, `docs/DEPLOYMENT.md`, `README.md`, and REL-09 backlog to describe setup and flow.
+6. Expanded **operator setup** in `docs/CICD.md` §4: auth model (PAT vs `GITHUB_TOKEN` vs commit author), fine-grained PAT steps, platform secret/vars, chart branch push rules, verify, failure modes, rotation. Cross-linked from `DEPLOYMENT.md` and `README.md`.
 
 ## Files Changed
 
@@ -64,9 +65,9 @@ Alternatives rejected:
 
 **Documentation:**
 
-* `docs/CICD.md` — Job graph, secret setup, promotion flow, troubleshooting.
-* `docs/DEPLOYMENT.md` — Dev auto-promote notes.
-* `README.md` — CI/CD summary.
+* `docs/CICD.md` — Job graph, full operator setup (PAT/secret/branch rules), promotion flow, troubleshooting.
+* `docs/DEPLOYMENT.md` — Bước 0 table for chart promote operator setup + link to CICD §4.
+* `README.md` — CI/CD summary + operator setup link.
 * `docs/backlogs/2026-07-09-rel-09-gitops-argocd.md` — Phase 6 acceptance marked done for dev.
 * `docs/changes/2026-07-11-auto-promote-dev-chart-image-tag.md` — This change record.
 

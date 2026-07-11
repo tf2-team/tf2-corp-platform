@@ -171,27 +171,113 @@ Do **not** put the service name in `IMAGE_NAME`; bake appends `/<service>:<versi
 
 Optional repository variable: `AWS_REGION=us-east-1` (workflows default to `us-east-1` if unset).
 
-### 4. Chart promote token (dev automation)
+### 4. Operator setup — chart promote token (dev automation)
 
-For **update-chart-dev** to write to the chart repository after a successful development publish:
+Cross-repo Git writes cannot use the platform repo’s default `GITHUB_TOKEN`. Job **`update-chart-dev`** authenticates to the **chart** repository with a PAT stored as a platform Actions secret.
 
-1. Create a **fine-grained PAT** (recommended) or classic PAT with:
-   - Resource: chart repo only (`tmcmanhcuong/tf2-corp-chart`, or your fork)
-   - Permission: **Contents: Read and write**
-2. In the **platform** GitHub repo (**Settings → Secrets and variables → Actions**):
-   - Secret **`CHART_REPO_TOKEN`** = the PAT
-   - Optional variables (defaults shown):
+#### How authentication works
+
+| Concern | Identity |
+|---|---|
+| Platform workflow / AWS OIDC / ECR push | Platform `GITHUB_TOKEN` + environment role |
+| Checkout + **push** to chart repo | Secret **`CHART_REPO_TOKEN`** (PAT) |
+| Git commit author name/email | `github-actions[bot]` (cosmetic; set in the job) |
+
+The Action does **not** “assume” GitHub’s built-in bot for write access to another repo. The **PAT owner** (or fine-grained token resource grants) is what GitHub authorizes for the push. Prefer a **dedicated machine user** for the PAT if you do not want a personal account owning the token.
+
+Production chart promotion remains **manual** (no token write to `values-prod.yaml`).
+
+#### Prerequisites
+
+| Item | Value / notes |
+|---|---|
+| Platform GitHub repo | e.g. `tmcmanhcuong/tf2-corp-platform` (where `build-and-push.yml` runs) |
+| Chart GitHub repo | default `tmcmanhcuong/tf2-corp-chart` |
+| Chart branch for dev | default `techx-dev-corp` (Argo CD Application `techx-corp-dev` `targetRevision`) |
+| Operator rights | Admin (or secrets:write) on platform repo; ability to create PATs; ability to configure chart branch rules |
+
+#### Step A — Create a fine-grained PAT (recommended)
+
+1. GitHub → **Settings → Developer settings → Personal access tokens → Fine-grained tokens → Generate new token**.
+2. **Token name:** e.g. `techx-platform-chart-promote-dev`.
+3. **Expiration:** set a finite expiry (e.g. 90 days) and calendar a rotation.
+4. **Resource owner:** org or user that owns the chart repo.
+5. **Repository access:** **Only select repositories** → select the chart repo only  
+   (`tmcmanhcuong/tf2-corp-chart`, or your fork).
+6. **Permissions → Repository permissions:**
+   - **Contents:** **Read and write** (required for checkout + push of `values-dev.yaml`)
+   - **Metadata:** Read-only (usually granted automatically)
+   - Do **not** grant admin, workflows, or secrets permissions.
+7. Generate the token and **copy it once** (GitHub will not show it again).
+
+Classic PAT alternative (less preferred): `repo` scope on an account with write access to the chart repo. Still store it only as `CHART_REPO_TOKEN`.
+
+#### Step B — Add the secret on the **platform** repository
+
+1. Open the **platform** repo on GitHub (not the chart repo).
+2. **Settings → Secrets and variables → Actions → New repository secret**.
+3. Name: **`CHART_REPO_TOKEN`**
+4. Value: paste the PAT from Step A → **Add secret**.
+
+Do **not** commit the PAT to Git, put it in Environment variables (non-secret), or paste it into workflow logs.
+
+#### Step C — Optional repository variables (defaults are usually enough)
+
+In the **same platform** repo: **Settings → Secrets and variables → Actions → Variables**.
 
 | Variable | Default | Purpose |
 |---|---|---|
 | `CHART_REPO` | `tmcmanhcuong/tf2-corp-chart` | Chart GitHub `owner/repo` |
-| `CHART_BRANCH` | `techx-dev-corp` | Branch that Argo CD dev Application tracks |
+| `CHART_BRANCH` | `techx-dev-corp` | Branch that receives the direct push and that Argo CD dev tracks |
 
-3. Ensure branch `techx-dev-corp` on the chart repo **allows** the bot account to push (no “require PR” rule that blocks the PAT, or use a ruleset bypass for that identity).
+Override only if your chart remote or branch names differ.
 
-Without `CHART_REPO_TOKEN`, development builds still publish images and pass `release-ready`, but **update-chart-dev fails** until the secret is set.
+#### Step D — Allow the PAT identity to push chart branch `techx-dev-corp`
 
-Production chart promotion remains manual (no token write to `values-prod.yaml`).
+On the **chart** repo:
+
+1. Confirm the PAT’s user (or machine user) has **write** access to the chart repository.
+2. Review **Settings → Branches / Rulesets** for `techx-dev-corp`:
+   - If **Require a pull request before merging** (or similar) blocks direct pushes, either:
+     - add a **bypass** for the PAT’s user / team / app, or
+     - temporarily allow force-free direct pushes for that identity only.
+   - Status checks required on PR are fine for humans; they must not block the bot’s direct push path if you rely on automation.
+3. Do **not** require signed commits for that identity unless the PAT workflow is also configured to sign (not implemented today).
+
+#### Step E — Verify end-to-end
+
+1. Ensure `CHART_REPO_TOKEN` exists on the platform repo.
+2. Run a development publish:
+   - Actions → **Build and push images** → environment **`development`**, or
+   - push a change under `src/**` to platform branch `techx-dev-corp`.
+3. Confirm job order: matrix builds → **Verify ECR tags** → **Release ready** (green) → **Update chart values-dev tag** (green).
+4. On the chart repo, branch `techx-dev-corp`, open `values-dev.yaml` and confirm:
+
+   ```yaml
+   default:
+     image:
+       tag: "sha-<7char>"   # matches the platform release tag
+   ```
+
+5. Optional: `argocd app wait techx-corp-dev --sync --health --timeout 600`.
+
+#### Failure modes (setup-related)
+
+| Symptom | Fix |
+|---|---|
+| `Secret CHART_REPO_TOKEN is not set` | Complete Step B on the **platform** repo |
+| `Repository not found` / checkout 404 | Wrong `CHART_REPO`, or PAT lacks access to that repo |
+| `Permission denied` / push rejected | PAT Contents not Read/write; or branch rules block the PAT identity (Step D) |
+| Job skipped entirely | Environment was not `development`, or `release-ready` failed |
+
+Without `CHART_REPO_TOKEN`, development builds can still push images and pass `release-ready`, but **update-chart-dev fails** until the secret is set. Operators can still edit `values-dev.yaml` manually as a fallback.
+
+#### Security and rotation
+
+* Scope the PAT to the **chart repo only**; Contents read/write is enough.
+* Prefer a **machine user** over a personal account for ownership and offboarding.
+* Rotate on expiry or if the secret is exposed: create a new PAT → update `CHART_REPO_TOKEN` → revoke the old PAT.
+* Revoking the PAT immediately stops automated dev promotes (images still publish).
 
 ### 5. First dry run
 
