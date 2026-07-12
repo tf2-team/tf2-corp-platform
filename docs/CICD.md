@@ -128,30 +128,28 @@ PR CI does **not** run multi-arch bake. e2e / Cypress / tracetest are out of sco
 
 ## One-time operator setup
 
-### 1–2. AWS IAM OIDC + ECR push roles (Terraform)
+### 1–2. AWS IAM OIDC + ECR push roles (Terraform bootstrap)
 
-Managed in **`techx-corp-infra`** via module `modules/github-actions-ecr`:
+Managed in **`techx-corp-infra/bootstrap`** (account-level, with the remote state bucket). Module `modules/github-actions-ecr` creates the IAM roles; the GitHub OIDC provider is created once in bootstrap.
 
-| Environment stack | Role name | GitHub Environment | ECR repo | Creates OIDC provider? |
-|---|---|---|---|---|
-| `environments/production` | `techx-gha-platform-prod` | `production` | `techx-corp` | yes (account singleton) |
-| `environments/development` | `techx-gha-platform-dev` | `development` | `techx-dev-corp` | no (looks up existing) |
+| Bootstrap role key | Role name | GitHub Environment | ECR project prefix |
+|---|---|---|---|
+| `production` | `techx-gha-platform-prod` | `production` | `techx-prod-corp/*` |
+| `development` | `techx-gha-platform-dev` | `development` | `techx-dev-corp/*` |
 
-Apply production first (creates `token.actions.githubusercontent.com` OIDC provider), then development:
+Apply bootstrap **before** environment stacks (and before platform image push):
 
 ```bash
-terraform -chdir=environments/production plan -out=prod.tfplan
-terraform -chdir=environments/production apply "prod.tfplan"
-
-terraform -chdir=environments/development plan -out=dev.tfplan
-terraform -chdir=environments/development apply "dev.tfplan"
+terraform -chdir=bootstrap plan -out=bootstrap.tfplan
+terraform -chdir=bootstrap apply "bootstrap.tfplan"
 ```
 
 Read role ARNs:
 
 ```bash
-terraform -chdir=environments/production output github_actions_ecr_role_arn
-terraform -chdir=environments/development output github_actions_ecr_role_arn
+terraform -chdir=bootstrap output github_actions_ecr_production_role_arn
+terraform -chdir=bootstrap output github_actions_ecr_development_role_arn
+terraform -chdir=bootstrap output github_oidc_provider_arn
 ```
 
 Trust subjects include the GitHub Environment **and** branch refs (`main` / tags for prod, `techx-dev-corp` for dev).
@@ -164,8 +162,8 @@ In the GitHub repo **Settings → Environments**:
 
 | Environment | Variable `AWS_ROLE_ARN` | Variable `IMAGE_NAME` (REGISTRY/PROJECT only) | Protection |
 |---|---|---|---|
-| `development` | ARN of `techx-gha-platform-dev` | `493499579600.dkr.ecr.us-east-1.amazonaws.com/techx-dev-corp` | optional |
-| `production` | ARN of `techx-gha-platform-prod` | `493499579600.dkr.ecr.us-east-1.amazonaws.com/techx-corp` | required reviewers recommended |
+| `development` | bootstrap `github_actions_ecr_development_role_arn` | `493499579600.dkr.ecr.us-east-1.amazonaws.com/techx-dev-corp` | optional |
+| `production` | bootstrap `github_actions_ecr_production_role_arn` | `493499579600.dkr.ecr.us-east-1.amazonaws.com/techx-prod-corp` | required reviewers recommended |
 
 Do **not** put the service name in `IMAGE_NAME`; bake appends `/<service>:<version>`.
 

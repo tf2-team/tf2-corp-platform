@@ -11,7 +11,7 @@
 Tài liệu này cung cấp hướng dẫn từng bước để triển khai toàn bộ nền tảng TechX Corp lên AWS EKS. Quy trình bao gồm:
 
 - Khởi tạo hạ tầng cơ sở và Remote State bằng Terraform (`techx-corp-infra`).
-- Tạo **nested ECR repositories** (`techx-corp/*`, `techx-dev-corp/*`) và IAM role GitHub Actions OIDC.
+- Bootstrap tạo GitHub Actions OIDC + ECR push roles; environment stacks tạo **nested ECR** (`techx-prod-corp/*`, `techx-dev-corp/*`).
 - Triển khai EKS Cluster và cấu hình AWS Load Balancer Controller.
 - Build và Push Docker images (CI/CD hoặc thủ công).
 - Triển khai ứng dụng bằng Helm (`techx-corp-chart`) với ALB, smoke test và rollback an toàn.
@@ -21,7 +21,7 @@ Tài liệu này cung cấp hướng dẫn từng bước để triển khai to�
 | Repository | Vai trò |
 |---|---|
 | **`techx-corp-platform`** | Mã nguồn microservices, Dockerfiles, Compose/Buildx, GitHub Actions build/push |
-| **`techx-corp-infra`** | Terraform: VPC, EKS, nested ECR, GitHub OIDC roles, ALB Controller IAM |
+| **`techx-corp-infra`** | Terraform: bootstrap (state + GHA OIDC/ECR roles), VPC, EKS, nested ECR, ALB Controller IAM |
 | **`techx-corp-chart`** | Helm chart, public ALB values, smoke test, rollout/rollback |
 
 ## 3. Điều kiện tiên quyết (Prerequisites)
@@ -108,7 +108,9 @@ default.image.tag        = VERSION
 > 2. **KHÔNG COMMIT** `backend.hcl` thật.
 > 3. **Luôn** `plan -out=...` → review → `apply` file plan (không `apply` trực tiếp trên production).
 
-### Bước 1: Bootstrap Remote State (S3)
+### Bước 1: Bootstrap Remote State + GitHub OIDC / ECR roles
+
+Bootstrap creates the S3 state backend **and** account-level GitHub Actions OIDC + platform ECR push roles.
 
 1. `terraform -chdir=bootstrap init`
 2. `terraform -chdir=bootstrap plan -out=bootstrap.tfplan`
@@ -130,14 +132,21 @@ default.image.tag        = VERSION
    terraform -chdir=bootstrap state list
    ```
 
-### Bước 2: Provision production (VPC, EKS, nested ECR, GHA OIDC)
+6. Read GHA role ARNs for platform GitHub Environments:
+
+   ```bash
+   terraform -chdir=bootstrap output github_actions_ecr_production_role_arn
+   terraform -chdir=bootstrap output github_actions_ecr_development_role_arn
+   ```
+
+### Bước 2: Provision production (VPC, EKS, nested ECR)
 
 Terraform production tạo:
 
 - VPC + EKS (`techx-tf2`)
-- **Nested ECR**: `techx-corp/<service>` cho toàn bộ catalog platform
-- **GitHub Actions OIDC provider** + role `techx-gha-platform-prod` (push ECR)
+- **Nested ECR**: `techx-prod-corp/<service>` cho toàn bộ catalog platform
 - IAM ALB Controller
+- **Không** tạo GitHub OIDC / `techx-gha-platform-*` (đã ở bootstrap)
 
 ```bash
 # backend.hcl (không commit)
@@ -156,7 +165,6 @@ Outputs hữu ích:
 ```bash
 terraform -chdir=environments/production output ecr_image_base_url
 terraform -chdir=environments/production output ecr_service_names
-terraform -chdir=environments/production output github_actions_ecr_role_arn
 ```
 
 ### Bước 3 (tuỳ chọn): Provision development
@@ -168,10 +176,9 @@ terraform -chdir=environments/development apply "dev.tfplan"
 
 terraform -chdir=environments/development output ecr_image_base_url
 # → .../techx-dev-corp
-terraform -chdir=environments/development output github_actions_ecr_role_arn
 ```
 
-Gán output `github_actions_ecr_role_arn` vào GitHub Environment variable **`AWS_ROLE_ARN`**, và `ecr_image_base_url` vào **`IMAGE_NAME`** (xem [CICD.md](./CICD.md)).
+Gán bootstrap `github_actions_ecr_*_role_arn` vào GitHub Environment variable **`AWS_ROLE_ARN`**, và env `ecr_image_base_url` vào **`IMAGE_NAME`** (xem [CICD.md](./CICD.md)).
 
 ---
 
@@ -453,5 +460,5 @@ aws s3api list-object-versions --bucket techx-tf-state-493499579600-us-east-1 \
 ## Tài liệu liên quan
 
 - [CICD.md](./CICD.md) — GitHub Actions, OIDC, Environments  
-- `techx-corp-infra` — Terraform modules `ecr`, `github-actions-ecr`  
+- `techx-corp-infra` — Terraform `bootstrap/` (OIDC + GHA ECR roles), modules `ecr`, `github-actions-ecr`  
 - `techx-corp-chart` — Helm values + smoke test  
