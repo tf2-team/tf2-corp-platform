@@ -578,7 +578,7 @@ jobs:
       contents: read
     env:
       # Override via repository variables if remotes/branch names differ.
-      CHART_REPO: ${{ vars.CHART_REPO || 'tmcmanhcuong/tf2-corp-chart' }}
+      CHART_REPO: ${{ vars.CHART_REPO || 'tf2-team/tf2-corp-chart' }}
       CHART_BRANCH: ${{ vars.CHART_BRANCH || 'techx-dev-corp' }}
       VERSION: ${{ needs.prepare.outputs.version }}
       SHORT_SHA: ${{ needs.prepare.outputs.short_sha }}
