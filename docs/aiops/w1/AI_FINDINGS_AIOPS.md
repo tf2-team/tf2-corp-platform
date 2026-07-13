@@ -1,4 +1,4 @@
-# Ghi nhận hệ thống (Findings) - Lớp AI (Dành cho AIOps)
+﻿# Ghi nhận hệ thống (Findings) - Lớp AI (Dành cho AIOps)
 
 Tài liệu này tổng hợp các phát hiện từ việc phân tích mã nguồn của hai dịch vụ `product-reviews` và `llm`, nhằm cung cấp thông tin cho đội AIOps biết cần phải giám sát (monitor) những gì và các điểm yếu hệ thống ở đâu.
 
@@ -54,3 +54,5 @@ Dịch vụ sử dụng OpenFeature SDK với `FlagdProvider` kết nối tới 
 2. Giám sát lượng connection mở tới PostgreSQL (nguy cơ sập do thiếu connection pool).
 3. Đề xuất team Dev bổ sung ngay khối `try...except` và `timeout` cho nhánh gọi LLM thực tế, tránh để lỗi gRPC làm vỡ UI.
 4. Cảnh báo rò rỉ dữ liệu cá nhân (PII) trên hệ thống Log và Trace OpenTelemetry.
+
+

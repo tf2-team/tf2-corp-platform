@@ -1,4 +1,4 @@
-{
+﻿{
   "_meta": {
     "scenario": "TechX Corp Platform - Phase 3 TF2 storefront with e-commerce microservices, AI review assistant, Kafka async processing, feature flags, observability, and planned AIOps runtime.",
     "schema_version": "1.0",
@@ -7,8 +7,8 @@
     "environment": "Kubernetes / EKS target, Docker Compose local equivalent",
     "nab_mapping": "N/A - this repository does not include NAB stream CSV files. Keep nab_stream as N/A until a lab dataset mapping is assigned.",
     "source_notes": [
-      "Derived from phase3 onboarding docs, aio-docs AIOps architecture docs, Helm values, Docker Compose, Envoy routes, proto contracts, and service source code.",
-      "AIOps runtime is marked planned because tf2-corp-platform/src/aiops is not present yet.",
+      "Derived from phase3 onboarding docs, tf2-corp-platform/docs/aiops AIOps architecture docs, Helm values, Docker Compose, Envoy routes, proto contracts, and service source code.",
+      "AIOps runtime is marked planned because tf2-corp-platform/src/aio is not present yet.",
       "Replica/SPOF status must be validated against live kubectl and Jaeger evidence before final incident use.",
       "flagd and OpenFeature incident paths are protected. AIOps may observe symptoms but must not mutate, disable, redirect, or bypass them."
     ]
@@ -162,3 +162,5 @@
     "Do not mark any component as a confirmed SPOF from this static JSON alone. Validate deployed replicas, state durability, and failover behavior in EKS."
   ]
 }
+
+

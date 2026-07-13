@@ -1,4 +1,4 @@
-# Signal Catalog for AIOps (TF2 / AIO4)
+﻿# Signal Catalog for AIOps (TF2 / AIO4)
 
 This catalog inventories all telemetry signals (Prometheus metrics, Jaeger trace attributes, and OpenSearch log fields) available in the **TechX Corp Platform** relevant to AIOps anomaly detection, RCA, and automated remediation.
 
@@ -229,3 +229,5 @@ Custom Business-layer Trace Attributes added inside `product-reviews` server (`g
 | `body.message` | String | `"Rate limit reached. Please try again later."` | LLM rate limit 429 response |
 | `body.message` | String | `"openai.RateLimitError"` \| `"openai.APITimeoutError"` | Python client-side exceptions from openai library |
 | `body.message` | String | `"llmInaccurateResponse feature flag: True"` | Feature flag hook state audits |
+
+

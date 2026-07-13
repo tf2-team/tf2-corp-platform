@@ -1,4 +1,4 @@
-# AIOps Backlog Ưu Tiên — Tổng Hợp Đa Nguồn
+﻿# AIOps Backlog Ưu Tiên — Tổng Hợp Đa Nguồn
 
 **Công thức xếp hạng:** Ưu tiên = Rủi ro (Khả năng xảy ra × Mức nghiêm trọng) × Tác động Business  
 **Nguồn dữ liệu:**
@@ -253,3 +253,5 @@
 **Sprint 2 (P1 — 3 items):** Cải thiện chất lượng giám sát: readiness probe, log severity, và alert tuning. Bắt đầu viết runbook cho các kịch bản phổ biến.
 
 **Sprint 3+:** Tự động hóa: runbook matching → auto-remediation → verification loop.
+
+

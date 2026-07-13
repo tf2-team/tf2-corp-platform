@@ -1,4 +1,4 @@
-# Báo cáo đánh giá điểm yếu hệ thống — Góc nhìn AIOps
+﻿# Báo cáo đánh giá điểm yếu hệ thống — Góc nhìn AIOps
 
 **Dự án:** TechX Corp Platform — Phase 3 Capstone  
 **Nhóm / Track:** AIO04 — AIOps  
@@ -342,3 +342,4 @@ Hệ thống TechX Corp Platform **đã có nền observability đủ tốt** đ
 ---
 
 *Báo cáo này là deliverable Week 1 — AIOps System Weak Points Assessment. File làm việc chi tiết: `AIOPS-W1-WEAK-POINTS-ASSESSMENT.md`.*
+

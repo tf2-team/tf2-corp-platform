@@ -1,4 +1,4 @@
-# TF2 / AIO4 AIOps Architecture
+﻿# TF2 / AIO4 AIOps Architecture
 
 > **Status:** Proposed implementation baseline  
 > **Owners:** AIO4 AIOps sub-team (3 members)  
@@ -12,11 +12,11 @@ This document defines the complete AIOps pipeline, runtime boundaries, safety mo
 
 The repository contains discovery notes written at different times, so they do not all have equal authority. Use this precedence whenever two documents disagree:
 
-1. Active BTC mandates in `phase3/mandates/`, then [Phase 3 rules](../phase3/RULES.md), [SLO](../phase3/onboarding/SLO.md), [budget](../phase3/onboarding/BUDGET.md), and [architecture](../phase3/onboarding/ARCHITECTURE.md).
+1. Active BTC mandates in `phase3/mandates/`, then [Phase 3 rules](../../../phase3/RULES.md), [SLO](../../../phase3/onboarding/SLO.md), [budget](../../../phase3/onboarding/BUDGET.md), and [architecture](../../../phase3/onboarding/ARCHITECTURE.md).
 2. Evidence from the currently deployed TF2 environment, provided the metric, labels, time window, and capture time are recorded.
-3. The corrected [AIOps backlog](aiops/AIO_BACKLOG.md) and [AIOps task plan](aiops_task_plan.md).
-4. Team discovery inputs: [baseline metrics](aiops/w1/baseline_metrics.md), [signal catalog](aiops/w1/signal_for_anomoly.md), [weakness assessment](aiops/w1/weakness.md), and [AI findings](aiops/w1/AI_FINDINGS_AIOPS.md).
-5. The older [multi-source prioritized backlog](aiops/w1/AIOPS_PRIORITIZED_BACKLOG.md), which remains useful as discovery history but is superseded where it conflicts with the corrected backlog.
+3. The corrected [AIOps backlog](AIO_BACKLOG.md) and [AIOps task plan](aiops_task_plan.md).
+4. Team discovery inputs: [baseline metrics](w1/baseline_metrics.md), [signal catalog](w1/signal_for_anomoly.md), [weakness assessment](w1/weakness.md), and [AI findings](w1/AI_FINDINGS_AIOPS.md).
+5. The older [multi-source prioritized backlog](w1/AIOPS_PRIORITIZED_BACKLOG.md), which remains useful as discovery history but is superseded where it conflicts with the corrected backlog.
 
 The resulting non-negotiable interpretations are:
 
@@ -25,6 +25,7 @@ The resulting non-negotiable interpretations are:
 - P0 order is `OPS-01 -> OPS-03 -> OPS-02`. `OPS-04`, `OPS-07`, and `OPS-05` are P1. `OPS-06` is conditional P2 unless evidence, a live incident, or a BTC mandate promotes it.
 - A missing, stale, or unverified series is never interpreted as zero or healthy.
 - BTC-owned flagd and OpenFeature incident paths are protected. The AIOps system may observe their symptoms but must never disable, redirect, mutate, or bypass them.
+- Mandate #1 network exposure is active: storefront remains public, while Grafana, Jaeger, ArgoCD/admin UIs, dashboards, and AIOps runtime endpoints remain private through VPN, tunnel, or private networking.
 
 ## 2. Scope
 
@@ -86,7 +87,7 @@ These rules keep the design from becoming a template-only or mock implementation
 These integration decisions are intentionally left for later consideration because they require deployed evidence or CDO ownership that is not available in this repository. They must not be replaced with mocks, guessed values, or silent fallbacks:
 
 1. **AIOps self-metrics ingestion.** Before P0 self-observability is accepted, `ADR-DEPLOY-001` must select and prove one real path: either the deployed OpenTelemetry Collector scrapes the AIOps `/metrics` endpoint with a Prometheus receiver, or the runtime exports its metrics through OTLP to the existing collector. Merely exposing `/metrics` is insufficient. Verification must query real `aiops_*` series in TF2 Prometheus and fire the independent runtime-loss alert.
-2. **TF2 deployment-chart ownership.** Before EKS deployment, `ADR-DEPLOY-001` must identify the actual CDO-owned chart repository, immutable revision, owner, and checkout used to deploy TF2. Deployment source files may be developed under `tf2-corp-platform/src/aiops/`, but they cannot be treated as active until the real chart consumes them. The `phase3/techx-corp-chart` reference copy must never be edited or deployed by assumption.
+2. **TF2 deployment-chart ownership.** Before EKS deployment, `ADR-DEPLOY-001` must identify the actual CDO-owned chart repository, immutable revision, owner, and checkout used to deploy TF2. Deployment source files may be developed under `tf2-corp-platform/src/aio/`, but they cannot be treated as active until the real chart consumes them. The `phase3/techx-corp-chart` reference copy must never be edited or deployed by assumption.
 3. **Live-remediation approval and execution identity.** Mandatory P0 remains dry-run-first and may finish dry-run-only with a signed safety decision. Before `live-approved` is enabled, `ADR-LIVE-001` must define one exact action, an auditable expiring approval provider, and the Kubernetes execution boundary. Prefer a separate narrowly scoped executor workload and ServiceAccount; any alternative must prove that the ordinary runtime remains read-only. A boolean setting, fixture approval, or temporarily broad RoleBinding is not valid.
 
 ## 4. System context
@@ -318,7 +319,7 @@ Recovery requires consecutive successful checks and fresh telemetry. A Grafana `
 
 Runbooks are versioned Markdown with machine-readable front matter:
 
-The only canonical runbook location is `tf2-corp-platform/src/aiops/runbooks/`. Runtime matching, validation, packaging, operator links, and documentation references must resolve to that directory. `aio-docs` must link to canonical runbooks rather than maintain copies.
+The only canonical runbook location is `tf2-corp-platform/src/aio/runbooks/`. Runtime matching, validation, packaging, operator links, and documentation references must resolve to that directory. `tf2-corp-platform/docs/aiops` must link to canonical runbooks rather than maintain copies.
 
 - `runbook_id`, title, owner, severity, flows, services, detector IDs.
 - Preconditions and evidence queries.
@@ -676,44 +677,36 @@ The AIOps operations dashboard shows runtime mode, last collection, signal fresh
 ```
 workspace-root/
 ├── tf2-corp-platform/
-│   ├── src/
-│   │   ├── aiops/
-│   │   ├── grafana/provisioning/
-│   │   │   ├── alerting/aiops-slo-rules.yaml
-│   │   │   └── dashboards/demo/
-│   │   │       ├── aiops-slo-dashboard.json
-│   │   │       └── aiops-operations-dashboard.json
-│   │   └── prometheus/
-│   │       └── prometheus-config.yaml
-│   └── Makefile
-├── ${TF2_CHART_ROOT}/                       # actual TF2 chart checkout; CDO-owned
-│   ├── values.yaml
-│   ├── values.schema.json
-│   ├── templates/
-│   │   ├── aiops-rbac.yaml
-│   │   ├── aiops-pvc.yaml
-│   │   └── component.yaml
-│   └── grafana/provisioning/
-│       ├── alerting/
-│       └── dashboards/
-└── aio-docs/
-    ├── architect.md
-    ├── implement_plan.md
-    └── aiops/
-        ├── adr/
-        ├── topology/
-        ├── eval/
-        ├── ops-reviews/
-        ├── postmortems/
-        ├── runbook-index.md             # links only; canonical runbooks live under tf2-corp-platform/src/aiops/runbooks/
-        └── evidence-index.md
+    ├── docs/
+    │   └── aiops/
+    │       ├── w1/
+    │       ├── AIO_BACKLOG.md
+    │       ├── architect.md
+    │       ├── implement_plan.md
+    │       ├── adr/
+    │       ├── topology/
+    │       ├── eval/
+    │       ├── ops-reviews/
+    │       ├── postmortems/
+    │       ├── runbook-index.md             # links only; canonical runbooks live under tf2-corp-platform/src/aio/runbooks/
+    │       └── evidence-index.md
+    ├── src/
+    │   ├── aio/
+    │   ├── grafana/provisioning/
+    │   │   ├── alerting/aiops-slo-rules.yaml
+    │   │   └── dashboards/demo/
+    │   │       ├── aiops-slo-dashboard.json
+    │   │       └── aiops-operations-dashboard.json
+    │   └── prometheus/
+    │       └── prometheus-config.yaml
+    └── Makefile
 
 ```
 
-The application belongs in the TF2 platform source tree as one new service. This folder design intentionally shows only `tf2-corp-platform/src/aiops/` while preserving the complete planned application structure. External chart integration remains governed by Section 3.2.
+The application belongs in the TF2 platform source tree as one new service. This folder design intentionally shows only `tf2-corp-platform/src/aio/` while preserving the complete planned application structure. External chart integration remains governed by Section 3.2.
 
 ```text
-tf2-corp-platform/src/aiops/
+tf2-corp-platform/src/aio/
 ├── README.md
 ├── pyproject.toml
 ├── Dockerfile
@@ -835,8 +828,8 @@ tf2-corp-platform/src/aiops/
 - Detector and action registration is explicit. Dynamic imports from alert text are forbidden.
 - Environment URLs and secrets are not embedded in queries or runbooks.
 - Generated runtime evidence is ignored by Git; checked-in evaluation fixtures are synthetic or redacted.
-- Runtime code and canonical runbooks live under `tf2-corp-platform/src/aiops`. `aio-docs` may contain planning, ADRs, evaluation reports, Ops Reviews, postmortems, and evidence indexes, but no duplicate runbooks. Runtime startup must not read code, runbooks, or fixture data from `aio-docs`.
-- Test fixtures, fake adapters, and replay scenarios must stay under `tf2-corp-platform/src/aiops/tests/` and cannot be referenced by enabled production signal, detector, route, or policy configuration.
+- Runtime code and canonical runbooks live under `tf2-corp-platform/src/aio`. `tf2-corp-platform/docs/aiops` contains planning, ADRs, evaluation reports, Ops Reviews, postmortems, and evidence indexes, but no duplicate runbooks. Runtime startup must not read code, runbooks, or fixture data from `tf2-corp-platform/docs/aiops`.
+- Test fixtures, fake adapters, and replay scenarios must stay under `tf2-corp-platform/src/aio/tests/` and cannot be referenced by enabled production signal, detector, route, or policy configuration.
 - Grafana hard SLO rules remain useful without the Python runtime.
 - The EKS source of deployed Grafana assets is `${TF2_CHART_ROOT}/grafana/provisioning/`; `tf2-corp-platform/src/grafana/provisioning/` is the local/Docker counterpart. Keep identically named AIOps assets synchronized and verify their digests in CI so the two environments cannot drift silently.
 - `kubernetes_live.py` must be disabled in ordinary dry-run deployments and must never give the ordinary runtime mutation credentials. If P1 live execution is approved, it acts only as a typed client to the separate executor boundary defined by `ADR-LIVE-001`.
@@ -919,6 +912,7 @@ The mandatory Phase 3 AIOps baseline is implemented when all of the following ar
 - Official SLI mapping for browse/search availability, storefront p95, cart success, and checkout success is validated and signed; AI correctness is integrated or explicitly `N/A`.
 - Independent Grafana rules display rolling-24-hour SLO/error-budget state and reach the real TF2 channel.
 - The AIOps runtime continuously runs on EKS with health, freshness, resource, and mode telemetry.
+- Mandate #1 network exposure evidence proves storefront remains public while Grafana, Jaeger, ArgoCD/admin UIs, dashboards, and AIOps runtime endpoints are private through VPN, tunnel, or private networking.
 - P0 detectors cover official SLOs, checkout dependency failure, DB pressure, and monitoring loss using qualified signals.
 - Multi-signal anomaly results are explainable and do not delay hard alerts.
 - Incidents are deduplicated, correlated, linked to evidence/runbooks, and durably audited.
@@ -972,3 +966,6 @@ Before production dry-run, sign and index:
 7. Optional `ADR-LIVE-001` — the one exact live action, or a signed conclusion that the project remains dry-run only.
 
 Open values that must come from deployment evidence rather than guesswork are the final Prometheus metric/label mappings, DB threshold, statistical anomaly thresholds, alert channel, namespace URLs, resource sizing, AIE correctness interface, cost freshness interface, and any live-action candidate.
+
+
+

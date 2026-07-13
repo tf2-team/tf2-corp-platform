@@ -1,4 +1,4 @@
-# Phase 3 Summary for AIO4 (TF2)
+﻿# Phase 3 Summary for AIO4 (TF2)
 
 ## 🏢 Bối cảnh
 
@@ -181,3 +181,6 @@ graph LR
 - [INCIDENT_HISTORY](../../../phase3/onboarding/INCIDENT_HISTORY.md)
 - [AI_FEATURE](../../../phase3/onboarding/AI_FEATURE.md)
 - [PITCH_GUIDE](../../../phase3/onboarding/PITCH_GUIDE.md)
+
+
+

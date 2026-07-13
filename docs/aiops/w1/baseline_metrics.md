@@ -1,4 +1,4 @@
-# TechX Corp Platform - AIOps Baseline Metrics & Discovery
+﻿# TechX Corp Platform - AIOps Baseline Metrics & Discovery
 
 This document records the baseline metrics, request flows, and traffic analysis of the TechX Corp Platform. Use these PromQL queries in the Grafana **Explore** view to find the baseline performance and error metrics.
 
@@ -130,3 +130,5 @@ Use the **Locust** interface at `http://localhost:8080/loadgen/` and the Request
      - `image-provider` (only loads static assets during full browser simulation, very low traffic)
      - `flagd-ui` / `flagd` (read-only configuration fetch, does not receive direct user traffic)
      - `llm` (only active when AI reviews/assistant are triggered via `product-reviews`, which occurs in low-frequency tasks)
+
+

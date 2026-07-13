@@ -1,4 +1,4 @@
-# TF2 / AIO4 AIOps Technical Implementation Guide
+﻿# TF2 / AIO4 AIOps Technical Implementation Guide
 
 > **Purpose:** Detailed engineering instructions for implementing the complete AIOps system proposed in [architect.md](architect.md).  
 > **Scope:** Runtime, configuration, signals, detectors, correlation, incident handling, guarded remediation, observability, deployment, testing, and evidence.  
@@ -73,7 +73,7 @@ The deployable service must be wired to real TF2 infrastructure, not sample data
 ### 2.2 Repository and deployment ownership preflight
 
 - `tf2-corp-platform` is the delivery repository for runtime code and local/Docker Grafana assets.
-- `aio-docs` is the delivery repository for ADRs, evaluations, Ops Reviews, postmortems, and evidence indexes; it links to canonical runbooks in `tf2-corp-platform/src/aiops/runbooks/`, and the runtime never reads it.
+- `tf2-corp-platform/docs/aiops` is the delivery location for AIOps ADRs, evaluations, Ops Reviews, postmortems, and evidence indexes; it links to canonical runbooks in `tf2-corp-platform/src/aio/runbooks/`, and the runtime never reads it.
 - `phase3/techx-corp-chart` is upstream reference material unless CDO explicitly identifies it as a writable delivery repository.
 - `ADR-DEPLOY-001` must record the URL, immutable revision, owner, and local checkout root of the chart repository that actually deploys TF2. Refer to that checkout as `TF2_CHART_ROOT` in commands and documentation.
 - Stop deployment work if `TF2_CHART_ROOT` is uncommitted, points at the Phase 3 reference by accident, or cannot render the currently deployed TF2 release. This prevents a locally edited template from being mistaken for a real EKS delivery.
@@ -116,12 +116,12 @@ Do not enable a detector merely because its code exists. Enablement requires a q
 
 ## 4. Create the service scaffold
 
-Create the service at `tf2-corp-platform/src/aiops/`.
+Create the service at `tf2-corp-platform/src/aio/`.
 
 ### 4.1 Minimum package files
 
 ```text
-tf2-corp-platform/src/aiops/
+tf2-corp-platform/src/aio/
 ├── README.md
 ├── pyproject.toml
 ├── Dockerfile
@@ -1048,7 +1048,7 @@ Each item records source, stable query ID/expression, absolute time bounds, capt
 
 ### 15.4 Runbook format
 
-Use Markdown with machine-readable YAML front matter. `tf2-corp-platform/src/aiops/runbooks/` is the only canonical runbook location. Runtime matching, validation, packaging, operator links, and documentation must resolve there; `aio-docs` may link to canonical runbooks but must not contain copies.
+Use Markdown with machine-readable YAML front matter. `tf2-corp-platform/src/aio/runbooks/` is the only canonical runbook location. Runtime matching, validation, packaging, operator links, and documentation must resolve there; `tf2-corp-platform/docs/aiops` may link to canonical runbooks but must not contain copies.
 
 ```yaml
 ---
@@ -1482,6 +1482,7 @@ Every result records scenario revision, code/config revision, environment, comma
 - Normal RBAC is read-only and verified.
 - Resource/PVC requests are approved within platform constraints.
 - Direct Grafana official-SLO route is active.
+- Mandate #1 network exposure evidence is current: storefront is public, while Grafana, Jaeger, ArgoCD/admin UIs, dashboards, and AIOps endpoints are private through VPN, tunnel, or private networking.
 - A prior Helm revision/rollback method is recorded.
 
 ### 21.2 Deployment progression
@@ -1521,7 +1522,7 @@ Rollback or disable the AIOps component when it:
 
 ## 22. Produce required technical documentation and evidence
 
-Create under `aio-docs/aiops/`:
+Create and maintain under `tf2-corp-platform/docs/aiops/`:
 
 ```text
 aiops/
@@ -1540,7 +1541,7 @@ aiops/
 └── evidence-index.md
 ```
 
-This documentation tree stores decisions and evidence only. Canonical operational runbooks remain exclusively in `tf2-corp-platform/src/aiops/runbooks/`; the evidence index links to those files instead of copying them.
+This documentation tree stores decisions and evidence only. Canonical operational runbooks remain exclusively in `tf2-corp-platform/src/aio/runbooks/`; the evidence index links to those files instead of copying them.
 
 The evidence index should link:
 
@@ -1613,6 +1614,7 @@ P0 is the required Phase 3 baseline. Conditional P1/P2 items below do not block 
 - [ ] Pod runs non-root with read-only root filesystem, dropped capabilities, and seccomp.
 - [ ] Normal ServiceAccount is namespace-scoped read-only and cannot read Secrets or mutate application resources.
 - [ ] No public ingress exposes the runtime.
+- [ ] Mandate #1 exposure is proven: storefront public; Grafana, Jaeger, ArgoCD/admin UIs, dashboards, and AIOps endpoints private through VPN, tunnel, or private networking.
 - [ ] Runtime-loss and official-SLO alerts do not depend solely on AIOps itself.
 - [ ] The selected real self-metrics ingestion path produces queryable `aiops_*` series in TF2 Prometheus and the runtime-loss alert is proven.
 - [ ] `ADR-DEPLOY-001` identifies the real TF2 chart repository/revision and the deployed release consumes the committed AIOps assets.
@@ -1621,7 +1623,7 @@ P0 is the required Phase 3 baseline. Conditional P1/P2 items below do not block 
 #### Tests and evidence
 
 - [ ] Unit, config, contract, integration, Grafana/PromQL, replay, image, manifest, and EKS checks pass.
-- [ ] Production image/manifests contain no test adapter, fixture path, mock endpoint, sample credential, or dependency on `aio-docs`/the Phase 3 reference chart.
+- [ ] Production image/manifests contain no test adapter, fixture path, mock endpoint, sample credential, or dependency on `tf2-corp-platform/docs/aiops`/the Phase 3 reference chart.
 - [ ] A deployed controlled event proves the real adapter chain end to end; replay evidence is reported separately.
 - [ ] Required replay scenarios produce reproducible JSON/Markdown results.
 - [ ] Detection and remediation evaluation metrics are reported without unsupported claims.
@@ -1645,3 +1647,6 @@ P2/stretch work is optional and must not delay or weaken P0/P1:
 - [ ] Optional work remains within SLO, budget, safety, and operational-evidence constraints.
 
 When every applicable item passes—or a genuinely unavailable optional signal is explicitly represented as `N/A` with evidence—the architecture in [architect.md](architect.md) has been fully implemented for the Phase 3 AIOps scope.
+
+
+
