@@ -56,10 +56,14 @@ Kết quả phải là:
 bb52f540bfb3386d9689a7ee44231f17d40892ed
 ```
 
-Nếu clone repository mới hoàn toàn:
+Nếu clone repository mới, checkout nhánh feature trước rồi lấy setup từ `aie`:
 
 ```powershell
-git clone --recurse-submodules https://github.com/tf2-team/tf2-corp-platform.git
+git clone https://github.com/tf2-team/tf2-corp-platform.git
+cd tf2-corp-platform
+git switch feature/aie-trustworthiness # Hoặc feature/aie-shopping-workflow
+git merge origin/aie
+git submodule update --init --recursive
 ```
 
 ## 3. Tạo cấu hình local
@@ -69,30 +73,20 @@ cd third-party/mem0/server
 Copy-Item .env.example .env
 ```
 
-Mỗi developer tự điền secret local:
+Trong `.env`, mỗi developer chỉ cần tự điền ba giá trị sau:
 
 ```dotenv
 GROQ_API_KEY=<personal-groq-key>
-
-POSTGRES_HOST=postgres
-POSTGRES_PORT=5432
-POSTGRES_DB=postgres
-POSTGRES_USER=postgres
 POSTGRES_PASSWORD=<local-postgres-password>
-POSTGRES_COLLECTION_NAME=memories
-APP_DB_NAME=mem0_app
-
 JWT_SECRET=<random-local-secret>
-ADMIN_API_KEY=
-AUTH_DISABLED=false
-DASHBOARD_URL=http://localhost:3000
+```
 
+Giữ nguyên cấu hình model đã có trong `.env.example`:
+
+```dotenv
 MEM0_DEFAULT_LLM_MODEL=llama-3.3-70b-versatile
 MEM0_DEFAULT_EMBEDDER_MODEL=sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2
 MEM0_EMBEDDING_DIMS=384
-
-MEM0_TELEMETRY=false
-REQUEST_LOG_RETENTION_DAYS=30
 ```
 
 Tạo `JWT_SECRET`:
@@ -101,7 +95,7 @@ Tạo `JWT_SECRET`:
 python -c "import secrets; print(secrets.token_urlsafe(48))"
 ```
 
-Không commit `server/.env`. File này đã được Mem0 `.gitignore`.
+Không commit `server/.env`. File này đã được loại trừ bởi `.gitignore` của Mem0.
 
 ## 4. Chạy local
 
@@ -119,14 +113,16 @@ mem0-dashboard   Up (healthy)
 postgres         Up (healthy)
 ```
 
-Lần chạy đầu FastEmbed tải model từ Hugging Face và lưu trong volume `fastembed_cache`.
+Trong lần chạy đầu tiên, FastEmbed tải model từ Hugging Face và lưu trong volume `fastembed_cache`.
 
 Mở `http://localhost:3000/setup` và thực hiện:
 
 1. Tạo admin local.
 2. Giữ LLM provider là `groq` và model là `llama-3.3-70b-versatile`.
-3. Giữ embedder là `fastembed`, model multilingual ở trên và dimension `384`.
+3. Giữ embedder là `fastembed` và chọn model `sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2`.
 4. Tạo Mem0 runtime API key dạng `m0sk_...`.
+
+Vector dimension `384` được lấy từ `MEM0_EMBEDDING_DIMS` trong `.env`, không nhập trong wizard.
 
 Hai loại key có mục đích khác nhau:
 
@@ -139,29 +135,44 @@ GROQ_API_KEY (gsk_...)   : Mem0 → Groq
 
 Add memory:
 
-```bash
-curl -X POST http://localhost:8888/memories \
-  -H "X-API-Key: <mem0-runtime-key>" \
-  -H "Content-Type: application/json" \
-  -d '{"messages":[{"role":"user","content":"I like hiking"}],"user_id":"alice"}'
+```powershell
+$headers = @{ "X-API-Key" = "<mem0-runtime-key>" }
+$body = @{
+    messages = @(@{ role = "user"; content = "I like hiking" })
+    user_id = "alice"
+} | ConvertTo-Json -Depth 4
+
+Invoke-RestMethod `
+    -Method Post `
+    -Uri "http://localhost:8888/memories" `
+    -Headers $headers `
+    -ContentType "application/json" `
+    -Body $body
 ```
 
 Search memory:
 
-```bash
-curl -X POST http://localhost:8888/search \
-  -H "X-API-Key: <mem0-runtime-key>" \
-  -H "Content-Type: application/json" \
-  -d '{"query":"What outdoor activity does Alice enjoy?","filters":{"user_id":"alice"}}'
+```powershell
+$body = @{
+    query = "What outdoor activity does Alice enjoy?"
+    filters = @{ user_id = "alice" }
+} | ConvertTo-Json -Depth 4
+
+Invoke-RestMethod `
+    -Method Post `
+    -Uri "http://localhost:8888/search" `
+    -Headers $headers `
+    -ContentType "application/json" `
+    -Body $body
 ```
 
-Kết quả search phải trả memory `User likes hiking`.
+Kết quả tìm kiếm phải chứa memory `User likes hiking`.
 
 ## 6. Quy tắc dùng chung cho các nhánh AIE
 
 - Không commit `.env`, Groq key, Mem0 runtime key hoặc admin credential.
 - Không đổi embedding model hoặc `MEM0_EMBEDDING_DIMS` riêng trên từng nhánh.
-- Không dùng `openai/gpt-oss-120b` cho setup local hiện tại: prompt extraction của Mem0 có thể vượt giới hạn Groq 8K TPM.
+- Không dùng `openai/gpt-oss-120b` cho setup local hiện tại. Khi kiểm thử với Groq account/tier hiện tại, prompt extraction của Mem0 đã vượt giới hạn TPM.
 - Không thêm Qdrant hoặc graph store cho MVP.
 - Feature code gọi Mem0 qua REST API; không phụ thuộc trực tiếp vào Mem0 Python SDK.
 - Khi chạy code từ host, dùng `MEM0_BASE_URL=http://localhost:8888`.
@@ -180,7 +191,7 @@ Reset toàn bộ dữ liệu local chỉ khi chưa có dữ liệu cần giữ:
 docker compose down -v
 ```
 
-Lệnh reset bắt buộc nếu đổi embedding dimension vì pgvector collection cũ không tương thích dimension mới.
+Lệnh reset này là bắt buộc nếu đổi embedding dimension vì pgvector collection cũ không tương thích dimension mới.
 
 ## 7. Cập nhật source Mem0
 
@@ -197,26 +208,16 @@ Không sửa submodule trong một nhánh feature rồi chỉ commit repo platfo
 CDO cần bám theo cùng cấu hình local:
 
 - Dùng TechX-managed image build từ fork/commit đã pin, không cài lại `mem0ai` không pin từ PyPI khi container startup.
-- Inject `GROQ_API_KEY`, `JWT_SECRET`, PostgreSQL credential và runtime key qua secret backend.
+- Cấp `GROQ_API_KEY`, `JWT_SECRET`, PostgreSQL credential và runtime key qua secret backend.
 - Cấp PostgreSQL + pgvector với vector dimension `384` và persistent storage.
 - Cấp CPU/RAM cho FastEmbed; không cần GPU.
-- Bake embedding model vào image hoặc cấp persistent cache và egress tới Hugging Face.
+- Đóng gói embedding model trong image, hoặc cấp persistent cache và cho phép egress tới Hugging Face.
 - Cho Mem0 egress HTTPS tới Groq.
-- Không public Mem0 API/dashboard; application gọi qua internal Service.
+- Không công khai Mem0 API/dashboard; application gọi qua internal Service.
 - Giữ authentication bật; không dùng `AUTH_DISABLED=true` ngoài local development.
 - Không triển khai graph datastore cho MVP.
 
 Production Dockerfile, Helm, ECR và CI/CD chưa nằm trong phạm vi setup hiện tại.
-
-## 9. Trạng thái hiện tại
-
-- [x] Fork Mem0 và pin source commit.
-- [x] Groq + FastEmbed + PostgreSQL/pgvector chạy local.
-- [x] Add/search memory hoạt động với vector dimension `384`.
-- [x] Dashboard và API-key authentication hoạt động.
-- [x] Setup có thể được chia sẻ qua `aie` cho hai nhánh feature.
-- [ ] Tích hợp Mem0 client vào `src/product-reviews`.
-- [ ] Chuẩn bị deployment với CDO.
 
 ## References
 
