@@ -9,6 +9,7 @@ Team tập trung phát triển trải nghiệm mua sắm dùng LLM trên nền c
 - [AI Shopping Experience Backlog](./ai-shopping-experience-backlog.md): phạm vi, độ ưu tiên, dependency và acceptance criteria của các workstream AI.
 - [Implementation Guide](./implementation-guide.md): hướng dẫn kỹ thuật để chuyển backlog thành thiết kế và implementation trong codebase hiện tại.
 - [Eight-Day Implementation Plan](./eight-day-implementation-plan.md): phân công theo ngày, dependency, Definition of Done và các integration checkpoint cuối ngày.
+- [Mem0 Self-Hosted Deployment Handoff](./mem0-self-hosted-deployment-handoff.md): contract, ownership và yêu cầu hạ tầng để CDO triển khai Mem0 trên development cluster.
 
 ## Ownership boundary
 
