@@ -73,7 +73,7 @@ The deployable service must be wired to real TF2 infrastructure, not sample data
 ### 2.2 Repository and deployment ownership preflight
 
 - `tf2-corp-platform` is the delivery repository for runtime code and local/Docker Grafana assets.
-- `aio-docs` is the delivery repository for ADRs, evaluations, Ops Reviews, postmortems, and evidence indexes; it links to canonical runbooks in `tf2-corp-platform/src/aiops/runbooks/`, and the runtime never reads it.
+- `aio-docs` is the delivery repository for ADRs, evaluations, Ops Reviews, postmortems, and evidence indexes; it links to canonical runbooks in `tf2-corp-platform/src/aio/runbooks/`, and the runtime never reads it.
 - `phase3/techx-corp-chart` is upstream reference material unless CDO explicitly identifies it as a writable delivery repository.
 - `ADR-DEPLOY-001` must record the URL, immutable revision, owner, and local checkout root of the chart repository that actually deploys TF2. Refer to that checkout as `TF2_CHART_ROOT` in commands and documentation.
 - Stop deployment work if `TF2_CHART_ROOT` is uncommitted, points at the Phase 3 reference by accident, or cannot render the currently deployed TF2 release. This prevents a locally edited template from being mistaken for a real EKS delivery.
@@ -116,12 +116,12 @@ Do not enable a detector merely because its code exists. Enablement requires a q
 
 ## 4. Create the service scaffold
 
-Create the service at `tf2-corp-platform/src/aiops/`.
+Create the service at `tf2-corp-platform/src/aio/`.
 
 ### 4.1 Minimum package files
 
 ```text
-tf2-corp-platform/src/aiops/
+tf2-corp-platform/src/aio/
 ├── README.md
 ├── pyproject.toml
 ├── Dockerfile
@@ -1048,7 +1048,7 @@ Each item records source, stable query ID/expression, absolute time bounds, capt
 
 ### 15.4 Runbook format
 
-Use Markdown with machine-readable YAML front matter. `tf2-corp-platform/src/aiops/runbooks/` is the only canonical runbook location. Runtime matching, validation, packaging, operator links, and documentation must resolve there; `aio-docs` may link to canonical runbooks but must not contain copies.
+Use Markdown with machine-readable YAML front matter. `tf2-corp-platform/src/aio/runbooks/` is the only canonical runbook location. Runtime matching, validation, packaging, operator links, and documentation must resolve there; `aio-docs` may link to canonical runbooks but must not contain copies.
 
 ```yaml
 ---
@@ -1540,7 +1540,7 @@ aiops/
 └── evidence-index.md
 ```
 
-This documentation tree stores decisions and evidence only. Canonical operational runbooks remain exclusively in `tf2-corp-platform/src/aiops/runbooks/`; the evidence index links to those files instead of copying them.
+This documentation tree stores decisions and evidence only. Canonical operational runbooks remain exclusively in `tf2-corp-platform/src/aio/runbooks/`; the evidence index links to those files instead of copying them.
 
 The evidence index should link:
 
