@@ -50,8 +50,8 @@ Git tag pushes (`v*`) and manual `workflow_dispatch` always run the full pipelin
 
 | Trigger | GitHub Environment | `IMAGE_NAME` (REGISTRY/PROJECT) |
 |---|---|---|
-| `push` to `main` | `production` | `493499579600.dkr.ecr.us-east-1.amazonaws.com/techx-corp` |
-| tag `v*` | `production` | `493499579600.dkr.ecr.us-east-1.amazonaws.com/techx-corp` |
+| `push` to `main` | `production` | `493499579600.dkr.ecr.us-east-1.amazonaws.com/techx-prod-corp` |
+| tag `v*` | `production` | `493499579600.dkr.ecr.us-east-1.amazonaws.com/techx-prod-corp` |
 | `push` to `techx-dev-corp` | `development` | `493499579600.dkr.ecr.us-east-1.amazonaws.com/techx-dev-corp` |
 | `workflow_dispatch` | chosen input | same as that environment’s `IMAGE_NAME` |
 
@@ -66,7 +66,7 @@ Examples:
 ```text
 493499579600.dkr.ecr.us-east-1.amazonaws.com/techx-dev-corp/ad:sha-a1b2c3d
 493499579600.dkr.ecr.us-east-1.amazonaws.com/techx-dev-corp/checkout:sha-a1b2c3d
-493499579600.dkr.ecr.us-east-1.amazonaws.com/techx-corp/frontend:v1.2.3
+493499579600.dkr.ecr.us-east-1.amazonaws.com/techx-prod-corp/frontend:v1.2.3
 ```
 
 Compose / bake use:
@@ -158,20 +158,143 @@ OIDC only — no long-lived AWS access keys.
 
 ### 3. GitHub Environments
 
-In the GitHub repo **Settings → Environments**:
+Create two Environments on the **platform** GitHub repository (**Settings → Environments → New environment**):
 
-| Environment | Variable `AWS_ROLE_ARN` | Variable `IMAGE_NAME` (REGISTRY/PROJECT only) | Protection |
+| Environment name | Typical protection | Used when |
+|---|---|---|
+| `development` | optional | push to `techx-dev-corp`, or `workflow_dispatch` → `development` |
+| `production` | required reviewers recommended | push to `main`, tags `v*`, or `workflow_dispatch` → `production` |
+
+Environment **names must match exactly** (`development` / `production`). Build jobs select the environment from the prepare step; OIDC trust policies in bootstrap also key off these names.
+
+Variable and secret values for each environment are configured in **§4** below.
+
+### 4. Configure GitHub Actions variables and secrets
+
+Platform workflows read configuration from **GitHub Actions variables** and **secrets**. Nothing below is committed to Git.
+
+| Scope | Where to set | Who can read | Use for |
 |---|---|---|---|
-| `development` | bootstrap `github_actions_ecr_development_role_arn` | `493499579600.dkr.ecr.us-east-1.amazonaws.com/techx-dev-corp` | optional |
-| `production` | bootstrap `github_actions_ecr_production_role_arn` | `493499579600.dkr.ecr.us-east-1.amazonaws.com/techx-prod-corp` | required reviewers recommended |
+| **Environment variable** | Settings → Environments → *env* → Environment variables | Only jobs that declare `environment: <name>` | Per-env AWS role + ECR base (`AWS_ROLE_ARN`, `IMAGE_NAME`) |
+| **Repository variable** | Settings → Secrets and variables → Actions → **Variables** | All workflows in the repo | Optional shared defaults (`AWS_REGION`, `CHART_REPO`, `CHART_BRANCH`) |
+| **Repository secret** | Settings → Secrets and variables → Actions → **Secrets** | All workflows (masked in logs) | Sensitive tokens (`CHART_REPO_TOKEN`) |
 
-Do **not** put the service name in `IMAGE_NAME`; bake appends `/<service>:<version>`.
+Do **not** store PATs or role ARNs in the repository, in Environment *secrets* unless required, or in plain workflow logs. Prefer **Environment variables** for non-secret per-env config (`AWS_ROLE_ARN`, `IMAGE_NAME`) so values are visible to operators but scoped by environment.
 
-Optional repository variable: `AWS_REGION=us-east-1` (workflows default to `us-east-1` if unset).
+#### 4.1 Quick reference (required vs optional)
 
-### 4. Operator setup — chart promote token (dev automation)
+**Environment variables** (set on **each** of `development` and `production`):
 
-Cross-repo Git writes cannot use the platform repo’s default `GITHUB_TOKEN`. Job **`update-chart-dev`** authenticates to the **chart** repository with a PAT stored as a platform Actions secret.
+| Name | Required | Example / source | Consumed by |
+|---|---|---|---|
+| `AWS_ROLE_ARN` | **Yes** | Bootstrap output `github_actions_ecr_development_role_arn` or `…_production_role_arn` | `preflight`, `build`, `verify-ecr` (OIDC `role-to-assume`) |
+| `IMAGE_NAME` | **Yes** | `REGISTRY/PROJECT` only — see table below | `preflight`, `build`, `verify-ecr` (bake push path + `describe-images`) |
+
+| Environment | `IMAGE_NAME` value (REGISTRY/PROJECT only) |
+|---|---|
+| `development` | `493499579600.dkr.ecr.us-east-1.amazonaws.com/techx-dev-corp` |
+| `production` | `493499579600.dkr.ecr.us-east-1.amazonaws.com/techx-prod-corp` |
+
+Do **not** put a service name in `IMAGE_NAME`. Bake appends `/<service>:<version>` (and `/<service>:buildcache` for registry cache).
+
+**Repository variables** (optional; workflow defaults apply if unset):
+
+| Name | Required | Default if unset | Purpose |
+|---|---|---|---|
+| `AWS_REGION` | No | `us-east-1` | AWS region for OIDC + ECR CLI |
+| `CHART_REPO` | No | `tf2-team/tf2-corp-chart` | Chart GitHub `owner/repo` for **update-chart-dev** |
+| `CHART_BRANCH` | No | `techx-dev-corp` | Chart branch that receives the dev tag push (Argo CD dev `targetRevision`) |
+
+**Repository secrets**:
+
+| Name | Required | Value | Consumed by |
+|---|---|---|---|
+| `CHART_REPO_TOKEN` | **Yes for development auto-promote** | Fine-grained (or classic) PAT with **Contents: Read and write** on the chart repo | **update-chart-dev** only |
+
+Without `CHART_REPO_TOKEN`, development can still build, push, and pass **release-ready**; only the chart tag promote job fails. Production never uses this secret (prod chart promote is manual).
+
+PR **CI** (`ci.yml`) needs no repository variables or secrets.
+
+#### 4.2 Step-by-step — Environment variables (`AWS_ROLE_ARN`, `IMAGE_NAME`)
+
+1. Obtain role ARNs after bootstrap apply:
+
+   ```cmd
+   cd /d techx-corp-infra
+   terraform -chdir=bootstrap output github_actions_ecr_development_role_arn
+   terraform -chdir=bootstrap output github_actions_ecr_production_role_arn
+   ```
+
+2. Open the **platform** repo on GitHub → **Settings → Environments**.
+3. Open **`development`** (create it first if missing — §3).
+4. Under **Environment variables** → **Add variable**:
+
+   | Name | Value |
+   |---|---|
+   | `AWS_ROLE_ARN` | ARN from `github_actions_ecr_development_role_arn` |
+   | `IMAGE_NAME` | `493499579600.dkr.ecr.us-east-1.amazonaws.com/techx-dev-corp` |
+
+5. Open **`production`** and add the same names with production values:
+
+   | Name | Value |
+   |---|---|
+   | `AWS_ROLE_ARN` | ARN from `github_actions_ecr_production_role_arn` |
+   | `IMAGE_NAME` | `493499579600.dkr.ecr.us-east-1.amazonaws.com/techx-prod-corp` |
+
+6. Confirm `IMAGE_NAME` has **no** trailing slash and **no** service segment (wrong: `…/techx-prod-corp/ad`).
+
+#### 4.3 Step-by-step — Repository variables (optional)
+
+1. Platform repo → **Settings → Secrets and variables → Actions → Variables** tab.
+2. **New repository variable** for any override you need:
+
+   | Name | When to set |
+   |---|---|
+   | `AWS_REGION` | If ECR/OIDC is not in `us-east-1` |
+   | `CHART_REPO` | If the chart remote is not `tf2-team/tf2-corp-chart` |
+   | `CHART_BRANCH` | If Argo CD dev tracks a branch other than `techx-dev-corp` |
+
+Leave unset when the workflow defaults match your layout.
+
+#### 4.4 Step-by-step — Repository secret (`CHART_REPO_TOKEN`)
+
+1. Create a fine-grained PAT with **Contents: Read and write** on the **chart** repository only (full procedure in **§5**).
+2. Platform repo → **Settings → Secrets and variables → Actions → Secrets** tab.
+3. **New repository secret**:
+   - Name: `CHART_REPO_TOKEN` (exact spelling)
+   - Value: the PAT → **Add secret**
+4. Do **not** put the PAT in Environment variables, commit it, or print it in workflow steps.
+
+#### 4.5 Configuration checklist
+
+| # | Item | Scope | Done when |
+|---|---|---|---|
+| 1 | Environments `development` and `production` exist | Environments | Names match workflow |
+| 2 | `AWS_ROLE_ARN` on both environments | Env variables | Matches bootstrap outputs |
+| 3 | `IMAGE_NAME` on both environments | Env variables | REGISTRY/PROJECT only; matches ECR project |
+| 4 | `AWS_REGION` (optional) | Repo variable | Set only if not `us-east-1` |
+| 5 | `CHART_REPO` / `CHART_BRANCH` (optional) | Repo variables | Set only if remotes/branch differ |
+| 6 | `CHART_REPO_TOKEN` | Repo secret | Required for automated dev chart promote |
+
+#### 4.6 How workflows resolve values
+
+```text
+prepare → target_environment = development | production
+preflight / build / verify-ecr:
+  environment: ${{ target_environment }}
+  vars.AWS_ROLE_ARN, vars.IMAGE_NAME   # from that Environment
+  vars.AWS_REGION || 'us-east-1'       # repository (or default)
+update-chart-dev (development only):
+  secrets.CHART_REPO_TOKEN             # repository secret
+  vars.CHART_REPO || 'tf2-team/tf2-corp-chart'
+  vars.CHART_BRANCH || 'techx-dev-corp'
+```
+
+If `AWS_ROLE_ARN` or `IMAGE_NAME` is missing on the selected environment, **preflight** fails fast with an explicit error pointing at this document.
+
+### 5. Operator setup — chart promote token (dev automation)
+
+Cross-repo Git writes cannot use the platform repo’s default `GITHUB_TOKEN`. Job **`update-chart-dev`** authenticates to the **chart** repository with a PAT stored as a platform Actions secret (configured in **§4.4**).
 
 #### How authentication works
 
@@ -189,8 +312,8 @@ Production chart promotion remains **manual** (no token write to `values-prod.ya
 
 | Item | Value / notes |
 |---|---|
-| Platform GitHub repo | e.g. `tmcmanhcuong/tf2-corp-platform` (where `build-and-push.yml` runs) |
-| Chart GitHub repo | default `tmcmanhcuong/tf2-corp-chart` |
+| Platform GitHub repo | the repo where `build-and-push.yml` runs |
+| Chart GitHub repo | default `tf2-team/tf2-corp-chart` (override with repo variable `CHART_REPO`) |
 | Chart branch for dev | default `techx-dev-corp` (Argo CD Application `techx-corp-dev` `targetRevision`) |
 | Operator rights | Admin (or secrets:write) on platform repo; ability to create PATs; ability to configure chart branch rules |
 
@@ -201,7 +324,7 @@ Production chart promotion remains **manual** (no token write to `values-prod.ya
 3. **Expiration:** set a finite expiry (e.g. 90 days) and calendar a rotation.
 4. **Resource owner:** org or user that owns the chart repo.
 5. **Repository access:** **Only select repositories** → select the chart repo only  
-   (`tmcmanhcuong/tf2-corp-chart`, or your fork).
+   (default `tf2-team/tf2-corp-chart`, or your fork / remote name).
 6. **Permissions → Repository permissions:**
    - **Contents:** **Read and write** (required for checkout + push of `values-dev.yaml`)
    - **Metadata:** Read-only (usually granted automatically)
@@ -212,25 +335,12 @@ Classic PAT alternative (less preferred): `repo` scope on an account with write 
 
 #### Step B — Add the secret on the **platform** repository
 
-1. Open the **platform** repo on GitHub (not the chart repo).
-2. **Settings → Secrets and variables → Actions → New repository secret**.
-3. Name: **`CHART_REPO_TOKEN`**
-4. Value: paste the PAT from Step A → **Add secret**.
+Follow **§4.4** (name **`CHART_REPO_TOKEN`**, value = PAT from Step A).  
+Optional chart remote/branch overrides: **§4.3** (`CHART_REPO`, `CHART_BRANCH`; workflow defaults are usually enough).
 
 Do **not** commit the PAT to Git, put it in Environment variables (non-secret), or paste it into workflow logs.
 
-#### Step C — Optional repository variables (defaults are usually enough)
-
-In the **same platform** repo: **Settings → Secrets and variables → Actions → Variables**.
-
-| Variable | Default | Purpose |
-|---|---|---|
-| `CHART_REPO` | `tmcmanhcuong/tf2-corp-chart` | Chart GitHub `owner/repo` |
-| `CHART_BRANCH` | `techx-dev-corp` | Branch that receives the direct push and that Argo CD dev tracks |
-
-Override only if your chart remote or branch names differ.
-
-#### Step D — Allow the PAT identity to push chart branch `techx-dev-corp`
+#### Step C — Allow the PAT identity to push chart branch `techx-dev-corp`
 
 On the **chart** repo:
 
@@ -242,7 +352,7 @@ On the **chart** repo:
    - Status checks required on PR are fine for humans; they must not block the bot’s direct push path if you rely on automation.
 3. Do **not** require signed commits for that identity unless the PAT workflow is also configured to sign (not implemented today).
 
-#### Step E — Verify end-to-end
+#### Step D — Verify end-to-end
 
 1. Ensure `CHART_REPO_TOKEN` exists on the platform repo.
 2. Run a development publish:
@@ -263,9 +373,9 @@ On the **chart** repo:
 
 | Symptom | Fix |
 |---|---|
-| `Secret CHART_REPO_TOKEN is not set` | Complete Step B on the **platform** repo |
+| `Secret CHART_REPO_TOKEN is not set` | Complete §4.4 / Step B on the **platform** repo |
 | `Repository not found` / checkout 404 | Wrong `CHART_REPO`, or PAT lacks access to that repo |
-| `Permission denied` / push rejected | PAT Contents not Read/write; or branch rules block the PAT identity (Step D) |
+| `Permission denied` / push rejected | PAT Contents not Read/write; or branch rules block the PAT identity (Step C) |
 | Job skipped entirely | Environment was not `development`, or `release-ready` failed |
 
 Without `CHART_REPO_TOKEN`, development builds can still push images and pass `release-ready`, but **update-chart-dev fails** until the secret is set. Operators can still edit `values-dev.yaml` manually as a fallback.
@@ -277,7 +387,7 @@ Without `CHART_REPO_TOKEN`, development builds can still push images and pass `r
 * Rotate on expiry or if the secret is exposed: create a new PAT → update `CHART_REPO_TOKEN` → revoke the old PAT.
 * Revoking the PAT immediately stops automated dev promotes (images still publish).
 
-### 5. First dry run
+### 6. First dry run
 
 1. Merge workflow / bake changes to the development branch.
 2. Dry-run development: push to `techx-dev-corp`, or Actions → **Build and push images** → `development`.
@@ -291,7 +401,7 @@ Without `CHART_REPO_TOKEN`, development builds can still push images and pass `r
 
 4. Confirm the workflow summary shows **Release ready**, then **Chart values-dev update** with the new tag.
 5. Confirm chart `values-dev.yaml` on `techx-dev-corp` has `default.image.tag: "sha-<7char>"`.
-6. Production: merge/push `main` (or tag `v*` / protected dispatch) only after development passes → `techx-corp`; open a **manual** chart values PR for prod.
+6. Production: merge/push `main` (or tag `v*` / protected dispatch) only after development passes → `techx-prod-corp`; open a **manual** chart values PR for prod.
 
 ---
 
@@ -310,13 +420,13 @@ set -a
 # shellcheck disable=SC1091
 source .env
 set +a
-export IMAGE_NAME=493499579600.dkr.ecr.us-east-1.amazonaws.com/techx-corp
+export IMAGE_NAME=493499579600.dkr.ecr.us-east-1.amazonaws.com/techx-prod-corp
 export IMAGE_VERSION=sha-manual
 export DEMO_VERSION=sha-manual
 
 # Release group only (21 services + registry cache)
 docker buildx bake -f docker-compose.yml -f docker-bake.hcl release --push
-# Produces: .../techx-corp/ad:sha-manual + .../techx-corp/ad:buildcache , ...
+# Produces: .../techx-prod-corp/ad:sha-manual + .../techx-prod-corp/ad:buildcache , ...
 ```
 
 Makefile (after setting `.env.override`):
@@ -340,7 +450,7 @@ Local non-push Compose builds (`make build`, `make start`) are unchanged and use
 | Individual matrix build fails | Re-run failed jobs or full workflow; `fail-fast: false` keeps other services building. |
 | verify-ecr reports missing tags | Re-run build for missing services or full workflow; do **not** promote chart values. |
 | release-ready red | Treat as not promotable; `update-chart-dev` is skipped. |
-| update-chart-dev fails: missing `CHART_REPO_TOKEN` | Add the secret (see §4); re-run failed job or full workflow. |
+| update-chart-dev fails: missing `CHART_REPO_TOKEN` | Add the secret (see §4.4 / §5); re-run failed job or full workflow. |
 | update-chart-dev fails: push rejected / protected branch | Allow the PAT identity to push to `techx-dev-corp`, or temporarily open a manual values commit. |
 
 Rollback of this CI design: revert workflow, `docker-bake.hcl`, Makefile, and docs. Existing `:buildcache` tags may remain or be deleted; they do not affect deployed SHA/version tags.
@@ -354,7 +464,9 @@ Rollback of this CI design: revert workflow, `docker-bake.hcl`, Makefile, and do
 | `Not authorized to perform sts:AssumeRoleWithWebIdentity` | Trust policy `sub` does not match environment name or repo |
 | `denied: User is not authorized to perform ecr:PutImage` | Role policy missing repo ARN or wrong repository name |
 | Bake OOM / disk full | Runner disk; workflow frees space — re-run or use larger runner |
-| Images pushed to wrong registry | `IMAGE_NAME` env var missing on GitHub Environment |
+| Images pushed to wrong registry | `IMAGE_NAME` missing or wrong on the GitHub Environment (see §4) |
+| `GitHub Environment variable AWS_ROLE_ARN is not set` | Add `AWS_ROLE_ARN` on that Environment (§4.2) |
+| `GitHub Environment variable IMAGE_NAME is not set` | Add `IMAGE_NAME` on that Environment (§4.2) |
 | Compose missing Dockerfile path | `.env` not sourced before bake |
 | Catalog mismatch in prepare | New Compose `build:` service not listed in bake group `release` |
 
