@@ -933,21 +933,43 @@ jobs:
               --jq '.[0].url // empty'
           )"
 
+          MANUAL_PR_URL="https://github.com/${CHART_REPO}/compare/${CHART_PROD_BRANCH}...${PROMOTE_BRANCH}?expand=1"
+
           if [[ -n "${EXISTING_URL}" ]]; then
             echo "Updated existing PR: ${EXISTING_URL}"
-            gh pr edit "${EXISTING_URL}" --repo "${CHART_REPO}" \
+            if ! gh pr edit "${EXISTING_URL}" --repo "${CHART_REPO}" \
               --title "${PR_TITLE}" \
-              --body-file /tmp/chart-prod-pr-body.md
+              --body-file /tmp/chart-prod-pr-body.md; then
+              echo "::error::Failed to update existing PR. Ensure CHART_REPO_TOKEN fine-grained PAT has Pull requests: Read and write on ${CHART_REPO}. Branch already pushed: ${PROMOTE_BRANCH}. Manual open: ${MANUAL_PR_URL}"
+              exit 1
+            fi
             PR_URL="${EXISTING_URL}"
           else
+            set +e
             PR_URL="$(
               gh pr create \
                 --repo "${CHART_REPO}" \
                 --base "${CHART_PROD_BRANCH}" \
                 --head "${PROMOTE_BRANCH}" \
                 --title "${PR_TITLE}" \
-                --body-file /tmp/chart-prod-pr-body.md
+                --body-file /tmp/chart-prod-pr-body.md \
+                2> /tmp/gh-pr-create.err
             )"
+            PR_CREATE_RC=$?
+            set -e
+            if [[ "${PR_CREATE_RC}" -ne 0 ]]; then
+              cat /tmp/gh-pr-create.err >&2 || true
+              {
+                echo "::error::Failed to create chart PR (often GraphQL: Resource not accessible by personal access token)."
+                echo "::error::Fix: regenerate/edit the fine-grained PAT used as CHART_REPO_TOKEN with repository permissions:"
+                echo "::error::  - Contents: Read and write"
+                echo "::error::  - Pull requests: Read and write"
+                echo "::error::Then update the platform repo secret CHART_REPO_TOKEN and re-run this job."
+                echo "::error::Branch already pushed: ${PROMOTE_BRANCH}"
+                echo "::error::Manual PR (until PAT is fixed): ${MANUAL_PR_URL}"
+              }
+              exit 1
+            fi
             echo "Opened PR: ${PR_URL}"
           fi
 
