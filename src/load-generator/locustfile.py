@@ -3,6 +3,9 @@
 # Copyright The OpenTelemetry Authors
 # SPDX-License-Identifier: Apache-2.0
 
+import grpc.experimental.gevent as grpc_gevent
+grpc_gevent.init_gevent()
+
 import json
 import os
 import random
