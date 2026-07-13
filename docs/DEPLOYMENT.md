@@ -11,7 +11,7 @@
 Tài liệu này cung cấp hướng dẫn từng bước để triển khai toàn bộ nền tảng TechX Corp lên AWS EKS. Quy trình bao gồm:
 
 - Khởi tạo hạ tầng cơ sở và Remote State bằng Terraform (`techx-corp-infra`).
-- Tạo **nested ECR repositories** (`techx-corp/*`, `techx-dev-corp/*`) và IAM role GitHub Actions OIDC.
+- Bootstrap tạo GitHub Actions OIDC + ECR push roles; environment stacks tạo **nested ECR** (`techx-prod-corp/*`, `techx-dev-corp/*`).
 - Triển khai EKS Cluster và cấu hình AWS Load Balancer Controller.
 - Build và Push Docker images (CI/CD hoặc thủ công).
 - Triển khai ứng dụng bằng Helm (`techx-corp-chart`) với ALB, smoke test và rollback an toàn.
@@ -21,7 +21,7 @@ Tài liệu này cung cấp hướng dẫn từng bước để triển khai to�
 | Repository | Vai trò |
 |---|---|
 | **`techx-corp-platform`** | Mã nguồn microservices, Dockerfiles, Compose/Buildx, GitHub Actions build/push |
-| **`techx-corp-infra`** | Terraform: VPC, EKS, nested ECR, GitHub OIDC roles, ALB Controller IAM |
+| **`techx-corp-infra`** | Terraform: bootstrap (state + GHA OIDC/ECR roles), VPC, EKS, nested ECR, ALB Controller IAM |
 | **`techx-corp-chart`** | Helm chart, public ALB values, smoke test, rollout/rollback |
 
 ## 3. Điều kiện tiên quyết (Prerequisites)
@@ -108,7 +108,9 @@ default.image.tag        = VERSION
 > 2. **KHÔNG COMMIT** `backend.hcl` thật.
 > 3. **Luôn** `plan -out=...` → review → `apply` file plan (không `apply` trực tiếp trên production).
 
-### Bước 1: Bootstrap Remote State (S3)
+### Bước 1: Bootstrap Remote State + GitHub OIDC / ECR roles
+
+Bootstrap creates the S3 state backend **and** account-level GitHub Actions OIDC + platform ECR push roles.
 
 1. `terraform -chdir=bootstrap init`
 2. `terraform -chdir=bootstrap plan -out=bootstrap.tfplan`
@@ -130,14 +132,21 @@ default.image.tag        = VERSION
    terraform -chdir=bootstrap state list
    ```
 
-### Bước 2: Provision production (VPC, EKS, nested ECR, GHA OIDC)
+6. Read GHA role ARNs for platform GitHub Environments:
+
+   ```bash
+   terraform -chdir=bootstrap output github_actions_ecr_production_role_arn
+   terraform -chdir=bootstrap output github_actions_ecr_development_role_arn
+   ```
+
+### Bước 2: Provision production (VPC, EKS, nested ECR)
 
 Terraform production tạo:
 
 - VPC + EKS (`techx-tf2`)
-- **Nested ECR**: `techx-corp/<service>` cho toàn bộ catalog platform
-- **GitHub Actions OIDC provider** + role `techx-gha-platform-prod` (push ECR)
+- **Nested ECR**: `techx-prod-corp/<service>` cho toàn bộ catalog platform
 - IAM ALB Controller
+- **Không** tạo GitHub OIDC / `techx-gha-platform-*` (đã ở bootstrap)
 
 ```bash
 # backend.hcl (không commit)
@@ -156,7 +165,6 @@ Outputs hữu ích:
 ```bash
 terraform -chdir=environments/production output ecr_image_base_url
 terraform -chdir=environments/production output ecr_service_names
-terraform -chdir=environments/production output github_actions_ecr_role_arn
 ```
 
 ### Bước 3 (tuỳ chọn): Provision development
@@ -168,10 +176,9 @@ terraform -chdir=environments/development apply "dev.tfplan"
 
 terraform -chdir=environments/development output ecr_image_base_url
 # → .../techx-dev-corp
-terraform -chdir=environments/development output github_actions_ecr_role_arn
 ```
 
-Gán output `github_actions_ecr_role_arn` vào GitHub Environment variable **`AWS_ROLE_ARN`**, và `ecr_image_base_url` vào **`IMAGE_NAME`** (xem [CICD.md](./CICD.md)).
+Gán bootstrap `github_actions_ecr_*_role_arn` vào GitHub Environment variable **`AWS_ROLE_ARN`**, và env `ecr_image_base_url` vào **`IMAGE_NAME`** (xem [CICD.md](./CICD.md)).
 
 ---
 
@@ -246,7 +253,7 @@ Runbook: `techx-corp-chart/docs/operations/external-secrets.md` · infra: `techx
 > [!TIP]
 > **Khuyến nghị — GitHub Actions** (`.github/workflows/build-and-push.yml`):
 >
-> **Job graph:** `CI → prepare → AWS/ECR preflight → build matrix (21) → verify ECR → release-ready → update-chart-dev (dev only)`
+> **Job graph:** `CI → prepare → AWS/ECR preflight → build matrix (21) → verify ECR → release-ready → update-chart-dev (dev) | create-chart-prod-pr (prod)`
 >
 > | Trigger | GitHub Environment | ECR PROJECT |
 > |---|---|---|
@@ -257,7 +264,7 @@ Runbook: `techx-corp-chart/docs/operations/external-secrets.md` · infra: `techx
 >
 > Tag CI: `sha-<7-char>` trên branch; tên tag git (ví dụ `v1.2.3`) khi push tag.  
 > Catalog: 21 release images trong `docker-bake.hcl` (gồm customized `opensearch`); cache tag `${IMAGE_NAME}/<service>:buildcache`.  
-> Sau **release-ready** xanh: **dev** auto direct-push `values-dev.yaml` tag (secret `CHART_REPO_TOKEN`); **prod** vẫn mở PR values chart thủ công.  
+> Sau **release-ready** xanh: **dev** auto direct-push `values-dev.yaml` tag; **prod** auto-open PR `values-prod.yaml` (human merge). Secret `CHART_REPO_TOKEN` cho cả hai.  
 > Chi tiết OIDC / Environments / chart token: **[CICD.md](./CICD.md)**.
 
 > [!IMPORTANT]
@@ -267,21 +274,21 @@ Runbook: `techx-corp-chart/docs/operations/external-secrets.md` · infra: `techx
 ### Bước 0 (ưu tiên): CI/CD
 
 1. Setup GitHub Environments (`AWS_ROLE_ARN`, `IMAGE_NAME`) theo [CICD.md](./CICD.md).
-2. **Dev chart auto-promote (one-time operator setup)** — chi tiết đầy đủ: [CICD.md §4 Operator setup](./CICD.md#4-operator-setup--chart-promote-token-dev-automation):
+2. **Chart promote (one-time operator setup)** — chi tiết đầy đủ: [CICD.md §5 Operator setup](./CICD.md#5-operator-setup--chart-promote-token-dev-push--prod-pr):
 
    | Step | Action |
    |---|---|
-   | A | Create fine-grained PAT (chart repo only, **Contents: Read and write**) |
+   | A | Create fine-grained PAT (chart repo only, **Contents** + **Pull requests** Read and write) |
    | B | Platform repo secret **`CHART_REPO_TOKEN`** = PAT |
-   | C | Optional vars `CHART_REPO` / `CHART_BRANCH` (defaults usually OK) |
-   | D | Chart branch `techx-dev-corp` allows that PAT identity to **direct push** |
-   | E | Dry-run publish `development` → job **Update chart values-dev tag** green |
+   | C | Optional vars `CHART_REPO` / `CHART_BRANCH` / `CHART_PROD_BRANCH` (defaults usually OK) |
+   | D | Chart branch `techx-dev-corp` allows that PAT identity to **direct push**; allow promote branches + PRs into `main` |
+   | E | Dry-run `development` → **Update chart values-dev tag** green; dry-run `production` → **Create chart values-prod PR** green |
 
-   Auth: push uses the **PAT** (not platform `GITHUB_TOKEN`); commit author may show as `github-actions[bot]`.  
-   Prod chart tag still requires a **manual** values PR.
+   Auth: chart push/PR uses the **PAT** (not platform `GITHUB_TOKEN`); commit author may show as `github-actions[bot]`.  
+   Prod chart tag is automated as a **PR** (not direct push to `main`); merge remains a human gate.
 
 3. Push `techx-dev-corp` (dev) trước; promote production chỉ sau khi development pass.
-4. Xác minh workflow: 21 job build riêng; job **Verify ECR** + **Release ready** xanh; dev có thêm **Update chart values-dev tag**.
+4. Xác minh workflow: 21 job build riêng; job **Verify ECR** + **Release ready** xanh; dev có **Update chart values-dev tag**; prod có **Create chart values-prod PR**.
 5. Xác minh tag runtime (và tùy chọn `buildcache`):
 
    ```bash
@@ -290,6 +297,7 @@ Runbook: `techx-corp-chart/docs/operations/external-secrets.md` · infra: `techx
    # dev: techx-dev-corp/ad
    # lặp cho đủ 21 service trong catalog release (gồm opensearch)
    # dev: chart values-dev.yaml default.image.tag được bot push sau release-ready
+   # prod: chart PR values-prod.yaml default.image.tag; merge PR để Argo sync
    ```
 
 ### Bước 1: Login ECR (thủ công)
@@ -453,5 +461,5 @@ aws s3api list-object-versions --bucket techx-tf-state-493499579600-us-east-1 \
 ## Tài liệu liên quan
 
 - [CICD.md](./CICD.md) — GitHub Actions, OIDC, Environments  
-- `techx-corp-infra` — Terraform modules `ecr`, `github-actions-ecr`  
+- `techx-corp-infra` — Terraform `bootstrap/` (OIDC + GHA ECR roles), modules `ecr`, `github-actions-ecr`  
 - `techx-corp-chart` — Helm values + smoke test  
