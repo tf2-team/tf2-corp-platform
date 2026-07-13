@@ -1,6 +1,6 @@
 # AI Engineering Implementation Guide: From Feature Requirements to Execution
 
-> Owner: AI Engineering. Xem [AI Engineering overview](./README.md) và [AI Shopping Experience Backlog](./ai-shopping-experience-backlog.md).
+> Owner: AI Engineering. Xem [AI Engineering overview](./README.md), [AI Shopping Experience Backlog](./ai-shopping-experience-backlog.md) và [Eight-Day Implementation Plan](./eight-day-implementation-plan.md).
 
 ## Document Purpose
 

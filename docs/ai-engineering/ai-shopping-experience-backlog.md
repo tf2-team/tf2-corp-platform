@@ -1,6 +1,6 @@
 # AI Shopping Experience Backlog
 
-> Owner: AI Engineering. Xem [AI Engineering overview](./README.md) và [Implementation Guide](./implementation-guide.md).
+> Owner: AI Engineering. Xem [AI Engineering overview](./README.md), [Implementation Guide](./implementation-guide.md) và [Eight-Day Implementation Plan](./eight-day-implementation-plan.md).
 
 Tài liệu này là backlog ưu tiên cho phần AI Shopping Experience, viết để mentor review hướng triển khai và thứ tự ưu tiên. Nội dung bám vào codebase hiện tại, các service đang có, các rủi ro nhìn thấy trong luồng `product-reviews`, `product-catalog`, `cart`, frontend, telemetry và LLM integration.
 
