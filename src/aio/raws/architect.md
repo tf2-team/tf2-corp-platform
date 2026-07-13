@@ -318,7 +318,7 @@ Recovery requires consecutive successful checks and fresh telemetry. A Grafana `
 
 Runbooks are versioned Markdown with machine-readable front matter:
 
-The only canonical runbook location is `tf2-corp-platform/src/aio/runbooks/`. Runtime matching, validation, packaging, operator links, and documentation references must resolve to that directory. `aio-docs` must link to canonical runbooks rather than maintain copies.
+The only canonical runbook location is `tf2-corp-platform/src/aio/runbooks/`. Runtime matching, validation, packaging, operator links, and documentation references must resolve to that directory. `tf2-corp-platform/docs/aiops` must link to canonical runbooks rather than maintain copies.
 
 - `runbook_id`, title, owner, severity, flows, services, detector IDs.
 - Preconditions and evidence queries.
@@ -675,13 +675,11 @@ The AIOps operations dashboard shows runtime mode, last collection, signal fresh
 ## 15. Target folder structure
 ```
 workspace-root/
-├── tf2-corp-platform/
+└── tf2-corp-platform/
     ├── docs/
     │   └── aiops/
     │       ├── w1/
     │       ├── AIO_BACKLOG.md
-    │       ├── architect.md
-    │       ├── implement_plan.md
     │       ├── adr/
     │       ├── topology/
     │       ├── eval/
@@ -690,7 +688,7 @@ workspace-root/
     │       ├── runbook-index.md             # links only; canonical runbooks live under tf2-corp-platform/src/aio/runbooks/
     │       └── evidence-index.md
     ├── src/
-    │   ├── aiops/
+    │   ├── aio/
     │   ├── grafana/provisioning/
     │   │   ├── alerting/aiops-slo-rules.yaml
     │   │   └── dashboards/demo/
@@ -826,7 +824,7 @@ tf2-corp-platform/src/aio/
 - Detector and action registration is explicit. Dynamic imports from alert text are forbidden.
 - Environment URLs and secrets are not embedded in queries or runbooks.
 - Generated runtime evidence is ignored by Git; checked-in evaluation fixtures are synthetic or redacted.
-- Runtime code and canonical runbooks live under `tf2-corp-platform/src/aio`. `aio-docs` may contain planning, ADRs, evaluation reports, Ops Reviews, postmortems, and evidence indexes, but no duplicate runbooks. Runtime startup must not read code, runbooks, or fixture data from `aio-docs`.
+- Runtime code and canonical runbooks live under `tf2-corp-platform/src/aio`. `tf2-corp-platform/docs/aiops` may contain planning, ADRs, evaluation reports, Ops Reviews, postmortems, and evidence indexes, but no duplicate runbooks. Runtime startup must not read code, runbooks, or fixture data from `tf2-corp-platform/docs/aiops`.
 - Test fixtures, fake adapters, and replay scenarios must stay under `tf2-corp-platform/src/aio/tests/` and cannot be referenced by enabled production signal, detector, route, or policy configuration.
 - Grafana hard SLO rules remain useful without the Python runtime.
 - The EKS source of deployed Grafana assets is `${TF2_CHART_ROOT}/grafana/provisioning/`; `tf2-corp-platform/src/grafana/provisioning/` is the local/Docker counterpart. Keep identically named AIOps assets synchronized and verify their digests in CI so the two environments cannot drift silently.
