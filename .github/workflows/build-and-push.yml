@@ -3,10 +3,11 @@
 name: Build and push images
 
 # Job graph: CI → prepare → AWS/ECR preflight → 21-service build matrix → verify ECR
-#            → release-ready → update-chart-dev (development only)
+#            → release-ready → update-chart-dev (development) | create-chart-prod-pr (production)
 # Dev: after release-ready, direct-push default.image.tag to chart repo values-dev.yaml
 #      on branch techx-dev-corp (requires secret CHART_REPO_TOKEN).
-# Prod: still manual chart values PR (no automated write to values-prod.yaml).
+# Prod: after release-ready, open a PR on the chart repo updating values-prod.yaml
+#       (requires secret CHART_REPO_TOKEN with Contents + Pull requests write).
 
 on:
   push:
@@ -495,7 +496,7 @@ jobs:
           echo "All ${#SERVICES[@]} release images present for tag ${DEMO_VERSION}"
 
   # ---------------------------------------------------------------------------
-  # 6. release-ready — sole gate for chart promotion (auto-dev or manual-prod)
+  # 6. release-ready — sole gate for chart promotion (auto-dev or auto-prod PR)
   # ---------------------------------------------------------------------------
   release-ready:
     name: Release ready
@@ -539,9 +540,9 @@ jobs:
             if [[ "${TARGET_ENV}" == "development" ]]; then
               echo "On success, **update-chart-dev** will direct-push \`default.image.tag\` to the chart repo."
             else
-              echo "Production: this gate permits a **manual** chart values PR only (no automated chart write)."
+              echo "On success, **create-chart-prod-pr** will open a chart PR for \`values-prod.yaml\` (merge still required)."
             fi
-            echo "This workflow does **not** deploy Helm resources or open production chart PRs."
+            echo "This workflow does **not** deploy Helm resources or merge production chart PRs."
           } >> "${GITHUB_STEP_SUMMARY}"
 
           FAILED=0
@@ -743,3 +744,226 @@ jobs:
 
           echo "::error::Failed to push to ${CHART_REPO}@${CHART_BRANCH} after ${ATTEMPTS} attempts"
           exit 1
+
+  # ---------------------------------------------------------------------------
+  # 8. create-chart-prod-pr — open PR to update chart values-prod.yaml tag
+  #    Runs only after release-ready succeeds for the production environment.
+  #    Does not merge; human review remains the production deploy gate.
+  #    Requires repository secret CHART_REPO_TOKEN (Contents + Pull requests write).
+  # ---------------------------------------------------------------------------
+  create-chart-prod-pr:
+    name: Create chart values-prod PR
+    needs: [prepare, release-ready]
+    if: >
+      needs.release-ready.result == 'success' &&
+      needs.prepare.outputs.target_environment == 'production'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    env:
+      # Override via repository variables if remotes/branch names differ.
+      CHART_REPO: ${{ vars.CHART_REPO || 'tf2-team/tf2-corp-chart' }}
+      CHART_PROD_BRANCH: ${{ vars.CHART_PROD_BRANCH || 'main' }}
+      VERSION: ${{ needs.prepare.outputs.version }}
+      SHORT_SHA: ${{ needs.prepare.outputs.short_sha }}
+      PLATFORM_SHA: ${{ github.sha }}
+      PLATFORM_RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+      PLATFORM_REPO: ${{ github.repository }}
+    steps:
+      - name: Require CHART_REPO_TOKEN
+        env:
+          CHART_REPO_TOKEN: ${{ secrets.CHART_REPO_TOKEN }}
+        run: |
+          set -euo pipefail
+          if [[ -z "${CHART_REPO_TOKEN}" ]]; then
+            echo "::error::Secret CHART_REPO_TOKEN is not set. Create a fine-grained PAT with Contents: Read and write and Pull requests: Read and write on ${CHART_REPO}, add it as a repository secret, then re-run. See docs/CICD.md."
+            exit 1
+          fi
+
+      - name: Checkout chart repository
+        # actions/checkout@v7.0.0
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
+        with:
+          repository: ${{ env.CHART_REPO }}
+          ref: ${{ env.CHART_PROD_BRANCH }}
+          token: ${{ secrets.CHART_REPO_TOKEN }}
+          path: chart
+          fetch-depth: 20
+
+      - name: Update values-prod tag, push branch, open PR
+        working-directory: chart
+        env:
+          GH_TOKEN: ${{ secrets.CHART_REPO_TOKEN }}
+        run: |
+          set -euo pipefail
+
+          FILE="values-prod.yaml"
+          if [[ ! -f "${FILE}" ]]; then
+            echo "::error::${FILE} not found in ${CHART_REPO}@${CHART_PROD_BRANCH}"
+            exit 1
+          fi
+
+          # Sanitize version for a valid git branch segment (e.g. v1.2.3 or sha-a1b2c3d).
+          SAFE_VERSION="$(printf '%s' "${VERSION}" | tr -c 'A-Za-z0-9._-' '-')"
+          PROMOTE_BRANCH="promote/prod-image-${SAFE_VERSION}"
+
+          # Precise in-place update of default.image.tag only (preserve comments/layout).
+          python3 - <<'PY'
+          import os
+          import re
+          import sys
+          from pathlib import Path
+
+          path = Path("values-prod.yaml")
+          text = path.read_text(encoding="utf-8")
+          version = os.environ["VERSION"]
+
+          pattern = re.compile(
+              r"(^default:\n"
+              r"  image:\n"
+              r"    repository:[^\n]+\n"
+              r"(?:    #[^\n]*\n)*"
+              r"    tag:\s*)\"[^\"]*\"",
+              re.MULTILINE,
+          )
+          match = pattern.search(text)
+          if not match:
+              print(
+                  "::error::Could not locate default.image.tag under default.image in values-prod.yaml",
+                  file=sys.stderr,
+              )
+              sys.exit(1)
+
+          current_match = re.search(r'tag:\s*"([^"]*)"', match.group(0))
+          current = current_match.group(1) if current_match else ""
+          print(f"current_tag={current}")
+          print(f"new_tag={version}")
+
+          if current == version:
+              Path(".tag-unchanged").write_text("1", encoding="utf-8")
+              print("Tag already up to date; no PR needed.")
+              sys.exit(0)
+
+          new_text, n = pattern.subn(rf'\1"{version}"', text, count=1)
+          if n != 1:
+              print(f"::error::Expected 1 replacement, got {n}", file=sys.stderr)
+              sys.exit(1)
+
+          path.write_text(new_text, encoding="utf-8")
+          Path(".previous-tag").write_text(current, encoding="utf-8")
+          print(f"Updated default.image.tag: {current} → {version}")
+          PY
+
+          if [[ -f .tag-unchanged ]]; then
+            {
+              echo "## Chart values-prod PR"
+              echo ""
+              echo "No change: \`default.image.tag\` already \`${VERSION}\` on \`${CHART_REPO}@${CHART_PROD_BRANCH}\`."
+              echo "Skipped branch push and PR creation."
+            } >> "${GITHUB_STEP_SUMMARY}"
+            exit 0
+          fi
+
+          PREVIOUS_TAG="unknown"
+          if [[ -f .previous-tag ]]; then
+            PREVIOUS_TAG="$(cat .previous-tag)"
+          fi
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          git checkout -B "${PROMOTE_BRANCH}"
+
+          git add "${FILE}"
+          if git diff --cached --quiet; then
+            echo "Working tree clean after update; nothing to commit."
+            exit 0
+          fi
+
+          git commit -m "chore(prod): promote image tag to ${VERSION}" \
+            -m "Automated PR by platform build after release-ready." \
+            -m "Platform commit: ${PLATFORM_SHA}" \
+            -m "Workflow: ${PLATFORM_RUN_URL}"
+
+          # Bot promote branches are disposable per tag; force refresh on re-runs.
+          git push --force origin "HEAD:${PROMOTE_BRANCH}"
+
+          PR_TITLE="chore(prod): promote image tag to ${VERSION}"
+          # Body file keeps YAML/script indentation out of the heredoc delimiter.
+          {
+            echo "## Summary"
+            echo ""
+            echo "Promote production Helm image tag after a successful platform image publish."
+            echo ""
+            echo "| Field | Value |"
+            echo "|---|---|"
+            echo "| File | \`${FILE}\` |"
+            echo "| Previous tag | \`${PREVIOUS_TAG}\` |"
+            echo "| New tag | \`${VERSION}\` |"
+            echo "| Base branch | \`${CHART_PROD_BRANCH}\` |"
+            echo "| Platform repo | \`${PLATFORM_REPO}\` |"
+            echo "| Platform commit | \`${PLATFORM_SHA}\` |"
+            echo "| Platform workflow | ${PLATFORM_RUN_URL} |"
+            echo ""
+            echo "## Notes"
+            echo ""
+            echo "* All **21** release images were built and verified in ECR before this PR was opened."
+            echo "* Merge this PR to let Argo CD Application \`techx-corp\` sync the new global tag."
+            echo "* Do **not** merge while a platform publish for this tag is still in progress (this job only runs after \`release-ready\`)."
+            echo ""
+            echo "## Validation after merge"
+            echo ""
+            echo '```cmd'
+            echo "argocd app wait techx-corp --sync --health --timeout 600"
+            echo '```'
+          } > /tmp/chart-prod-pr-body.md
+
+          # Idempotent: reuse an existing open PR for this head branch when present.
+          # Prefer owner:branch for --head so gh matches the chart repo owner reliably.
+          CHART_OWNER="${CHART_REPO%%/*}"
+          HEAD_REF="${CHART_OWNER}:${PROMOTE_BRANCH}"
+          EXISTING_URL="$(
+            gh pr list \
+              --repo "${CHART_REPO}" \
+              --head "${HEAD_REF}" \
+              --base "${CHART_PROD_BRANCH}" \
+              --state open \
+              --json url \
+              --jq '.[0].url // empty'
+          )"
+
+          if [[ -n "${EXISTING_URL}" ]]; then
+            echo "Updated existing PR: ${EXISTING_URL}"
+            gh pr edit "${EXISTING_URL}" --repo "${CHART_REPO}" \
+              --title "${PR_TITLE}" \
+              --body-file /tmp/chart-prod-pr-body.md
+            PR_URL="${EXISTING_URL}"
+          else
+            PR_URL="$(
+              gh pr create \
+                --repo "${CHART_REPO}" \
+                --base "${CHART_PROD_BRANCH}" \
+                --head "${PROMOTE_BRANCH}" \
+                --title "${PR_TITLE}" \
+                --body-file /tmp/chart-prod-pr-body.md
+            )"
+            echo "Opened PR: ${PR_URL}"
+          fi
+
+          {
+            echo "## Chart values-prod PR"
+            echo ""
+            echo "| Field | Value |"
+            echo "|---|---|"
+            echo "| Repository | \`${CHART_REPO}\` |"
+            echo "| Base branch | \`${CHART_PROD_BRANCH}\` |"
+            echo "| Head branch | \`${PROMOTE_BRANCH}\` |"
+            echo "| File | \`${FILE}\` |"
+            echo "| Previous tag | \`${PREVIOUS_TAG}\` |"
+            echo "| Tag | \`${VERSION}\` |"
+            echo "| Mode | pull request (no auto-merge) |"
+            echo "| PR | ${PR_URL} |"
+            echo ""
+            echo "Review and merge the PR to deploy. Argo CD (\`techx-corp\`) will sync after merge to \`${CHART_PROD_BRANCH}\`."
+          } >> "${GITHUB_STEP_SUMMARY}"

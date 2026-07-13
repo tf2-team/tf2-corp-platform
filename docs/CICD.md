@@ -8,7 +8,7 @@ Helm deploy stays in `techx-corp-chart`.
 | Workflow | File | When | What |
 |---|---|---|---|
 | CI | `.github/workflows/ci.yml` | `pull_request` to `main` / `techx-dev-corp`; also `workflow_call` | Lint + selective unit tests |
-| Build & Push | `.github/workflows/build-and-push.yml` | `push` to `main` / `techx-dev-corp` with changes under `src/**`, tags `v*`, `workflow_dispatch` | Gated multi-arch bake → ECR → verify → (dev) chart tag promote |
+| Build & Push | `.github/workflows/build-and-push.yml` | `push` to `main` / `techx-dev-corp` with changes under `src/**`, tags `v*`, `workflow_dispatch` | Gated multi-arch bake → ECR → verify → chart promote (dev push / prod PR) |
 
 ### Job graph (Build & Push)
 
@@ -19,7 +19,8 @@ CI (reusable lint + unit tests)
   → build matrix     # 21 services, max-parallel: 4, fail-fast: false
   → verify ECR       # describe-images for every release tag
   → release-ready    # if: always(); sole gate for chart promotion
-  → update-chart-dev # development only: direct-push values-dev.yaml tag
+  → update-chart-dev      # development only: direct-push values-dev.yaml tag
+  → create-chart-prod-pr  # production only: open PR for values-prod.yaml tag
 ```
 
 Failing CI never reaches AWS authentication or image push.  
@@ -28,9 +29,9 @@ Failing CI never reaches AWS authentication or image push.
 | Environment | After `release-ready` |
 |---|---|
 | `development` | Job **update-chart-dev** direct-pushes `default.image.tag` in chart `values-dev.yaml` on branch `techx-dev-corp` |
-| `production` | Still **manual** chart values PR (`values-prod.yaml`); no automated chart write |
+| `production` | Job **create-chart-prod-pr** opens a chart PR updating `values-prod.yaml` on base `main` (no auto-merge) |
 
-The workflow does **not** deploy Helm resources or call Argo CD APIs. Dev promotion relies on Argo CD auto-sync reading the chart Git commit.
+The workflow does **not** deploy Helm resources, call Argo CD APIs, or merge production chart PRs. Dev promotion relies on Argo CD auto-sync after the direct push; prod deploy still requires a human to merge the chart PR.
 
 ### Path filter (branch pushes)
 
@@ -202,16 +203,17 @@ Do **not** put a service name in `IMAGE_NAME`. Bake appends `/<service>:<version
 | Name | Required | Default if unset | Purpose |
 |---|---|---|---|
 | `AWS_REGION` | No | `us-east-1` | AWS region for OIDC + ECR CLI |
-| `CHART_REPO` | No | `tf2-team/tf2-corp-chart` | Chart GitHub `owner/repo` for **update-chart-dev** |
+| `CHART_REPO` | No | `tf2-team/tf2-corp-chart` | Chart GitHub `owner/repo` for chart promote jobs |
 | `CHART_BRANCH` | No | `techx-dev-corp` | Chart branch that receives the dev tag push (Argo CD dev `targetRevision`) |
+| `CHART_PROD_BRANCH` | No | `main` | Chart base branch for production promote PRs (Argo CD prod `targetRevision`) |
 
 **Repository secrets**:
 
 | Name | Required | Value | Consumed by |
 |---|---|---|---|
-| `CHART_REPO_TOKEN` | **Yes for development auto-promote** | Fine-grained (or classic) PAT with **Contents: Read and write** on the chart repo | **update-chart-dev** only |
+| `CHART_REPO_TOKEN` | **Yes for chart promote (dev + prod)** | Fine-grained (or classic) PAT on the chart repo: **Contents: Read and write**, and **Pull requests: Read and write** (prod PR job) | **update-chart-dev**, **create-chart-prod-pr** |
 
-Without `CHART_REPO_TOKEN`, development can still build, push, and pass **release-ready**; only the chart tag promote job fails. Production never uses this secret (prod chart promote is manual).
+Without `CHART_REPO_TOKEN`, development and production can still build, push, and pass **release-ready**; only the chart promote jobs fail. Operators can still edit chart values manually as a fallback.
 
 PR **CI** (`ci.yml`) needs no repository variables or secrets.
 
@@ -253,12 +255,13 @@ PR **CI** (`ci.yml`) needs no repository variables or secrets.
    | `AWS_REGION` | If ECR/OIDC is not in `us-east-1` |
    | `CHART_REPO` | If the chart remote is not `tf2-team/tf2-corp-chart` |
    | `CHART_BRANCH` | If Argo CD dev tracks a branch other than `techx-dev-corp` |
+   | `CHART_PROD_BRANCH` | If Argo CD prod tracks a branch other than `main` |
 
 Leave unset when the workflow defaults match your layout.
 
 #### 4.4 Step-by-step — Repository secret (`CHART_REPO_TOKEN`)
 
-1. Create a fine-grained PAT with **Contents: Read and write** on the **chart** repository only (full procedure in **§5**).
+1. Create a fine-grained PAT with **Contents: Read and write** and **Pull requests: Read and write** on the **chart** repository only (full procedure in **§5**).
 2. Platform repo → **Settings → Secrets and variables → Actions → Secrets** tab.
 3. **New repository secret**:
    - Name: `CHART_REPO_TOKEN` (exact spelling)
@@ -273,8 +276,8 @@ Leave unset when the workflow defaults match your layout.
 | 2 | `AWS_ROLE_ARN` on both environments | Env variables | Matches bootstrap outputs |
 | 3 | `IMAGE_NAME` on both environments | Env variables | REGISTRY/PROJECT only; matches ECR project |
 | 4 | `AWS_REGION` (optional) | Repo variable | Set only if not `us-east-1` |
-| 5 | `CHART_REPO` / `CHART_BRANCH` (optional) | Repo variables | Set only if remotes/branch differ |
-| 6 | `CHART_REPO_TOKEN` | Repo secret | Required for automated dev chart promote |
+| 5 | `CHART_REPO` / `CHART_BRANCH` / `CHART_PROD_BRANCH` (optional) | Repo variables | Set only if remotes/branch differ |
+| 6 | `CHART_REPO_TOKEN` | Repo secret | Required for automated dev push + prod PR |
 
 #### 4.6 How workflows resolve values
 
@@ -288,25 +291,29 @@ update-chart-dev (development only):
   secrets.CHART_REPO_TOKEN             # repository secret
   vars.CHART_REPO || 'tf2-team/tf2-corp-chart'
   vars.CHART_BRANCH || 'techx-dev-corp'
+create-chart-prod-pr (production only):
+  secrets.CHART_REPO_TOKEN             # same secret; needs Pull requests write
+  vars.CHART_REPO || 'tf2-team/tf2-corp-chart'
+  vars.CHART_PROD_BRANCH || 'main'
 ```
 
 If `AWS_ROLE_ARN` or `IMAGE_NAME` is missing on the selected environment, **preflight** fails fast with an explicit error pointing at this document.
 
-### 5. Operator setup — chart promote token (dev automation)
+### 5. Operator setup — chart promote token (dev push + prod PR)
 
-Cross-repo Git writes cannot use the platform repo’s default `GITHUB_TOKEN`. Job **`update-chart-dev`** authenticates to the **chart** repository with a PAT stored as a platform Actions secret (configured in **§4.4**).
+Cross-repo Git writes cannot use the platform repo’s default `GITHUB_TOKEN`. Jobs **`update-chart-dev`** and **`create-chart-prod-pr`** authenticate to the **chart** repository with a PAT stored as a platform Actions secret (configured in **§4.4**).
 
 #### How authentication works
 
 | Concern | Identity |
 |---|---|
 | Platform workflow / AWS OIDC / ECR push | Platform `GITHUB_TOKEN` + environment role |
-| Checkout + **push** to chart repo | Secret **`CHART_REPO_TOKEN`** (PAT) |
+| Checkout + **push** / **open PR** on chart repo | Secret **`CHART_REPO_TOKEN`** (PAT) |
 | Git commit author name/email | `github-actions[bot]` (cosmetic; set in the job) |
 
-The Action does **not** “assume” GitHub’s built-in bot for write access to another repo. The **PAT owner** (or fine-grained token resource grants) is what GitHub authorizes for the push. Prefer a **dedicated machine user** for the PAT if you do not want a personal account owning the token.
+The Action does **not** “assume” GitHub’s built-in bot for write access to another repo. The **PAT owner** (or fine-grained token resource grants) is what GitHub authorizes for the push/PR. Prefer a **dedicated machine user** for the PAT if you do not want a personal account owning the token.
 
-Production chart promotion remains **manual** (no token write to `values-prod.yaml`).
+Production still requires a **human merge** of the chart PR (no auto-merge, no Argo API call from platform CI).
 
 #### Prerequisites
 
@@ -315,18 +322,20 @@ Production chart promotion remains **manual** (no token write to `values-prod.ya
 | Platform GitHub repo | the repo where `build-and-push.yml` runs |
 | Chart GitHub repo | default `tf2-team/tf2-corp-chart` (override with repo variable `CHART_REPO`) |
 | Chart branch for dev | default `techx-dev-corp` (Argo CD Application `techx-corp-dev` `targetRevision`) |
+| Chart base branch for prod PRs | default `main` (Argo CD Application `techx-corp` `targetRevision`) |
 | Operator rights | Admin (or secrets:write) on platform repo; ability to create PATs; ability to configure chart branch rules |
 
 #### Step A — Create a fine-grained PAT (recommended)
 
 1. GitHub → **Settings → Developer settings → Personal access tokens → Fine-grained tokens → Generate new token**.
-2. **Token name:** e.g. `techx-platform-chart-promote-dev`.
+2. **Token name:** e.g. `techx-platform-chart-promote`.
 3. **Expiration:** set a finite expiry (e.g. 90 days) and calendar a rotation.
 4. **Resource owner:** org or user that owns the chart repo.
 5. **Repository access:** **Only select repositories** → select the chart repo only  
    (default `tf2-team/tf2-corp-chart`, or your fork / remote name).
 6. **Permissions → Repository permissions:**
-   - **Contents:** **Read and write** (required for checkout + push of `values-dev.yaml`)
+   - **Contents:** **Read and write** (required for checkout + push of values files / promote branches)
+   - **Pull requests:** **Read and write** (required for **create-chart-prod-pr**)
    - **Metadata:** Read-only (usually granted automatically)
    - Do **not** grant admin, workflows, or secrets permissions.
 7. Generate the token and **copy it once** (GitHub will not show it again).
@@ -336,23 +345,26 @@ Classic PAT alternative (less preferred): `repo` scope on an account with write 
 #### Step B — Add the secret on the **platform** repository
 
 Follow **§4.4** (name **`CHART_REPO_TOKEN`**, value = PAT from Step A).  
-Optional chart remote/branch overrides: **§4.3** (`CHART_REPO`, `CHART_BRANCH`; workflow defaults are usually enough).
+Optional chart remote/branch overrides: **§4.3** (`CHART_REPO`, `CHART_BRANCH`, `CHART_PROD_BRANCH`; workflow defaults are usually enough).
 
 Do **not** commit the PAT to Git, put it in Environment variables (non-secret), or paste it into workflow logs.
 
-#### Step C — Allow the PAT identity to push chart branch `techx-dev-corp`
+#### Step C — Allow the PAT identity to push chart branch `techx-dev-corp` (dev) and create promote branches (prod)
 
 On the **chart** repo:
 
 1. Confirm the PAT’s user (or machine user) has **write** access to the chart repository.
-2. Review **Settings → Branches / Rulesets** for `techx-dev-corp`:
+2. Review **Settings → Branches / Rulesets** for `techx-dev-corp` (dev direct-push):
    - If **Require a pull request before merging** (or similar) blocks direct pushes, either:
      - add a **bypass** for the PAT’s user / team / app, or
      - temporarily allow force-free direct pushes for that identity only.
    - Status checks required on PR are fine for humans; they must not block the bot’s direct push path if you rely on automation.
-3. Do **not** require signed commits for that identity unless the PAT workflow is also configured to sign (not implemented today).
+3. For production, the bot pushes feature branches `promote/prod-image-<tag>` (not `main`). Ensure branch rules allow the PAT to **create and push** those branches and **open PRs** into `main`.
+4. Do **not** require signed commits for that identity unless the PAT workflow is also configured to sign (not implemented today).
 
 #### Step D — Verify end-to-end
+
+**Development**
 
 1. Ensure `CHART_REPO_TOKEN` exists on the platform repo.
 2. Run a development publish:
@@ -369,6 +381,15 @@ On the **chart** repo:
 
 5. Optional: `argocd app wait techx-corp-dev --sync --health --timeout 600`.
 
+**Production**
+
+1. Run a production publish only after development is validated:
+   - push `src/**` to platform `main`, or tag `v*`, or dispatch **`production`**.
+2. Confirm job order ends with **Create chart values-prod PR** (green).
+3. Open the linked chart PR; confirm `values-prod.yaml` has `default.image.tag: "<version>"`.
+4. Review and merge the PR when ready to deploy.
+5. Optional: `argocd app wait techx-corp --sync --health --timeout 600`.
+
 #### Failure modes (setup-related)
 
 | Symptom | Fix |
@@ -376,16 +397,17 @@ On the **chart** repo:
 | `Secret CHART_REPO_TOKEN is not set` | Complete §4.4 / Step B on the **platform** repo |
 | `Repository not found` / checkout 404 | Wrong `CHART_REPO`, or PAT lacks access to that repo |
 | `Permission denied` / push rejected | PAT Contents not Read/write; or branch rules block the PAT identity (Step C) |
-| Job skipped entirely | Environment was not `development`, or `release-ready` failed |
+| `GraphQL: Resource not accessible` / PR create fails | Grant fine-grained PAT **Pull requests: Read and write** |
+| Job skipped entirely | Wrong environment for that job, or `release-ready` failed |
 
-Without `CHART_REPO_TOKEN`, development builds can still push images and pass `release-ready`, but **update-chart-dev fails** until the secret is set. Operators can still edit `values-dev.yaml` manually as a fallback.
+Without `CHART_REPO_TOKEN`, builds can still push images and pass `release-ready`, but chart promote jobs fail until the secret is set. Operators can still edit chart values manually as a fallback.
 
 #### Security and rotation
 
-* Scope the PAT to the **chart repo only**; Contents read/write is enough.
+* Scope the PAT to the **chart repo only**; Contents + Pull requests read/write is enough.
 * Prefer a **machine user** over a personal account for ownership and offboarding.
 * Rotate on expiry or if the secret is exposed: create a new PAT → update `CHART_REPO_TOKEN` → revoke the old PAT.
-* Revoking the PAT immediately stops automated dev promotes (images still publish).
+* Revoking the PAT immediately stops automated chart promotes (images still publish).
 
 ### 6. First dry run
 
@@ -401,7 +423,7 @@ Without `CHART_REPO_TOKEN`, development builds can still push images and pass `r
 
 4. Confirm the workflow summary shows **Release ready**, then **Chart values-dev update** with the new tag.
 5. Confirm chart `values-dev.yaml` on `techx-dev-corp` has `default.image.tag: "sha-<7char>"`.
-6. Production: merge/push `main` (or tag `v*` / protected dispatch) only after development passes → `techx-prod-corp`; open a **manual** chart values PR for prod.
+6. Production: merge/push `main` (or tag `v*` / protected dispatch) only after development passes → ECR production project; confirm job **Create chart values-prod PR** opens a chart PR for `values-prod.yaml`, then merge that PR to deploy.
 
 ---
 
@@ -449,9 +471,10 @@ Local non-push Compose builds (`make build`, `make start`) are unchanged and use
 | preflight missing ECR repo | Create nested repo via `techx-corp-infra` ECR module; re-run. |
 | Individual matrix build fails | Re-run failed jobs or full workflow; `fail-fast: false` keeps other services building. |
 | verify-ecr reports missing tags | Re-run build for missing services or full workflow; do **not** promote chart values. |
-| release-ready red | Treat as not promotable; `update-chart-dev` is skipped. |
-| update-chart-dev fails: missing `CHART_REPO_TOKEN` | Add the secret (see §4.4 / §5); re-run failed job or full workflow. |
+| release-ready red | Treat as not promotable; chart promote jobs are skipped. |
+| update-chart-dev / create-chart-prod-pr fails: missing `CHART_REPO_TOKEN` | Add the secret (see §4.4 / §5); re-run failed job or full workflow. |
 | update-chart-dev fails: push rejected / protected branch | Allow the PAT identity to push to `techx-dev-corp`, or temporarily open a manual values commit. |
+| create-chart-prod-pr fails: cannot create PR | Ensure PAT has **Pull requests: Read and write**; confirm `CHART_PROD_BRANCH` exists. |
 
 Rollback of this CI design: revert workflow, `docker-bake.hcl`, Makefile, and docs. Existing `:buildcache` tags may remain or be deleted; they do not affect deployed SHA/version tags.
 
@@ -479,8 +502,8 @@ Because the chart uses a **global** `default.image.tag` for all nested services 
 1. **Rebuild and push the full release set** (21 services, including `opensearch`) with the same tag.
 2. **Wait for `release-ready`** (includes ECR `describe-images` for every service).
 3. **Development:** job **update-chart-dev** direct-pushes `default.image.tag` in `values-dev.yaml` on chart branch `techx-dev-corp` (requires `CHART_REPO_TOKEN`).
-4. **Production:** open a **manual** PR on the chart repo updating `values-prod.yaml` (`default.image.tag` only).
-5. Argo CD auto-syncs (dev Application `techx-corp-dev`); optional wait: `argocd app wait techx-corp-dev --sync --health --timeout 600`.
+4. **Production:** job **create-chart-prod-pr** opens a chart PR updating `values-prod.yaml` (`default.image.tag` only) against base `main` (requires `CHART_REPO_TOKEN` with Pull requests write). A human merges the PR.
+5. Argo CD auto-syncs after the chart commit lands (dev Application `techx-corp-dev` after direct push; prod Application `techx-corp` after PR merge). Optional wait: `argocd app wait techx-corp-dev --sync --health --timeout 600` or `argocd app wait techx-corp --sync --health --timeout 600`.
 
 Do **not** promote chart values while any matrix job or verification is incomplete.
 
@@ -491,7 +514,7 @@ CI → prepare → preflight → build (all 21) → verify ECR → release-ready
 
 # Production
 CI → prepare → preflight → build (all 21) → verify ECR → release-ready
-  → manual values-prod.yaml PR → merge → Argo sync
+  → create-chart-prod-pr (open values-prod.yaml PR) → human merge → Argo sync
 ```
 
 See chart runbook: `techx-corp-chart/docs/operations/gitops-argocd.md`.
@@ -503,10 +526,11 @@ See chart runbook: `techx-corp-chart/docs/operations/gitops-argocd.md`.
 - `id-token: write` only on preflight, build, and verify-ecr jobs.
 - GitHub expressions passed into shell steps via quoted environment variables.
 - OIDC authentication only; no long-lived AWS keys.
+- Production chart path still requires human PR merge (no auto-merge from platform CI).
 
 ## Out of scope (v1)
 
-- Automated **production** chart PR / write to `values-prod.yaml`
+- Auto-merge of production chart PRs (human review remains the prod deploy gate)
 - Helm/kubectl deploy or Argo CD API calls from this repo
 - Path-filtered partial image builds while using a global tag (unsafe for promotion)
 - Per-service Helm runtime tags / movable runtime tags
