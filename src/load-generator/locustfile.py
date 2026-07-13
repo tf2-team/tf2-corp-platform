@@ -6,6 +6,9 @@
 import grpc.experimental.gevent as grpc_gevent
 grpc_gevent.init_gevent()
 
+import asyncio
+asyncio.set_event_loop_policy(asyncio.DefaultEventLoopPolicy())
+
 import json
 import os
 import random
