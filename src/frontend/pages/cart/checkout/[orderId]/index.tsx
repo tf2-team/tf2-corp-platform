@@ -5,7 +5,7 @@ import { NextPage } from 'next';
 import Head from 'next/head';
 import Link from 'next/link';
 import { useRouter } from 'next/router';
-import { useMemo } from 'react';
+import { useMemo, useEffect, useState } from 'react';
 import Ad from '../../../../components/Ad';
 import Button from '../../../../components/Button';
 import Layout from '../../../../components/Layout';
@@ -16,15 +16,38 @@ import { Money } from '../../../../protos/demo';
 import * as S from '../../../../styles/Checkout.styled';
 import { IProductCheckout } from '../../../../types/Cart';
 
+const emptyAddress = {
+  streetAddress: '',
+  city: '',
+  state: '',
+  country: '',
+  zipCode: '',
+};
+
 const Checkout: NextPage = () => {
   const { query } = useRouter();
-  const { orderId, items = [], shippingAddress, shippingCost = { units: 0, currencyCode: 'USD', nanos: 0 } } = JSON.parse((query.order || '{}') as string) as IProductCheckout;
+  const [isMounted, setIsMounted] = useState(false);
+
+  useEffect(() => {
+    setIsMounted(true);
+  }, []);
+
+  const orderData = useMemo(() => {
+    if (!isMounted || !query.order) return null;
+    try {
+      return JSON.parse(query.order as string) as IProductCheckout;
+    } catch {
+      return null;
+    }
+  }, [isMounted, query.order]);
 
   const orderTotal = useMemo<Money>(() => {
+    if (!orderData) return { units: 0, nanos: 0, currencyCode: 'USD' };
+    const { items = [], shippingCost = { units: 0, currencyCode: 'USD', nanos: 0 } } = orderData;
     const itemsTotal = items.reduce((acc, { item, cost = { units: 0, nanos: 0, currencyCode: 'USD' } }) => {
       return {
-        units: acc.units + (cost.units || 0) * item.quantity,
-        nanos: acc.nanos + (cost.nanos || 0) * item.quantity,
+        units: acc.units + (cost.units || 0) * (item?.quantity || 0),
+        nanos: acc.nanos + (cost.nanos || 0) * (item?.quantity || 0),
         currencyCode: cost.currencyCode || 'USD',
       };
     }, { units: 0, nanos: 0, currencyCode: 'USD' });
@@ -37,12 +60,18 @@ const Checkout: NextPage = () => {
       nanos: totalNanos % 1000000000,
       currencyCode: shippingCost.currencyCode || 'USD',
     };
-  }, [items, shippingCost]);
+  }, [orderData]);
+
+  if (!isMounted || !orderData) {
+    return null;
+  }
+
+  const { orderId, items = [], shippingAddress, shippingCost = { units: 0, currencyCode: 'USD', nanos: 0 } } = orderData;
 
   return (
     <AdProvider
       productIds={items.map(({ item }) => item?.productId || '')}
-      contextKeys={[...new Set(items.flatMap(({ item }) => item.product.categories))]}
+      contextKeys={[...new Set(items.flatMap(({ item }) => item?.product?.categories || []))]}
     >
       <Head>
         <title>Otel Demo - Checkout</title>
@@ -61,15 +90,18 @@ const Checkout: NextPage = () => {
 
             <S.RightColumn>
               <S.SectionTitle>Shipping Address</S.SectionTitle>
-              <S.AddressText>{shippingAddress.streetAddress}</S.AddressText>
-              <S.AddressText>{shippingAddress.city}, {shippingAddress.state} {shippingAddress.zipCode}</S.AddressText>
-              <S.AddressText>{shippingAddress.country}</S.AddressText>
+              <S.AddressText>{shippingAddress?.streetAddress}</S.AddressText>
+              <S.AddressText>
+                {shippingAddress?.city}, {shippingAddress?.state} {shippingAddress?.zipCode}
+              </S.AddressText>
+              <S.AddressText>{shippingAddress?.country}</S.AddressText>
             </S.RightColumn>
 
             <S.ItemsSection>
               <S.SectionTitle>Order Items</S.SectionTitle>
               <S.ItemList>
                 {items.map(({ item, cost = { units: 0, currencyCode: 'USD', nanos: 0 } }) => {
+                  if (!item?.product) return null;
                   const itemTotal: Money = {
                     units: (cost.units || 0) * item.quantity,
                     nanos: (cost.nanos || 0) * item.quantity,

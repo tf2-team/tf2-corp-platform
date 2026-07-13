@@ -12,5 +12,10 @@ namespace Accounting
             Level = LogLevel.Information,
             Message = "Order details: {@OrderResult}.")]
         public static partial void OrderReceivedMessage(ILogger logger, OrderResult orderResult);
+
+        [LoggerMessage(
+            Level = LogLevel.Information,
+            Message = "Successfully completed shipment and updated order {orderId} status to COMPLETED.")]
+        public static partial void ShipmentCompleted(ILogger logger, string orderId);
     }
 }

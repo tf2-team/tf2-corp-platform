@@ -19,13 +19,11 @@ services:
   # ******************
   # Accounting service
   accounting:
-    image: ${IMAGE_NAME}:${DEMO_VERSION}-accounting
+    image: ${IMAGE_NAME}/accounting:${DEMO_VERSION}
     container_name: accounting
     build:
       context: ./
       dockerfile: ${ACCOUNTING_DOCKERFILE}
-      cache_from:
-        - ${IMAGE_NAME}:${IMAGE_VERSION}-accounting
     deploy:
       resources:
         limits:
@@ -48,13 +46,11 @@ services:
 
   # AdService
   ad:
-    image: ${IMAGE_NAME}:${DEMO_VERSION}-ad
+    image: ${IMAGE_NAME}/ad:${DEMO_VERSION}
     container_name: ad
     build:
       context: ./
       dockerfile: ${AD_DOCKERFILE}
-      cache_from:
-        - ${IMAGE_NAME}:${IMAGE_VERSION}-ad
       args:
         OTEL_JAVA_AGENT_VERSION: ${OTEL_JAVA_AGENT_VERSION}
     deploy:
@@ -84,13 +80,11 @@ services:
 
   # Cart service
   cart:
-    image: ${IMAGE_NAME}:${DEMO_VERSION}-cart
+    image: ${IMAGE_NAME}/cart:${DEMO_VERSION}
     container_name: cart
     build:
       context: ./
       dockerfile: ${CART_DOCKERFILE}
-      cache_from:
-        - ${IMAGE_NAME}:${IMAGE_VERSION}-cart
     deploy:
       resources:
         limits:
@@ -119,13 +113,11 @@ services:
 
   # Checkout service
   checkout:
-    image: ${IMAGE_NAME}:${DEMO_VERSION}-checkout
+    image: ${IMAGE_NAME}/checkout:${DEMO_VERSION}
     container_name: checkout
     build:
       context: ./
       dockerfile: ${CHECKOUT_DOCKERFILE}
-      cache_from:
-        - ${IMAGE_NAME}:${IMAGE_VERSION}-checkout
     deploy:
       resources:
         limits:
@@ -172,13 +164,11 @@ services:
 
   # Currency service
   currency:
-    image: ${IMAGE_NAME}:${DEMO_VERSION}-currency
+    image: ${IMAGE_NAME}/currency:${DEMO_VERSION}
     container_name: currency
     build:
       context: ./
       dockerfile: ${CURRENCY_DOCKERFILE}
-      cache_from:
-        - ${IMAGE_NAME}:${IMAGE_VERSION}-currency
       args:
         OPENTELEMETRY_CPP_VERSION: ${OPENTELEMETRY_CPP_VERSION}
     deploy:
@@ -203,13 +193,11 @@ services:
 
   # Email service
   email:
-    image: ${IMAGE_NAME}:${DEMO_VERSION}-email
+    image: ${IMAGE_NAME}/email:${DEMO_VERSION}
     container_name: email
     build:
       context: ./
       dockerfile: ${EMAIL_DOCKERFILE}
-      cache_from:
-        - ${IMAGE_NAME}:${IMAGE_VERSION}-email
     deploy:
       resources:
         limits:
@@ -233,13 +221,11 @@ services:
 
   # Fraud Detection service
   fraud-detection:
-    image: ${IMAGE_NAME}:${DEMO_VERSION}-fraud-detection
+    image: ${IMAGE_NAME}/fraud-detection:${DEMO_VERSION}
     container_name: fraud-detection
     build:
       context: ./
       dockerfile: ${FRAUD_DOCKERFILE}
-      cache_from:
-        - ${IMAGE_NAME}:${IMAGE_VERSION}-fraud-detection
       args:
         OTEL_JAVA_AGENT_VERSION: ${OTEL_JAVA_AGENT_VERSION}
     deploy:
@@ -266,13 +252,11 @@ services:
 
   # Frontend
   frontend:
-    image: ${IMAGE_NAME}:${DEMO_VERSION}-frontend
+    image: ${IMAGE_NAME}/frontend:${DEMO_VERSION}
     container_name: frontend
     build:
       context: ./
       dockerfile: ${FRONTEND_DOCKERFILE}
-      cache_from:
-        - ${IMAGE_NAME}:${IMAGE_VERSION}-frontend
     deploy:
       resources:
         limits:
@@ -328,13 +312,11 @@ services:
 
   # Frontend Proxy (Envoy)
   frontend-proxy:
-    image: ${IMAGE_NAME}:${DEMO_VERSION}-frontend-proxy
+    image: ${IMAGE_NAME}/frontend-proxy:${DEMO_VERSION}
     container_name: frontend-proxy
     build:
       context: ./
       dockerfile: ${FRONTEND_PROXY_DOCKERFILE}
-      cache_from:
-        - ${IMAGE_NAME}:${IMAGE_VERSION}-frontend-proxy
     deploy:
       resources:
         limits:
@@ -381,13 +363,11 @@ services:
 
   # image-provider
   image-provider:
-    image: ${IMAGE_NAME}:${DEMO_VERSION}-image-provider
+    image: ${IMAGE_NAME}/image-provider:${DEMO_VERSION}
     container_name: image-provider
     build:
       context: ./
       dockerfile: ${IMAGE_PROVIDER_DOCKERFILE}
-      cache_from:
-        - ${IMAGE_NAME}:${IMAGE_VERSION}-image-provider
     deploy:
       resources:
         limits:
@@ -408,13 +388,11 @@ services:
 
   # Load Generator
   load-generator:
-    image: ${IMAGE_NAME}:${DEMO_VERSION}-load-generator
+    image: ${IMAGE_NAME}/load-generator:${DEMO_VERSION}
     container_name: load-generator
     build:
       context: ./
       dockerfile: ${LOAD_GENERATOR_DOCKERFILE}
-      cache_from:
-        - ${IMAGE_NAME}:${IMAGE_VERSION}-load-generator
     deploy:
       resources:
         limits:
@@ -447,13 +425,11 @@ services:
 
   # Payment service
   payment:
-    image: ${IMAGE_NAME}:${DEMO_VERSION}-payment
+    image: ${IMAGE_NAME}/payment:${DEMO_VERSION}
     container_name: payment
     build:
       context: ./
       dockerfile: ${PAYMENT_DOCKERFILE}
-      cache_from:
-        - ${IMAGE_NAME}:${IMAGE_VERSION}-payment
     deploy:
       resources:
         limits:
@@ -479,13 +455,11 @@ services:
 
   # Product Catalog service
   product-catalog:
-    image: ${IMAGE_NAME}:${DEMO_VERSION}-product-catalog
+    image: ${IMAGE_NAME}/product-catalog:${DEMO_VERSION}
     container_name: product-catalog
     build:
       context: ./
       dockerfile: ${PRODUCT_CATALOG_DOCKERFILE}
-      cache_from:
-        - ${IMAGE_NAME}:${IMAGE_VERSION}-product-catalog
     deploy:
       resources:
         limits:
@@ -515,13 +489,11 @@ services:
 
   # Product reviews service
   product-reviews:
-    image: ${IMAGE_NAME}:${DEMO_VERSION}-product-reviews
+    image: ${IMAGE_NAME}/product-reviews:${DEMO_VERSION}
     container_name: product-reviews
     build:
       context: ./
       dockerfile: ${PRODUCT_REVIEWS_DOCKERFILE}
-      cache_from:
-        - ${IMAGE_NAME}:${IMAGE_VERSION}-product-reviews
     deploy:
       resources:
         limits:
@@ -560,13 +532,11 @@ services:
 
   # Quote service
   quote:
-    image: ${IMAGE_NAME}:${DEMO_VERSION}-quote
+    image: ${IMAGE_NAME}/quote:${DEMO_VERSION}
     container_name: quote
     build:
       context: ./
       dockerfile: ${QUOTE_DOCKERFILE}
-      cache_from:
-        - ${IMAGE_NAME}:${IMAGE_VERSION}-quote
     deploy:
       resources:
         limits:
@@ -590,13 +560,11 @@ services:
 
   # Recommendation service
   recommendation:
-    image: ${IMAGE_NAME}:${DEMO_VERSION}-recommendation
+    image: ${IMAGE_NAME}/recommendation:${DEMO_VERSION}
     container_name: recommendation
     build:
       context: ./
       dockerfile: ${RECOMMENDATION_DOCKERFILE}
-      cache_from:
-        - ${IMAGE_NAME}:${IMAGE_VERSION}-recommendation
     deploy:
       resources:
         limits:
@@ -626,13 +594,11 @@ services:
 
   # Shipping service
   shipping:
-    image: ${IMAGE_NAME}:${DEMO_VERSION}-shipping
+    image: ${IMAGE_NAME}/shipping:${DEMO_VERSION}
     container_name: shipping
     build:
       context: ./
       dockerfile: ${SHIPPING_DOCKERFILE}
-      cache_from:
-        - ${IMAGE_NAME}:${IMAGE_VERSION}-shipping
     deploy:
       resources:
         limits:
@@ -686,13 +652,11 @@ services:
 
   # Flagd UI for configuring the feature flag service
   flagd-ui:
-    image: ${IMAGE_NAME}:${DEMO_VERSION}-flagd-ui
+    image: ${IMAGE_NAME}/flagd-ui:${DEMO_VERSION}
     container_name: flagd-ui
     build:
       context: ./
       dockerfile: ${FLAGD_UI_DOCKERFILE}
-      cache_from:
-        - ${IMAGE_NAME}:${IMAGE_VERSION}-flagd-ui
     deploy:
       resources:
         limits:
@@ -718,13 +682,11 @@ services:
 
   # Kafka used by Checkout, Accounting, and Fraud Detection services
   kafka:
-    image: ${IMAGE_NAME}:${DEMO_VERSION}-kafka
+    image: ${IMAGE_NAME}/kafka:${DEMO_VERSION}
     container_name: kafka
     build:
       context: ./
       dockerfile: ${KAFKA_DOCKERFILE}
-      cache_from:
-        - ${IMAGE_NAME}:${IMAGE_VERSION}-kafka
       args:
         OTEL_JAVA_AGENT_VERSION: ${OTEL_JAVA_AGENT_VERSION}
     deploy:
@@ -759,13 +721,11 @@ services:
 
   # LLM used by Product Review service
   llm:
-    image: ${IMAGE_NAME}:${DEMO_VERSION}-llm
+    image: ${IMAGE_NAME}/llm:${DEMO_VERSION}
     container_name: llm
     build:
       context: ./
       dockerfile: ${LLM_DOCKERFILE}
-      cache_from:
-        - ${IMAGE_NAME}:${IMAGE_VERSION}-llm
     deploy:
       resources:
         limits:
@@ -945,13 +905,11 @@ services:
 
   # OpenSearch
   opensearch:
-    image: ${IMAGE_NAME}:${DEMO_VERSION}-opensearch
+    image: ${IMAGE_NAME}/opensearch:${DEMO_VERSION}
     container_name: opensearch
     build:
       context: ./
       dockerfile: ${OPENSEARCH_DOCKERFILE}
-      cache_from:
-        - ${IMAGE_NAME}:${IMAGE_VERSION}-opensearch
     deploy:
       resources:
         limits:

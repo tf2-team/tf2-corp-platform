@@ -89,6 +89,7 @@ RUN groupadd -g 10001 appgroup && \
 
 # set runner ENV
 ENV MIX_ENV="prod"
+ENV PHX_SERVER=true
 
 # Only copy the final release from the build stage
 COPY --from=builder --chown=appuser:appgroup /app/_build/${MIX_ENV}/rel/flagd_ui ./
@@ -102,4 +103,4 @@ EXPOSE ${FLAGD_UI_PORT}
 # above and adding an entrypoint. See https://github.com/krallin/tini for details
 # ENTRYPOINT ["/tini", "--"]
 
-CMD ["/app/bin/server"]
+CMD ["/app/bin/flagd_ui", "start"]

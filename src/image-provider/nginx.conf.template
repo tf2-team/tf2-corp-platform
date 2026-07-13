@@ -16,6 +16,12 @@ http {
     otel_span_name image-provider;
 
 
+    client_body_temp_path /tmp/nginx/client_body;
+    proxy_temp_path /tmp/nginx/proxy;
+    fastcgi_temp_path /tmp/nginx/fastcgi;
+    uwsgi_temp_path /tmp/nginx/uwsgi;
+    scgi_temp_path /tmp/nginx/scgi;
+
     include /etc/nginx/mime.types;
     sendfile on;
     server {
@@ -33,7 +39,7 @@ http {
 
         location /status {
             stub_status on;
-            access_log  on;           
+            access_log  off;           
             allow all;
         }
     }

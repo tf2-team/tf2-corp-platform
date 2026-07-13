@@ -9,13 +9,12 @@ import PlatformFlag from '../PlatformFlag';
 
 const currentYear = new Date().getFullYear();
 
-const { userId } = SessionGateway.getSession();
-
 const Footer = () => {
   const [sessionId, setSessionId] = useState('');
 
   useEffect(() => {
-    setSessionId(userId);
+    // Read after mount so we use the localStorage-backed session, not SSR empty id.
+    setSessionId(SessionGateway.getSession().userId);
   }, []);
 
   return (

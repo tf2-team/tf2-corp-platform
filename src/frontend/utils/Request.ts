@@ -26,9 +26,22 @@ const request = async <T>({
 
   const responseText = await response.text();
 
-  if (!!responseText) return JSON.parse(responseText);
+  if (!response.ok) {
+    // API routes often return plain-text "Internal Server Error" on 500.
+    // Surface a clear Error instead of letting JSON.parse throw SyntaxError.
+    const snippet = responseText?.slice(0, 200) || response.statusText;
+    throw new Error(`Request failed ${response.status} ${response.statusText}: ${snippet}`);
+  }
 
-  return undefined as unknown as T;
+  if (!responseText) {
+    return undefined as unknown as T;
+  }
+
+  try {
+    return JSON.parse(responseText) as T;
+  } catch {
+    throw new Error(`Invalid JSON response from ${url}: ${responseText.slice(0, 200)}`);
+  }
 };
 
 export default request;

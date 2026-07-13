@@ -121,15 +121,16 @@ build-multiplatform:
 .PHONY: build-multiplatform-and-push
 build-multiplatform-and-push:
     # Because buildx bake does not support --env-file yet, we need to load it into the environment first.
-	set -a; . ./.env.override; set +a && docker buildx bake -f docker-compose.yml --push --set "*.platform=linux/amd64,linux/arm64"
+    # Pushes only the release group (21 deployable services, including opensearch); see docker-bake.hcl.
+	set -a; . ./.env.override; set +a && docker buildx bake -f docker-compose.yml -f docker-bake.hcl release --push
 
 .PHONY: clean-images
 clean-images:
-	@docker rmi $(shell docker images --filter=reference="nghiadaulau/techx-corp:1.0-*" -q); \
+	@docker rmi $$(docker images --filter=reference="*/techx-corp/*" --filter=reference="*/techx-dev-corp/*" -q) 2>/dev/null; \
     if [ $$? -ne 0 ]; \
     then \
     	echo; \
-        echo "Failed to removed 1 or more TechX Corp Platform images."; \
+        echo "Failed to remove 1 or more TechX Corp Platform images."; \
         echo "Check to ensure the Demo is not running by executing: make stop"; \
         false; \
     fi

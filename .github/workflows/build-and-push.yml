@@ -1,0 +1,745 @@
+# Copyright The OpenTelemetry Authors
+# SPDX-License-Identifier: Apache-2.0
+name: Build and push images
+
+# Job graph: CI → prepare → AWS/ECR preflight → 21-service build matrix → verify ECR
+#            → release-ready → update-chart-dev (development only)
+# Dev: after release-ready, direct-push default.image.tag to chart repo values-dev.yaml
+#      on branch techx-dev-corp (requires secret CHART_REPO_TOKEN).
+# Prod: still manual chart values PR (no automated write to values-prod.yaml).
+
+on:
+  push:
+    branches: [main, techx-dev-corp]
+    # Branch pushes: only when application sources under src/ change.
+    # Still builds the full 21-image release set (global Helm tag contract; no partial promotion).
+    # Tag pushes (v*) and workflow_dispatch always run (no path filter on those entry points).
+    paths:
+      - "src/**"
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      target_environment:
+        description: Target GitHub Environment (maps to ECR via environment variables)
+        required: true
+        type: choice
+        options:
+          - development
+          - production
+
+# Mapping:
+#   main / tags v*   → production  → ECR techx-corp
+#   techx-dev-corp   → development → ECR techx-dev-corp
+#   workflow_dispatch → chosen environment
+concurrency:
+  # Environment-scoped so prod/dev publishes do not cancel each other.
+  # yamllint disable-line rule:line-length
+  group: build-push-${{ github.event_name == 'workflow_dispatch' && inputs.target_environment || (startsWith(github.ref, 'refs/tags/v') && 'production' || (github.ref == 'refs/heads/main' && 'production' || 'development')) }}
+  # Do not cancel a running publish: a partial global tag set is unsafe for Helm promotion.
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # 1. Reusable CI — lint + unit tests must pass before any AWS auth or push
+  # ---------------------------------------------------------------------------
+  ci:
+    name: CI
+    uses: ./.github/workflows/ci.yml
+
+  # ---------------------------------------------------------------------------
+  # 2. prepare — resolve env/tag/matrix; validate bake catalog
+  # ---------------------------------------------------------------------------
+  prepare:
+    name: Prepare
+    needs: [ci]
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    outputs:
+      target_environment: ${{ steps.resolve.outputs.target_environment }}
+      version: ${{ steps.resolve.outputs.version }}
+      short_sha: ${{ steps.resolve.outputs.short_sha }}
+      services: ${{ steps.catalog.outputs.services }}
+      service_count: ${{ steps.catalog.outputs.service_count }}
+    steps:
+      - name: Checkout
+        # actions/checkout@v7.0.0
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
+
+      - name: Resolve environment and image version
+        id: resolve
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          REF: ${{ github.ref }}
+          REF_NAME: ${{ github.ref_name }}
+          SHA: ${{ github.sha }}
+          DISPATCH_ENV: ${{ inputs.target_environment }}
+        run: |
+          set -euo pipefail
+          SHORT_SHA="$(printf '%s' "${SHA}" | cut -c1-7)"
+
+          if [[ "${EVENT_NAME}" == "workflow_dispatch" ]]; then
+            TARGET_ENV="${DISPATCH_ENV}"
+          elif [[ "${REF}" == refs/tags/v* ]]; then
+            TARGET_ENV="production"
+          elif [[ "${REF}" == "refs/heads/main" ]]; then
+            TARGET_ENV="production"
+          else
+            TARGET_ENV="development"
+          fi
+
+          if [[ "${REF}" == refs/tags/v* ]]; then
+            VERSION="${REF_NAME}"
+          else
+            VERSION="sha-${SHORT_SHA}"
+          fi
+
+          {
+            echo "target_environment=${TARGET_ENV}"
+            echo "version=${VERSION}"
+            echo "short_sha=${SHORT_SHA}"
+          } >> "${GITHUB_OUTPUT}"
+
+          echo "target_environment=${TARGET_ENV}"
+          echo "version=${VERSION}"
+          echo "short_sha=${SHORT_SHA}"
+
+      - name: Validate release catalog and bake definition
+        id: catalog
+        env:
+          IMAGE_NAME: "validate.example/techx-corp"
+          DEMO_VERSION: "catalog-check"
+        run: |
+          set -euo pipefail
+
+          # Canonical release set (must match docker-bake.hcl group "release").
+          RELEASE_JSON='["accounting","ad","cart","checkout","currency","email","flagd-ui","fraud-detection","frontend","frontend-proxy","image-provider","kafka","llm","load-generator","opensearch","payment","product-catalog","product-reviews","quote","recommendation","shipping"]'
+
+          mapfile -t RELEASE < <(printf '%s' "${RELEASE_JSON}" | jq -r '.[]')
+
+          # Compose build targets (requires committed .env for Dockerfile vars).
+          # Preserve step env placeholders: `set -a; source .env` would otherwise
+          # overwrite them with local defaults (e.g. DEMO_VERSION=latest).
+          CI_IMAGE_NAME="${IMAGE_NAME}"
+          CI_DEMO_VERSION="${DEMO_VERSION}"
+          set -a
+          # shellcheck disable=SC1091
+          source .env
+          set +a
+          export IMAGE_NAME="${CI_IMAGE_NAME}"
+          export DEMO_VERSION="${CI_DEMO_VERSION}"
+
+          mapfile -t COMPOSE_BUILDS < <(
+            docker compose -f docker-compose.yml config --format json \
+              | jq -r '.services | to_entries[] | select(.value.build != null) | .key' \
+              | sort -u
+          )
+
+          # release must equal all compose build targets (no missing/extra services).
+          declare -A SEEN=()
+          for s in "${RELEASE[@]}"; do
+            if [[ -n "${SEEN[$s]+x}" ]]; then
+              echo "::error::Duplicate classification for service '${s}'"
+              exit 1
+            fi
+            SEEN[$s]=1
+          done
+
+          mapfile -t RELEASE_SORTED < <(printf '%s\n' "${RELEASE[@]}" | sort -u)
+          mapfile -t COMPOSE_SORTED < <(printf '%s\n' "${COMPOSE_BUILDS[@]}" | sort -u)
+
+          if [[ "${#RELEASE_SORTED[@]}" -ne "${#COMPOSE_SORTED[@]}" ]]; then
+            echo "::error::Catalog size mismatch: release=${#RELEASE_SORTED[@]} compose-builds=${#COMPOSE_SORTED[@]}"
+            echo "release:        ${RELEASE_SORTED[*]}"
+            echo "compose builds: ${COMPOSE_SORTED[*]}"
+            exit 1
+          fi
+
+          for i in "${!RELEASE_SORTED[@]}"; do
+            if [[ "${RELEASE_SORTED[$i]}" != "${COMPOSE_SORTED[$i]}" ]]; then
+              echo "::error::Catalog mismatch at index ${i}: release='${RELEASE_SORTED[$i]}' compose='${COMPOSE_SORTED[$i]}'"
+              echo "A newly added Compose build target must be listed in docker-bake.hcl group release."
+              exit 1
+            fi
+          done
+
+          if [[ "${#RELEASE[@]}" -ne 21 ]]; then
+            echo "::error::Expected 21 release services, got ${#RELEASE[@]}"
+            exit 1
+          fi
+
+          # Validate bake merge and print release definition.
+          BAKE_RAW="$(docker buildx bake -f docker-compose.yml -f docker-bake.hcl release --print)"
+          BAKE_JSON="${BAKE_RAW#"${BAKE_RAW%%\{*}"}"
+          if [[ -z "${BAKE_JSON}" || "${BAKE_JSON:0:1}" != "{" ]]; then
+            echo "::error::Failed to parse bake --print JSON"
+            echo "${BAKE_RAW}"
+            exit 1
+          fi
+          echo "${BAKE_JSON}" | jq -e '.group.release.targets | length == 21' >/dev/null
+
+          mapfile -t BAKE_TARGETS < <(echo "${BAKE_JSON}" | jq -r '.group.release.targets[]' | sort -u)
+          if [[ "${#BAKE_TARGETS[@]}" -ne 21 ]]; then
+            echo "::error::Bake release group has ${#BAKE_TARGETS[@]} unique targets (want 21)"
+            exit 1
+          fi
+
+          for svc in "${RELEASE[@]}"; do
+            platforms="$(echo "${BAKE_JSON}" | jq -r --arg t "${svc}" '
+              .target[$t].platforms // empty | if type == "array" then join(",") else . end
+            ')"
+            if [[ "${platforms}" != *"linux/amd64"* ]] || [[ "${platforms}" != *"linux/arm64"* ]]; then
+              echo "::error::Target '${svc}' missing required platforms (got: ${platforms})"
+              exit 1
+            fi
+
+            expected_ref="${IMAGE_NAME}/${svc}:buildcache"
+            # bake --print may emit cache entries as CSV strings or as objects {type,ref,...}.
+            cache_from_ok="$(echo "${BAKE_JSON}" | jq -r --arg t "${svc}" --arg ref "${expected_ref}" '
+              [.target[$t]["cache-from"] // empty | if type == "array" then .[] else . end]
+              | map(if type == "object" then .ref // empty else tostring end)
+              | any(. == $ref or contains($ref))
+            ')"
+            cache_to_ok="$(echo "${BAKE_JSON}" | jq -r --arg t "${svc}" --arg ref "${expected_ref}" '
+              [.target[$t]["cache-to"] // empty | if type == "array" then .[] else . end]
+              | map(if type == "object" then
+                  ((.ref // "") == $ref or ((.ref // "") | tostring | contains($ref)))
+                  and ((.mode // "") == "max" or (.mode // "") == "MAX")
+                else
+                  (tostring | contains($ref) and contains("mode=max"))
+                end)
+              | any(.)
+            ')"
+            if [[ "${cache_from_ok}" != "true" ]]; then
+              echo "::error::Target '${svc}' cache-from missing ${expected_ref}"
+              echo "${BAKE_JSON}" | jq --arg t "${svc}" '.target[$t]["cache-from"]'
+              exit 1
+            fi
+            if [[ "${cache_to_ok}" != "true" ]]; then
+              echo "::error::Target '${svc}' cache-to missing ${expected_ref} with mode=max"
+              echo "${BAKE_JSON}" | jq --arg t "${svc}" '.target[$t]["cache-to"]'
+              exit 1
+            fi
+          done
+
+          # Customized OpenSearch must be part of the release set (Helm pulls from ECR).
+          if ! echo "${BAKE_JSON}" | jq -e '.group.release.targets | index("opensearch")' >/dev/null 2>&1; then
+            echo "::error::opensearch must be in the release group"
+            exit 1
+          fi
+
+          SERVICES_OUT="$(printf '%s' "${RELEASE_JSON}" | jq -c '.')"
+          {
+            echo "services=${SERVICES_OUT}"
+            echo "service_count=${#RELEASE[@]}"
+          } >> "${GITHUB_OUTPUT}"
+
+          echo "Catalog OK: ${#RELEASE[@]} release = ${#COMPOSE_SORTED[@]} compose builds"
+          echo "Release services: ${RELEASE[*]}"
+
+  # ---------------------------------------------------------------------------
+  # 3. preflight — OIDC + ECR repository checks before expensive matrix jobs
+  # ---------------------------------------------------------------------------
+  preflight:
+    name: AWS/ECR preflight
+    needs: [prepare]
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment: ${{ needs.prepare.outputs.target_environment }}
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      AWS_REGION: ${{ vars.AWS_REGION || 'us-east-1' }}
+    steps:
+      - name: Validate environment configuration
+        env:
+          AWS_ROLE_ARN: ${{ vars.AWS_ROLE_ARN }}
+          IMAGE_NAME: ${{ vars.IMAGE_NAME }}
+          TARGET_ENV: ${{ needs.prepare.outputs.target_environment }}
+        run: |
+          set -euo pipefail
+          if [[ -z "${AWS_ROLE_ARN}" ]]; then
+            echo "::error::GitHub Environment variable AWS_ROLE_ARN is not set on '${TARGET_ENV}'. See docs/CICD.md."
+            exit 1
+          fi
+          if [[ -z "${IMAGE_NAME}" ]]; then
+            echo "::error::GitHub Environment variable IMAGE_NAME is not set on '${TARGET_ENV}'. See docs/CICD.md."
+            exit 1
+          fi
+          echo "IMAGE_NAME=${IMAGE_NAME}"
+          echo "AWS_ROLE_ARN is configured for environment ${TARGET_ENV}"
+
+      - name: Configure AWS credentials (OIDC)
+        # aws-actions/configure-aws-credentials@v6.2.2
+        uses: aws-actions/configure-aws-credentials@517a711dbcd0e402f90c77e7e2f81e849156e31d
+        with:
+          role-to-assume: ${{ vars.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Verify ECR repositories for release catalog
+        env:
+          IMAGE_NAME: ${{ vars.IMAGE_NAME }}
+          SERVICES_JSON: ${{ needs.prepare.outputs.services }}
+        run: |
+          set -euo pipefail
+          # IMAGE_NAME = REGISTRY/PROJECT (e.g. 123.dkr.ecr.region.amazonaws.com/techx-dev-corp)
+          PROJECT="${IMAGE_NAME#*/}"
+          if [[ -z "${PROJECT}" || "${PROJECT}" == "${IMAGE_NAME}" ]]; then
+            echo "::error::IMAGE_NAME must be REGISTRY/PROJECT, got: ${IMAGE_NAME}"
+            exit 1
+          fi
+
+          mapfile -t SERVICES < <(printf '%s' "${SERVICES_JSON}" | jq -r '.[]')
+          MISSING=()
+          for svc in "${SERVICES[@]}"; do
+            REPO="${PROJECT}/${svc}"
+            if ! aws ecr describe-repositories --repository-names "${REPO}" --region "${AWS_REGION}" >/dev/null 2>&1; then
+              MISSING+=("${REPO}")
+            else
+              echo "OK repository ${REPO}"
+            fi
+          done
+
+          if [[ "${#MISSING[@]}" -gt 0 ]]; then
+            echo "::error::Missing ECR repositories (${#MISSING[@]}):"
+            printf '  - %s\n' "${MISSING[@]}"
+            exit 1
+          fi
+          echo "All ${#SERVICES[@]} ECR repositories exist under project ${PROJECT}"
+
+  # ---------------------------------------------------------------------------
+  # 4. build matrix — one bake target per job, max-parallel 4
+  # ---------------------------------------------------------------------------
+  build:
+    name: Build ${{ matrix.service }}
+    needs: [prepare, preflight]
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    environment: ${{ needs.prepare.outputs.target_environment }}
+    permissions:
+      contents: read
+      id-token: write
+    strategy:
+      fail-fast: false
+      max-parallel: 21
+      matrix:
+        service: ${{ fromJson(needs.prepare.outputs.services) }}
+    env:
+      AWS_REGION: ${{ vars.AWS_REGION || 'us-east-1' }}
+    steps:
+      - name: Checkout
+        # actions/checkout@v7.0.0
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
+
+      - name: Free disk space
+        run: |
+          set -euo pipefail
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL || true
+          sudo docker image prune -af || true
+          df -h
+
+      - name: Configure AWS credentials (OIDC)
+        # aws-actions/configure-aws-credentials@v6.2.2
+        uses: aws-actions/configure-aws-credentials@517a711dbcd0e402f90c77e7e2f81e849156e31d
+        with:
+          role-to-assume: ${{ vars.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Login to Amazon ECR
+        # aws-actions/amazon-ecr-login@v2.1.6
+        uses: aws-actions/amazon-ecr-login@d539f0932e70871a027e9d5a9d8fc38589180a64
+
+      - name: Set up QEMU
+        # docker/setup-qemu-action@v4.2.0
+        uses: docker/setup-qemu-action@96fe6ef7f33517b61c61be40b68a1882f3264fb8
+
+      - name: Set up Docker Buildx
+        # docker/setup-buildx-action@v4.2.0
+        uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c
+        with:
+          driver-opts: |
+            image=moby/buildkit:buildx-stable-1
+          buildkitd-config: ./buildkitd.toml
+
+      - name: Build and push service
+        env:
+          IMAGE_NAME: ${{ vars.IMAGE_NAME }}
+          DEMO_VERSION: ${{ needs.prepare.outputs.version }}
+          IMAGE_VERSION: ${{ needs.prepare.outputs.version }}
+          SERVICE: ${{ matrix.service }}
+        run: |
+          set -euo pipefail
+          # Load Dockerfile paths and build args from committed .env.
+          # Do NOT source .env.override (may point at the test registry).
+          #
+          # Critical: .env sets DEMO_VERSION=latest and a default IMAGE_NAME for
+          # local Compose. Those must NOT clobber the immutable release identity
+          # resolved by prepare (sha-<7> / v*) or the environment's IMAGE_NAME.
+          # Previously `set -a; source .env` overwrote both, so images landed in
+          # ECR only as :latest while verify-ecr looked for :sha-XXXXXXX.
+          CI_IMAGE_NAME="${IMAGE_NAME}"
+          CI_DEMO_VERSION="${DEMO_VERSION}"
+          CI_IMAGE_VERSION="${IMAGE_VERSION}"
+
+          set -a
+          # shellcheck disable=SC1091
+          source .env
+          set +a
+
+          # Override local Compose defaults from .env with the CI release identity.
+          export IMAGE_NAME="${CI_IMAGE_NAME}"
+          export DEMO_VERSION="${CI_DEMO_VERSION}"
+          export IMAGE_VERSION="${CI_IMAGE_VERSION}"
+
+          echo "Baking service=${SERVICE}"
+          echo "  IMAGE_NAME=${IMAGE_NAME}"
+          echo "  DEMO_VERSION=${DEMO_VERSION}"
+          echo "  platforms=linux/amd64,linux/arm64 (from docker-bake.hcl)"
+          echo "  cache=${IMAGE_NAME}/${SERVICE}:buildcache"
+          echo "  runtime_tag=${IMAGE_NAME}/${SERVICE}:${DEMO_VERSION}"
+
+          docker buildx bake -f docker-compose.yml -f docker-bake.hcl "${SERVICE}" --push
+
+      - name: Job summary
+        if: always()
+        env:
+          IMAGE_NAME: ${{ vars.IMAGE_NAME }}
+          DEMO_VERSION: ${{ needs.prepare.outputs.version }}
+          SERVICE: ${{ matrix.service }}
+          SHORT_SHA: ${{ needs.prepare.outputs.short_sha }}
+          TARGET_ENV: ${{ needs.prepare.outputs.target_environment }}
+        run: |
+          {
+            echo "## Build ${SERVICE}"
+            echo ""
+            echo "| Field | Value |"
+            echo "|---|---|"
+            echo "| Environment | \`${TARGET_ENV}\` |"
+            echo "| Service | \`${SERVICE}\` |"
+            echo "| Image | \`${IMAGE_NAME}/${SERVICE}:${DEMO_VERSION}\` |"
+            echo "| Cache | \`${IMAGE_NAME}/${SERVICE}:buildcache\` |"
+            echo "| Commit | \`${SHORT_SHA}\` |"
+          } >> "${GITHUB_STEP_SUMMARY}"
+
+  # ---------------------------------------------------------------------------
+  # 5. verify ECR — only after every matrix entry succeeds
+  # ---------------------------------------------------------------------------
+  verify-ecr:
+    name: Verify ECR tags
+    needs: [prepare, preflight, build]
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    environment: ${{ needs.prepare.outputs.target_environment }}
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      AWS_REGION: ${{ vars.AWS_REGION || 'us-east-1' }}
+    steps:
+      - name: Configure AWS credentials (OIDC)
+        # aws-actions/configure-aws-credentials@v6.2.2
+        uses: aws-actions/configure-aws-credentials@517a711dbcd0e402f90c77e7e2f81e849156e31d
+        with:
+          role-to-assume: ${{ vars.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Describe every promoted release tag
+        env:
+          IMAGE_NAME: ${{ vars.IMAGE_NAME }}
+          DEMO_VERSION: ${{ needs.prepare.outputs.version }}
+          SERVICES_JSON: ${{ needs.prepare.outputs.services }}
+        run: |
+          set -euo pipefail
+          PROJECT="${IMAGE_NAME#*/}"
+          mapfile -t SERVICES < <(printf '%s' "${SERVICES_JSON}" | jq -r '.[]')
+
+          MISSING=()
+          FOUND=()
+          {
+            echo "## ECR verification for \`${DEMO_VERSION}\`"
+            echo ""
+            echo "| Service | Repository | Digest |"
+            echo "|---|---|---|"
+          } >> "${GITHUB_STEP_SUMMARY}"
+
+          for svc in "${SERVICES[@]}"; do
+            REPO="${PROJECT}/${svc}"
+            if DESC="$(aws ecr describe-images \
+              --repository-name "${REPO}" \
+              --image-ids "imageTag=${DEMO_VERSION}" \
+              --region "${AWS_REGION}" \
+              --output json 2>/dev/null)"; then
+              DIGEST="$(printf '%s' "${DESC}" | jq -r '.imageDetails[0].imageDigest // "unknown"')"
+              FOUND+=("${svc}")
+              echo "| \`${svc}\` | \`${REPO}\` | \`${DIGEST}\` |" >> "${GITHUB_STEP_SUMMARY}"
+              echo "OK ${REPO}:${DEMO_VERSION} digest=${DIGEST}"
+            else
+              MISSING+=("${svc}")
+              echo "| \`${svc}\` | \`${REPO}\` | **MISSING** |" >> "${GITHUB_STEP_SUMMARY}"
+              echo "MISSING ${REPO}:${DEMO_VERSION}"
+            fi
+          done
+
+          {
+            echo ""
+            echo "Found: ${#FOUND[@]} / ${#SERVICES[@]}"
+          } >> "${GITHUB_STEP_SUMMARY}"
+
+          if [[ "${#MISSING[@]}" -gt 0 ]]; then
+            echo "::error::Missing ECR images for tag ${DEMO_VERSION} (${#MISSING[@]}): ${MISSING[*]}"
+            exit 1
+          fi
+          echo "All ${#SERVICES[@]} release images present for tag ${DEMO_VERSION}"
+
+  # ---------------------------------------------------------------------------
+  # 6. release-ready — sole gate for chart promotion (auto-dev or manual-prod)
+  # ---------------------------------------------------------------------------
+  release-ready:
+    name: Release ready
+    if: always()
+    needs: [ci, prepare, preflight, build, verify-ecr]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Evaluate release gate
+        env:
+          CI_RESULT: ${{ needs.ci.result }}
+          PREPARE_RESULT: ${{ needs.prepare.result }}
+          PREFLIGHT_RESULT: ${{ needs.preflight.result }}
+          BUILD_RESULT: ${{ needs.build.result }}
+          VERIFY_RESULT: ${{ needs.verify-ecr.result }}
+          VERSION: ${{ needs.prepare.outputs.version }}
+          SHORT_SHA: ${{ needs.prepare.outputs.short_sha }}
+          TARGET_ENV: ${{ needs.prepare.outputs.target_environment }}
+          SERVICE_COUNT: ${{ needs.prepare.outputs.service_count }}
+        run: |
+          set -euo pipefail
+          {
+            echo "## Release-ready gate"
+            echo ""
+            echo "| Job | Result |"
+            echo "|---|---|"
+            echo "| ci | \`${CI_RESULT}\` |"
+            echo "| prepare | \`${PREPARE_RESULT}\` |"
+            echo "| preflight | \`${PREFLIGHT_RESULT}\` |"
+            echo "| build | \`${BUILD_RESULT}\` |"
+            echo "| verify-ecr | \`${VERIFY_RESULT}\` |"
+            echo ""
+            echo "| Field | Value |"
+            echo "|---|---|"
+            echo "| Environment | \`${TARGET_ENV}\` |"
+            echo "| Tag | \`${VERSION}\` |"
+            echo "| Commit | \`${SHORT_SHA}\` |"
+            echo "| Services | \`${SERVICE_COUNT}\` |"
+            echo ""
+            if [[ "${TARGET_ENV}" == "development" ]]; then
+              echo "On success, **update-chart-dev** will direct-push \`default.image.tag\` to the chart repo."
+            else
+              echo "Production: this gate permits a **manual** chart values PR only (no automated chart write)."
+            fi
+            echo "This workflow does **not** deploy Helm resources or open production chart PRs."
+          } >> "${GITHUB_STEP_SUMMARY}"
+
+          FAILED=0
+          for pair in "ci:${CI_RESULT}" "prepare:${PREPARE_RESULT}" "preflight:${PREFLIGHT_RESULT}" "build:${BUILD_RESULT}" "verify-ecr:${VERIFY_RESULT}"; do
+            name="${pair%%:*}"
+            result="${pair#*:}"
+            if [[ "${result}" != "success" ]]; then
+              echo "::error::Release gate failed: job '${name}' result='${result}' (want success)"
+              FAILED=1
+            fi
+          done
+
+          if [[ "${FAILED}" -ne 0 ]]; then
+            echo "Release is NOT ready. Do not promote chart values."
+            exit 1
+          fi
+
+          echo "Release is ready (tag=${VERSION}, env=${TARGET_ENV})."
+
+  # ---------------------------------------------------------------------------
+  # 7. update-chart-dev — direct-push image tag to chart values-dev.yaml
+  #    Runs only after release-ready succeeds for the development environment.
+  #    Requires repository secret CHART_REPO_TOKEN (contents:write on chart repo).
+  # ---------------------------------------------------------------------------
+  update-chart-dev:
+    name: Update chart values-dev tag
+    needs: [prepare, release-ready]
+    if: >
+      needs.release-ready.result == 'success' &&
+      needs.prepare.outputs.target_environment == 'development'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    env:
+      # Override via repository variables if remotes/branch names differ.
+      CHART_REPO: ${{ vars.CHART_REPO || 'tf2-team/tf2-corp-chart' }}
+      CHART_BRANCH: ${{ vars.CHART_BRANCH || 'techx-dev-corp' }}
+      VERSION: ${{ needs.prepare.outputs.version }}
+      SHORT_SHA: ${{ needs.prepare.outputs.short_sha }}
+      PLATFORM_SHA: ${{ github.sha }}
+      PLATFORM_RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+    steps:
+      - name: Require CHART_REPO_TOKEN
+        env:
+          CHART_REPO_TOKEN: ${{ secrets.CHART_REPO_TOKEN }}
+        run: |
+          set -euo pipefail
+          if [[ -z "${CHART_REPO_TOKEN}" ]]; then
+            echo "::error::Secret CHART_REPO_TOKEN is not set. Create a fine-grained PAT (or classic PAT) with contents:write on ${CHART_REPO}, add it as a repository secret, then re-run. See docs/CICD.md."
+            exit 1
+          fi
+
+      - name: Checkout chart repository
+        # actions/checkout@v7.0.0
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
+        with:
+          repository: ${{ env.CHART_REPO }}
+          ref: ${{ env.CHART_BRANCH }}
+          token: ${{ secrets.CHART_REPO_TOKEN }}
+          path: chart
+          # Fetch enough history for rebase retries against concurrent pushes.
+          fetch-depth: 20
+
+      - name: Update default.image.tag and push
+        working-directory: chart
+        run: |
+          set -euo pipefail
+
+          FILE="values-dev.yaml"
+          if [[ ! -f "${FILE}" ]]; then
+            echo "::error::${FILE} not found in ${CHART_REPO}@${CHART_BRANCH}"
+            exit 1
+          fi
+
+          # Precise in-place update of default.image.tag only (preserve comments/layout).
+          python3 - <<'PY'
+          import os
+          import re
+          import sys
+          from pathlib import Path
+
+          path = Path("values-dev.yaml")
+          text = path.read_text(encoding="utf-8")
+          version = os.environ["VERSION"]
+
+          pattern = re.compile(
+              r"(^default:\n"
+              r"  image:\n"
+              r"    repository:[^\n]+\n"
+              r"(?:    #[^\n]*\n)*"
+              r"    tag:\s*)\"[^\"]*\"",
+              re.MULTILINE,
+          )
+          match = pattern.search(text)
+          if not match:
+              print(
+                  "::error::Could not locate default.image.tag under default.image in values-dev.yaml",
+                  file=sys.stderr,
+              )
+              sys.exit(1)
+
+          current_match = re.search(r'tag:\s*"([^"]*)"', match.group(0))
+          current = current_match.group(1) if current_match else ""
+          print(f"current_tag={current}")
+          print(f"new_tag={version}")
+
+          if current == version:
+              Path(".tag-unchanged").write_text("1", encoding="utf-8")
+              print("Tag already up to date; no commit needed.")
+              sys.exit(0)
+
+          new_text, n = pattern.subn(rf'\1"{version}"', text, count=1)
+          if n != 1:
+              print(f"::error::Expected 1 replacement, got {n}", file=sys.stderr)
+              sys.exit(1)
+
+          path.write_text(new_text, encoding="utf-8")
+          print(f"Updated default.image.tag: {current} → {version}")
+          PY
+
+          if [[ -f .tag-unchanged ]]; then
+            {
+              echo "## Chart values-dev update"
+              echo ""
+              echo "No change: \`default.image.tag\` already \`${VERSION}\` on \`${CHART_REPO}@${CHART_BRANCH}\`."
+            } >> "${GITHUB_STEP_SUMMARY}"
+            exit 0
+          fi
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          git add "${FILE}"
+          if git diff --cached --quiet; then
+            echo "Working tree clean after update; nothing to commit."
+            exit 0
+          fi
+
+          git commit -m "chore(dev): promote image tag to ${VERSION}" \
+            -m "Automated by platform build after release-ready." \
+            -m "Platform commit: ${PLATFORM_SHA}" \
+            -m "Workflow: ${PLATFORM_RUN_URL}"
+
+          # checkout action already configured origin with CHART_REPO_TOKEN credentials.
+          # Retry push with rebase if another bot/human commit landed first.
+          ATTEMPTS=5
+          for attempt in $(seq 1 "${ATTEMPTS}"); do
+            if git push origin "HEAD:${CHART_BRANCH}"; then
+              echo "Pushed default.image.tag=${VERSION} to ${CHART_REPO}@${CHART_BRANCH}"
+              {
+                echo "## Chart values-dev update"
+                echo ""
+                echo "| Field | Value |"
+                echo "|---|---|"
+                echo "| Repository | \`${CHART_REPO}\` |"
+                echo "| Branch | \`${CHART_BRANCH}\` |"
+                echo "| File | \`values-dev.yaml\` |"
+                echo "| Tag | \`${VERSION}\` |"
+                echo "| Mode | direct push |"
+                echo ""
+                echo "Argo CD (\`techx-corp-dev\`) will auto-sync after this commit lands."
+              } >> "${GITHUB_STEP_SUMMARY}"
+              exit 0
+            fi
+            echo "Push rejected (attempt ${attempt}/${ATTEMPTS}); pulling with rebase..."
+            git fetch origin "${CHART_BRANCH}"
+            git rebase "origin/${CHART_BRANCH}"
+
+            # Re-apply tag after rebase in case remote also touched values-dev.yaml.
+            python3 - <<'PY'
+          import os
+          import re
+          import sys
+          from pathlib import Path
+
+          path = Path("values-dev.yaml")
+          text = path.read_text(encoding="utf-8")
+          version = os.environ["VERSION"]
+          pattern = re.compile(
+              r"(^default:\n"
+              r"  image:\n"
+              r"    repository:[^\n]+\n"
+              r"(?:    #[^\n]*\n)*"
+              r"    tag:\s*)\"[^\"]*\"",
+              re.MULTILINE,
+          )
+          if not pattern.search(text):
+              print("::error::values-dev.yaml lost default.image.tag after rebase", file=sys.stderr)
+              sys.exit(1)
+          path.write_text(pattern.sub(rf'\1"{version}"', text, count=1), encoding="utf-8")
+          PY
+            git add "${FILE}"
+            if ! git diff --cached --quiet; then
+              # Keep a single promote commit on top after resolving concurrent updates.
+              git commit --amend --no-edit
+            fi
+          done
+
+          echo "::error::Failed to push to ${CHART_REPO}@${CHART_BRANCH} after ${ATTEMPTS} attempts"
+          exit 1

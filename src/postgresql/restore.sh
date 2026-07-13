@@ -1,4 +1,6 @@
-#!/bin/bash
+#!/bin/sh
+# Copyright The OpenTelemetry Authors
+# SPDX-License-Identifier: Apache-2.0
 # Restore script for postgresql in docker-compose
 # Ensure you are running this from the project root.
 

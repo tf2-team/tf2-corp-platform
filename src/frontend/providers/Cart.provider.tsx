@@ -43,6 +43,8 @@ const CartProvider = ({ children }: IProps) => {
   const { data: cart = { userId: '', items: [] } } = useQuery({
     queryKey: ['cart', selectedCurrency],
     queryFn: () => ApiGateway.getCart(selectedCurrency),
+    // Wait for a real currency so we don't race an empty SSR default into the cart query.
+    enabled: Boolean(selectedCurrency),
   });
   const addCartMutation = useMutation({
     mutationFn: ApiGateway.addCartItem,
