@@ -95,9 +95,9 @@ A2.2 liên quan đến A1.1 (A2.2 cần A1.1 vì Q&A cũng phải có grounding/
     ```json
     {
       "results": [
-        { 
-          "id": "OLJCESPC7Z", 
-          "name": "National Park Foundation Explorascope", 
+        {
+          "id": "OLJCESPC7Z",
+          "name": "National Park Foundation Explorascope",
           "price_usd": { "units": 101, "nanos": 960000000 } //Giá theo format product_catelog trong database
         }
       ]

@@ -1,6 +1,6 @@
 # Day 1 Result - Define Grounded AI Response and Safety Contract
 
-- **Developer:** Hoàng Huy 
+- **Developer:** Hoàng Huy
 - **Task:** Task 1
 
 ## 1. Kết quả
