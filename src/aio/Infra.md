@@ -43,7 +43,7 @@ flowchart LR
 
     GRAFANA -->|independent hard SLO route| ONCALL
 
-    AIOPS -->|/metrics aiops_*| PROM
+    AIOPS -->|OTLP aiops_* self-metrics| OTEL
 ```
 
 ## EKS Deployment Và RBAC Boundary
@@ -67,6 +67,7 @@ flowchart TB
         end
 
         KAPI["Kubernetes API"]
+        OTEL["OpenTelemetry Collector"]
         PROM["Prometheus"]
         GRAFANA["Grafana"]
         JAEGER["Jaeger"]
@@ -79,7 +80,7 @@ flowchart TB
     SVC --> POD
 
     GRAFANA -->|POST /api/v1/events/grafana<br/>secret/HMAC auth| SVC
-    PROM -->|scrape /metrics or OTLP path via collector| SVC
+    POD -->|OTLP aiops_* self-metrics| OTEL
 
     POD -->|query metrics| PROM
     POD -.->|incident enrichment| JAEGER

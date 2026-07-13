@@ -1,10 +1,10 @@
 # TF2 / AIO4 AIOps Architecture
 
-> **Status:** Proposed implementation baseline  
+> **Status:** Selected implementation baseline; ADR sign-off and live EKS evidence pending
 > **Owners:** AIO4 AIOps sub-team (3 members)  
 > **Target environment:** TF2 on AWS EKS  
 > **Planning window:** July 6-24, 2026  
-> **Last updated:** July 10, 2026
+> **Last updated:** July 13, 2026
 
 This document defines the complete AIOps pipeline, runtime boundaries, safety model, data contracts, deployment model, and target folder structure for AIO4 in TF2. The matching delivery sequence is in [implement_plan.md](implement_plan.md).
 
@@ -81,13 +81,15 @@ These rules keep the design from becoming a template-only or mock implementation
 - Dry-run recommendations are real operational outputs from real telemetry. They are non-mutating by policy, not mock incidents.
 - Phase 3 policy constants such as official SLO objectives are intentionally versioned as policy-as-code. Environment facts such as endpoints, metric mappings, labels, deployment topology, evidence-derived thresholds, resource sizes, and action targets are configuration backed by deployment evidence, never Python constants.
 
-### 3.2 Later implementation decisions and gates
+### 3.2 Recorded implementation decisions and remaining gates
 
-These integration decisions are intentionally left for later consideration because they require deployed evidence or CDO ownership that is not available in this repository. They must not be replaced with mocks, guessed values, or silent fallbacks:
+The team selected the following baseline on July 13, 2026 after inspecting the cloned platform and chart repositories. Repository evidence selects the design, but it does not replace the live EKS queries, rendered manifests, Argo status, CDO review, and signed ADR evidence required for acceptance.
 
-1. **AIOps self-metrics ingestion.** Before P0 self-observability is accepted, `ADR-DEPLOY-001` must select and prove one real path: either the deployed OpenTelemetry Collector scrapes the AIOps `/metrics` endpoint with a Prometheus receiver, or the runtime exports its metrics through OTLP to the existing collector. Merely exposing `/metrics` is insufficient. Verification must query real `aiops_*` series in TF2 Prometheus and fire the independent runtime-loss alert.
-2. **TF2 deployment-chart ownership.** Before EKS deployment, `ADR-DEPLOY-001` must identify the actual CDO-owned chart repository, immutable revision, owner, and checkout used to deploy TF2. Deployment source files may be developed under `tf2-corp-platform/src/aio/`, but they cannot be treated as active until the real chart consumes them. The `phase3/techx-corp-chart` reference copy must never be edited or deployed by assumption.
-3. **Live-remediation approval and execution identity.** Mandatory P0 remains dry-run-first and may finish dry-run-only with a signed safety decision. Before `live-approved` is enabled, `ADR-LIVE-001` must define one exact action, an auditable expiring approval provider, and the Kubernetes execution boundary. Prefer a separate narrowly scoped executor workload and ServiceAccount; any alternative must prove that the ordinary runtime remains read-only. A boolean setting, fixture approval, or temporarily broad RoleBinding is not valid.
+1. **AIOps self-metrics use OTLP.** The production path is `aiops-runtime -> OTLP -> existing OpenTelemetry Collector -> Prometheus`. The inspected chart already configures an OTLP receiver in the collector metrics pipeline and exports that pipeline to the Prometheus OTLP endpoint. The runtime still exposes `/metrics` for diagnostics and compatibility, but that endpoint is not the selected production ingestion path. Before P0 self-observability is accepted, `ADR-DEPLOY-001` must link the deployed collector revision, a real TF2 query returning qualified `aiops_*` series, and an independent Grafana runtime-loss alert delivered without depending on the AIOps runtime.
+2. **TF2 deployment uses the separate CDO-owned GitOps chart.** The selected repository is `https://github.com/tf2-team/tf2-corp-chart.git`. The inspected baseline was commit `6c49c645a03922d763dd77e54cfe1db6227eaf16` on `main`; its production Argo CD Application is `techx-corp`, release `techx-corp`, namespace `techx-corp-prod`, using `values.yaml`, `values-public-alb.yaml`, and `values-prod.yaml`. AIOps runtime source, image build, production configuration, and runbooks remain in `tf2-corp-platform`; dedicated AIOps Deployment, Service, ConfigMap/PVC, NetworkPolicy, read-only RBAC, and Grafana mounts must be added to and reviewed in the chart repository. The inspected chart currently has no AIOps workload, so EKS deployment remains gated until a chart commit is rendered, reviewed by its CODEOWNER/CDO owner, merged, synchronized by Argo CD, and proven live. The `phase3/techx-corp-chart` copy remains reference-only.
+3. **P0 uses real dry-run remediation; live remediation is deferred, not removed.** The selected initial production mode is `dry-run`. P0 must continuously complete detection, qualification, correlation, incident creation, safety evaluation, a real non-mutating action proposal, audit, verification evaluation, and human escalation using real TF2 telemetry and routing. This is the team's safe initial implementation of the Phase 3 response loop. The team keeps one gated live action as the later acceptance target for its full Phase 3 live-remediation demonstration, but will transition only when every `ADR-SAFETY-001` and `ADR-LIVE-001` gate is satisfied with live evidence and CDO approval. Until then, the chart must contain no executor workload, mutation ServiceAccount, mutation Role, or RoleBinding. A temporary `N -> N+1 -> N` change for one exact stateless Deployment may be evaluated as a future candidate, but it is not approved: the target must be multi-replica, not controlled by an HPA, within current budget and error-budget policy, deterministically verifiable, and reversibly restored to the captured replica count.
+
+These decisions must not be replaced with mocks, guessed values, boolean approvals, fixture evidence, silent fallbacks, or temporarily broad credentials. If live deployed evidence conflicts with the inspected repositories, fail closed, record the conflict, and revise the applicable ADR before implementation continues.
 
 ## 4. System context
 
@@ -138,8 +140,7 @@ flowchart LR
     GRAFANA -->|independent hard-SLO route| ONCALL[TF2 on-call channel]
     AIOPS -->|normalized incidents| ONCALL
     AIOPS --> STORE[(Incident and audit store)]
-    AIOPS --> METRICS[AIOps /metrics]
-    METRICS --> PROM
+    AIOPS -->|OTLP aiops_* self-metrics| OTEL
 ```
 
 The direct Grafana-to-on-call route is deliberate. A broken AIOps runtime must not hide an official SLO breach.
@@ -913,7 +914,7 @@ The mandatory Phase 3 AIOps baseline is implemented when all of the following ar
 - Incidents are deduplicated, correlated, linked to evidence/runbooks, and durably audited.
 - The default response loop completes `detect -> safety check -> dry-run -> verify/escalate`.
 - Prohibited actions are proven rejected; no broad mutation RBAC exists.
-- Live action is absent by default. A signed dry-run-only safety decision is an acceptable P0 result.
+- Live action is absent from the current P0 baseline. The signed dry-run decision remains authoritative until the planned later live-remediation transition satisfies every gate.
 - Controlled replay tests reproduce detection, routing, recommendation, verification, audit, and escalation.
 - At least one authenticated controlled event traverses the deployed EKS production wiring with real Prometheus/Grafana, notification, persistence, and verification adapters; replay-only success is insufficient.
 - The production image and rendered manifests prove that test adapters/fixtures are absent from runtime packaging and that every enabled value has a recorded configuration or evidence source.
@@ -958,6 +959,6 @@ Before production dry-run, sign and index:
 4. `ADR-ROUTING-001` — severity, fingerprint/grouping, real contact point, retries, and backup route.
 5. `ADR-DEPLOY-001` — actual TF2 chart repository/revision, EKS namespace, URLs, PVC/storage trade-off, resources, security context, and ownership.
 6. `ADR-THRESHOLD-DB-001` — discovered PostgreSQL `max_connections`, baseline, approved warning threshold, and evidence.
-7. Optional `ADR-LIVE-001` — the one exact live action, or a signed conclusion that the project remains dry-run only.
+7. `ADR-LIVE-001` — the current dry-run decision and the requirements for the planned later transition to one exact live action.
 
 Open values that must come from deployment evidence rather than guesswork are the final Prometheus metric/label mappings, DB threshold, statistical anomaly thresholds, alert channel, namespace URLs, resource sizing, AIE correctness interface, cost freshness interface, and any live-action candidate.

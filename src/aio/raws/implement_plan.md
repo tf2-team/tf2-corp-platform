@@ -38,7 +38,7 @@ The complete result must include:
 - Durable incident state, deduplication, recovery, and audit history.
 - Real alert routing with runbook, dashboard, trace, and log-query links.
 - Dry-run-first remediation with hard safety gates.
-- Optional live execution only for one explicitly approved action; dry-run-only is valid when no action passes the gates.
+- Current P0 execution is dry-run; the planned later live transition permits only one explicitly approved action after every gate passes.
 - Runtime self-observability, EKS deployment assets, reproducible tests, and an evidence pack.
 
 ## 2. Non-negotiable implementation rules
@@ -74,17 +74,17 @@ The deployable service must be wired to real TF2 infrastructure, not sample data
 
 - `tf2-corp-platform` is the delivery repository for runtime code and local/Docker Grafana assets.
 - `tf2-corp-platform/docs/aiops` is the delivery location for ADRs, evaluations, Ops Reviews, postmortems, and evidence indexes; it links to canonical runbooks in `tf2-corp-platform/src/aio/runbooks/`, and the runtime never reads it.
-- `phase3/techx-corp-chart` is upstream reference material unless CDO explicitly identifies it as a writable delivery repository.
-- `ADR-DEPLOY-001` must record the URL, immutable revision, owner, and local checkout root of the chart repository that actually deploys TF2. Refer to that checkout as `TF2_CHART_ROOT` in commands and documentation.
+- `phase3/techx-corp-chart` is upstream reference material and is not the TF2 delivery repository.
+- The verified delivery checkout is the clean sibling `tf2-corp-chart`, remote `https://github.com/tf2-team/tf2-corp-chart.git`. The inspected baseline is commit `6c49c645a03922d763dd77e54cfe1db6227eaf16` on `main`; refer to this checkout as `TF2_CHART_ROOT` in commands and documentation. `ADR-DEPLOY-001` must additionally record the later implementing commit and live Argo sync revision.
 - Stop deployment work if `TF2_CHART_ROOT` is uncommitted, points at the Phase 3 reference by accident, or cannot render the currently deployed TF2 release. This prevents a locally edited template from being mistaken for a real EKS delivery.
 
-### 2.3 Later implementation decisions and gates
+### 2.3 Recorded decisions and remaining acceptance gates
 
-Carry these unresolved integrations as explicit later-consideration items. Do not fill them with mock endpoints, guessed chart paths, placeholder approvals, or permissive credentials:
+The July 13 repository review selected the implementation direction below. Do not replace the remaining live-environment gates with mock endpoints, guessed revisions, placeholder approvals, or permissive credentials:
 
-1. **AIOps self-metrics ingestion:** before P0 self-observability acceptance, choose either a deployed OpenTelemetry Collector Prometheus receiver that scrapes `/metrics`, or OTLP metric export from the runtime to the existing collector. Record the selected path in `ADR-DEPLOY-001`, query real `aiops_*` series in TF2 Prometheus, and prove the independent runtime-loss alert. Exposing `/metrics` alone is not completion.
-2. **TF2 chart ownership:** before EKS deployment, complete `ADR-DEPLOY-001` with the real CDO-owned chart URL, immutable revision, owner, and checkout. AIOps deployment source can be prepared in this repository, but it is not deployable evidence until the actual TF2 chart consumes it. Never treat `phase3/techx-corp-chart` as writable by assumption.
-3. **Live-remediation approval and executor:** P0 may close dry-run-only with a signed safety decision. Before `live-approved`, complete `ADR-LIVE-001` with one exact action, a real audited and expiring approval provider, and a separate least-privilege execution boundary. Prefer a dedicated executor workload/ServiceAccount so the ordinary AIOps runtime stays read-only; document and prove any alternative.
+1. **AIOps self-metrics ingestion:** implement OTLP metric export from `aiops-runtime` to the existing collector, which already receives OTLP metrics and exports them to the Prometheus OTLP endpoint in the inspected chart. Continue to expose `/metrics`, but do not count that endpoint alone as ingestion evidence. Complete `ADR-DEPLOY-001` with the deployed collector revision, query real qualified `aiops_*` series in TF2 Prometheus, and prove the independent runtime-loss alert.
+2. **TF2 chart ownership:** use `https://github.com/tf2-team/tf2-corp-chart.git`, with the inspected baseline `6c49c645a03922d763dd77e54cfe1db6227eaf16` on `main`. Production GitOps declares Argo Application/release `techx-corp`, namespace `techx-corp-prod`, and the base/public/prod values layers. Add dedicated AIOps resources to that repository through its CODEOWNER/CDO review; the current inspected revision has no AIOps workload. Record the implementing chart commit and live Argo sync revision in `ADR-DEPLOY-001`. Never deploy the Phase 3 reference copy by assumption.
+3. **Remediation mode:** implement P0 as a real continuous dry-run response loop. Record this current choice in `ADR-SAFETY-001` and `ADR-LIVE-001`. Live remediation remains planned for a later gated transition after one exact action, real audited expiring approval, separate least-privilege executor, live target evidence, cost/error-budget permission, deterministic verification, rollback, cooldown, and CDO approval all exist. No mutation identity is deployed in the dry-run baseline.
 
 ## 3. Dependency-ordered implementation sequence
 
@@ -1532,7 +1532,7 @@ aiops/
 │   ├── ADR-ROUTING-001.md
 │   ├── ADR-DEPLOY-001.md
 │   ├── ADR-THRESHOLD-DB-001.md
-│   └── ADR-LIVE-001.md              # or dry-run-only decision
+│   └── ADR-LIVE-001.md              # current dry-run + later live gate
 ├── topology/
 ├── eval/
 ├── ops-reviews/
@@ -1605,7 +1605,7 @@ P0 is the required Phase 3 baseline. Conditional P1/P2 items below do not block 
 - [ ] Flagd/OpenFeature, stateful, single-replica, DB, Secret, broad-RBAC, unsafe-scale, and unverifiable actions are rejected.
 - [ ] Cooldown, maximum attempts, one-live-action lock, approval expiry/digest, and restart behavior are tested.
 - [ ] Each response ends in verified success, rollback, failure, or escalation; never an untracked state.
-- [ ] Live action is absent by default and the dry-run-only safety decision is signed.
+- [ ] Live action is absent from the P0 baseline, the dry-run decision is signed, and the later live-remediation gate remains documented.
 
 #### Deployment and security
 
@@ -1634,7 +1634,7 @@ P1 is admitted only after all mandatory P0 checks pass. Report only the P1 capab
 - [ ] Enabled high-risk flag signatures use qualified real symptoms and canonical runbooks; protected flag state is never read, changed, or exercised without authorization.
 - [ ] LLM operational visibility uses verified TF2 signals and reports unavailable GenAI/token data as `N/A`.
 - [ ] Extended checkout topology and likely-cause ranking match current source, traces, and deployed state.
-- [ ] If a live action is delivered, `ADR-LIVE-001` defines one exact action, real expiring approval provider, separate least-privilege executor identity, verification, rollback, cost, error-budget, and audit evidence. Otherwise the signed dry-run-only P0 result remains authoritative.
+- [ ] Before the planned live transition, `ADR-LIVE-001` defines one exact action, real expiring approval provider, separate least-privilege executor identity, verification, rollback, cost, error-budget, and audit evidence. Until every item passes, the signed dry-run P0 result remains authoritative.
 
 ### 23.3 Conditional P2 and stretch acceptance
 
