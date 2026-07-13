@@ -115,7 +115,8 @@ Related: prior dev automation `docs/changes/2026-07-11-auto-promote-dev-chart-im
 
 ### Remaining Verification (Post-Merge)
 
-1. Ensure fine-grained PAT includes **Pull requests: Read and write** on the chart repo; update `CHART_REPO_TOKEN` if needed.
+1. Ensure fine-grained PAT includes **Pull requests: Read and write** on the chart repo; update `CHART_REPO_TOKEN` if needed.  
+   Observed failure without this permission: `GraphQL: Resource not accessible by personal access token (createPullRequest)` while git push still succeeds.
 2. Run production publish (`main` / `v*` / dispatch `production`) after images are green.
 3. Confirm job **Create chart values-prod PR** is green and links a chart PR.
 4. Confirm PR updates only `values-prod.yaml` `default.image.tag`.
