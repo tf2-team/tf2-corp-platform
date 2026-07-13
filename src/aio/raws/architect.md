@@ -12,11 +12,11 @@ This document defines the complete AIOps pipeline, runtime boundaries, safety mo
 
 The repository contains discovery notes written at different times, so they do not all have equal authority. Use this precedence whenever two documents disagree:
 
-1. Active BTC mandates in `phase3/mandates/`, then [Phase 3 rules](../phase3/RULES.md), [SLO](../phase3/onboarding/SLO.md), [budget](../phase3/onboarding/BUDGET.md), and [architecture](../phase3/onboarding/ARCHITECTURE.md).
+1. Active BTC mandates in `phase3/mandates/`, then [Phase 3 rules](../../../../phase3/RULES.md), [SLO](../../../../phase3/onboarding/SLO.md), [budget](../../../../phase3/onboarding/BUDGET.md), and [architecture](../../../../phase3/onboarding/ARCHITECTURE.md).
 2. Evidence from the currently deployed TF2 environment, provided the metric, labels, time window, and capture time are recorded.
-3. The corrected [AIOps backlog](aiops/AIO_BACKLOG.md) and [AIOps task plan](aiops_task_plan.md).
-4. Team discovery inputs: [baseline metrics](aiops/w1/baseline_metrics.md), [signal catalog](aiops/w1/signal_for_anomoly.md), [weakness assessment](aiops/w1/weakness.md), and [AI findings](aiops/w1/AI_FINDINGS_AIOPS.md).
-5. The older [multi-source prioritized backlog](aiops/w1/AIOPS_PRIORITIZED_BACKLOG.md), which remains useful as discovery history but is superseded where it conflicts with the corrected backlog.
+3. The corrected [AIOps backlog](../../../docs/aiops/AIO_BACKLOG.md) and [AIOps task plan](../../../docs/aiops/aiops_task_plan.md).
+4. Team discovery inputs: [baseline metrics](../../../docs/aiops/w1/baseline_metrics.md), [signal catalog](../../../docs/aiops/w1/signal_for_anomoly.md), [weakness assessment](../../../docs/aiops/w1/weakness.md), and [AI findings](../../../docs/aiops/w1/AI_FINDINGS_AIOPS.md).
+5. The older [multi-source prioritized backlog](../../../docs/aiops/w1/AIOPS_PRIORITIZED_BACKLOG.md), which remains useful as discovery history but is superseded where it conflicts with the corrected backlog.
 
 The resulting non-negotiable interpretations are:
 
@@ -676,37 +676,30 @@ The AIOps operations dashboard shows runtime mode, last collection, signal fresh
 ```
 workspace-root/
 ├── tf2-corp-platform/
-│   ├── src/
-│   │   ├── aiops/
-│   │   ├── grafana/provisioning/
-│   │   │   ├── alerting/aiops-slo-rules.yaml
-│   │   │   └── dashboards/demo/
-│   │   │       ├── aiops-slo-dashboard.json
-│   │   │       └── aiops-operations-dashboard.json
-│   │   └── prometheus/
-│   │       └── prometheus-config.yaml
-│   └── Makefile
-├── ${TF2_CHART_ROOT}/                       # actual TF2 chart checkout; CDO-owned
-│   ├── values.yaml
-│   ├── values.schema.json
-│   ├── templates/
-│   │   ├── aiops-rbac.yaml
-│   │   ├── aiops-pvc.yaml
-│   │   └── component.yaml
-│   └── grafana/provisioning/
-│       ├── alerting/
-│       └── dashboards/
-└── aio-docs/
-    ├── architect.md
-    ├── implement_plan.md
-    └── aiops/
-        ├── adr/
-        ├── topology/
-        ├── eval/
-        ├── ops-reviews/
-        ├── postmortems/
-        ├── runbook-index.md             # links only; canonical runbooks live under tf2-corp-platform/src/aio/runbooks/
-        └── evidence-index.md
+    ├── docs/
+    │   └── aiops/
+    │       ├── w1/
+    │       ├── AIO_BACKLOG.md
+    │       ├── architect.md
+    │       ├── implement_plan.md
+    │       ├── adr/
+    │       ├── topology/
+    │       ├── eval/
+    │       ├── ops-reviews/
+    │       ├── postmortems/
+    │       ├── runbook-index.md             # links only; canonical runbooks live under tf2-corp-platform/src/aio/runbooks/
+    │       └── evidence-index.md
+    ├── src/
+    │   ├── aiops/
+    │   ├── grafana/provisioning/
+    │   │   ├── alerting/aiops-slo-rules.yaml
+    │   │   └── dashboards/demo/
+    │   │       ├── aiops-slo-dashboard.json
+    │   │       └── aiops-operations-dashboard.json
+    │   └── prometheus/
+    │       └── prometheus-config.yaml
+    └── Makefile
+
 ```
 The application belongs in the TF2 platform source tree as one new service. This folder design intentionally shows only `tf2-corp-platform/src/aio/` while preserving the complete planned application structure. External chart integration remains governed by Section 3.2.
 
