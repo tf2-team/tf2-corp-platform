@@ -41,8 +41,17 @@ Setup:
 * End-to-end production runbook: **[docs/DEPLOYMENT.md](docs/DEPLOYMENT.md)**
 
 ## Run locally
+
+Full local build/run guide (Make targets, env files, minimal stack, tests, troubleshooting):
+
+**[docs/LOCAL_BUILD_AND_RUN.md](docs/LOCAL_BUILD_AND_RUN.md)**
+
 ```sh
-docker compose up --force-recreate --remove-orphans --detach
+# Preferred (loads .env + .env.override)
+make start
+
+# Or plain Compose
+docker compose --env-file .env --env-file .env.override up --force-recreate --remove-orphans --detach
 ```
 Storefront: http://localhost:8080/
 
