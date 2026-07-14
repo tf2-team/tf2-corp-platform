@@ -2,7 +2,7 @@
 
 > **Purpose:** Detailed engineering instructions for implementing the complete AIOps system proposed in [architect.md](architect.md).  
 > **Scope:** Runtime, configuration, signals, detectors, correlation, incident handling, guarded remediation, observability, deployment, testing, and evidence.  
-> **Project coordination:** Kept in [aiops_task_plan.md](../../../docs/aiops/aiops_task_plan.md) and intentionally omitted here.
+> **Project coordination:** Kept in [aiops_task_plan.md](../../../../docs/aiops/aiops_task_plan.md) and intentionally omitted here.
 
 This guide is ordered by technical dependency. Complete and verify each foundation before enabling components that depend on it. Paths below follow the target structure in the architecture; create them as implementation progresses.
 
