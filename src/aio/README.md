@@ -1,6 +1,6 @@
 # TF2 AIO4 AIOps Runtime
 
-Modular-monolith AIOps service scaffold and evolving runtime described by `docs/raws/architect.md` and `docs/raws/implement_plan.md`.
+Modular-monolith AIOps service scaffold and evolving runtime described by `../../docs/aiops/instruction/raws/architect.md` and `../../docs/aiops/instruction/raws/implement_plan.md`.
 
 ## Folder Layout
 
