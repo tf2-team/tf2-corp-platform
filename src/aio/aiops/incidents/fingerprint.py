@@ -1,0 +1,16 @@
+from __future__ import annotations
+
+from hashlib import sha256
+
+from aiops.schemas import CandidateEvent
+
+
+def incident_fingerprint(environment: str, candidate: CandidateEvent) -> str:
+    stable_parts = [
+        environment,
+        candidate.detector_id,
+        candidate.flow,
+        candidate.service,
+        candidate.likely_dependency,
+    ]
+    return sha256("|".join(stable_parts).encode("utf-8")).hexdigest()
