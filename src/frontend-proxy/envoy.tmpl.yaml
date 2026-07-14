@@ -51,6 +51,16 @@ static_resources:
                           redirect: { path_redirect: "/grafana/" }
                         - match: { prefix: "/grafana/" }
                           route: { cluster: grafana }
+                        # Argo CD (control plane, argocd NS). Keep path prefix — server.rootpath=/argocd.
+                        # VPN / private DNS only; CloudFront must block /argocd.
+                        - match: { path: "/argocd" }
+                          redirect: { path_redirect: "/argocd/" }
+                        - match: { prefix: "/argocd/" }
+                          route:
+                            cluster: argocd
+                            timeout: 0s
+                            upgrade_configs:
+                              - upgrade_type: websocket
                         - match: { prefix: "/images/" }
                           route: { cluster: image-provider, prefix_rewrite: "/" }
                         - match: { prefix: "/flagservice/" }
@@ -242,6 +252,19 @@ static_resources:
                     socket_address:
                       address: ${JAEGER_HOST}
                       port_value: ${JAEGER_UI_PORT}
+    # Cross-namespace: argocd-server.argocd.svc.cluster.local (HTTP when server.insecure=true).
+    - name: argocd
+      type: STRICT_DNS
+      lb_policy: ROUND_ROBIN
+      load_assignment:
+        cluster_name: argocd
+        endpoints:
+          - lb_endpoints:
+              - endpoint:
+                  address:
+                    socket_address:
+                      address: ${ARGOCD_HOST}
+                      port_value: ${ARGOCD_PORT}
 admin:
   address:
     socket_address:
