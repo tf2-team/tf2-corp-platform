@@ -13,4 +13,3 @@ class DetectorEngine:
         for detector in self._detectors:
             candidates.extend(detector.evaluate(features))
         return candidates
-

@@ -1,12 +1,12 @@
 import unittest
 
-from aiops.collectors import StaticCollector
 from aiops.config import Settings
 from aiops.detectors import DependencyDetector, NoDataDetector, ThresholdDetector
 from aiops.schemas import Observation, SignalQuality
 from aiops.pipeline import AiopsPipeline
 from aiops.remediation import PolicyEngine
 from aiops.storage import InMemoryIncidentStore
+from tests.helpers import StaticCollector
 
 
 def policy(settings: Settings) -> PolicyEngine:

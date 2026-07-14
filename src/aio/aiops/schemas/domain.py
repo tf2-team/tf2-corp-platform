@@ -116,4 +116,3 @@ class PipelineResult(AiopsModel):
     notifications: list[NotificationMessage]
     policy_decisions: list[PolicyDecision]
     verification_results: list[VerificationResult]
-

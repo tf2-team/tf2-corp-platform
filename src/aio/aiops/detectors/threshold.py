@@ -44,4 +44,3 @@ class ThresholdDetector(Detector):
                 contributing_signals=(feature.signal_id,),
             )
         ]
-

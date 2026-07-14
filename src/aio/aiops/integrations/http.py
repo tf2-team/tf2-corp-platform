@@ -29,4 +29,3 @@ class HttpApiClient:
         response = self._client.post(path, json=json)
         response.raise_for_status()
         return response.json()
-

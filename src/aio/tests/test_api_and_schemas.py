@@ -1,12 +1,9 @@
 import unittest
-from pathlib import Path
-from tempfile import TemporaryDirectory
 
 from aiops.api import create_app
-from aiops.api.app import handle_grafana_webhook, run_static_pipeline
-from aiops.config import Settings
+from aiops.api.app import handle_grafana_webhook
 from aiops.models import Observation as LegacyObservation
-from aiops.schemas import GrafanaWebhookEvent, Observation, PipelineRunRequest, SignalQuality
+from aiops.schemas import GrafanaWebhookEvent, Observation, SignalQuality
 
 
 class SchemaPackageTest(unittest.TestCase):
@@ -19,33 +16,12 @@ class SchemaPackageTest(unittest.TestCase):
 
 
 class FastApiAppTest(unittest.TestCase):
-    def test_pipeline_endpoint_returns_pydantic_result(self):
-        with TemporaryDirectory() as tmp:
-            settings = Settings().model_copy(update={"state_store_path": Path(tmp) / "aiops.sqlite3"})
-            result = run_static_pipeline(
-                PipelineRunRequest(
-                    observations=[
-                        Observation(
-                            signal_id="checkout_bad_ratio_24h",
-                            value=0.02,
-                            unit="ratio",
-                            window="24h",
-                            quality=SignalQuality.VERIFIED,
-                        )
-                    ]
-                ),
-                settings=settings,
-            )
-
-        self.assertEqual(result.incidents[0].flow, "checkout")
-        self.assertEqual(result.policy_decisions[0].result, "dry-run-recorded")
-
     def test_fastapi_app_exposes_expected_routes(self):
         paths = {route.path for route in create_app().routes}
 
         self.assertIn("/health/live", paths)
-        self.assertIn("/api/v1/pipeline/run", paths)
         self.assertIn("/api/v1/events/grafana", paths)
+        self.assertNotIn("/api/v1/pipeline/run", paths)
 
     def test_grafana_webhook_normalizes_event(self):
         response = handle_grafana_webhook(

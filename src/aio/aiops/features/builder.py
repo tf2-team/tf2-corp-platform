@@ -24,4 +24,3 @@ class FeatureBuilder:
             status=status,
             labels=dict(observation.labels),
         )
-

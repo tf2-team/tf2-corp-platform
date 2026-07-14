@@ -1,0 +1,11 @@
+schema_version: "1.0"
+environment: tf2
+enabled: false
+admission_state: awaiting-live-configuration-evidence
+runtime_mode: dry-run
+configuration_sources:
+  official_objectives: phase3-policy
+  infrastructure_identities: deployment-config-and-secrets
+  thresholds: signed-adrs
+  routes: signed-routing-adr
+

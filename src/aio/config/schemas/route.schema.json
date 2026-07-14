@@ -1,0 +1,16 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:tf2:aiops:notification-route:1",
+  "title": "AIOps notification route",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["route_id", "enabled", "owner", "secret_ref", "backup_route_ref"],
+  "properties": {
+    "route_id": {"type": "string", "minLength": 1},
+    "enabled": {"type": "boolean"},
+    "owner": {"type": "string", "minLength": 1},
+    "secret_ref": {"type": "string", "minLength": 1},
+    "backup_route_ref": {"type": ["string", "null"]}
+  }
+}
+

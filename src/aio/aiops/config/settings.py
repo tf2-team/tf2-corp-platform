@@ -11,7 +11,6 @@ class Settings(BaseSettings):
 
     app_title: str
     api_health_live_path: str
-    api_pipeline_run_path: str
     health_status: str
 
     environment: str

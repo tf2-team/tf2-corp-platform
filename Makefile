@@ -250,3 +250,63 @@ endif
 .PHONY: build-react-native-android
 build-react-native-android:
 	docker build -f src/react-native-app/android.Dockerfile --platform=linux/amd64 --output=. src/react-native-app
+
+# AIO4 AIOps service ---------------------------------------------------------
+AIOPS_DIR := src/aio
+AIOPS_PYTHON ?= python
+AIOPS_IMAGE ?= tf2-aiops:local
+
+.PHONY: aiops-install
+aiops-install:
+	cd $(AIOPS_DIR) && $(AIOPS_PYTHON) -m pip install --require-hashes --requirement requirements-dev.lock
+	cd $(AIOPS_DIR) && $(AIOPS_PYTHON) -m pip install --no-deps --editable .
+
+.PHONY: aiops-format-check
+aiops-format-check:
+	cd $(AIOPS_DIR) && $(AIOPS_PYTHON) -m ruff format --check aiops scripts tests
+
+.PHONY: aiops-lint
+aiops-lint:
+	cd $(AIOPS_DIR) && $(AIOPS_PYTHON) -m ruff check aiops scripts tests
+
+.PHONY: aiops-typecheck
+aiops-typecheck:
+	cd $(AIOPS_DIR) && $(AIOPS_PYTHON) -m mypy aiops scripts
+
+.PHONY: aiops-config-check
+aiops-config-check:
+	cd $(AIOPS_DIR) && $(AIOPS_PYTHON) scripts/validate_config.py
+	cd $(AIOPS_DIR) && $(AIOPS_PYTHON) scripts/check_runtime_imports.py
+
+.PHONY: aiops-unit
+aiops-unit:
+	cd $(AIOPS_DIR) && $(AIOPS_PYTHON) -m pytest -q tests/test_core_pipeline.py tests/test_runtime_pipeline.py tests/test_scaffold.py
+
+.PHONY: aiops-contract
+aiops-contract:
+	cd $(AIOPS_DIR) && $(AIOPS_PYTHON) -m pytest -q tests/test_api_and_schemas.py tests/test_settings.py
+
+.PHONY: aiops-integration
+aiops-integration:
+	cd $(AIOPS_DIR) && $(AIOPS_PYTHON) -m pytest -q tests/test_integrations.py tests/test_sqlite_storage.py
+
+.PHONY: aiops-replay
+aiops-replay:
+	@test -n "$(SCENARIO)" || (echo "SCENARIO is required" && exit 2)
+	cd $(AIOPS_DIR) && $(AIOPS_PYTHON) scripts/replay_scenario.py "$(SCENARIO)"
+
+.PHONY: aiops-eval
+aiops-eval:
+	cd $(AIOPS_DIR) && $(AIOPS_PYTHON) scripts/replay_scenario.py --all
+
+.PHONY: aiops-artifact-check
+aiops-artifact-check:
+	cd $(AIOPS_DIR) && $(AIOPS_PYTHON) scripts/inspect_artifact.py
+
+.PHONY: aiops-image
+aiops-image:
+	docker build --file $(AIOPS_DIR)/Dockerfile --tag $(AIOPS_IMAGE) $(AIOPS_DIR)
+
+.PHONY: aiops-check
+aiops-check: aiops-format-check aiops-lint aiops-typecheck aiops-config-check aiops-unit aiops-contract aiops-integration aiops-eval aiops-artifact-check
+	@echo "All local AIOps pre-merge checks passed"

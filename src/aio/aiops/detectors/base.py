@@ -9,4 +9,3 @@ class Detector(ABC):
     @abstractmethod
     def evaluate(self, features: list[Feature]) -> list[CandidateEvent]:
         raise NotImplementedError
-

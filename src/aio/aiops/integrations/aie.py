@@ -12,4 +12,3 @@ class AieClient:
 
     def get_status(self) -> dict:
         return self._http.get("/status")
-

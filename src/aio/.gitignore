@@ -1,4 +1,12 @@
 __pycache__/
 *.py[cod]
+.mypy_cache/
+.pytest_cache/
+.ruff_cache/
+.venv/
+*.egg-info/
+build/
+dist/
+evidence/
 state/*.sqlite3
 state/*.sqlite3-*

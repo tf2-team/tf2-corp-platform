@@ -1,9 +1,7 @@
 name: capstone
 dependencies:
-  - python
+  - python=3.12
   - pip
   - pip:
-      - fastapi>=0.110,<1
-      - httpx>=0.28,<1
-      - pydantic>=2,<3
-      - pydantic-settings>=2,<3
+      - --require-hashes
+      - -r requirements-dev.lock

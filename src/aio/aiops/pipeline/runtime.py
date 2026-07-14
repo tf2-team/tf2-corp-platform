@@ -17,8 +17,7 @@ from aiops.verification import VerificationEngine
 
 
 class IncidentStore(Protocol):
-    def upsert(self, candidate: CandidateEvent) -> Incident:
-        ...
+    def upsert(self, candidate: CandidateEvent) -> Incident: ...
 
 
 class AiopsPipeline:

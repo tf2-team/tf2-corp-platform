@@ -18,4 +18,3 @@ class NotificationClient:
 
     def send(self, message: NotificationMessage) -> dict:
         return self._http.post("/", json=message.model_dump(mode="json"))
-

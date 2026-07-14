@@ -24,4 +24,3 @@ class NotificationBuilder:
             likely_dependency=dependency,
             runbook_id=last_event.runbook_id,
         )
-

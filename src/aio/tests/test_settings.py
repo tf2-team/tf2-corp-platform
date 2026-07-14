@@ -2,13 +2,12 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from aiops.api.app import create_app, run_static_pipeline
+from aiops.api.app import create_app
 from aiops.config import Settings
-from aiops.schemas import Observation, PipelineRunRequest, SignalQuality
 
 
 class SettingsTest(unittest.TestCase):
-    def test_settings_load_from_env_file_and_drive_pipeline(self):
+    def test_settings_load_from_env_file(self):
         with tempfile.TemporaryDirectory() as directory:
             env_file = Path(directory) / ".env"
             env_file.write_text(
@@ -26,29 +25,15 @@ class SettingsTest(unittest.TestCase):
             )
             settings = Settings(_env_file=env_file)
 
-            result = run_static_pipeline(
-                PipelineRunRequest(
-                    observations=[
-                        Observation(
-                            signal_id="checkout_bad_ratio_24h",
-                            value=0.2,
-                            unit="ratio",
-                            window="24h",
-                            quality=SignalQuality.VERIFIED,
-                        )
-                    ]
-                ),
-                settings=settings,
-            )
-
-        self.assertEqual(result.incidents, [])
+        self.assertEqual(settings.checkout_slo_threshold, 0.5)
+        self.assertEqual(settings.checkout_slo_runbook_id, "RB-TEST")
+        self.assertEqual(settings.policy_mode, "observe")
 
     def test_fastapi_routes_come_from_settings(self):
-        settings = Settings(api_health_live_path="/livez", api_pipeline_run_path="/run-now")
+        settings = Settings(api_health_live_path="/livez")
         paths = {route.path for route in create_app(settings).routes}
 
         self.assertIn("/livez", paths)
-        self.assertIn("/run-now", paths)
 
 
 if __name__ == "__main__":

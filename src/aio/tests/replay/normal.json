@@ -1,0 +1,10 @@
+{
+  "scenario_id": "normal",
+  "description": "Synthetic fixture used to validate the replay command boundary.",
+  "observations": [],
+  "expected": {
+    "incidents": 0,
+    "actions": 0
+  }
+}
+

@@ -18,4 +18,3 @@ class QualificationGate:
             )
             for observation in observations
         ]
-

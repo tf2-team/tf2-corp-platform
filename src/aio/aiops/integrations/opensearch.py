@@ -17,4 +17,3 @@ class OpenSearchClient:
 
     def search(self, index: str, body: dict) -> dict:
         return self._http.post(f"/{index}/_search", json=body)
-

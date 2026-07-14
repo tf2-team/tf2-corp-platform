@@ -17,6 +17,32 @@ permissions:
   contents: read
 
 jobs:
+  aiops:
+    name: AIOps checks and image
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        # actions/checkout@v7.0.0
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
+
+      - name: Setup Python
+        # actions/setup-python@v6.0.0
+        uses: actions/setup-python@e797f83bcb11b83ae66e0230d6156d7c80228e7c
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: src/aio/requirements-dev.lock
+
+      - name: Install locked dependencies
+        run: make aiops-install
+
+      - name: Run AIOps pre-merge checks
+        run: make aiops-check
+
+      - name: Build AIOps image
+        run: make aiops-image AIOPS_IMAGE=tf2-aiops:ci
+
   lint:
     name: Lint
     runs-on: ubuntu-latest

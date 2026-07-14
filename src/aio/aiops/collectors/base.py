@@ -9,4 +9,3 @@ class Collector(ABC):
     @abstractmethod
     def collect(self) -> list[Observation]:
         raise NotImplementedError
-
