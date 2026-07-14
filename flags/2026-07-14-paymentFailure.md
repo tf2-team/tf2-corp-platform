@@ -202,10 +202,8 @@ Branch: `fix/checkout-payment-retry-paymentFailure` · author `tmcmanhcuong` · 
 | 6 | Explore Prometheus — success rate | [`evidence/prometheus-sucessrate.png`](./evidence/prometheus-sucessrate.png) |
 | 7 | Explore OpenSearch — payment fail logs | [`evidence/paymentfail-opensearch.png`](./evidence/paymentfail-opensearch.png) |
 | 8 | **GitHub commits fix** | [`evidence/commit-fix.png`](./evidence/commit-fix.png) |
-| 9 | Timeline flagd-alert local | `../../scripts/flagd-alert/flagd-logs/incident-paymentFailure-2026-07-14.md` |
-| 10 | Watcher raw log (pre-upgrade) | `../../scripts/flagd-alert/logs/watcher.log.20260714.pre-upgrade` |
-| 11 | Platform fix PRs | GitHub `tf2-corp-platform` PR #16 / #17 |
-| 12 | Jaeger historical | **Không còn** trong cửa sổ incident (đã ghi) |
+| 9 | Platform fix PRs | GitHub `tf2-corp-platform` PR #16 / #17 |
+| 10 | Jaeger historical | **Không còn** trong cửa sổ incident (đã ghi) |
 
 ---
 
