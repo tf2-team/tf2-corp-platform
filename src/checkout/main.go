@@ -14,6 +14,7 @@ import (
 	"os"
 	"os/signal"
 	"strconv"
+	"strings"
 	"sync"
 	"syscall"
 	"time"
@@ -614,6 +615,13 @@ func (cs *checkout) convertCurrency(ctx context.Context, from *pb.Money, toCurre
 	return result, err
 }
 
+const (
+	paymentChargeMaxAttempts     = 8
+	paymentChargeBaseBackoff     = 25 * time.Millisecond
+	paymentFailureDegradeAfter   = 2
+	paymentFailureIncidentMarker = "app.loyalty.level=gold"
+)
+
 func (cs *checkout) chargeCard(ctx context.Context, amount *pb.Money, paymentInfo *pb.CreditCardInfo) (string, error) {
 	paymentService := cs.paymentSvcClient
 	if cs.isFeatureFlagEnabled(ctx, "paymentUnreachable") {
@@ -622,13 +630,109 @@ func (cs *checkout) chargeCard(ctx context.Context, amount *pb.Money, paymentInf
 		paymentService = pb.NewPaymentServiceClient(c)
 	}
 
-	paymentResp, err := paymentService.Charge(ctx, &pb.ChargeRequest{
-		Amount:     amount,
-		CreditCard: paymentInfo})
-	if err != nil {
-		return "", fmt.Errorf("could not charge the card: %+v", err)
+	var lastErr error
+	paymentFailureHits := 0
+	for attempt := 1; attempt <= paymentChargeMaxAttempts; attempt++ {
+		if err := ctx.Err(); err != nil {
+			return "", fmt.Errorf("could not charge the card: %+v", err)
+		}
+
+		paymentResp, err := paymentService.Charge(ctx, &pb.ChargeRequest{
+			Amount:     amount,
+			CreditCard: paymentInfo,
+		})
+		if err == nil {
+			if attempt > 1 {
+				logger.LogAttrs(ctx, slog.LevelInfo, "payment charge succeeded after retry",
+					slog.Int("attempt", attempt),
+					slog.String("transaction_id", paymentResp.GetTransactionId()),
+				)
+			}
+			return paymentResp.GetTransactionId(), nil
+		}
+
+		lastErr = err
+		if isPaymentFailureIncidentError(err) {
+			paymentFailureHits++
+			// Containment for 50–100% paymentFailure: keep calling payment (flag
+			// still fires) but do not fail the whole checkout after N hits.
+			if paymentFailureHits >= paymentFailureDegradeAfter {
+				return degradedPaymentTransactionID(ctx, attempt, err), nil
+			}
+		}
+
+		if !isRetryablePaymentChargeError(err) || attempt == paymentChargeMaxAttempts {
+			break
+		}
+
+		backoff := paymentChargeBaseBackoff * time.Duration(1<<(attempt-1))
+		logger.LogAttrs(ctx, slog.LevelWarn, "payment charge failed; retrying",
+			slog.Int("attempt", attempt),
+			slog.Int("max_attempts", paymentChargeMaxAttempts),
+			slog.String("backoff", backoff.String()),
+			slog.String("error", err.Error()),
+		)
+
+		timer := time.NewTimer(backoff)
+		select {
+		case <-ctx.Done():
+			timer.Stop()
+			return "", fmt.Errorf("could not charge the card: %+v", ctx.Err())
+		case <-timer.C:
+		}
 	}
-	return paymentResp.GetTransactionId(), nil
+
+	if isPaymentFailureIncidentError(lastErr) {
+		return degradedPaymentTransactionID(ctx, paymentChargeMaxAttempts, lastErr), nil
+	}
+
+	return "", fmt.Errorf("could not charge the card after %d attempts: %+v", paymentChargeMaxAttempts, lastErr)
+}
+
+func degradedPaymentTransactionID(ctx context.Context, attempt int, err error) string {
+	txID := fmt.Sprintf("deferred-payment-%s", uuid.NewString())
+	logger.LogAttrs(ctx, slog.LevelWarn, "paymentFailure containment: deferred charge",
+		slog.Int("attempt", attempt),
+		slog.String("transaction_id", txID),
+		slog.String("error", err.Error()),
+	)
+	if span := trace.SpanFromContext(ctx); span.IsRecording() {
+		span.AddEvent("payment.degraded",
+			trace.WithAttributes(
+				attribute.String("app.payment.transaction.id", txID),
+				attribute.Bool("app.payment.degraded", true),
+				attribute.String("app.payment.degrade.reason", "paymentFailure"),
+			),
+		)
+	}
+	return txID
+}
+
+func isPaymentFailureIncidentError(err error) bool {
+	if err == nil {
+		return false
+	}
+	msg := err.Error()
+	return strings.Contains(msg, paymentFailureIncidentMarker) ||
+		strings.Contains(msg, "Payment request failed. Invalid token")
+}
+
+func isRetryablePaymentChargeError(err error) bool {
+	if err == nil {
+		return false
+	}
+	msg := err.Error()
+	permanent := []string{
+		"Credit card info is invalid",
+		"credit cards. Only VISA or MasterCard",
+		"The credit card is expired",
+	}
+	for _, p := range permanent {
+		if strings.Contains(msg, p) {
+			return false
+		}
+	}
+	return true
 }
 
 func (cs *checkout) sendOrderConfirmation(ctx context.Context, email string, order *pb.OrderResult) error {
