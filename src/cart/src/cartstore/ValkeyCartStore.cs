@@ -47,8 +47,8 @@ public class ValkeyCartStore : ICartStore
         ILogger<ValkeyCartStore> logger,
         string valkeyAddress,
         bool useTls = false,
-        string? password = null,
-        string? tlsHost = null)
+        string password = null,
+        string tlsHost = null)
     {
         _logger = logger;
         // Serialize empty cart into byte array.

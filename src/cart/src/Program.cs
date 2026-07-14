@@ -35,8 +35,8 @@ if (string.IsNullOrEmpty(valkeyAddress))
     Environment.Exit(1);
 }
 bool valkeyTls = bool.TryParse(builder.Configuration["VALKEY_TLS"], out var parsedValkeyTls) && parsedValkeyTls;
-string? valkeyPassword = builder.Configuration["VALKEY_PASSWORD"];
-string? valkeyTlsHost = builder.Configuration["VALKEY_TLS_HOST"];
+string valkeyPassword = builder.Configuration["VALKEY_PASSWORD"];
+string valkeyTlsHost = builder.Configuration["VALKEY_TLS_HOST"];
 
 if (valkeyTls && string.IsNullOrWhiteSpace(valkeyPassword))
 {
