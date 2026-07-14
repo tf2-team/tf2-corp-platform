@@ -1,12 +1,34 @@
 ---
 runbook_id: RB-MONITORING-LOSS
 version: "1.0"
+title: Monitoring signal loss
+severity: P0
 owner: aio4-aiops
 escalation: tf2-on-call
-flow: monitoring
+flows:
+  - monitoring
+services:
+  - observability
 detector_types:
   - no-data
+signal_refs:
+  - aiops_runtime_last_success_timestamp
+  - checkout_success_ratio_24h
 allowed_runtime_mode: dry-run
+evidence_required:
+  - missing signal IDs and source adapter
+  - last successful sample and gap duration
+  - collector/runtime status
+  - affected detector list
+prohibited_actions:
+  - replace missing telemetry with zero or healthy values
+  - resolve another incident using unavailable verification data
+  - disable direct Grafana alert routes
+verification:
+  signal_refs:
+    - aiops_runtime_last_success_timestamp
+  consecutive_cycles: 2
+communication_template: "[monitoring loss] Incident=<id>; source=<adapter>; missing_signals=<ids>; gap=<duration>; affected_detectors=<ids>; verification=inconclusive."
 ---
 
 # Monitoring signal loss

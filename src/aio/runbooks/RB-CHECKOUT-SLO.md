@@ -1,12 +1,33 @@
 ---
 runbook_id: RB-CHECKOUT-SLO
 version: "1.0"
+title: Checkout official SLO breach
+severity: P0
 owner: aio4-aiops
 escalation: tf2-on-call
-flow: checkout
+flows:
+  - checkout
+services:
+  - checkout
 detector_types:
   - official-slo
+signal_refs:
+  - checkout_success_ratio_24h
 allowed_runtime_mode: dry-run
+evidence_required:
+  - official SLI value and threshold
+  - request count and evaluation time
+  - query and configuration revision
+  - incident timeline and notification attempts
+prohibited_actions:
+  - mutate flagd/OpenFeature/BTC incident delivery
+  - restart stateful or single-replica workloads
+  - mutate databases, Secrets, or broad Kubernetes scope
+verification:
+  signal_refs:
+    - checkout_success_ratio_24h
+  consecutive_cycles: 2
+communication_template: "[SEV1][checkout] Official checkout success SLO breached. Incident=<id>; value=<value>; window=24h; likely_dependency=<name-or-unknown>; mode=dry-run; verification=<state>."
 ---
 
 # Checkout official SLO breach

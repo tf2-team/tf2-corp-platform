@@ -1,0 +1,103 @@
+schema_version: "1.0"
+runbooks:
+  - runbook_id: RB-CHECKOUT-SLO
+    path: runbooks/RB-CHECKOUT-SLO.md
+    priority: 10
+    matches:
+      detector_ids:
+        - ops01_checkout_slo
+      detector_types:
+        - official-slo
+      flows:
+        - checkout
+      services:
+        - checkout
+      signal_ids:
+        - checkout_success_ratio_24h
+    sample_incident:
+      incident_id: inc-sample-checkout-slo
+      detector_id: ops01_checkout_slo
+      detector_type: official-slo
+      flow: checkout
+      service: checkout
+      signal_id: checkout_success_ratio_24h
+      severity: SEV1
+      runbook_id: RB-CHECKOUT-SLO
+
+  - runbook_id: RB-CHECKOUT-DEPENDENCY
+    path: runbooks/RB-CHECKOUT-DEPENDENCY.md
+    priority: 20
+    matches:
+      detector_ids:
+        - ops03_checkout_payment_dependency
+      detector_types:
+        - dependency
+      flows:
+        - checkout
+      services:
+        - checkout
+        - payment
+      signal_ids:
+        - checkout_placeorder_error_rate_5m
+        - checkout_span_errors_by_operation_5m
+        - payment_server_errors_by_operation_5m
+    sample_incident:
+      incident_id: inc-sample-checkout-payment
+      detector_id: ops03_checkout_payment_dependency
+      detector_type: dependency
+      flow: checkout
+      service: checkout
+      signal_id: payment_server_errors_by_operation_5m
+      severity: SEV1
+      runbook_id: RB-CHECKOUT-DEPENDENCY
+      likely_dependency: payment
+
+  - runbook_id: RB-DB-SATURATION
+    path: runbooks/RB-DB-SATURATION.md
+    priority: 30
+    matches:
+      detector_ids:
+        - ops04_postgresql_backend_saturation
+      detector_types:
+        - saturation
+      flows:
+        - database-pressure
+      services:
+        - postgresql
+      signal_ids:
+        - postgresql_backend_usage_ratio_5m
+        - postgresql_active_backends_5m
+    sample_incident:
+      incident_id: inc-sample-db-saturation
+      detector_id: ops04_postgresql_backend_saturation
+      detector_type: saturation
+      flow: database-pressure
+      service: postgresql
+      signal_id: postgresql_backend_usage_ratio_5m
+      severity: SEV1
+      runbook_id: RB-DB-SATURATION
+
+  - runbook_id: RB-MONITORING-LOSS
+    path: runbooks/RB-MONITORING-LOSS.md
+    priority: 40
+    matches:
+      detector_ids:
+        - ops02_monitoring_loss
+      detector_types:
+        - no-data
+      flows:
+        - monitoring
+      services:
+        - observability
+      signal_ids:
+        - aiops_runtime_last_success_timestamp
+        - checkout_success_ratio_24h
+    sample_incident:
+      incident_id: inc-sample-monitoring-loss
+      detector_id: ops02_monitoring_loss
+      detector_type: no-data
+      flow: monitoring
+      service: observability
+      signal_id: aiops_runtime_last_success_timestamp
+      severity: SEV2
+      runbook_id: RB-MONITORING-LOSS

@@ -1,12 +1,35 @@
 ---
 runbook_id: RB-DB-SATURATION
 version: "1.0"
+title: PostgreSQL backend saturation
+severity: P0
 owner: aio4-aiops
 escalation: tf2-on-call
-flow: database-pressure
+flows:
+  - database-pressure
+services:
+  - postgresql
 detector_types:
   - saturation
+signal_refs:
+  - postgresql_backend_usage_ratio_5m
+  - postgresql_active_backends_5m
 allowed_runtime_mode: dry-run
+evidence_required:
+  - active backend count and maximum connection source
+  - pressure ratio and threshold
+  - affected service errors or latency
+  - database owner and configuration revision
+prohibited_actions:
+  - restart PostgreSQL or stateful database pods
+  - change database configuration, schema, users, credentials, or data
+  - delete pods, Secrets, volumes, or persistent claims
+verification:
+  signal_refs:
+    - postgresql_backend_usage_ratio_5m
+    - postgresql_active_backends_5m
+  consecutive_cycles: 2
+communication_template: "[database pressure] Incident=<id>; backends=<active>/<maximum>; ratio=<value>; affected_flows=<flows>; mode=dry-run; verification=<state>."
 ---
 
 # PostgreSQL backend saturation

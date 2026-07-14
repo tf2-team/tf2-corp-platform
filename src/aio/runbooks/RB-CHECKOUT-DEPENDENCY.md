@@ -1,12 +1,37 @@
 ---
 runbook_id: RB-CHECKOUT-DEPENDENCY
 version: "1.0"
+title: Checkout dependency failure
+severity: P0
 owner: aio4-aiops
 escalation: tf2-on-call
-flow: checkout
+flows:
+  - checkout
+services:
+  - checkout
+  - payment
 detector_types:
   - dependency
+signal_refs:
+  - checkout_placeorder_error_rate_5m
+  - checkout_span_errors_by_operation_5m
+  - payment_server_errors_by_operation_5m
 allowed_runtime_mode: dry-run
+evidence_required:
+  - parent checkout error or latency feature
+  - downstream dependency error signal
+  - topology path and confidence
+  - bounded trace/log/Kubernetes evidence when available
+prohibited_actions:
+  - treat correlation as verified root cause
+  - restart stateful or single-replica components
+  - mutate databases, Secrets, flagd, OpenFeature, or BTC incident infrastructure
+verification:
+  signal_refs:
+    - checkout_placeorder_error_rate_5m
+    - payment_server_errors_by_operation_5m
+  consecutive_cycles: 2
+communication_template: "[checkout dependency] Incident=<id>; likely_dependency=<name-or-unknown>; confidence=<value>; checkout_impact=<summary>; mode=dry-run; verification=<state>."
 ---
 
 # Checkout dependency failure
