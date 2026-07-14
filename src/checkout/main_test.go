@@ -4,10 +4,57 @@ package main
 
 import (
 	"encoding/json"
+	"errors"
 	"testing"
 
 	pb "github.com/open-telemetry/techx-corp/src/checkout/genproto/oteldemo"
 )
+
+func TestIsRetryablePaymentChargeError(t *testing.T) {
+	cases := []struct {
+		name string
+		err  error
+		want bool
+	}{
+		{
+			name: "paymentFailure random fault",
+			err:  errors.New("Payment request failed. Invalid token. app.loyalty.level=gold"),
+			want: true,
+		},
+		{
+			name: "generic unavailable",
+			err:  errors.New("rpc error: code = Unavailable desc = connection refused"),
+			want: true,
+		},
+		{
+			name: "invalid card",
+			err:  errors.New("Credit card info is invalid."),
+			want: false,
+		},
+		{
+			name: "unsupported card type",
+			err:  errors.New("Sorry, we cannot process amex credit cards. Only VISA or MasterCard is accepted."),
+			want: false,
+		},
+		{
+			name: "expired card",
+			err:  errors.New("The credit card is expired."),
+			want: false,
+		},
+		{
+			name: "nil",
+			err:  nil,
+			want: false,
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := isRetryablePaymentChargeError(tc.err); got != tc.want {
+				t.Fatalf("isRetryablePaymentChargeError(%v) = %v, want %v", tc.err, got, tc.want)
+			}
+		})
+	}
+}
 
 func TestParseOrderCancelledBytes(t *testing.T) {
 	orderID := "order-123"
