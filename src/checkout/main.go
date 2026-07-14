@@ -234,10 +234,13 @@ func main() {
 	if svc.kafkaBrokerSvcAddr != "" {
 		svc.KafkaProducerClient, err = kafka.CreateKafkaProducer([]string{svc.kafkaBrokerSvcAddr}, logger)
 		if err != nil {
-			logger.Error(err.Error())
+			// Keep serving PlaceOrder, but never call methods on a nil producer.
+			// KAFKA_ADDR alone is not enough — producer may fail when the broker is not ready.
+			logger.Error(fmt.Sprintf("failed to create Kafka producer (order post-processing disabled): %v", err))
+			svc.KafkaProducerClient = nil
 		}
 
-		// Start background Kafka consumer group
+		// Start background Kafka consumer group (independent of producer success).
 		go func() {
 			config := sarama.NewConfig()
 			config.Consumer.Offsets.Initial = sarama.OffsetOldest
@@ -410,10 +413,12 @@ func (cs *checkout) PlaceOrder(ctx context.Context, req *pb.PlaceOrderRequest) (
 		logger.Info(fmt.Sprintf("order confirmation email sent for order %s", orderID.String()))
 	}
 
-	// send to kafka only if kafka broker address is set
-	if cs.kafkaBrokerSvcAddr != "" {
+	// send to kafka only when a producer was successfully created
+	if cs.kafkaBrokerSvcAddr != "" && cs.KafkaProducerClient != nil {
 		logger.Info("sending to postProcessor")
 		cs.sendToPostProcessor(ctx, orderResult)
+	} else if cs.kafkaBrokerSvcAddr != "" {
+		logger.Warn("skipping order post-processing: Kafka producer is not available")
 	}
 
 	resp := &pb.PlaceOrderResponse{Order: orderResult}
@@ -792,6 +797,17 @@ func (cs *checkout) shipOrder(ctx context.Context, address *pb.Address, items []
 }
 
 func (cs *checkout) sendToPostProcessor(ctx context.Context, result *pb.OrderResult) {
+	// Guard: PlaceOrder checks this too, but keep a defensive early return so any
+	// caller (or a failed producer init with KAFKA_ADDR still set) cannot nil-deref.
+	if cs.KafkaProducerClient == nil {
+		logger.Error("sendToPostProcessor called with nil Kafka producer; dropping message")
+		return
+	}
+	if result == nil {
+		logger.Error("sendToPostProcessor called with nil order result; dropping message")
+		return
+	}
+
 	message, err := proto.Marshal(result)
 	if err != nil {
 		logger.Error(fmt.Sprintf("Failed to marshal message to protobuf: %+v", err))
@@ -964,11 +980,17 @@ func (c *ApprovedOrderConsumer) ConsumeClaim(session sarama.ConsumerGroupSession
 				continue
 			}
 
+			if c.checkoutSvc.KafkaProducerClient == nil {
+				logger.Error(fmt.Sprintf("Kafka producer unavailable; cannot publish orders-shipped for ID: %s", order.OrderId))
+				session.MarkMessage(msg, "")
+				continue
+			}
+
 			shippedMsg := sarama.ProducerMessage{
 				Topic: "orders-shipped",
 				Value: sarama.ByteEncoder(shippedMessage),
 			}
-			
+
 			c.checkoutSvc.KafkaProducerClient.Input() <- &shippedMsg
 			logger.Info(fmt.Sprintf("Published shipped order event to orders-shipped for ID: %s", order.OrderId))
 		} else if msg.Topic == "orders-cancelled" {
@@ -1057,3 +1079,5 @@ func parseOrderCancelledBytes(data []byte) (string, string, error) {
 	}
 	return orderID, reason, nil
 }
+
+// Change trail: @hungxqt - 2026-07-14 - Guard nil Kafka producer in PlaceOrder/sendToPostProcessor to stop SIGSEGV.
