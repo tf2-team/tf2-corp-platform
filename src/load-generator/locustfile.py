@@ -12,6 +12,37 @@ import logging
 from locust import HttpUser, task, between
 from locust_plugins.users.playwright import PlaywrightUser, pw, PageWithRetry, event
 
+# Durable guard for distributed mode: stale worker messages (HPA scale-down, Spot
+# interrupt, pod restart) must not KeyError-kill MasterRunner.client_listener.
+# Without this, the master UI shows worker_count=0 until the master process restarts.
+def _install_master_stale_worker_guard():
+    try:
+        from locust.runners import MasterRunner
+    except ImportError:
+        return
+    if getattr(MasterRunner, "_techx_stale_worker_guard", False):
+        return
+
+    _orig_handle_message = MasterRunner.handle_message
+
+    def _safe_handle_message(self, client_id, msg):
+        try:
+            return _orig_handle_message(self, client_id, msg)
+        except KeyError:
+            node_id = getattr(msg, "node_id", None) or client_id
+            logging.warning(
+                "Ignoring message from unknown/disconnected Locust worker node_id=%s type=%s",
+                node_id,
+                getattr(msg, "type", None),
+            )
+            return None
+
+    MasterRunner.handle_message = _safe_handle_message
+    MasterRunner._techx_stale_worker_guard = True
+
+
+_install_master_stale_worker_guard()
+
 from opentelemetry import context, baggage, trace
 from opentelemetry.context import Context
 from opentelemetry.metrics import set_meter_provider
@@ -296,3 +327,5 @@ async def add_baggage_header(route: Route, request: Request):
         'baggage': ', '.join(filter(None, (existing_baggage, 'synthetic_request=true')))
     }
     await route.continue_(headers=headers)
+
+# Change trail: @hungxqt - 2026-07-14 - Guard MasterRunner against stale worker KeyError killing client_listener.
