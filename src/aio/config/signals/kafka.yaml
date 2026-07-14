@@ -1,5 +1,21 @@
 schema_version: "1.0"
 enabled: false
 admission_state: conditional-p2
-signals: []
+signals:
+  - signal_id: kafka_metric_inventory
+    owner: aio4
+    source_adapter: prometheus
+    query_ref: queries/kafka.yaml#kafka_metric_inventory
+    unit: count
+    shape: vector
+    cadence: 300s
+    window: 5m
+    freshness_limit: 600s
+    qualification_state: unqualified
+    evidence_ref: evidence/kafka-signal-qualification-required
+    purpose: fallback
+    required_labels:
+      - __name__
+    max_cardinality: 500
+    minimum_samples: 0
 

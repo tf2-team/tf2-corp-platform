@@ -1,4 +1,66 @@
 schema_version: "1.0"
 enabled: false
-signals: []
+signals:
+  - signal_id: checkout_placeorder_error_rate_5m
+    owner: aio4
+    source_adapter: prometheus
+    query_ref: queries/checkout.yaml#checkout_placeorder_error_rate_5m
+    unit: percent
+    shape: scalar
+    cadence: 60s
+    window: 5m
+    freshness_limit: 180s
+    qualification_state: fallback-only
+    evidence_ref: evidence/2026-07-14-checkout-payment-investigation
+    purpose: diagnostic
+    required_labels: []
+    max_cardinality: 1
+    minimum_samples: 10
+  - signal_id: checkout_span_errors_by_operation_5m
+    owner: aio4
+    source_adapter: prometheus
+    query_ref: queries/checkout.yaml#checkout_span_errors_by_operation_5m
+    unit: requests_per_second
+    shape: vector
+    cadence: 60s
+    window: 5m
+    freshness_limit: 180s
+    qualification_state: fallback-only
+    evidence_ref: evidence/2026-07-14-checkout-payment-investigation
+    purpose: diagnostic
+    required_labels:
+      - span_name
+    max_cardinality: 100
+    minimum_samples: 1
+  - signal_id: payment_server_errors_by_operation_5m
+    owner: aio4
+    source_adapter: prometheus
+    query_ref: queries/checkout.yaml#payment_server_errors_by_operation_5m
+    unit: requests_per_second
+    shape: vector
+    cadence: 60s
+    window: 5m
+    freshness_limit: 180s
+    qualification_state: fallback-only
+    evidence_ref: evidence/2026-07-14-checkout-payment-investigation
+    purpose: diagnostic
+    required_labels:
+      - span_name
+    max_cardinality: 100
+    minimum_samples: 1
+  - signal_id: checkout_placeorder_p95_seconds_5m
+    owner: aio4
+    source_adapter: prometheus
+    query_ref: queries/checkout.yaml#checkout_placeorder_p95_seconds_5m
+    unit: seconds
+    shape: scalar
+    cadence: 60s
+    window: 5m
+    freshness_limit: 180s
+    qualification_state: fallback-only
+    evidence_ref: evidence/2026-07-14-checkout-payment-investigation
+    purpose: diagnostic
+    required_labels: []
+    max_cardinality: 1
+    minimum_samples: 10
 

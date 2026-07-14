@@ -1,4 +1,24 @@
 schema_version: "1.0"
 enabled: false
-queries: []
+queries:
+  - query_id: postgresql_backend_usage_ratio_5m
+    source_adapter: prometheus
+    mode: range
+    window: 5m
+    unit: ratio
+    result_shape: scalar
+    status: unqualified
+    expression: |
+      sum(postgresql_backends)
+      /
+      clamp_min(sum(postgresql_connection_max), 1)
+  - query_id: postgresql_active_backends_5m
+    source_adapter: prometheus
+    mode: range
+    window: 5m
+    unit: count
+    result_shape: vector
+    status: unqualified
+    expression: |
+      sum(postgresql_backends) by (postgresql_database_name)
 

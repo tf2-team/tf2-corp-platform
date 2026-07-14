@@ -1,4 +1,3 @@
-import tempfile
 import unittest
 from pathlib import Path
 
@@ -26,8 +25,11 @@ def candidate(value: float):
 
 class SQLiteIncidentStoreTest(unittest.TestCase):
     def test_persists_and_deduplicates_incidents(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            db_path = Path(tmp) / "aiops.sqlite3"
+        db_path = Path("state/test-aiops.sqlite3")
+        for path in [db_path, db_path.with_name(f"{db_path.name}-shm"), db_path.with_name(f"{db_path.name}-wal")]:
+            path.unlink(missing_ok=True)
+
+        try:
             first_store = SQLiteIncidentStore(db_path, environment="tf2")
             incident = first_store.upsert(candidate(0.02))
             first_store.close()
@@ -35,6 +37,9 @@ class SQLiteIncidentStoreTest(unittest.TestCase):
             second_store = SQLiteIncidentStore(db_path, environment="tf2")
             same_incident = second_store.upsert(candidate(0.03))
             second_store.close()
+        finally:
+            for path in [db_path, db_path.with_name(f"{db_path.name}-shm"), db_path.with_name(f"{db_path.name}-wal")]:
+                path.unlink(missing_ok=True)
 
         self.assertEqual(incident.incident_id, same_incident.incident_id)
         self.assertEqual(same_incident.occurrence_count, 2)

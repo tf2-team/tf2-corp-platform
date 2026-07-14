@@ -1,4 +1,47 @@
 schema_version: "1.0"
 enabled: false
-queries: []
+queries:
+  - query_id: checkout_placeorder_error_rate_5m
+    source_adapter: prometheus
+    mode: range
+    window: 5m
+    unit: percent
+    result_shape: scalar
+    status: fallback-only
+    expression: |
+      (
+        sum(rate(rpc_server_duration_milliseconds_count{service_name="checkout", rpc_method="PlaceOrder", rpc_grpc_status_code!="0"}[5m]))
+        /
+        clamp_min(sum(rate(rpc_server_duration_milliseconds_count{service_name="checkout", rpc_method="PlaceOrder"}[5m])), 0.001)
+      ) * 100
+  - query_id: checkout_span_errors_by_operation_5m
+    source_adapter: prometheus
+    mode: range
+    window: 5m
+    unit: requests_per_second
+    result_shape: vector
+    status: fallback-only
+    expression: |
+      sum(rate(traces_span_metrics_calls_total{service_name="checkout", status_code="STATUS_CODE_ERROR"}[5m])) by (span_name)
+  - query_id: payment_server_errors_by_operation_5m
+    source_adapter: prometheus
+    mode: range
+    window: 5m
+    unit: requests_per_second
+    result_shape: vector
+    status: fallback-only
+    expression: |
+      sum(rate(traces_span_metrics_calls_total{service_name="payment", span_kind="SPAN_KIND_SERVER", status_code="STATUS_CODE_ERROR"}[5m])) by (span_name)
+  - query_id: checkout_placeorder_p95_seconds_5m
+    source_adapter: prometheus
+    mode: range
+    window: 5m
+    unit: seconds
+    result_shape: scalar
+    status: fallback-only
+    expression: |
+      histogram_quantile(
+        0.95,
+        sum(rate(rpc_server_duration_milliseconds_bucket{service_name="checkout", rpc_method="PlaceOrder"}[5m])) by (le)
+      ) / 1000
 

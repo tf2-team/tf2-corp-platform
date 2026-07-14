@@ -1,4 +1,64 @@
 schema_version: "1.0"
 enabled: false
-signals: []
+signals:
+  - signal_id: browse_search_success_ratio_24h
+    owner: aio4
+    source_adapter: prometheus
+    query_ref: queries/official_slos.yaml#browse_search_success_ratio_24h
+    unit: ratio
+    shape: scalar
+    cadence: 60s
+    window: 24h
+    freshness_limit: 180s
+    qualification_state: unqualified
+    evidence_ref: evidence/adr-sli-001-required
+    purpose: official-sli
+    required_labels: []
+    max_cardinality: 1
+    minimum_samples: 100
+  - signal_id: storefront_p95_seconds_24h
+    owner: aio4
+    source_adapter: prometheus
+    query_ref: queries/official_slos.yaml#storefront_p95_seconds_24h
+    unit: seconds
+    shape: scalar
+    cadence: 60s
+    window: 24h
+    freshness_limit: 180s
+    qualification_state: unqualified
+    evidence_ref: evidence/adr-sli-001-required
+    purpose: official-sli
+    required_labels: []
+    max_cardinality: 1
+    minimum_samples: 100
+  - signal_id: cart_success_ratio_24h
+    owner: aio4
+    source_adapter: prometheus
+    query_ref: queries/official_slos.yaml#cart_success_ratio_24h
+    unit: ratio
+    shape: scalar
+    cadence: 60s
+    window: 24h
+    freshness_limit: 180s
+    qualification_state: unqualified
+    evidence_ref: evidence/adr-sli-001-required
+    purpose: official-sli
+    required_labels: []
+    max_cardinality: 1
+    minimum_samples: 100
+  - signal_id: checkout_success_ratio_24h
+    owner: aio4
+    source_adapter: prometheus
+    query_ref: queries/official_slos.yaml#checkout_success_ratio_24h
+    unit: ratio
+    shape: scalar
+    cadence: 60s
+    window: 24h
+    freshness_limit: 180s
+    qualification_state: unqualified
+    evidence_ref: evidence/adr-sli-001-required
+    purpose: official-sli
+    required_labels: []
+    max_cardinality: 1
+    minimum_samples: 100
 

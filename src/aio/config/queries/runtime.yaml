@@ -1,14 +1,12 @@
 schema_version: "1.0"
 enabled: false
-admission_state: conditional-p2
 queries:
-  - query_id: kafka_metric_inventory
+  - query_id: aiops_scheduler_last_success_timestamp_seconds
     source_adapter: prometheus
     mode: instant
     window: 5m
-    unit: count
+    unit: seconds
     result_shape: vector
     status: unqualified
     expression: |
-      count by (__name__) ({__name__=~"kafka_.*"})
-
+      aiops_scheduler_last_success_timestamp_seconds

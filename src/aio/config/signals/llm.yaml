@@ -1,5 +1,20 @@
 schema_version: "1.0"
 enabled: false
 admission_state: conditional-p1
-signals: []
+signals:
+  - signal_id: aie_correctness_status
+    owner: aio4
+    source_adapter: aie-status
+    query_ref: queries/llm.yaml#aie_correctness_status
+    unit: boolean
+    shape: event
+    cadence: 300s
+    window: 15m
+    freshness_limit: 900s
+    qualification_state: unqualified
+    evidence_ref: evidence/aie-correctness-contract-required
+    purpose: fallback
+    required_labels: []
+    max_cardinality: 1
+    minimum_samples: 0
 
