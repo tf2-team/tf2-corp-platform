@@ -1,18 +1,24 @@
 """Grounding pipeline for AI-generated product review summaries (A1.1).
 
-Takes a SafeReviewSet produced by the guardrail pipeline (A1.2) and produces
-a GroundedResponse: every claim in the final response must cite a review
-that actually exists in the SafeReviewSet, and its content must plausibly
-be supported by that review's text. Claims that fail either check are
-dropped silently. If no claim survives, the response is ABSTAINED.
+Public API (per Day 2/3 implementation brief):
+    generate_grounded_summary(safe_reviews) -> GroundedDraft
+    validate_grounded_summary(draft, safe_reviews) -> GroundedResponse
 
-This module never sets ResponseStatus.BLOCKED. BLOCKED is a decision that
-belongs to the safety layer (A1.2 / guardrails.py) — grounding.py only ever
-returns GROUNDED or ABSTAINED.
+This module assumes safe_reviews.reviews is non-empty. The caller
+(product_reviews_server.py) is responsible for short-circuiting to an
+abstained response before calling generate_grounded_summary when
+SafeReviewSet has no reviews — that check belongs to the orchestration
+layer, not here.
+
+grounding.py never sets ResponseStatus.BLOCKED. BLOCKED is a decision
+that belongs to the safety layer (A1.2 / guardrails.py).
 """
 
 import logging
+import os
+import re
 
+import instructor
 from openai import OpenAI
 
 from ai_contracts import (
@@ -26,67 +32,97 @@ from ai_contracts import (
 
 logger = logging.getLogger("grounding")
 
+# Fixed abstention message, per the Day 2/3 brief. Do not vary this string.
+ABSTAIN_MESSAGE = "Cac review hien tai khong cung cap du thong tin."
+
 _SYSTEM_PROMPT = (
     "You are a product review summarizer. You will be given a list of "
-    "reviews, each tagged with a source_id. Summarize what the reviews say "
-    "and, for every claim you make, cite the source_id(s) that support it. "
-    "Do not include any claim that is not directly supported by at least "
-    "one review. Do not invent numbers, durations, or specifics that are "
-    "not stated in the reviews. Respond only with JSON matching this "
-    'shape: {"answer": string, "claims": [{"text": string, '
-    '"sources": [string]}]}'
+    "reviews, each tagged with a source_id. Summarize what the reviews "
+    "say and, for every claim you make, cite the source_id(s) that "
+    "support it. Do not include any claim that is not directly "
+    "supported by at least one review. Do not invent numbers, "
+    "durations, proper names, or comparisons that are not stated in "
+    "the reviews."
 )
 
-# Words shorter than this are too generic (stopword-like) to count as a
-# meaningful signal for the content-overlap check below.
 _MIN_KEYWORD_LENGTH = 4
-
 _GENERIC_WORDS = {
     "dung", "duoc", "khong", "nhung", "cung", "voi", "cho", "rat",
     "tot", "san", "pham", "nay", "ngay", "lien", "tuc", "hoac",
 }
+_NUMBER_PATTERN = re.compile(r"\d+")
+
 
 def _build_review_prompt(safe_review_set: SafeReviewSet) -> str:
     lines = [f"[{review.source_id}] {review.text}" for review in safe_review_set.reviews]
     return "Reviews:\n" + "\n".join(lines)
 
 
-def call_model_for_draft(safe_review_set: SafeReviewSet, client: OpenAI, model: str) -> str:
-    """Calls the LLM and returns the raw JSON string it produced.
-
-    Kept as its own function, separate from summarize_with_grounding, so
-    tests can patch just this call without needing a real OpenAI client,
-    network access, or API key.
+def _get_client_and_model() -> tuple[OpenAI, str]:
+    """Reads LLM connection settings from the environment, same variable
+    names product_reviews_server.py already uses (LLM_BASE_URL, LLM_MODEL,
+    OPENAI_API_KEY). Kept as its own function so tests can patch it
+    without touching real env vars or making a network call.
     """
-    messages = [
-        {"role": "system", "content": _SYSTEM_PROMPT},
-        {"role": "user", "content": _build_review_prompt(safe_review_set)},
-    ]
-    response = client.chat.completions.create(
-        model=model,
-        messages=messages,
-        response_format={"type": "json_object"},
+    client = OpenAI(
+        base_url=os.environ["LLM_BASE_URL"],
+        api_key=os.environ["OPENAI_API_KEY"],
     )
-    return response.choices[0].message.content
+    model = os.environ["LLM_MODEL"]
+    return client, model
+
+
+def generate_grounded_summary(safe_reviews: SafeReviewSet) -> GroundedDraft:
+    """Calls the LLM through Instructor, which enforces the GroundedDraft
+    schema on the model's response and retries automatically on a schema
+    mismatch. Client/model come from _get_client_and_model, not from
+    parameters, to match the public signature in the Day 2/3 brief.
+    """
+    client, model = _get_client_and_model()
+    instructor_client = instructor.from_openai(client)
+    return instructor_client.chat.completions.create(
+        model=model,
+        response_model=GroundedDraft,
+        messages=[
+            {"role": "system", "content": _SYSTEM_PROMPT},
+            {"role": "user", "content": _build_review_prompt(safe_reviews)},
+        ],
+    )
+
+
+def _extract_numbers(text: str) -> set[str]:
+    return set(_NUMBER_PATTERN.findall(text))
+
+
+def _claim_has_fabricated_number(claim_text: str, source_texts: list[str]) -> bool:
+    """Catches the "pin tot" -> "pin dung 20 gio" case: a claim that states
+    a specific number (duration, quantity, etc.) not present in any of its
+    cited sources. This is a more targeted check than keyword overlap,
+    since a fabricated number can otherwise share enough generic words
+    with the source to pass a plain overlap check.
+    """
+    claim_numbers = _extract_numbers(claim_text)
+    if not claim_numbers:
+        return False
+    source_numbers: set[str] = set()
+    for text in source_texts:
+        source_numbers |= _extract_numbers(text)
+    return not claim_numbers.issubset(source_numbers)
 
 
 def _content_supported(claim_text: str, source_texts: list[str]) -> bool:
     """Cheap keyword-overlap check: does at least one cited review share a
-    meaningful word with the claim?
-
-    This is a structural safety net, not a semantic guarantee: it catches
-    claims that cite a real source_id but talk about something that
-    source never actually mentions (e.g. review says "pin dung tot", claim
-    says "pin dung duoc 20 gio" — no shared meaningful word beyond "pin").
-    Upgrade to embedding similarity later if eval shows this isn't
-    catching enough cases.
+    meaningful, non-generic word with the claim? Structural safety net,
+    not a semantic guarantee — catches claims that cite a real source_id
+    but talk about something that source never mentions at all. Number
+    fabrication is handled separately by _claim_has_fabricated_number,
+    since a shared generic word can otherwise mask a fabricated number.
     """
     claim_words = {
         w for w in claim_text.lower().split()
         if len(w) >= _MIN_KEYWORD_LENGTH and w not in _GENERIC_WORDS
     }
     if not claim_words:
-        # Claim too short/generic to extract any signal from; don't block on it.
         return True
     for text in source_texts:
         source_words = {
@@ -99,16 +135,21 @@ def _content_supported(claim_text: str, source_texts: list[str]) -> bool:
 
 
 def _validate_claim(claim: GroundedClaim, reviews_by_id: dict[str, SafeReview]) -> bool:
-    # Layer 1 - citation check: every cited source_id must exist in this
-    # SafeReviewSet. This also implicitly enforces product scoping, since
+    # Layer 1 - citation: every cited source_id must exist in this
+    # SafeReviewSet. Also implicitly enforces product scoping, since
     # SafeReviewSet only ever contains reviews for one product_id.
     if not all(source_id in reviews_by_id for source_id in claim.sources):
         logger.info(f"Dropping claim with unknown source_id(s): {claim.sources}")
         return False
 
-    # Layer 2 - content check: claim text must be plausibly supported by
-    # the text of its cited sources, not just point at a real ID.
     source_texts = [reviews_by_id[source_id].text for source_id in claim.sources]
+
+    # Layer 2 - fabricated number/duration check.
+    if _claim_has_fabricated_number(claim.text, source_texts):
+        logger.info(f"Dropping claim with a number not present in its sources: '{claim.text}'")
+        return False
+
+    # Layer 3 - general content-overlap check.
     if not _content_supported(claim.text, source_texts):
         logger.info(f"Dropping claim not supported by source content: '{claim.text}'")
         return False
@@ -116,45 +157,21 @@ def _validate_claim(claim: GroundedClaim, reviews_by_id: dict[str, SafeReview]) 
     return True
 
 
-def summarize_with_grounding(
-    safe_review_set: SafeReviewSet,
-    client: OpenAI,
-    model: str,
+def validate_grounded_summary(
+    draft: GroundedDraft,
+    safe_reviews: SafeReviewSet,
 ) -> GroundedResponse:
-    """Entry point for A1.1. Never returns model output directly — every
-    path either goes through claim validation or short-circuits to
-    ABSTAINED before any model call happens.
+    """Never returns model output directly. Filters draft.claims against
+    safe_reviews and re-derives the answer from surviving claims only.
     """
-    if not safe_review_set.reviews:
-        return GroundedResponse(
-            status=ResponseStatus.ABSTAINED,
-            reason=safe_review_set.reason or "No reviews available for this product",
-        )
-
-    raw_json = call_model_for_draft(safe_review_set, client, model)
-
-    try:
-        draft = GroundedDraft.model_validate_json(raw_json)
-    except Exception as e:
-        logger.error(f"Model returned a draft that did not match the expected schema: {e}")
-        return GroundedResponse(
-            status=ResponseStatus.ABSTAINED,
-            reason="Model response did not match the expected schema",
-        )
-
-    reviews_by_id = {review.source_id: review for review in safe_review_set.reviews}
+    reviews_by_id = {review.source_id: review for review in safe_reviews.reviews}
     surviving_claims = [claim for claim in draft.claims if _validate_claim(claim, reviews_by_id)]
 
     if not surviving_claims:
-        return GroundedResponse(
-            status=ResponseStatus.ABSTAINED,
-            reason="No claim was supported by the available reviews",
-        )
+        return GroundedResponse(status=ResponseStatus.ABSTAINED, reason=ABSTAIN_MESSAGE)
 
     # Re-derive the answer from surviving claims only. Never reuse
-    # draft.answer as-is: it may reference a claim that was just dropped,
-    # which would violate the "answer cannot exceed claims" rule from the
-    # Grounded AI Response Contract.
+    # draft.answer as-is: it may reference a claim that was just dropped.
     answer = " ".join(claim.text for claim in surviving_claims)
 
     return GroundedResponse(

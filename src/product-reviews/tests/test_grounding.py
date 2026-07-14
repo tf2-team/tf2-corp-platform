@@ -1,22 +1,31 @@
-"""Tests for grounding.py (A1.1).
+"""Tests for grounding.py (A1.1), per the Day 2/3 implementation brief.
 
-These tests never call a real LLM. call_model_for_draft is patched in every
-test that needs a model response, so the whole suite runs offline and fast.
+validate_grounded_summary is pure logic — it takes a GroundedDraft you
+build by hand and a SafeReviewSet, no model or network involved at all.
+generate_grounded_summary is the only function that touches the LLM, and
+it's patched in the one test that exercises it, so the whole suite still
+runs offline.
 """
 
 from unittest.mock import patch
 
 import pytest
 
-from ai_contracts import ResponseStatus, SafeReview, SafeReviewSet
-from grounding import summarize_with_grounding
-
-FAKE_CLIENT = object()  # never actually called; call_model_for_draft is patched
-FAKE_MODEL = "fake-model"
+from ai_contracts import (
+    GroundedClaim,
+    GroundedDraft,
+    ResponseStatus,
+    SafeReview,
+    SafeReviewSet,
+)
+from grounding import (
+    ABSTAIN_MESSAGE,
+    generate_grounded_summary,
+    validate_grounded_summary,
+)
 
 
 def _reviews(*pairs):
-    """Shorthand: _reviews(("r1", "Pin dung tot"), ("r2", "May hoi nang"))"""
     return [SafeReview(source_id=sid, text=text) for sid, text in pairs]
 
 
@@ -27,13 +36,12 @@ def test_claim_with_valid_source_is_kept():
         product_id="P001",
         reviews=_reviews(("r1", "Pin dung tot, dung ca ngay khong het")),
     )
-    mock_draft = (
-        '{"answer": "Pin dung tot",'
-        ' "claims": [{"text": "Pin dung tot", "sources": ["r1"]}]}'
+    draft = GroundedDraft(
+        answer="Pin dung tot",
+        claims=[GroundedClaim(text="Pin dung tot", sources=["r1"])],
     )
 
-    with patch("grounding.call_model_for_draft", return_value=mock_draft):
-        result = summarize_with_grounding(safe_reviews, FAKE_CLIENT, FAKE_MODEL)
+    result = validate_grounded_summary(draft, safe_reviews)
 
     assert result.status == ResponseStatus.GROUNDED
     assert len(result.claims) == 1
@@ -47,116 +55,118 @@ def test_claim_with_unknown_source_id_is_dropped():
         product_id="P001",
         reviews=_reviews(("r1", "Pin dung tot, dung ca ngay khong het")),
     )
-    mock_draft = (
-        '{"answer": "San pham co sac nhanh",'
-        ' "claims": [{"text": "San pham co sac nhanh", "sources": ["r99"]}]}'
+    draft = GroundedDraft(
+        answer="San pham co sac nhanh",
+        claims=[GroundedClaim(text="San pham co sac nhanh", sources=["r99"])],
     )
 
-    with patch("grounding.call_model_for_draft", return_value=mock_draft):
-        result = summarize_with_grounding(safe_reviews, FAKE_CLIENT, FAKE_MODEL)
+    result = validate_grounded_summary(draft, safe_reviews)
 
     assert result.status == ResponseStatus.ABSTAINED
     assert result.claims == []
-    assert result.reason
+    assert result.reason == ABSTAIN_MESSAGE
 
 
-# --- Citation: claim cites a real source_id but content doesn't match --
+# --- Citation: claim cites a real source but invents a number/duration -
 
-def test_claim_with_unsupported_content_is_dropped():
+def test_claim_with_fabricated_number_is_dropped():
     safe_reviews = SafeReviewSet(
         product_id="P001",
         reviews=_reviews(("r1", "Pin dung tot, dung ca ngay khong het")),
     )
-    # r1 exists, but nothing in its text supports a specific "20 gio" claim
-    mock_draft = (
-        '{"answer": "Pin dung duoc 20 gio",'
-        ' "claims": [{"text": "Pin dung duoc hai muoi gio lien tuc", "sources": ["r1"]}]}'
+    draft = GroundedDraft(
+        answer="Pin dung duoc 20 gio",
+        claims=[GroundedClaim(text="Pin dung duoc 20 gio lien tuc", sources=["r1"])],
     )
 
-    with patch("grounding.call_model_for_draft", return_value=mock_draft):
-        result = summarize_with_grounding(safe_reviews, FAKE_CLIENT, FAKE_MODEL)
+    result = validate_grounded_summary(draft, safe_reviews)
 
     assert result.status == ResponseStatus.ABSTAINED
 
 
-# --- Abstention: empty SafeReviewSet short-circuits, no model call -----
+# --- Citation: claim cites a real source but content isn't related ----
 
-def test_empty_review_set_abstains_without_calling_model():
-    safe_reviews = SafeReviewSet(product_id="P001", reviews=[], reason="No reviews found")
-
-    with patch("grounding.call_model_for_draft") as mock_call:
-        result = summarize_with_grounding(safe_reviews, FAKE_CLIENT, FAKE_MODEL)
-        mock_call.assert_not_called()
-
-    assert result.status == ResponseStatus.ABSTAINED
-    assert result.reason == "No reviews found"
-
-
-# --- Abstention: model returns a schema that doesn't match GroundedDraft
-
-def test_malformed_model_output_abstains():
+def test_claim_with_unrelated_content_is_dropped():
     safe_reviews = SafeReviewSet(
         product_id="P001",
         reviews=_reviews(("r1", "Pin dung tot")),
     )
-    mock_draft = "this is not valid json at all"
+    draft = GroundedDraft(
+        answer="San pham bi loi man hinh thuong xuyen",
+        claims=[GroundedClaim(text="San pham bi loi man hinh thuong xuyen", sources=["r1"])],
+    )
 
-    with patch("grounding.call_model_for_draft", return_value=mock_draft):
-        result = summarize_with_grounding(safe_reviews, FAKE_CLIENT, FAKE_MODEL)
+    result = validate_grounded_summary(draft, safe_reviews)
 
     assert result.status == ResponseStatus.ABSTAINED
 
 
-# --- Abstention: every claim gets dropped -> whole response abstains ---
+# --- Abstention: model draft has no claim that survives validation ----
 
-def test_all_claims_dropped_results_in_abstention():
+def test_all_claims_dropped_results_in_fixed_abstain_message():
     safe_reviews = SafeReviewSet(
         product_id="P001",
         reviews=_reviews(("r1", "Pin dung tot")),
     )
-    mock_draft = (
-        '{"answer": "khong lien quan",'
-        ' "claims": [{"text": "khong lien quan gi ca", "sources": ["r99"]}]}'
+    draft = GroundedDraft(
+        answer="khong lien quan",
+        claims=[GroundedClaim(text="khong lien quan gi ca", sources=["r99"])],
     )
 
-    with patch("grounding.call_model_for_draft", return_value=mock_draft):
-        result = summarize_with_grounding(safe_reviews, FAKE_CLIENT, FAKE_MODEL)
+    result = validate_grounded_summary(draft, safe_reviews)
 
     assert result.status == ResponseStatus.ABSTAINED
+    assert result.reason == ABSTAIN_MESSAGE
     assert result.claims == []
 
 
-# --- flagd: even when llmInaccurateResponse is simulated (model forced -
-# --- to fabricate an answer), grounding still filters the bad claim ----
+# --- flagd: even when llmInaccurateResponse forces a fabricated draft, -
+# --- validate_grounded_summary still filters it out ---------------------
 
-def test_grounding_filters_fabricated_claim_from_inaccurate_flag():
+def test_validate_filters_fabricated_claim_from_inaccurate_flag():
     """Simulates product_reviews_server.py's llmInaccurateResponse flag
-    path: the model is instructed to make the answer inaccurate, so it
-    fabricates a claim not supported by any real review. grounding.py
-    must not know or care that the flag was on — it should filter this
-    exactly like any other unsupported claim.
+    path: the model is instructed to make the answer inaccurate, so
+    generate_grounded_summary would return a claim with no basis in the
+    real review text. validate_grounded_summary must not know or care
+    that the flag was on — it filters this exactly like any other
+    unsupported claim.
     """
     safe_reviews = SafeReviewSet(
         product_id="L9ECAV7KIM",
         reviews=_reviews(("r1", "May hoi nang nhung cam chac tay")),
     )
-    # Model was told to "make the answer inaccurate" and invents a claim
-    # with no basis in the actual review text.
-    mock_draft = (
-        '{"answer": "San pham nay bi loi man hinh thuong xuyen",'
-        ' "claims": [{"text": "San pham bi loi man hinh thuong xuyen", "sources": ["r1"]}]}'
+    draft = GroundedDraft(
+        answer="San pham nay bi loi man hinh thuong xuyen",
+        claims=[GroundedClaim(text="San pham bi loi man hinh thuong xuyen", sources=["r1"])],
     )
 
-    with patch("grounding.call_model_for_draft", return_value=mock_draft):
-        result = summarize_with_grounding(safe_reviews, FAKE_CLIENT, FAKE_MODEL)
+    result = validate_grounded_summary(draft, safe_reviews)
 
     assert result.status == ResponseStatus.ABSTAINED
     assert result.claims == []
 
 
+# --- generate_grounded_summary: patched, no real model/network needed -
+
+def test_generate_grounded_summary_calls_instructor_client():
+    safe_reviews = SafeReviewSet(
+        product_id="P001",
+        reviews=_reviews(("r1", "Pin dung tot")),
+    )
+    expected_draft = GroundedDraft(
+        answer="Pin dung tot",
+        claims=[GroundedClaim(text="Pin dung tot", sources=["r1"])],
+    )
+
+    with patch("grounding._get_client_and_model", return_value=(object(), "fake-model")), \
+         patch("grounding.instructor.from_openai") as mock_from_openai:
+        mock_from_openai.return_value.chat.completions.create.return_value = expected_draft
+        result = generate_grounded_summary(safe_reviews)
+
+    assert result == expected_draft
+
+
 # --- Contract sanity: SafeReviewSet with duplicate source_id is invalid
-# (schema-level check already enforced by ai_contract.py; verifying here
-# so a future contract change that weakens this doesn't go unnoticed)
 
 def test_safe_review_set_rejects_duplicate_source_ids():
     with pytest.raises(Exception):
