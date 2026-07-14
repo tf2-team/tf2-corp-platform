@@ -3,8 +3,11 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
+	"io"
+	"log/slog"
 	"testing"
 
 	pb "github.com/open-telemetry/techx-corp/src/checkout/genproto/oteldemo"
@@ -203,3 +206,28 @@ func TestBuildShippingRequestPayload_NegativeQuantity(t *testing.T) {
 		t.Fatal("expected error for negative quantity")
 	}
 }
+
+func TestSendToPostProcessor_NilProducerDoesNotPanic(t *testing.T) {
+	// Regression: PlaceOrder used to call KafkaProducerClient.Input() when
+	// KAFKA_ADDR was set but producer creation had failed (nil client).
+	prev := logger
+	logger = slog.New(slog.NewTextHandler(io.Discard, nil))
+	t.Cleanup(func() { logger = prev })
+
+	cs := &checkout{
+		kafkaBrokerSvcAddr:  "kafka:9092",
+		KafkaProducerClient: nil,
+	}
+	cs.sendToPostProcessor(context.Background(), &pb.OrderResult{OrderId: "order-nil-producer"})
+}
+
+func TestSendToPostProcessor_NilResultDoesNotPanic(t *testing.T) {
+	prev := logger
+	logger = slog.New(slog.NewTextHandler(io.Discard, nil))
+	t.Cleanup(func() { logger = prev })
+
+	cs := &checkout{KafkaProducerClient: nil}
+	cs.sendToPostProcessor(context.Background(), nil)
+}
+
+// Change trail: @hungxqt - 2026-07-14 - Regression tests for nil Kafka producer / nil order in sendToPostProcessor.
