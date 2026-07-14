@@ -34,7 +34,6 @@ Containment (không tắt flag): checkout **retry + deferred-charge** đã merge
 
 | Kênh | Tự động? | Bắt được? | Ghi chú |
 | --- | --- | --- | --- |
-| **flagd-alert → Telegram** | **Có** | **Có** | Poll BTC flags.json mỗi 30s; message ON/OFF `paymentFailure` |
 | **Grafana Webstore SLOs** | Metrics panel | **Có (triệu chứng)** | Checkout success **98.6%** (vi phạm SLO) 14:00–15:00 |
 | **Explore Prometheus** | Metrics query | **Có (định lượng)** | Error rate ~1.0; success rate ~0% lúc 14:25–14:35 |
 | **Explore OpenSearch** | Logs query | **Có (message fault)** | Body `Invalid token` / `loyalty.level=gold` |
