@@ -56,6 +56,42 @@ func TestIsRetryablePaymentChargeError(t *testing.T) {
 	}
 }
 
+func TestIsPaymentFailureIncidentError(t *testing.T) {
+	cases := []struct {
+		name string
+		err  error
+		want bool
+	}{
+		{
+			name: "canonical paymentFailure message",
+			err:  errors.New("Payment request failed. Invalid token. app.loyalty.level=gold"),
+			want: true,
+		},
+		{
+			name: "wrapped grpc error",
+			err:  errors.New("rpc error: code = Unknown desc = Payment request failed. Invalid token. app.loyalty.level=gold"),
+			want: true,
+		},
+		{
+			name: "permanent card error",
+			err:  errors.New("Credit card info is invalid."),
+			want: false,
+		},
+		{
+			name: "nil",
+			err:  nil,
+			want: false,
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := isPaymentFailureIncidentError(tc.err); got != tc.want {
+				t.Fatalf("isPaymentFailureIncidentError(%v) = %v, want %v", tc.err, got, tc.want)
+			}
+		})
+	}
+}
+
 func TestParseOrderCancelledBytes(t *testing.T) {
 	orderID := "order-123"
 	reason := "suspicious velocity"
