@@ -7,6 +7,6 @@ __pycache__/
 *.egg-info/
 build/
 dist/
-evidence/
-state/*.sqlite3
-state/*.sqlite3-*
+/evidence/
+/state/*.sqlite3
+/state/*.sqlite3-*

@@ -108,9 +108,10 @@ The liveness endpoint is `GET /health/live`. Other production API and scheduler 
 
 ```bash
 make aiops-image
+docker run --rm --env-file src/aio/.env -p 8080:8080 tf2-aiops:local
 ```
 
-The image uses an immutable Python base digest, installs the hash-locked runtime dependency set, runs as UID/GID 10001, and excludes `.env`, tests, fixtures, planning docs, and generated state/evidence. Kubernetes must provide configuration and Secrets at deployment time.
+The local `.env` argument is only for workstation validation. The image contains no settings or secrets and intentionally fails fast when required configuration is absent. The image uses an immutable Python base digest, installs the hash-locked runtime dependency set, runs as UID/GID 10001, and excludes `.env`, tests, fixtures, planning docs, and generated state/evidence. Kubernetes must provide configuration and Secrets at deployment time.
 
 ## Integrations
 
