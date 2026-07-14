@@ -12,7 +12,7 @@ This document defines the complete AIOps pipeline, runtime boundaries, safety mo
 
 The repository contains discovery notes written at different times, so they do not all have equal authority. Use this precedence whenever two documents disagree:
 
-1. Active BTC mandates in `phase3/mandates/`, then [Phase 3 rules](../../../../../../phase3/RULES.md), [SLO](../../../../../../phase3/onboarding/SLO.md), [budget](../../../../../../phase3/onboarding/BUDGET.md), and [architecture](../../../../../../phase3/onboarding/ARCHITECTURE.md).
+1. Active BTC mandates in `phase3/mandates/`, then [Phase 3 rules](../../../../../phase3/RULES.md), [SLO](../../../../../phase3/onboarding/SLO.md), [budget](../../../../../phase3/onboarding/BUDGET.md), and [architecture](../../../../../phase3/onboarding/ARCHITECTURE.md).
 2. Evidence from the currently deployed TF2 environment, provided the metric, labels, time window, and capture time are recorded.
 3. The corrected [AIOps backlog](../../../../docs/aiops/AIO_BACKLOG.md) and [AIOps task plan](../../../../docs/aiops/aiops_task_plan.md).
 4. Team discovery inputs: [baseline metrics](../../../../docs/aiops/w1/baseline_metrics.md), [signal catalog](../../../../docs/aiops/w1/signal_for_anomoly.md), [weakness assessment](../../../../docs/aiops/w1/weakness.md), and [AI findings](../../../../docs/aiops/w1/AI_FINDINGS_AIOPS.md).
