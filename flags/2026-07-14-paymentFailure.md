@@ -46,48 +46,7 @@ Containment (không tắt flag): checkout **retry + deferred-charge** đã merge
 
 ---
 
-## 3. Timeline (flagd-alert)
-
-Nguồn: `scripts/flagd-alert` watcher (poll 30s; giờ ước lượng ±30s trước khi có timestamp writer).
-
-| Giờ (~ +07) | Sự kiện | Variant |
-| --- | --- | --- |
-| **14:16:03** | ON | `off` → **`10%`** |
-| **14:19:03** | Escalate | `10%` → **`50%`** |
-| **14:25:33** | Escalate | `50%` → **`100%`** |
-| **14:30:33** | OFF | `100%` → `off` |
-| **14:32:33** | ON lại | `off` → **`100%`** |
-| **14:34:33** | OFF cuối | `100%` → `off` |
-
-- Wave 1 ~**14.5 phút** (bao phủ user report **14:15–14:30**).
-- Wave 2 ~**2 phút** @100%.
-- Khớp cửa sổ user phản ánh.
-
-### Log chuyển variant
-
-```
-[flagd] ON: paymentFailure
-variant: off → 10%
----
-[flagd] ON: paymentFailure
-variant: 10% → 50%
----
-[flagd] ON: paymentFailure
-variant: 50% → 100%
----
-[flagd] OFF: paymentFailure
-variant: 100% → off
----
-[flagd] ON: paymentFailure
-variant: off → 100%
----
-[flagd] OFF: paymentFailure
-variant: 100% → off
-```
-
----
-
-## 4. Root cause
+## 3. Root cause
 
 | Hạng mục | Chi tiết |
 | --- | --- |
@@ -98,9 +57,9 @@ variant: 100% → off
 
 ---
 
-## 5. Impact (evidence observability)
+## 4. Impact (evidence observability)
 
-### 5.1 Webstore SLOs & Resources — `14:00–15:00`
+### 4.1 Webstore SLOs & Resources — `14:00–15:00`
 
 ![Webstore SLOs dashboard](./evidence/webstore-dashboard.png)
 
@@ -111,7 +70,7 @@ variant: 100% → off
 | Storefront p95 | ~5.5 ms | Latency ổn |
 | Checkout latency p95/p99 | ~51–156 ms | Vấn đề là **error**, không phải chậm |
 
-### 5.2 Demo Dashboard — service `payment` — `14:00–15:00`
+### 4.2 Demo Dashboard — service `payment` — `14:00–15:00`
 
 ![Demo Dashboard payment RED metrics](./evidence/demo-payment.png)
 
@@ -121,7 +80,7 @@ variant: 100% → off
 | Request rate | Vẫn có traffic `charge` |
 | Duration | Thấp (ms) — mode **fail**, không phải slow |
 
-### 5.3 Demo Dashboard — service `checkout` — `14:00–15:00`
+### 4.3 Demo Dashboard — service `checkout` — `14:00–15:00`
 
 ![Demo Dashboard checkout RED metrics](./evidence/demo-checkout.png)
 
@@ -131,13 +90,13 @@ variant: 100% → off
 | Duration | `charge` / PlaceOrder tăng khi fail (retry / error path) |
 | Correlation | Lỗi checkout bám theo payment `Charge` fail |
 
-### 5.4 Telegram auto-alert (flagd-alert)
+### 4.4 Telegram auto-alert (flagd-alert)
 
 ![Telegram flagd ON/OFF alerts](./evidence/alert-telegram.png)
 
 Message watcher có full chuỗi escalate `paymentFailure` (10% → 50% → 100% → off → 100% → off) → chứng minh **detect tự động** dư chấn flag BTC.
 
-### 5.5 Explore Prometheus — checkout error rate — `14:00–15:00`
+### 4.5 Explore Prometheus — checkout error rate — `14:00–15:00`
 
 ![Prometheus checkout error rate](./evidence/prometheus-errorrate.png)
 
@@ -162,7 +121,7 @@ sum(rate(traces_span_metrics_duration_milliseconds_count{
 
 Khớp escalate `paymentFailure` → **100%** và user window 14:15–14:30.
 
-### 5.6 Explore Prometheus — checkout success rate — `14:00–15:00`
+### 4.6 Explore Prometheus — checkout success rate — `14:00–15:00`
 
 ![Prometheus checkout success rate](./evidence/prometheus-sucessrate.png)
 
@@ -184,7 +143,7 @@ Query:
 
 Củng cố panel Webstore Checkout **98.6%** (aggregate cả giờ) — peak fail nằm giữa cửa sổ.
 
-### 5.7 Explore OpenSearch — log payment fail — `14:00–15:00`
+### 4.7 Explore OpenSearch — log payment fail — `14:00–15:00`
 
 ![OpenSearch payment failure logs](./evidence/paymentfail-opensearch.png)
 
@@ -198,7 +157,7 @@ Củng cố panel Webstore Checkout **98.6%** (aggregate cả giờ) — peak fa
 
 → Log **chứng minh message** đúng inject path `payment/charge.js` (không chỉ error rate metric).
 
-### 5.8 Jaeger (tra sau sự cố)
+### 4.8 Jaeger (tra sau sự cố)
 
 | Kiểm tra | Kết quả |
 | --- | --- |
@@ -209,7 +168,7 @@ Củng cố panel Webstore Checkout **98.6%** (aggregate cả giờ) — peak fa
 
 ---
 
-## 6. Response (containment — giữ nguyên flag)
+## 5. Response (containment — giữ nguyên flag)
 
 | Hành động | Chi tiết | Ref |
 | --- | --- | --- |
@@ -220,7 +179,7 @@ Củng cố panel Webstore Checkout **98.6%** (aggregate cả giờ) — peak fa
 
 Code: `src/checkout/main.go` (`chargeCard`, `degradedPaymentTransactionID`, classifiers).
 
-### 6.1 GitHub commits (evidence fix)
+### 5.1 GitHub commits (evidence fix)
 
 ![GitHub commits fix paymentFailure](./evidence/commit-fix.png)
 
@@ -233,7 +192,7 @@ Branch: `fix/checkout-payment-retry-paymentFailure` · author `tmcmanhcuong` · 
 
 ---
 
-## 7. Mục lục evidence
+## 6. Mục lục evidence
 
 | # | Artifact | Path / vị trí |
 | --- | --- | --- |
@@ -262,7 +221,7 @@ Branch: `fix/checkout-payment-retry-paymentFailure` · author `tmcmanhcuong` · 
 
 ---
 
-## 8. Gap & follow-up
+## 7. Gap & follow-up
 
 1. **Grafana alert rules** cho checkout error rate / SLO burn — cần provision + verify fire (backlog OPS-01).
 2. **Jaeger storage** — memory-only không đủ forensic sau 1–2h; cân nhắc backend retention dài hơn nếu budget cho phép.
@@ -270,6 +229,6 @@ Branch: `fix/checkout-payment-retry-paymentFailure` · author `tmcmanhcuong` · 
 
 ---
 
-## 9. One-liner gửi nhóm TF / mentor
+## 8. One-liner gửi nhóm TF / mentor
 
 > **2026-07-14 ~14:15–14:30 (+07):** user không thanh toán được. **Detect:** Telegram flagd-alert `paymentFailure` 10%→50%→100%. **Dashboard:** Checkout Success **98.6%**. **Metrics:** Prometheus error rate ~1.0 / success ~0% lúc 14:25–14:35. **Log:** OpenSearch ERROR `Invalid token. app.loyalty.level=gold`. **RCA:** BTC flag inject `payment/charge.js`. **Response:** checkout retry + deferred charge (PR #16/#17), **không** tắt flag. **Jaeger:** không còn trace. **Grafana alert fire:** chưa có evidence.
