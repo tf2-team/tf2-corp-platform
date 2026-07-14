@@ -34,6 +34,15 @@ if (string.IsNullOrEmpty(valkeyAddress))
     Console.WriteLine("VALKEY_ADDR environment variable is required.");
     Environment.Exit(1);
 }
+bool valkeyTls = bool.TryParse(builder.Configuration["VALKEY_TLS"], out var parsedValkeyTls) && parsedValkeyTls;
+string? valkeyPassword = builder.Configuration["VALKEY_PASSWORD"];
+string? valkeyTlsHost = builder.Configuration["VALKEY_TLS_HOST"];
+
+if (valkeyTls && string.IsNullOrWhiteSpace(valkeyPassword))
+{
+    Console.WriteLine("VALKEY_PASSWORD is required when VALKEY_TLS is enabled.");
+    Environment.Exit(1);
+}
 
 builder.Logging
     .AddOpenTelemetry(options => options.AddOtlpExporter())
@@ -41,7 +50,12 @@ builder.Logging
 
 builder.Services.AddSingleton<ICartStore>(x =>
 {
-    var store = new ValkeyCartStore(x.GetRequiredService<ILogger<ValkeyCartStore>>(), valkeyAddress);
+    var store = new ValkeyCartStore(
+        x.GetRequiredService<ILogger<ValkeyCartStore>>(),
+        valkeyAddress,
+        valkeyTls,
+        valkeyPassword,
+        valkeyTlsHost);
     store.Initialize();
     return store;
 });
