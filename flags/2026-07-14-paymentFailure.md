@@ -19,7 +19,6 @@
 
 Khoảng **14:15–14:30 (+07)**, user phản ánh không thanh toán được. Radar team đã bắt được fault-injection BTC:
 
-- **flagd-alert → Telegram** tự gửi ON/OFF khi `paymentFailure` escalate (`10%` → `50%` → `100%`).
 - **Grafana Webstore SLOs** ghi **Checkout Success Rate = 98.6%** trong `14:00–15:00` (**dưới SLO ≥ 99.0%**).
 - **Explore Prometheus** xác nhận checkout **error rate → ~1.0** và **success rate → 0%** quanh **14:25–14:35**, rồi hồi sau flag OFF.
 - **Explore OpenSearch** còn log body `Payment request failed. Invalid token. app.loyalty.level=gold` (severity ERROR) trong cửa sổ incident.
@@ -88,7 +87,7 @@ Containment (không tắt flag): checkout **retry + deferred-charge** đã merge
 | Duration | `charge` / PlaceOrder tăng khi fail (retry / error path) |
 | Correlation | Lỗi checkout bám theo payment `Charge` fail |
 
-### 4.4 Telegram auto-alert (flagd-alert)
+### 4.4 Telegram auto-alert
 
 ![Telegram flagd ON/OFF alerts](./evidence/alert-telegram.png)
 
