@@ -1034,7 +1034,10 @@ jobs:
   update-chart-dev:
     name: Update chart values-dev tag
     needs: [prepare, release-ready]
+    # always(): when selective publish skips empty build/retag, GHA would otherwise
+    # cascade-skip this job even if release-ready succeeded. Gate on result + env.
     if: >
+      always() &&
       needs.release-ready.result == 'success' &&
       needs.prepare.outputs.target_environment == 'development'
     runs-on: ubuntu-latest
@@ -1218,7 +1221,10 @@ jobs:
   create-chart-prod-pr:
     name: Create chart values-prod PR
     needs: [prepare, release-ready]
+    # always(): when selective publish skips empty build/retag, GHA would otherwise
+    # cascade-skip this job even if release-ready succeeded. Gate on result + env.
     if: >
+      always() &&
       needs.release-ready.result == 'success' &&
       needs.prepare.outputs.target_environment == 'production'
     runs-on: ubuntu-latest
@@ -1453,3 +1459,5 @@ jobs:
             echo ""
             echo "Review and merge the PR to deploy. Argo CD (\`techx-corp\`) will sync after merge to \`${CHART_PROD_BRANCH}\`."
           } >> "${GITHUB_STEP_SUMMARY}"
+
+# Change trail: @hungxqt - 2026-07-14 - always() on chart promote jobs so skipped retag/build does not cascade-skip them.

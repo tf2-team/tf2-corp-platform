@@ -20,12 +20,13 @@ CI (reusable lint + unit tests)
   → retag matrix       # unchanged services: PREV_TAG → NEW_TAG (parallel with build)
   → verify ECR         # describe-images for every release service under NEW_TAG
   → release-ready      # if: always(); sole gate for chart promotion
-  → update-chart-dev      # development only: direct-push values-dev.yaml tag
-  → create-chart-prod-pr  # production only: open PR for values-prod.yaml tag
+  → update-chart-dev      # development only: always() + release-ready success + env
+  → create-chart-prod-pr  # production only: always() + release-ready success + env
 ```
 
 Failing CI never reaches AWS authentication or image push.  
-`release-ready` succeeds when CI, prepare, preflight, and verify-ecr succeed, and build/retag are each **success** or **skipped** (skipped when that side of the plan is empty). At least one of build/retag must have run.
+`release-ready` succeeds when CI, prepare, preflight, and verify-ecr succeed, and build/retag are each **success** or **skipped** (skipped when that side of the plan is empty). At least one of build/retag must have run.  
+Chart promote jobs also use `always()` so a skipped empty build/retag matrix does not cascade-skip them after a green `release-ready`.
 
 | Environment | After `release-ready` |
 |---|---|
@@ -451,7 +452,7 @@ On the **chart** repo:
 | `Repository not found` / checkout 404 | Wrong `CHART_REPO`, or PAT lacks access to that repo |
 | `Permission denied` / push rejected | PAT Contents not Read/write; or branch rules block the PAT identity (Step C) |
 | `GraphQL: Resource not accessible` / PR create fails | Grant fine-grained PAT **Pull requests: Read and write** |
-| Job skipped entirely | Wrong environment for that job, or `release-ready` failed |
+| Job skipped entirely | Wrong environment for that job, or `release-ready` failed. If **both** chart jobs skip after a green `release-ready` on a selective run, the job `if` must include `always()` so a skipped empty build/retag matrix does not cascade-skip promote (fixed in workflow). |
 
 Without `CHART_REPO_TOKEN`, builds can still push images and pass `release-ready`, but chart promote jobs fail until the secret is set. Operators can still edit chart values manually as a fallback.
 
@@ -525,6 +526,7 @@ Local non-push Compose builds (`make build`, `make start`) are unchanged and use
 | Individual matrix build fails | Re-run failed jobs or full workflow; `fail-fast: false` keeps other services building. |
 | verify-ecr reports missing tags | Re-run build for missing services or full workflow; do **not** promote chart values. |
 | release-ready red | Treat as not promotable; chart promote jobs are skipped. |
+| update-chart-dev / create-chart-prod-pr skipped after green release-ready | Empty build or retag side is **skipped** by design; promote jobs use `always()` plus `needs.release-ready.result == 'success'` so they still run. Re-run on a commit that includes that `if` fix if an older workflow skipped them. |
 | update-chart-dev / create-chart-prod-pr fails: missing `CHART_REPO_TOKEN` | Add the secret (see §4.4 / §5); re-run failed job or full workflow. |
 | update-chart-dev fails: push rejected / protected branch | Allow the PAT identity to push to `techx-dev-corp`, or temporarily open a manual values commit. |
 | create-chart-prod-pr fails: cannot create PR | Ensure PAT has **Pull requests: Read and write**; confirm `CHART_PROD_BRANCH` exists. |
@@ -589,3 +591,5 @@ See chart runbook: `techx-corp-chart/docs/operations/gitops-argocd.md`.
 - Per-service Helm runtime tags / movable runtime tags
 - Native multi-arch runners, image security gates, SBOM/provenance, Cosign
 - Full e2e / tracetest in PR CI
+
+<!-- Change trail: @hungxqt - 2026-07-14 - Document always() guard so chart promote jobs are not cascade-skipped. -->
