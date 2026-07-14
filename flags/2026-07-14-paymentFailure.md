@@ -210,15 +210,6 @@ Branch: `fix/checkout-payment-retry-paymentFailure` · author `tmcmanhcuong` · 
 | 12 | Jaeger historical | **Không còn** trong cửa sổ incident (đã ghi) |
 | 13 | Grafana alert rule fire | **Chưa chụp** → unknown / không có evidence auto fire |
 
-### Map mentor: dashboard / metrics / log / alert
-
-| Mentor yêu cầu | Evidence |
-| --- | --- |
-| **Dashboard** | Webstore SLOs + Demo payment/checkout |
-| **Metrics** | Explore Prometheus error rate + success rate |
-| **Log** | Explore OpenSearch ERROR `Invalid token` / `loyalty.level=gold` |
-| **Alert** | Telegram flagd-alert (auto); Grafana rule fire — chưa có |
-
 ---
 
 ## 7. Gap & follow-up
