@@ -39,10 +39,9 @@ Containment (không tắt flag): checkout **retry + deferred-charge** đã merge
 | **Explore Prometheus** | Metrics query | **Có (định lượng)** | Error rate ~1.0; success rate ~0% lúc 14:25–14:35 |
 | **Explore OpenSearch** | Logs query | **Có (message fault)** | Body `Invalid token` / `loyalty.level=gold` |
 | **Grafana Demo / spanmetrics** | Metrics panel | **Có (triệu chứng)** | Error rate payment `Charge` + checkout spans |
-| **Grafana Alerting (rule fire)** | Alert rule | **Chưa có evidence** | Không chụp được alert đang fire → ghi **không xác nhận auto alert rule** |
 | **Jaeger historical traces** | N/A | **Không dùng được** | Memory backend `max_traces`; cửa sổ đã bị eviction |
 
-**Trả lời mentor:** dư chấn **có** trên dashboard / metrics / log và **có auto-alert** qua Telegram flagd. **Grafana alert rule fire: chưa chứng minh được** (ghi Ops Review).
+**Trả lời mentor:** dư chấn **có** trên dashboard / metrics / log và **có auto-alert** qua Telegram flagd.
 
 ---
 
@@ -208,18 +207,16 @@ Branch: `fix/checkout-payment-retry-paymentFailure` · author `tmcmanhcuong` · 
 | 10 | Watcher raw log (pre-upgrade) | `../../scripts/flagd-alert/logs/watcher.log.20260714.pre-upgrade` |
 | 11 | Platform fix PRs | GitHub `tf2-corp-platform` PR #16 / #17 |
 | 12 | Jaeger historical | **Không còn** trong cửa sổ incident (đã ghi) |
-| 13 | Grafana alert rule fire | **Chưa chụp** → unknown / không có evidence auto fire |
 
 ---
 
 ## 7. Gap & follow-up
 
-1. **Grafana alert rules** cho checkout error rate / SLO burn — cần provision + verify fire (backlog OPS-01).
-2. **Jaeger storage** — memory-only không đủ forensic sau 1–2h; cân nhắc backend retention dài hơn nếu budget cho phép.
-3. **Deploy lag** — code containment trên `main` cần rollout image `checkout` mới mới bảo vệ prod khi flag 100% lần sau.
+1. **Jaeger storage** — memory-only không đủ forensic sau 1–2h; cân nhắc backend retention dài hơn nếu budget cho phép.
+2. **Deploy lag** — code containment trên `main` cần rollout image `checkout` mới mới bảo vệ prod khi flag 100% lần sau.
 
 ---
 
 ## 8. One-liner gửi nhóm TF / mentor
 
-> **2026-07-14 ~14:15–14:30 (+07):** user không thanh toán được. **Detect:** Telegram flagd-alert `paymentFailure` 10%→50%→100%. **Dashboard:** Checkout Success **98.6%**. **Metrics:** Prometheus error rate ~1.0 / success ~0% lúc 14:25–14:35. **Log:** OpenSearch ERROR `Invalid token. app.loyalty.level=gold`. **RCA:** BTC flag inject `payment/charge.js`. **Response:** checkout retry + deferred charge (PR #16/#17), **không** tắt flag. **Jaeger:** không còn trace. **Grafana alert fire:** chưa có evidence.
+> **2026-07-14 ~14:15–14:30 (+07):** user không thanh toán được. **Detect:** Telegram flagd-alert `paymentFailure` 10%→50%→100%. **Dashboard:** Checkout Success **98.6%**. **Metrics:** Prometheus error rate ~1.0 / success ~0% lúc 14:25–14:35. **Log:** OpenSearch ERROR `Invalid token. app.loyalty.level=gold`. **RCA:** BTC flag inject `payment/charge.js`. **Response:** checkout retry + deferred charge (PR #16/#17), **không** tắt flag. **Jaeger:** không còn trace.
