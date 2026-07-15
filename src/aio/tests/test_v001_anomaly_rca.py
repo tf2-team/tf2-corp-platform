@@ -21,12 +21,12 @@ def metric(service: str, name: str, values: list[float]) -> MetricSeries:
 class V001AnomalyRcaTest(unittest.TestCase):
     def test_v001_pipeline_ranks_top_root_cause_service_and_metrics(self):
         series = [
-            metric("checkout", "latency", [1.0, 1.1, 1.0, 1.1, 1.0, 1.1, 1.0, 2.0, 2.1, 2.0]),
-            metric("payment", "latency", [1.0, 1.1, 1.0, 1.1, 1.0, 1.1, 1.0, 20.0, 21.0, 22.0]),
-            metric("payment", "error", [0.0, 0.1, 0.0, 0.1, 0.0, 0.1, 0.0, 9.0, 10.0, 11.0]),
+            metric("checkout", "latency", [1, 1, 1, 1, 1, 1, 1, 2]),
+            metric("payment", "latency", [1, 1, 1, 1, 1, 1, 1, 20]),
+            metric("payment", "error", [0, 0, 0, 0, 0, 0, 0, 9]),
         ]
         config_data = load_runtime_config(Path("config/runtime.json")).model_dump()
-        config_data["rca"].update({"top_k": 3, "ewma_z_threshold": 0.5, "bocpd_score_threshold": 1.0})
+        config_data["rca"].update({"top_k": 3, "ewma_z_threshold": 1.5, "bocpd_score_threshold": 1.0})
         runtime_config = RuntimeConfig.model_validate(config_data)
 
         findings = V001AnomalyEngine(
@@ -39,15 +39,15 @@ class V001AnomalyRcaTest(unittest.TestCase):
         ).evaluate(series)
         result = V001RcaEngine(runtime_config).rank(findings, series, top_k=3)
 
-        self.assertTrue({finding.algorithm for finding in findings} >= {"ewma_stl", "isolation_forest", "baro_bocpd"})
+        self.assertTrue({finding.algorithm for finding in findings} >= {"ewma_stl", "isolation_forest", "norm_bocpd"})
         self.assertEqual(result.root_causes[0].service, "payment")
         self.assertIn("latency", result.root_causes[0].root_cause_metrics)
 
     def test_pipeline_api_accepts_metric_series_and_returns_rca_result(self):
         series = [
-            metric("checkout", "latency", [1.0, 1.1, 1.0, 1.1, 1.0, 1.1, 1.0, 2.0, 2.1, 2.0]),
-            metric("payment", "latency", [1.0, 1.1, 1.0, 1.1, 1.0, 1.1, 1.0, 20.0, 21.0, 22.0]),
-            metric("payment", "error", [0.0, 0.1, 0.0, 0.1, 0.0, 0.1, 0.0, 9.0, 10.0, 11.0]),
+            metric("checkout", "latency", [1, 1, 1, 1, 1, 1, 1, 2]),
+            metric("payment", "latency", [1, 1, 1, 1, 1, 1, 1, 20]),
+            metric("payment", "error", [0, 0, 0, 0, 0, 0, 0, 9]),
         ]
         with TemporaryDirectory() as tmp:
             settings = Settings().model_copy(update={"state_store_path": Path(tmp) / "aiops.sqlite3"})
