@@ -1086,6 +1086,8 @@ jobs:
           fi
 
           # Precise in-place update of default.image.tag only (preserve comments/layout).
+          # Allow comments and sibling keys under default: before image: (values-prod
+          # may set terminationGracePeriodSeconds etc. above image).
           python3 - <<'PY'
           import os
           import re
@@ -1098,9 +1100,9 @@ jobs:
 
           pattern = re.compile(
               r"(^default:\n"
+              r"(?:[ \t].*\n)*?"
               r"  image:\n"
-              r"    repository:[^\n]+\n"
-              r"(?:    #[^\n]*\n)*"
+              r"(?:[ \t].*\n)*?"
               r"    tag:\s*)\"[^\"]*\"",
               re.MULTILINE,
           )
@@ -1279,6 +1281,8 @@ jobs:
           PROMOTE_BRANCH="promote/prod-image-${SAFE_VERSION}"
 
           # Precise in-place update of default.image.tag only (preserve comments/layout).
+          # Allow comments and sibling keys under default: before image: (values-prod
+          # may set terminationGracePeriodSeconds etc. above image).
           python3 - <<'PY'
           import os
           import re
@@ -1291,9 +1295,9 @@ jobs:
 
           pattern = re.compile(
               r"(^default:\n"
+              r"(?:[ \t].*\n)*?"
               r"  image:\n"
-              r"    repository:[^\n]+\n"
-              r"(?:    #[^\n]*\n)*"
+              r"(?:[ \t].*\n)*?"
               r"    tag:\s*)\"[^\"]*\"",
               re.MULTILINE,
           )
@@ -1460,4 +1464,4 @@ jobs:
             echo "Review and merge the PR to deploy. Argo CD (\`techx-corp\`) will sync after merge to \`${CHART_PROD_BRANCH}\`."
           } >> "${GITHUB_STEP_SUMMARY}"
 
-# Change trail: @hungxqt - 2026-07-14 - always() on chart promote jobs so skipped retag/build does not cascade-skip them.
+# Change trail: @hungxqt - 2026-07-15 - Allow sibling keys under default before image when promoting chart tags.

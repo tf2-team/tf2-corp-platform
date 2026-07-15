@@ -157,8 +157,11 @@ if __name__ == "__main__":
     pc_channel = grpc.insecure_channel(catalog_addr)
     product_catalog_stub = demo_pb2_grpc.ProductCatalogServiceStub(pc_channel)
 
-    # Create gRPC server
-    server = grpc.server(futures.ThreadPoolExecutor(max_workers=10))
+    # Create gRPC server.
+    # Health Check shares this pool with ListRecommendations; under load a pool of
+    # 10 filled up and readiness/liveness RPC timed out (HPA CPU then <unknown>).
+    max_workers = int(os.environ.get("GRPC_MAX_WORKERS", "20"))
+    server = grpc.server(futures.ThreadPoolExecutor(max_workers=max_workers))
 
     # Add class to gRPC server
     service = RecommendationService()
@@ -171,3 +174,5 @@ if __name__ == "__main__":
     server.start()
     logger.info(f'Recommendation service started, listening on port {port}')
     server.wait_for_termination()
+
+# Change trail: @hungxqt - 2026-07-14 - Raise gRPC worker pool so health probes succeed under load.
