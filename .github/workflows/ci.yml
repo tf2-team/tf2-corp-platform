@@ -4,7 +4,7 @@ name: CI
 
 on:
   pull_request:
-    branches: [main, techx-dev-corp]
+    branches: [main, techx-dev-corp, aie]
   # Called by build-and-push.yml so lint/unit tests gate image publishing.
   # Standalone branch-push trigger removed to avoid duplicated CI runs.
   workflow_call:
@@ -93,3 +93,30 @@ jobs:
         if: matrix.kind == 'dotnet'
         working-directory: ${{ matrix.workdir }}
         run: dotnet test --configuration Release --verbosity minimal
+
+  product-reviews-tests:
+    name: Product reviews tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        # actions/checkout@v7.0.0
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
+
+      - name: Setup Python
+        # actions/setup-python@v6.2.0
+        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: |
+            src/product-reviews/requirements.txt
+            src/product-reviews/requirements-dev.txt
+
+      - name: Install dependencies
+        run: python -m pip install -r src/product-reviews/requirements-dev.txt
+
+      - name: Validate spaCy model
+        run: python -c "import spacy; spacy.load('en_core_web_lg')"
+
+      - name: Run product reviews tests
+        run: python -m pytest src/product-reviews/tests -v
