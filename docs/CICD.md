@@ -556,6 +556,7 @@ Local non-push Compose builds (`make build`, `make start`) are unchanged and use
 | update-chart-dev / create-chart-prod-pr fails: missing `CHART_REPO_TOKEN` | Add the secret (see §4.4 / §5); re-run failed job or full workflow. |
 | update-chart-dev fails: push rejected / protected branch | Allow the PAT identity to push to `techx-dev-corp`, or temporarily open a manual values commit. |
 | create-chart-prod-pr fails: cannot create PR | Ensure PAT has **Pull requests: Read and write**; confirm `CHART_PROD_BRANCH` exists. |
+| create-chart-prod-pr / update-chart-dev fails: `Could not locate default.image.tag under default.image` | Chart overlay has `default.image.tag` but not the old rigid layout (sibling keys under `default:` before `image:`). Workflow regex must allow indented lines before `image:` / `tag:`; re-run after that fix is on the platform default branch. |
 
 Rollback of this CI design: revert workflow, `docker-bake.hcl`, Makefile, and docs. Existing `:buildcache` tags may remain or be deleted; they do not affect deployed SHA/version tags.
 
@@ -573,6 +574,7 @@ Rollback of this CI design: revert workflow, `docker-bake.hcl`, Makefile, and do
 | `GitHub Environment variable IMAGE_NAME is not set` | Add `IMAGE_NAME` on that Environment (§4.2) |
 | Compose missing Dockerfile path | `.env` not sourced before bake |
 | Catalog mismatch in prepare | New Compose `build:` service not listed in bake group `release` |
+| `Could not locate default.image.tag under default.image in values-prod.yaml` | Tag updater expected `default:` → `image:` with no intervening keys; prod overlay may set lifecycle keys first — fixed flexible regex in promote jobs |
 
 ## Image promotion → GitOps (REL-09)
 
@@ -618,4 +620,4 @@ See chart runbook: `techx-corp-chart/docs/operations/gitops-argocd.md`.
 - Native multi-arch runners, image security gates, SBOM/provenance, Cosign
 - Full e2e / tracetest in PR CI
 
-<!-- Change trail: @hungxqt - 2026-07-15 - Document PR-only local image bake without ECR push. -->
+<!-- Change trail: @hungxqt - 2026-07-15 - Document flexible default.image.tag promote regex for values-prod layout. -->
