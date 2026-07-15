@@ -121,9 +121,12 @@ def must_map_env(key: str):
 
 
 def check_feature_flag(flag_name: str):
-    # Initialize OpenFeature
+    # BTC original || team local- twin (either source can inject).
     client = api.get_client()
-    return client.get_boolean_value("recommendationCacheFailure", False)
+    return (
+        client.get_boolean_value(flag_name, False)
+        or client.get_boolean_value(f"local-{flag_name}", False)
+    )
 
 
 if __name__ == "__main__":
@@ -157,8 +160,11 @@ if __name__ == "__main__":
     pc_channel = grpc.insecure_channel(catalog_addr)
     product_catalog_stub = demo_pb2_grpc.ProductCatalogServiceStub(pc_channel)
 
-    # Create gRPC server
-    server = grpc.server(futures.ThreadPoolExecutor(max_workers=10))
+    # Create gRPC server.
+    # Health Check shares this pool with ListRecommendations; under load a pool of
+    # 10 filled up and readiness/liveness RPC timed out (HPA CPU then <unknown>).
+    max_workers = int(os.environ.get("GRPC_MAX_WORKERS", "20"))
+    server = grpc.server(futures.ThreadPoolExecutor(max_workers=max_workers))
 
     # Add class to gRPC server
     service = RecommendationService()
@@ -171,3 +177,5 @@ if __name__ == "__main__":
     server.start()
     logger.info(f'Recommendation service started, listening on port {port}')
     server.wait_for_termination()
+
+# Change trail: @hungxqt - 2026-07-15 - Dual-read local- flags; fix check_feature_flag to use flag_name.

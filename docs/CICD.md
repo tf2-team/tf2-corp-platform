@@ -7,24 +7,52 @@ Helm deploy stays in `techx-corp-chart`.
 
 | Workflow | File | When | What |
 |---|---|---|---|
-| CI | `.github/workflows/ci.yml` | `pull_request` to `main` / `techx-dev-corp`; also `workflow_call` | Lint + selective unit tests |
-| Build & Push | `.github/workflows/build-and-push.yml` | `push` to `main` / `techx-dev-corp` with changes under `src/**`, tags `v*`, `workflow_dispatch` | Gated multi-arch bake → ECR → verify → chart promote (dev push / prod PR) |
+| CI | `.github/workflows/ci.yml` | `pull_request` to `main` / `techx-dev-corp`; also `workflow_call` | Lint + selective unit tests; on PRs only, local (no-push) image bake for changed services |
+| Build & Push | `.github/workflows/build-and-push.yml` | `push` to `main` / `techx-dev-corp` with image-affecting path changes, tags `v*`, `workflow_dispatch` | Gated multi-arch bake and/or ECR retag → verify all 21 tags → chart promote (dev push / prod PR) |
+
+### Job graph (PR CI)
+
+```text
+lint  ||  unit-tests  ||  prepare-pr-images → build-pr-images (matrix) → pr-image-build
+```
+
+| Job | When | Behavior |
+|---|---|---|
+| **prepare-pr-images** | `pull_request` only | Diff PR base…head; classify full vs selective bake list (same path rules as publish) |
+| **build-pr-images** | PR and `build_count != 0` | `docker buildx bake` per changed service: **linux/amd64 only**, registry cache disabled, `output=type=cacheonly`, **no** AWS OIDC, **no** ECR login, **no** `--push` |
+| **pr-image-build** | always on PR | Stable required-check aggregator (success if prepare ok and matrix success or skipped) |
+
+`workflow_call` from Build & Push runs **lint + unit-tests only** (PR image jobs are skipped). Publish still owns multi-arch bake + ECR.
+
+**Required check (branch protection):** add check name **`PR image build`** (job `pr-image-build`) so matrix job names do not need individual protection rules.
+
+**PR path classification** (same image-affecting roots as publish):
+
+| Change | PR bake plan |
+|---|---|
+| `src/<release-service>/**` | Selective: bake those services only |
+| `pb/**`, `docker-compose.yml`, `docker-bake.hcl`, `buildkitd.toml`, `.env` | Full: all 21 release services |
+| Docs / workflows / other non-image paths only | Skip bake matrix (`build_count=0`); **pr-image-build** still succeeds |
+
+PR bake intentionally differs from publish: single platform, no registry cache, no push. It exists to catch Dockerfile/context compile failures (e.g. missing `COPY` of a new package) before merge.
 
 ### Job graph (Build & Push)
 
 ```text
 CI (reusable lint + unit tests)
-  → prepare          # env, tag, service matrix, bake catalog validation
-  → AWS/ECR preflight  # OIDC + verify 21 ECR repositories
-  → build matrix     # 21 services, max-parallel: 4, fail-fast: false
-  → verify ECR       # describe-images for every release tag
-  → release-ready    # if: always(); sole gate for chart promotion
-  → update-chart-dev      # development only: direct-push values-dev.yaml tag
-  → create-chart-prod-pr  # production only: open PR for values-prod.yaml tag
+  → prepare            # env, tag, bake catalog validation, classify build vs retag
+  → AWS/ECR preflight  # OIDC + verify 21 ECR repos; refine lists if PREV_TAG missing
+  → build matrix       # changed services only (bake from source + :buildcache)
+  → retag matrix       # unchanged services: PREV_TAG → NEW_TAG (parallel with build)
+  → verify ECR         # describe-images for every release service under NEW_TAG
+  → release-ready      # if: always(); sole gate for chart promotion
+  → update-chart-dev      # development only: always() + release-ready success + env
+  → create-chart-prod-pr  # production only: always() + release-ready success + env
 ```
 
 Failing CI never reaches AWS authentication or image push.  
-`release-ready` succeeds only when **all** of CI, prepare, preflight, build, and verify-ecr succeed.
+`release-ready` succeeds when CI, prepare, preflight, and verify-ecr succeed, and build/retag are each **success** or **skipped** (skipped when that side of the plan is empty). At least one of build/retag must have run.  
+Chart promote jobs also use `always()` so a skipped empty build/retag matrix does not cascade-skip them after a green `release-ready`.
 
 | Environment | After `release-ready` |
 |---|---|
@@ -35,17 +63,59 @@ The workflow does **not** deploy Helm resources, call Argo CD APIs, or merge pro
 
 ### Path filter (branch pushes)
 
-On branch pushes (`main`, `techx-dev-corp`), the publishing workflow runs **only** when at least one file under:
+On branch pushes (`main`, `techx-dev-corp`), the publishing workflow runs when at least one file under these paths changes:
 
 ```text
 src/**
+pb/**
+docker-compose.yml
+docker-bake.hcl
+buildkitd.toml
+.env
 ```
 
-changes. Examples that **do not** start a branch publish: docs, README, workflows, `docker-bake.hcl`, `docker-compose.yml`, `Makefile`, root config.
+Examples that **do not** start a branch publish: docs, README, workflows, `Makefile`, and other root config not listed above.
 
-Any matching `src/**` change still builds and pushes the **full 21-image release set** (not a single service), because Helm uses one global image tag (plus matching `opensearch.image.tag`).
+Git tag pushes (`v*`) and manual `workflow_dispatch` always run the pipeline (no path filter).
 
-Git tag pushes (`v*`) and manual `workflow_dispatch` always run the full pipeline (no path filter). Use **workflow_dispatch** when you need to republish after bake/Compose/CI-only changes without touching `src/`.
+### Selective rebuild (build vs retag)
+
+Helm still uses **one global image tag** for all release services. Every successful publish must leave all **21** images present under the new tag (`sha-<7>` or `v*`). Selective CI does **not** promote a partial catalog.
+
+| Service classification | Action |
+|---|---|
+| **Changed** (`src/<service>/**`) | `docker buildx bake … --push` from source (BuildKit still uses ECR `:buildcache` for layers) |
+| **Unchanged** | Retag previous runtime image: `PREV_TAG` → `NEW_TAG` via `docker buildx imagetools create` (same digest, new tag) |
+| **Shared / global path** (`pb/**`, compose, bake, `.env`, `buildkitd.toml`) | **Full** bake of all 21 (no retag) |
+
+**When mode is full**
+
+* Git tag `v*`
+* `workflow_dispatch` with `force_full_rebuild: true` (default)
+* First push / zero `before` SHA
+* Shared path change above
+* Selective requested but no usable `PREV_TAG`
+
+**When mode is selective** (branch push with only per-service `src/<service>/` changes, or dispatch with `force_full_rebuild: false` and a previous tag)
+
+* `PREV_TAG` defaults to `sha-<first-7-of-github.event.before>` on branch pushes
+* `workflow_dispatch` can set `previous_tag` (e.g. `sha-a1b2c3d` or `v1.2.3`)
+* Preflight checks each retag candidate exists in ECR under `PREV_TAG`; missing services are moved into the build list
+
+Non-release paths under `src/` (e.g. `src/flagd`, Grafana config) do not force a service bake; if nothing maps to a release service, all 21 are retagged to the new global tag.
+
+| Ref | Purpose |
+|---|---|
+| `…/<service>:buildcache` | BuildKit **layer** cache during bake only — never deploy |
+| `…/<service>:<PREV_TAG>` → `…/<service>:<NEW_TAG>` | Skip source rebuild for unchanged services while keeping the global tag contract |
+
+### workflow_dispatch inputs
+
+| Input | Default | Purpose |
+|---|---|---|
+| `target_environment` | required | `development` or `production` |
+| `force_full_rebuild` | `true` | Bake all 21 from source when true |
+| `previous_tag` | empty | When force is false, tag to retag unchanged services from |
 
 ### Environment mapping (Build & Push)
 
@@ -98,7 +168,7 @@ Defined in `docker-bake.hcl` group `release` (layered over `docker-compose.yml`)
 
 `prepare` asserts `release` equals all Compose build targets (21), with no duplicates or missing services. A newly added Compose build target must be listed in `docker-bake.hcl` group `release`.
 
-### Registry cache
+### Registry cache and retag
 
 Each release target imports and exports BuildKit registry cache at:
 
@@ -109,21 +179,31 @@ ${IMAGE_NAME}/<service>:buildcache
 Export uses `mode=max`, OCI media types, and an image manifest.  
 **`buildcache` is a movable cache artifact only** — never a Helm-deployable runtime tag. Deploy only uses immutable release tags (`sha-*` or `v*`).
 
-Platforms: `linux/amd64` and `linux/arm64` (QEMU on `ubuntu-latest`).
+Selective publishes additionally copy multi-arch **runtime** manifests:
 
-Build matrix settings:
+```text
+docker buildx imagetools create \
+  --tag ${IMAGE_NAME}/<service>:${NEW_TAG} \
+  ${IMAGE_NAME}/<service>:${PREV_TAG}
+```
+
+That reuses the previous image digest under the new global tag; it does not rebuild layers and does not use `:buildcache`.
+
+Platforms: `linux/amd64` and `linux/arm64` (QEMU on bake jobs only).
+
+Build / retag matrix settings:
 
 | Setting | Value |
 |---|---|
 | `fail-fast` | `false` |
-| `max-parallel` | `4` |
+| `max-parallel` | `21` |
 | runner | `ubuntu-latest` |
-| `timeout-minutes` | `120` per service |
-| builder | Buildx + `buildkitd.toml` (`max-parallelism = 4`) |
+| `timeout-minutes` | `120` bake / `20` retag per service |
+| builder | Buildx + `buildkitd.toml` (`max-parallelism = 4`) on bake jobs |
 
 Environment-level concurrency uses `cancel-in-progress: false` so a canceled publish cannot leave a partially populated global tag.
 
-PR CI does **not** run multi-arch bake. e2e / Cypress / tracetest are out of scope for PR CI.
+PR CI runs **local single-arch** bake for changed services (no ECR). Multi-arch bake + push remains post-merge / dispatch only. e2e / Cypress / tracetest are out of scope for PR CI.
 
 ---
 
@@ -398,7 +478,7 @@ On the **chart** repo:
 | `Repository not found` / checkout 404 | Wrong `CHART_REPO`, or PAT lacks access to that repo |
 | `Permission denied` / push rejected | PAT Contents not Read/write; or branch rules block the PAT identity (Step C) |
 | `GraphQL: Resource not accessible` / PR create fails | Grant fine-grained PAT **Pull requests: Read and write** |
-| Job skipped entirely | Wrong environment for that job, or `release-ready` failed |
+| Job skipped entirely | Wrong environment for that job, or `release-ready` failed. If **both** chart jobs skip after a green `release-ready` on a selective run, the job `if` must include `always()` so a skipped empty build/retag matrix does not cascade-skip promote (fixed in workflow). |
 
 Without `CHART_REPO_TOKEN`, builds can still push images and pass `release-ready`, but chart promote jobs fail until the secret is set. Operators can still edit chart values manually as a fallback.
 
@@ -472,9 +552,11 @@ Local non-push Compose builds (`make build`, `make start`) are unchanged and use
 | Individual matrix build fails | Re-run failed jobs or full workflow; `fail-fast: false` keeps other services building. |
 | verify-ecr reports missing tags | Re-run build for missing services or full workflow; do **not** promote chart values. |
 | release-ready red | Treat as not promotable; chart promote jobs are skipped. |
+| update-chart-dev / create-chart-prod-pr skipped after green release-ready | Empty build or retag side is **skipped** by design; promote jobs use `always()` plus `needs.release-ready.result == 'success'` so they still run. Re-run on a commit that includes that `if` fix if an older workflow skipped them. |
 | update-chart-dev / create-chart-prod-pr fails: missing `CHART_REPO_TOKEN` | Add the secret (see §4.4 / §5); re-run failed job or full workflow. |
 | update-chart-dev fails: push rejected / protected branch | Allow the PAT identity to push to `techx-dev-corp`, or temporarily open a manual values commit. |
 | create-chart-prod-pr fails: cannot create PR | Ensure PAT has **Pull requests: Read and write**; confirm `CHART_PROD_BRANCH` exists. |
+| create-chart-prod-pr / update-chart-dev fails: `Could not locate default.image.tag under default.image` | Chart overlay has `default.image.tag` but not the old rigid layout (sibling keys under `default:` before `image:`). Workflow regex must allow indented lines before `image:` / `tag:`; re-run after that fix is on the platform default branch. |
 
 Rollback of this CI design: revert workflow, `docker-bake.hcl`, Makefile, and docs. Existing `:buildcache` tags may remain or be deleted; they do not affect deployed SHA/version tags.
 
@@ -492,6 +574,7 @@ Rollback of this CI design: revert workflow, `docker-bake.hcl`, Makefile, and do
 | `GitHub Environment variable IMAGE_NAME is not set` | Add `IMAGE_NAME` on that Environment (§4.2) |
 | Compose missing Dockerfile path | `.env` not sourced before bake |
 | Catalog mismatch in prepare | New Compose `build:` service not listed in bake group `release` |
+| `Could not locate default.image.tag under default.image in values-prod.yaml` | Tag updater expected `default:` → `image:` with no intervening keys; prod overlay may set lifecycle keys first — fixed flexible regex in promote jobs |
 
 ## Image promotion → GitOps (REL-09)
 
@@ -536,3 +619,5 @@ See chart runbook: `techx-corp-chart/docs/operations/gitops-argocd.md`.
 - Per-service Helm runtime tags / movable runtime tags
 - Native multi-arch runners, image security gates, SBOM/provenance, Cosign
 - Full e2e / tracetest in PR CI
+
+<!-- Change trail: @hungxqt - 2026-07-15 - Document flexible default.image.tag promote regex for values-prod layout. -->

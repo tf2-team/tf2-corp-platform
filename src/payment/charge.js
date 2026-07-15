@@ -26,7 +26,11 @@ module.exports.charge = async request => {
 
   await OpenFeature.setProviderAndWait(flagProvider);
 
-  const numberVariant =  await OpenFeature.getClient().getNumberValue("paymentFailure", 0);
+  // BTC original + team local- twin: max so either source can inject.
+  const client = OpenFeature.getClient();
+  const btcPaymentFailure = await client.getNumberValue("paymentFailure", 0);
+  const localPaymentFailure = await client.getNumberValue("local-paymentFailure", 0);
+  const numberVariant = Math.max(btcPaymentFailure, localPaymentFailure);
 
   if (numberVariant > 0) {
     // n% chance to fail with app.loyalty.level=gold
@@ -85,3 +89,4 @@ module.exports.charge = async request => {
 
   return { transactionId };
 };
+// Change trail: @hungxqt - 2026-07-15 - Dual-read local-paymentFailure (max with BTC).

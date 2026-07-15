@@ -62,9 +62,11 @@ def send_email(data)
   # create and start a manual span
   tracer = OpenTelemetry.tracer_provider.tracer('email')
   tracer.in_span("send_email") do |span|
-    # Check if memory leak flag is enabled
+    # BTC original + team local- twin: max so either source can inject.
     client = OpenFeature::SDK.build_client
-    memory_leak_multiplier = client.fetch_number_value(flag_key: "emailMemoryLeak", default_value: 0)
+    btc_memory_leak = client.fetch_number_value(flag_key: "emailMemoryLeak", default_value: 0)
+    local_memory_leak = client.fetch_number_value(flag_key: "local-emailMemoryLeak", default_value: 0)
+    memory_leak_multiplier = [btc_memory_leak, local_memory_leak].max
 
     # To speed up the memory leak we create a long email body
     confirmation_content = erb(:confirmation, locals: { order: data.order })
@@ -99,3 +101,4 @@ def send_email(data)
   # check out the OpenTelemetry Ruby docs at: 
   # https://opentelemetry.io/docs/instrumentation/ruby/manual/#creating-new-spans 
 end
+# Change trail: @hungxqt - 2026-07-15 - Dual-read local-emailMemoryLeak (max with BTC).

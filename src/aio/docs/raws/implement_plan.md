@@ -2,7 +2,7 @@
 
 > **Purpose:** Detailed engineering instructions for implementing the complete AIOps system proposed in [architect.md](architect.md).  
 > **Scope:** Runtime, configuration, signals, detectors, correlation, incident handling, guarded remediation, observability, deployment, testing, and evidence.  
-> **Project coordination:** Kept in [aiops_task_plan.md](aiops_task_plan.md) and intentionally omitted here.
+> **Project coordination:** Kept in [aiops_task_plan.md](../../../docs/aiops/aiops_task_plan.md) and intentionally omitted here.
 
 This guide is ordered by technical dependency. Complete and verify each foundation before enabling components that depend on it. Paths below follow the target structure in the architecture; create them as implementation progresses.
 
@@ -73,7 +73,7 @@ The deployable service must be wired to real TF2 infrastructure, not sample data
 ### 2.2 Repository and deployment ownership preflight
 
 - `tf2-corp-platform` is the delivery repository for runtime code and local/Docker Grafana assets.
-- `aio-docs` is the delivery repository for ADRs, evaluations, Ops Reviews, postmortems, and evidence indexes; it links to canonical runbooks in `tf2-corp-platform/src/aio/runbooks/`, and the runtime never reads it.
+- `tf2-corp-platform/docs/aiops` is the delivery location for ADRs, evaluations, Ops Reviews, postmortems, and evidence indexes; it links to canonical runbooks in `tf2-corp-platform/src/aio/runbooks/`, and the runtime never reads it.
 - `phase3/techx-corp-chart` is upstream reference material unless CDO explicitly identifies it as a writable delivery repository.
 - `ADR-DEPLOY-001` must record the URL, immutable revision, owner, and local checkout root of the chart repository that actually deploys TF2. Refer to that checkout as `TF2_CHART_ROOT` in commands and documentation.
 - Stop deployment work if `TF2_CHART_ROOT` is uncommitted, points at the Phase 3 reference by accident, or cannot render the currently deployed TF2 release. This prevents a locally edited template from being mistaken for a real EKS delivery.
@@ -1048,7 +1048,7 @@ Each item records source, stable query ID/expression, absolute time bounds, capt
 
 ### 15.4 Runbook format
 
-Use Markdown with machine-readable YAML front matter. `tf2-corp-platform/src/aio/runbooks/` is the only canonical runbook location. Runtime matching, validation, packaging, operator links, and documentation must resolve there; `aio-docs` may link to canonical runbooks but must not contain copies.
+Use Markdown with machine-readable YAML front matter. `tf2-corp-platform/src/aio/runbooks/` is the only canonical runbook location. Runtime matching, validation, packaging, operator links, and documentation must resolve there; `tf2-corp-platform/docs/aiops` may link to canonical runbooks but must not contain copies.
 
 ```yaml
 ---
@@ -1521,7 +1521,7 @@ Rollback or disable the AIOps component when it:
 
 ## 22. Produce required technical documentation and evidence
 
-Create under `aio-docs/aiops/`:
+Create under `tf2-corp-platform/docs/aiops/`:
 
 ```text
 aiops/
@@ -1621,7 +1621,7 @@ P0 is the required Phase 3 baseline. Conditional P1/P2 items below do not block 
 #### Tests and evidence
 
 - [ ] Unit, config, contract, integration, Grafana/PromQL, replay, image, manifest, and EKS checks pass.
-- [ ] Production image/manifests contain no test adapter, fixture path, mock endpoint, sample credential, or dependency on `aio-docs`/the Phase 3 reference chart.
+- [ ] Production image/manifests contain no test adapter, fixture path, mock endpoint, sample credential, or dependency on `tf2-corp-platform/docs/aiops`/the Phase 3 reference chart.
 - [ ] A deployed controlled event proves the real adapter chain end to end; replay evidence is reported separately.
 - [ ] Required replay scenarios produce reproducible JSON/Markdown results.
 - [ ] Detection and remediation evaluation metrics are reported without unsupported claims.

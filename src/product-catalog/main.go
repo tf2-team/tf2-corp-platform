@@ -152,6 +152,14 @@ func initDatabase() error {
 		return fmt.Errorf("failed to open database connection: %w", err)
 	}
 
+	// Cap the pool so multi-replica HPA cannot exhaust PostgreSQL max_connections.
+	// With catalog maxReplicas 12: 5 open × 12 = 60; leave headroom for other apps
+	// and the superuser reserve (default 3 of 100/200 slots).
+	db.SetMaxOpenConns(5)
+	db.SetMaxIdleConns(2)
+	db.SetConnMaxLifetime(5 * time.Minute)
+	db.SetConnMaxIdleTime(time.Minute)
+
 	reg, err = otelsql.RegisterDBStatsMetrics(db, otelsql.WithAttributes(semconv.DBSystemNamePostgreSQL))
 	if err != nil {
 		return fmt.Errorf("failed to register database metrics: %w", err)
@@ -488,8 +496,14 @@ func (p *productCatalog) checkProductFailure(ctx context.Context, id string) boo
 	}
 
 	client := openfeature.NewClient("productCatalog")
-	failureEnabled, _ := client.BooleanValue(
-		ctx, "productCatalogFailure", false, openfeature.EvaluationContext{},
-	)
-	return failureEnabled
+	evalCtx := openfeature.EvaluationContext{}
+	// BTC original || team local- twin.
+	failureEnabled, _ := client.BooleanValue(ctx, "productCatalogFailure", false, evalCtx)
+	if failureEnabled {
+		return true
+	}
+	localEnabled, _ := client.BooleanValue(ctx, "local-productCatalogFailure", false, evalCtx)
+	return localEnabled
 }
+
+// Change trail: @hungxqt - 2026-07-15 - Dual-read local-productCatalogFailure with BTC key.
