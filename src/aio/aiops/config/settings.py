@@ -18,6 +18,7 @@ class Settings(BaseSettings):
     policy_mode: str
     evidence_dir: Path
     state_store_path: Path
+    runtime_config_path: Path
 
     checkout_slo_detector_id: str
     checkout_bad_ratio_signal_id: str

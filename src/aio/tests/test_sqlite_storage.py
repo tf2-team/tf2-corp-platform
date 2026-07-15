@@ -34,11 +34,13 @@ class SQLiteIncidentStoreTest(unittest.TestCase):
 
             second_store = SQLiteIncidentStore(db_path, environment="tf2")
             same_incident = second_store.upsert(candidate(0.03))
+            incidents = second_store.list_incidents()
             second_store.close()
 
         self.assertEqual(incident.incident_id, same_incident.incident_id)
         self.assertEqual(same_incident.occurrence_count, 2)
         self.assertEqual(len(same_incident.events), 2)
+        self.assertEqual(len(incidents), 1)
 
 
 if __name__ == "__main__":

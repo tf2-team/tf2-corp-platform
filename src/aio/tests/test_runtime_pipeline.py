@@ -1,4 +1,6 @@
 import unittest
+from pathlib import Path
+from tempfile import TemporaryDirectory
 
 from aiops.collectors import StaticCollector
 from aiops.config import Settings
@@ -6,7 +8,7 @@ from aiops.detectors import DependencyDetector, NoDataDetector, ThresholdDetecto
 from aiops.schemas import Observation, SignalQuality
 from aiops.pipeline import AiopsPipeline
 from aiops.remediation import PolicyEngine
-from aiops.storage import InMemoryIncidentStore
+from aiops.storage import SQLiteIncidentStore
 
 
 def policy(settings: Settings) -> PolicyEngine:
@@ -35,52 +37,55 @@ def no_data_detector(settings: Settings) -> NoDataDetector:
 class RuntimePipelineTest(unittest.TestCase):
     def test_pipeline_runs_detect_to_incident_notify_and_dry_run(self):
         settings = Settings()
-        pipeline = AiopsPipeline(
-            collector=StaticCollector(
-                [
-                    Observation(
+        with TemporaryDirectory() as tmp:
+            store = SQLiteIncidentStore(Path(tmp) / "aiops.sqlite3", environment=settings.environment)
+            pipeline = AiopsPipeline(
+                collector=StaticCollector(
+                    [
+                        Observation(
+                            signal_id="checkout_bad_ratio_24h",
+                            value=0.02,
+                            unit="ratio",
+                            window="24h",
+                            quality=SignalQuality.VERIFIED,
+                        ),
+                        Observation(
+                            signal_id="checkout_payment_error_rate_5m",
+                            value=0.13,
+                            unit="ratio",
+                            window="5m",
+                            quality=SignalQuality.VERIFIED,
+                        ),
+                    ]
+                ),
+                detectors=[
+                    ThresholdDetector(
+                        detector_id="ops01_checkout_slo",
                         signal_id="checkout_bad_ratio_24h",
-                        value=0.02,
-                        unit="ratio",
-                        window="24h",
-                        quality=SignalQuality.VERIFIED,
+                        threshold=0.01,
+                        flow="checkout",
+                        service="checkout",
+                        severity="SEV1",
+                        runbook_id="RB-CHECKOUT-SLO",
                     ),
-                    Observation(
+                    DependencyDetector(
+                        detector_id="ops03_checkout_payment_dependency",
                         signal_id="checkout_payment_error_rate_5m",
-                        value=0.13,
-                        unit="ratio",
-                        window="5m",
-                        quality=SignalQuality.VERIFIED,
+                        threshold=0.05,
+                        flow="checkout",
+                        service="checkout",
+                        dependency="payment",
+                        runbook_id="RB-CHECKOUT-DEPENDENCY",
+                        severity=settings.dependency_default_severity,
+                        confidence=settings.dependency_default_confidence,
                     ),
-                ]
-            ),
-            detectors=[
-                ThresholdDetector(
-                    detector_id="ops01_checkout_slo",
-                    signal_id="checkout_bad_ratio_24h",
-                    threshold=0.01,
-                    flow="checkout",
-                    service="checkout",
-                    severity="SEV1",
-                    runbook_id="RB-CHECKOUT-SLO",
-                ),
-                DependencyDetector(
-                    detector_id="ops03_checkout_payment_dependency",
-                    signal_id="checkout_payment_error_rate_5m",
-                    threshold=0.05,
-                    flow="checkout",
-                    service="checkout",
-                    dependency="payment",
-                    runbook_id="RB-CHECKOUT-DEPENDENCY",
-                    severity=settings.dependency_default_severity,
-                    confidence=settings.dependency_default_confidence,
-                ),
-            ],
-            store=InMemoryIncidentStore(environment=settings.environment),
-            policy=policy(settings),
-        )
+                ],
+                store=store,
+                policy=policy(settings),
+            )
 
-        result = pipeline.run_once()
+            result = pipeline.run_once()
+            store.close()
 
         self.assertEqual(len(result.incidents), 1)
         self.assertEqual(result.incidents[0].likely_dependency, "payment")
@@ -91,24 +96,27 @@ class RuntimePipelineTest(unittest.TestCase):
 
     def test_pipeline_opens_monitoring_incident_for_stale_signal(self):
         settings = Settings()
-        pipeline = AiopsPipeline(
-            collector=StaticCollector(
-                [
-                    Observation(
-                        signal_id="checkout_bad_ratio_24h",
-                        value=None,
-                        unit="ratio",
-                        window="24h",
-                        quality=SignalQuality.STALE,
-                    )
-                ]
-            ),
-            detectors=[no_data_detector(settings)],
-            store=InMemoryIncidentStore(environment=settings.environment),
-            policy=policy(settings),
-        )
+        with TemporaryDirectory() as tmp:
+            store = SQLiteIncidentStore(Path(tmp) / "aiops.sqlite3", environment=settings.environment)
+            pipeline = AiopsPipeline(
+                collector=StaticCollector(
+                    [
+                        Observation(
+                            signal_id="checkout_bad_ratio_24h",
+                            value=None,
+                            unit="ratio",
+                            window="24h",
+                            quality=SignalQuality.STALE,
+                        )
+                    ]
+                ),
+                detectors=[no_data_detector(settings)],
+                store=store,
+                policy=policy(settings),
+            )
 
-        result = pipeline.run_once()
+            result = pipeline.run_once()
+            store.close()
 
         self.assertEqual(result.incidents[0].flow, "monitoring")
         self.assertEqual(result.incidents[0].state, "open")

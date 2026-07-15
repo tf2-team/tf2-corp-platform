@@ -13,4 +13,4 @@ def incident_fingerprint(environment: str, candidate: CandidateEvent) -> str:
         candidate.service,
         candidate.likely_dependency,
     ]
-    return sha256("|".join(stable_parts).encode("utf-8")).hexdigest()
+    return f"sha256:{sha256('|'.join(stable_parts).encode('utf-8')).hexdigest()}"

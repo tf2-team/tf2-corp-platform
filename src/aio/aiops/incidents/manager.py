@@ -13,8 +13,9 @@ class IncidentManager:
         fingerprint = self.fingerprint(candidate)
         incident = self._incidents_by_fingerprint.get(fingerprint)
         if incident is None:
+            digest = fingerprint.removeprefix("sha256:")
             incident = Incident(
-                incident_id=f"inc-{fingerprint[:12]}",
+                incident_id=f"inc-{digest[:12]}",
                 fingerprint=fingerprint,
                 state="open",
                 severity=candidate.severity,

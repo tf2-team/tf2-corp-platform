@@ -18,7 +18,12 @@ class GrafanaAlert(AiopsModel):
     status: str
     labels: dict[str, str]
     starts_at: str = Field(alias="startsAt")
+    ends_at: str | None = Field(default=None, alias="endsAt")
     annotations: dict[str, str] = Field(default_factory=dict)
+    fingerprint: str | None = None
+    generator_url: str | None = Field(default=None, alias="generatorURL")
+    dashboard_url: str | None = Field(default=None, alias="dashboardURL")
+    panel_url: str | None = Field(default=None, alias="panelURL")
 
 
 class GrafanaWebhookEvent(AiopsModel):
@@ -28,7 +33,13 @@ class GrafanaWebhookEvent(AiopsModel):
 
 
 class GrafanaNormalizedEvent(AiopsModel):
+    schema_version: str = "1.0"
     source: str
     status: str
-    alert_count: int
-    alert_names: list[str]
+    alert_id: str
+    received_at: str
+    starts_at: str
+    ends_at: str | None = None
+    labels: dict[str, str]
+    annotations_redacted: dict[str, str] = Field(default_factory=dict)
+    links: dict[str, str | None] = Field(default_factory=dict)

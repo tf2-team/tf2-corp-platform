@@ -18,7 +18,7 @@ aiops/
 ├── notifications/    # builder.py
 ├── remediation/      # policy.py
 ├── verification/     # engine.py
-├── storage/          # memory.py, sqlite.py
+├── storage/          # sqlite.py
 ├── pipeline/         # runtime.py
 ├── schemas/          # shared Pydantic request/domain/response models
 ├── shared/           # reusable helpers
@@ -43,7 +43,8 @@ conda run -n capstone python -B -m unittest discover -s tests
 
 ## Configuration
 
-All runtime configuration is loaded from `.env` through `aiops.config.Settings`.
+Runtime secrets, URLs, and paths are loaded from `.env` through `aiops.config.Settings`.
+Infrastructure topology, signal IDs, detector definitions, and policy lists are loaded from `config/runtime.json`.
 
 - Hyperparameters: thresholds, confidence, default replicas.
 - Runtime paths: API paths, evidence dir, state store path.
@@ -60,7 +61,7 @@ AIOPS_PROTECTED_TARGETS=["flagd","openfeature","secrets","btc-incident"]
 
 ## Current Scope
 
-This is still a minimal baseline: it includes FastAPI routes, SQLite incident persistence, and HTTP integration clients, but not Kubernetes mutation or production query registries yet. Add those when real endpoint/config evidence exists.
+This is still a minimal baseline: it includes FastAPI routes, SQLite incident persistence, config-driven detectors, and HTTP integration clients, but not Kubernetes mutation or production anomaly/RCA engines yet. Add those when real endpoint/config evidence exists.
 
 ## Integrations
 

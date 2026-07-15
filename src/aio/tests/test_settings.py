@@ -1,4 +1,5 @@
 import tempfile
+import json
 import unittest
 from pathlib import Path
 
@@ -11,6 +12,10 @@ class SettingsTest(unittest.TestCase):
     def test_settings_load_from_env_file_and_drive_pipeline(self):
         with tempfile.TemporaryDirectory() as directory:
             env_file = Path(directory) / ".env"
+            runtime_config_path = Path(directory) / "runtime.json"
+            runtime_config = json.loads(Path("config/runtime.json").read_text(encoding="utf-8"))
+            runtime_config["detectors"][0]["threshold"] = 0.5
+            runtime_config_path.write_text(json.dumps(runtime_config), encoding="utf-8")
             env_file.write_text(
                 Path(".env").read_text(encoding="utf-8")
                 + "\n"
@@ -20,6 +25,7 @@ class SettingsTest(unittest.TestCase):
                         "AIOPS_CHECKOUT_SLO_RUNBOOK_ID=RB-TEST",
                         "AIOPS_POLICY_MODE=observe",
                         f"AIOPS_STATE_STORE_PATH={Path(directory) / 'aiops.sqlite3'}",
+                        f"AIOPS_RUNTIME_CONFIG_PATH={runtime_config_path}",
                     ]
                 ),
                 encoding="utf-8",

@@ -41,8 +41,9 @@ class SQLiteIncidentStore:
         ).fetchone()
 
         if row is None:
+            digest = fingerprint.removeprefix("sha256:")
             incident = Incident(
-                incident_id=f"inc-{fingerprint[:12]}",
+                incident_id=f"inc-{digest[:12]}",
                 fingerprint=fingerprint,
                 state="open",
                 severity=candidate.severity,
@@ -71,6 +72,10 @@ class SQLiteIncidentStore:
                 (fingerprint, candidate.model_dump_json()),
             )
         return incident
+
+    def list_incidents(self) -> list[Incident]:
+        rows = self._connection.execute("SELECT incident_json FROM incidents ORDER BY fingerprint").fetchall()
+        return [Incident.model_validate_json(row[0]) for row in rows]
 
     def close(self) -> None:
         self._connection.close()

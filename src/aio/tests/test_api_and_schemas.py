@@ -45,6 +45,7 @@ class FastApiAppTest(unittest.TestCase):
 
         self.assertIn("/health/live", paths)
         self.assertIn("/api/v1/pipeline/run", paths)
+        self.assertIn("/api/v1/incidents", paths)
         self.assertIn("/api/v1/events/grafana", paths)
 
     def test_grafana_webhook_normalizes_event(self):
@@ -65,6 +66,8 @@ class FastApiAppTest(unittest.TestCase):
 
         self.assertEqual(response.source, "grafana")
         self.assertEqual(response.status, "firing")
+        self.assertEqual(response.labels["alertname"], "CheckoutSLOBreach")
+        self.assertEqual(response.schema_version, "1.0")
 
 
 if __name__ == "__main__":

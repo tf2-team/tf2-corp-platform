@@ -1,0 +1,88 @@
+{
+  "schema_version": "1.0",
+  "environment": "tf2",
+  "topology": {
+    "services": [
+      {
+        "name": "checkout",
+        "namespace": "tf2",
+        "kind": "Deployment",
+        "owner": "checkout-team",
+        "flow": "checkout",
+        "dependencies": ["payment"]
+      },
+      {
+        "name": "payment",
+        "namespace": "tf2",
+        "kind": "Deployment",
+        "owner": "payment-team",
+        "flow": "checkout",
+        "dependencies": []
+      }
+    ]
+  },
+  "signals": [
+    {
+      "id": "checkout_bad_ratio_24h",
+      "source": "prometheus",
+      "query_id": "checkout.bad_ratio.24h",
+      "unit": "ratio",
+      "window": "24h",
+      "flow": "checkout",
+      "service": "checkout",
+      "required_labels": []
+    },
+    {
+      "id": "checkout_payment_error_rate_5m",
+      "source": "prometheus",
+      "query_id": "checkout.payment_error_rate.5m",
+      "unit": "ratio",
+      "window": "5m",
+      "flow": "checkout",
+      "service": "checkout",
+      "required_labels": ["service", "dependency"]
+    }
+  ],
+  "detectors": [
+    {
+      "id": "ops01_checkout_slo",
+      "type": "threshold",
+      "enabled": true,
+      "signal_id": "checkout_bad_ratio_24h",
+      "threshold": 0.01,
+      "flow": "checkout",
+      "service": "checkout",
+      "severity": "SEV1",
+      "runbook_id": "RB-CHECKOUT-SLO"
+    },
+    {
+      "id": "ops02_monitoring_loss",
+      "type": "no-data",
+      "enabled": true,
+      "signal_ids": ["checkout_bad_ratio_24h"],
+      "flow": "monitoring",
+      "service": "aiops",
+      "severity": "SEV2",
+      "runbook_id": "RB-MONITORING-LOSS"
+    },
+    {
+      "id": "ops03_checkout_payment_dependency",
+      "type": "dependency",
+      "enabled": true,
+      "signal_id": "checkout_payment_error_rate_5m",
+      "threshold": 0.05,
+      "flow": "checkout",
+      "service": "checkout",
+      "dependency": "payment",
+      "severity": "SEV2",
+      "confidence": 0.8,
+      "runbook_id": "RB-CHECKOUT-DEPENDENCY"
+    }
+  ],
+  "policy": {
+    "protected_targets": ["aiops", "postgresql"],
+    "stateful_kinds": ["StatefulSet", "Database"],
+    "non_actionable_flows": ["monitoring"],
+    "default_action_replicas": 3
+  }
+}
