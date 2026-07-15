@@ -496,10 +496,14 @@ func (p *productCatalog) checkProductFailure(ctx context.Context, id string) boo
 	}
 
 	client := openfeature.NewClient("productCatalog")
-	failureEnabled, _ := client.BooleanValue(
-		ctx, "productCatalogFailure", false, openfeature.EvaluationContext{},
-	)
-	return failureEnabled
+	evalCtx := openfeature.EvaluationContext{}
+	// BTC original || team local- twin.
+	failureEnabled, _ := client.BooleanValue(ctx, "productCatalogFailure", false, evalCtx)
+	if failureEnabled {
+		return true
+	}
+	localEnabled, _ := client.BooleanValue(ctx, "local-productCatalogFailure", false, evalCtx)
+	return localEnabled
 }
 
-// Change trail: @hungxqt - 2026-07-14 - Cap sql.DB pool to protect PostgreSQL under HPA scale-out.
+// Change trail: @hungxqt - 2026-07-15 - Dual-read local-productCatalogFailure with BTC key.

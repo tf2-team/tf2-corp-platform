@@ -121,9 +121,12 @@ def must_map_env(key: str):
 
 
 def check_feature_flag(flag_name: str):
-    # Initialize OpenFeature
+    # BTC original || team local- twin (either source can inject).
     client = api.get_client()
-    return client.get_boolean_value("recommendationCacheFailure", False)
+    return (
+        client.get_boolean_value(flag_name, False)
+        or client.get_boolean_value(f"local-{flag_name}", False)
+    )
 
 
 if __name__ == "__main__":
@@ -175,4 +178,4 @@ if __name__ == "__main__":
     logger.info(f'Recommendation service started, listening on port {port}')
     server.wait_for_termination()
 
-# Change trail: @hungxqt - 2026-07-14 - Raise gRPC worker pool so health probes succeed under load.
+# Change trail: @hungxqt - 2026-07-15 - Dual-read local- flags; fix check_feature_flag to use flag_name.
