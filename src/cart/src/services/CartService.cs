@@ -80,7 +80,10 @@ public class CartService : Oteldemo.CartService.CartServiceBase
 
         try
         {
-            if (await _featureFlagHelper.GetBooleanValueAsync("cartFailure", false))
+            // BTC original || team local- twin (either source can inject).
+            bool cartFailure = await _featureFlagHelper.GetBooleanValueAsync("cartFailure", false)
+                || await _featureFlagHelper.GetBooleanValueAsync("local-cartFailure", false);
+            if (cartFailure)
             {
                 await _badCartStore.EmptyCartAsync(request.UserId);
             }
@@ -99,3 +102,4 @@ public class CartService : Oteldemo.CartService.CartServiceBase
         return Empty;
     }
 }
+// Change trail: @hungxqt - 2026-07-15 - Dual-read local-cartFailure with BTC key.

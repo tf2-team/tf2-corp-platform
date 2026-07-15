@@ -205,9 +205,12 @@ def list_models():
     })
 
 def check_feature_flag(flag_name: str):
-    # Initialize OpenFeature
+    # BTC original || team local- twin (either source can inject).
     client = api.get_client()
-    return client.get_boolean_value(flag_name, False)
+    return (
+        client.get_boolean_value(flag_name, False)
+        or client.get_boolean_value(f"local-{flag_name}", False)
+    )
 
 if __name__ == '__main__':
 
@@ -220,3 +223,4 @@ if __name__ == '__main__':
     print("OpenAI API server starting on http://localhost:8000")
     print("Set your OpenAI base URL to: http://localhost:8000/v1")
     app.run(host='0.0.0.0', port=8000, debug=True)
+# Change trail: @hungxqt - 2026-07-15 - Dual-read local- LLM flags with BTC keys.

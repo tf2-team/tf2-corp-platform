@@ -958,31 +958,32 @@ func createProducerSpan(ctx context.Context, msg *sarama.ProducerMessage) trace.
 	return span
 }
 
+// localFlagPrefix twins BTC/shared keys for team UI toggles under dual-source flagd.
+const localFlagPrefix = "local-"
+
 func (cs *checkout) isFeatureFlagEnabled(ctx context.Context, featureFlagName string) bool {
 	client := openfeature.NewClient("checkout")
+	evalCtx := openfeature.EvaluationContext{}
 
-	// Default value is set to false, but you could also make this a parameter.
-	featureEnabled, _ := client.BooleanValue(
-		ctx,
-		featureFlagName,
-		false,
-		openfeature.EvaluationContext{},
-	)
-
-	return featureEnabled
+	// BTC original || team local- twin (either source can inject).
+	featureEnabled, _ := client.BooleanValue(ctx, featureFlagName, false, evalCtx)
+	if featureEnabled {
+		return true
+	}
+	localEnabled, _ := client.BooleanValue(ctx, localFlagPrefix+featureFlagName, false, evalCtx)
+	return localEnabled
 }
 
 func (cs *checkout) getIntFeatureFlag(ctx context.Context, featureFlagName string) int {
 	client := openfeature.NewClient("checkout")
+	evalCtx := openfeature.EvaluationContext{}
 
-	// Default value is set to 0, but you could also make this a parameter.
-	featureFlagValue, _ := client.IntValue(
-		ctx,
-		featureFlagName,
-		0,
-		openfeature.EvaluationContext{},
-	)
-
+	// max(BTC, local-) so either source can raise intensity.
+	featureFlagValue, _ := client.IntValue(ctx, featureFlagName, 0, evalCtx)
+	localValue, _ := client.IntValue(ctx, localFlagPrefix+featureFlagName, 0, evalCtx)
+	if int(localValue) > int(featureFlagValue) {
+		return int(localValue)
+	}
 	return int(featureFlagValue)
 }
 
@@ -1139,4 +1140,4 @@ func parseOrderCancelledBytes(data []byte) (string, string, error) {
 	return orderID, reason, nil
 }
 
-// Change trail: @hungxqt - 2026-07-14 - Guard nil Kafka producer in PlaceOrder/sendToPostProcessor to stop SIGSEGV.
+// Change trail: @hungxqt - 2026-07-15 - Dual-read local- flag twins (OR bool / max int) with BTC keys.
