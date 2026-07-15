@@ -204,6 +204,8 @@ Diễn giải: scale-up này là **dư chấn / autoscaling response** trong lú
 
 ## 9. Response / containment
 
+![Commits fix cartFailure containment](./evidence/evidence2/commit-fix.png)
+
 | Hạng mục | Xử lý |
 | --- | --- |
 | **Nguyên tắc BTC** | Không tắt flagd, không sửa flag, không bypass OpenFeature, không chặn traffic BTC |
@@ -212,6 +214,8 @@ Diễn giải: scale-up này là **dư chấn / autoscaling response** trong lú
 | **Degraded mode** | Nếu vẫn fail, ghi log/trace `cart cleanup deferred` và **không làm fail checkout response** |
 | **Telemetry** | Set span attributes `app.cart.cleanup.status=succeeded/deferred`, `app.cart.cleanup.attempts` |
 | **Commit fix** | `e952c98` — `fix(checkout): defer cart cleanup failures` |
+| **Commit docs** | `34f7399` — `docs(flags): document cartFailure containment` |
+| **CI** | GitHub checks **7/7** pass trên branch fix |
 
 ### 9.1 Vì sao cách này giảm ảnh hưởng khách hàng tốt nhất?
 
@@ -251,6 +255,7 @@ Containment mới chuyển `EmptyCart` thành **best-effort cleanup**:
 | 5 | Baseline flags trước incident | [`evidence/evidence2/cartflag-off.png`](./evidence/evidence2/cartflag-off.png) |
 | 6 | Flag correlation `cartFailure/on` | [`evidence/evidence2/cartflagd-on.png`](./evidence/evidence2/cartflagd-on.png) |
 | 7 | HPA scale during incident | [`evidence/evidence2/hpa-scale.png`](./evidence/evidence2/hpa-scale.png) |
+| 8 | Commits fix containment | [`evidence/evidence2/commit-fix.png`](./evidence/evidence2/commit-fix.png) |
 
 ---
 
