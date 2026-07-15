@@ -5,6 +5,13 @@ import pytest
 
 sys.path.append(os.path.abspath(os.path.dirname(os.path.dirname(__file__))))
 
+# database.py validates this at import time. Integration tests mock all database
+# access, so use a non-routable placeholder instead of depending on CI secrets.
+os.environ.setdefault(
+    "DB_CONNECTION_STRING",
+    "postgresql://test:test@127.0.0.1:1/product_reviews",
+)
+
 from product_reviews_server import (
     get_ai_assistant_response,
     ProductReviewService
