@@ -34,7 +34,7 @@ def fetch_product_reviews_from_db(request_product_id):
 
             with connection.cursor() as cursor:
                 # Define the SQL query
-                query = "SELECT username, description, score FROM reviews.productreviews WHERE product_id= %s"
+                query = "SELECT username, description, score, id FROM reviews.productreviews WHERE product_id= %s"
 
                 # Execute the query
                 cursor.execute(query, (request_product_id, ))
