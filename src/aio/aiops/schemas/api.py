@@ -3,11 +3,12 @@ from __future__ import annotations
 from pydantic import Field
 
 from aiops.schemas.base import AiopsModel
-from aiops.schemas.domain import Observation
+from aiops.schemas.domain import MetricSeries, Observation
 
 
 class PipelineRunRequest(AiopsModel):
     observations: list[Observation] = Field(default_factory=list)
+    metric_series: list[MetricSeries] = Field(default_factory=list)
 
 
 class HealthResponse(AiopsModel):

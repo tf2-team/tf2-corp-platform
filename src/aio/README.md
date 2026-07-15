@@ -12,6 +12,8 @@ aiops/
 ├── normalization/    # normalizer.py
 ├── features/         # builder.py
 ├── detectors/        # base.py, engine.py, threshold.py, no_data.py, dependency.py
+├── anomaly/          # v0.0.1 EWMA/STL, service isolation score, BARO BOCPD
+├── rca/              # v0.0.1 graph traversal and BARO robust scorer ranking
 ├── correlation/      # correlator.py
 ├── enrichment/       # enricher.py
 ├── incidents/        # manager.py
@@ -61,7 +63,14 @@ AIOPS_PROTECTED_TARGETS=["flagd","openfeature","secrets","btc-incident"]
 
 ## Current Scope
 
-This is still a minimal baseline: it includes FastAPI routes, SQLite incident persistence, config-driven detectors, and HTTP integration clients, but not Kubernetes mutation or production anomaly/RCA engines yet. Add those when real endpoint/config evidence exists.
+This baseline includes FastAPI routes, SQLite incident persistence, config-driven detectors, HTTP integration clients, and the v0.0.1 anomaly/RCA path:
+
+- univariate EWMA plus seasonal residual scoring
+- per-service multivariate isolation-style scoring
+- BARO `bocpd`
+- graph traversal RCA plus BARO `robust_scorer`
+
+It still does not perform Kubernetes mutation directly.
 
 ## Integrations
 

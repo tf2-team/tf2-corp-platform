@@ -84,5 +84,15 @@
     "stateful_kinds": ["StatefulSet", "Database"],
     "non_actionable_flows": ["monitoring"],
     "default_action_replicas": 3
+  },
+  "rca": {
+    "enabled": true,
+    "top_k": 5,
+    "min_points": 8,
+    "ewma_alpha": 0.3,
+    "ewma_z_threshold": 3.0,
+    "seasonal_period": 1,
+    "isolation_score_threshold": 4.0,
+    "bocpd_score_threshold": 4.0
   }
 }

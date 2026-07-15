@@ -66,6 +66,17 @@ class RuntimePolicyConfig(AiopsModel):
     default_action_replicas: int
 
 
+class RcaConfig(AiopsModel):
+    enabled: bool = True
+    top_k: int = 5
+    min_points: int = 8
+    ewma_alpha: float = 0.3
+    ewma_z_threshold: float = 3.0
+    seasonal_period: int = 1
+    isolation_score_threshold: float = 4.0
+    bocpd_score_threshold: float = 4.0
+
+
 class RuntimeConfig(AiopsModel):
     schema_version: Literal["1.0"]
     environment: str
@@ -73,6 +84,7 @@ class RuntimeConfig(AiopsModel):
     signals: list[SignalDefinition]
     detectors: list[DetectorDefinition]
     policy: RuntimePolicyConfig
+    rca: RcaConfig = Field(default_factory=RcaConfig)
 
     @model_validator(mode="after")
     def validate_references(self) -> "RuntimeConfig":

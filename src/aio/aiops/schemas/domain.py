@@ -35,6 +35,39 @@ class Feature(AiopsModel):
     labels: dict[str, str] = Field(default_factory=dict)
 
 
+class MetricPoint(AiopsModel):
+    timestamp: int
+    value: float
+
+
+class MetricSeries(AiopsModel):
+    service: str
+    metric: str
+    signal_id: str
+    points: list[MetricPoint]
+
+
+class AnomalyFinding(AiopsModel):
+    algorithm: str
+    service: str
+    metric: str
+    signal_id: str
+    score: float
+    timestamp: int
+
+
+class RootCauseCandidate(AiopsModel):
+    service: str
+    score: float
+    root_cause_metrics: list[str] = Field(default_factory=list)
+    evidence: list[str] = Field(default_factory=list)
+
+
+class RcaResult(AiopsModel):
+    anomalies: list[AnomalyFinding] = Field(default_factory=list)
+    root_causes: list[RootCauseCandidate] = Field(default_factory=list)
+
+
 class EvidenceItem(AiopsModel):
     source: str
     reference: str
@@ -116,4 +149,4 @@ class PipelineResult(AiopsModel):
     notifications: list[NotificationMessage]
     policy_decisions: list[PolicyDecision]
     verification_results: list[VerificationResult]
-
+    rca_result: RcaResult = Field(default_factory=RcaResult)

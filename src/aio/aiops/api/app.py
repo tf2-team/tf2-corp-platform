@@ -29,9 +29,10 @@ def run_static_pipeline(request: PipelineRunRequest, settings: Settings | None =
             target_kind=settings.action_target_kind_deployment,
             default_replicas=runtime_config.policy.default_action_replicas,
         ),
+        runtime_config=runtime_config,
     )
     try:
-        return pipeline.run_once()
+        return pipeline.run_once(metric_series=request.metric_series)
     finally:
         store.close()
 

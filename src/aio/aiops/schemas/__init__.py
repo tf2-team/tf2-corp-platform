@@ -1,22 +1,28 @@
 from aiops.schemas.api import GrafanaAlert, GrafanaNormalizedEvent, GrafanaWebhookEvent, HealthResponse, PipelineRunRequest
 from aiops.schemas.base import AiopsModel
-from aiops.schemas.config import DetectorDefinition, RuntimeConfig, RuntimePolicyConfig, SignalDefinition, TopologyConfig, TopologyService
+from aiops.schemas.config import DetectorDefinition, RcaConfig, RuntimeConfig, RuntimePolicyConfig, SignalDefinition, TopologyConfig, TopologyService
 from aiops.schemas.domain import (
     ActionProposal,
+    AnomalyFinding,
     CandidateEvent,
     EvidenceItem,
     Feature,
     Incident,
+    MetricPoint,
+    MetricSeries,
     NotificationMessage,
     Observation,
     PipelineResult,
     PolicyDecision,
+    RcaResult,
+    RootCauseCandidate,
     SignalQuality,
     VerificationResult,
 )
 
 __all__ = [
     "ActionProposal",
+    "AnomalyFinding",
     "AiopsModel",
     "CandidateEvent",
     "DetectorDefinition",
@@ -27,11 +33,16 @@ __all__ = [
     "GrafanaWebhookEvent",
     "HealthResponse",
     "Incident",
+    "MetricPoint",
+    "MetricSeries",
     "NotificationMessage",
     "Observation",
     "PipelineResult",
     "PipelineRunRequest",
     "PolicyDecision",
+    "RcaConfig",
+    "RcaResult",
+    "RootCauseCandidate",
     "RuntimeConfig",
     "RuntimePolicyConfig",
     "SignalQuality",
