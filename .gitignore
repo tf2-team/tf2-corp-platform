@@ -56,3 +56,6 @@ test/tracetesting/tracetesting-vars.yaml
 src/cart/src/Program.cs.bak
 src/flagd/demo.flagd.json.bak
 contract
+
+# Generated AI model archives are published to S3, never committed.
+/dist/ai-model/

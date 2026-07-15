@@ -426,6 +426,9 @@ def check_feature_flag(flag_name: str):
 if __name__ == "__main__":
     service_name = must_map_env('OTEL_SERVICE_NAME')
 
+    # In EKS this is strict: do not become Ready with a missing/corrupt model.
+    guardrails.initialize_guardrails()
+
     api.set_provider(FlagdProvider(host=os.environ.get('FLAGD_HOST', 'flagd'), port=os.environ.get('FLAGD_PORT', 8013)))
 
     # Initialize Traces and Metrics

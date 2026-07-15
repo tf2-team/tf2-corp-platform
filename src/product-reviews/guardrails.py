@@ -2,6 +2,8 @@ import re
 import hashlib
 import json
 import logging
+import os
+from functools import lru_cache
 from decimal import Decimal
 from ai_contracts import (
     GuardrailAction,
@@ -13,6 +15,30 @@ from ai_contracts import (
 
 # Setup basic logging
 logger = logging.getLogger("guardrails")
+
+
+def _model_is_required() -> bool:
+    return os.getenv("AI_GUARDRAIL_REQUIRE_MODEL", "false").lower() in {
+        "1", "true", "yes", "on"
+    }
+
+
+@lru_cache(maxsize=1)
+def _prompt_injection_scanner():
+    from llm_guard.input_scanners import PromptInjection
+
+    return PromptInjection(threshold=0.5)
+
+
+def initialize_guardrails() -> None:
+    """Load heavyweight guardrails before the service starts accepting traffic."""
+    try:
+        _prompt_injection_scanner()
+    except Exception:
+        if _model_is_required():
+            logger.exception("Required prompt-injection model failed to load")
+            raise
+        logger.warning("Prompt-injection model unavailable; keyword fallback is active")
 
 # Common PII Regex Fallback patterns
 EMAIL_REGEX = re.compile(r"[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+")
@@ -80,12 +106,13 @@ def check_prompt_injection(text: str) -> bool:
     """Returns True if text is clean/valid, False if injection is detected."""
     # 1. Try using LLM Guard Input Scanner
     try:
-        from llm_guard.input_scanners import PromptInjection
-        scanner = PromptInjection(threshold=0.5)
+        scanner = _prompt_injection_scanner()
         _, is_valid, _ = scanner.scan(text)
         if not is_valid:
             return False
     except Exception as e:
+        if _model_is_required():
+            raise RuntimeError("Required prompt-injection model is unavailable") from e
         logger.warning(f"LLM Guard prompt injection check failed or not installed. Using keyword fallback. Error: {e}")
 
     # 2. Keyword fallback check
