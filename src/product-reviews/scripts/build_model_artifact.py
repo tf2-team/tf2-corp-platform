@@ -65,7 +65,7 @@ def main() -> None:
 
     checksum = sha256(archive)
     (output / "model.tar.gz.sha256").write_text(
-        f"{checksum}  model.tar.gz\n", encoding="ascii"
+        f"{checksum}  model.tar.gz\n", encoding="ascii", newline="\n"
     )
     (output / "manifest.json").write_text(
         json.dumps({**manifest, "sha256": checksum}, indent=2) + "\n",
