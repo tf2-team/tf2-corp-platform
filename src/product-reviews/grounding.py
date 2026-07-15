@@ -33,16 +33,16 @@ from ai_contracts import (
 logger = logging.getLogger("grounding")
 
 # Fixed abstention message, per the Day 2/3 brief. Do not vary this string.
-ABSTAIN_MESSAGE = "Cac review hien tai khong cung cap du thong tin."
+ABSTAIN_MESSAGE = "The current reviews do not provide enough information."
 
 _SYSTEM_PROMPT = (
     "You are a product review summarizer. You will be given a list of "
     "reviews, each tagged with a source_id. Summarize what the reviews "
-    "say and, for every claim you make, cite the source_id(s) that "
+    "say in English and, for every claim you make, cite the source_id(s) that "
     "support it. Do not include any claim that is not directly "
     "supported by at least one review. Do not invent numbers, "
     "durations, proper names, or comparisons that are not stated in "
-    "the reviews."
+    "the reviews. The summary and all claims must be written in English."
 )
 
 _MIN_KEYWORD_LENGTH = 4
