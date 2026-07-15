@@ -14,6 +14,7 @@ RUN go mod download
 COPY ./src/checkout/genproto/oteldemo/ genproto/oteldemo/
 COPY ./src/checkout/kafka/ kafka/
 COPY ./src/checkout/money/ money/
+COPY ./src/checkout/outbox/ outbox/
 COPY ./src/checkout/main.go main.go
 
 RUN CGO_ENABLED=0 GOOS=linux go build -ldflags "-s -w" -o checkout main.go
@@ -26,3 +27,4 @@ COPY --from=builder /usr/src/app/checkout/ ./
 
 EXPOSE ${CHECKOUT_PORT}
 ENTRYPOINT [ "./checkout" ]
+# Change trail: @hungxqt - 2026-07-15 - Copy outbox package into image build context for durable Kafka outbox
