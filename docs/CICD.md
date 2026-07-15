@@ -7,8 +7,34 @@ Helm deploy stays in `techx-corp-chart`.
 
 | Workflow | File | When | What |
 |---|---|---|---|
-| CI | `.github/workflows/ci.yml` | `pull_request` to `main` / `techx-dev-corp`; also `workflow_call` | Lint + selective unit tests |
+| CI | `.github/workflows/ci.yml` | `pull_request` to `main` / `techx-dev-corp`; also `workflow_call` | Lint + selective unit tests; on PRs only, local (no-push) image bake for changed services |
 | Build & Push | `.github/workflows/build-and-push.yml` | `push` to `main` / `techx-dev-corp` with image-affecting path changes, tags `v*`, `workflow_dispatch` | Gated multi-arch bake and/or ECR retag → verify all 21 tags → chart promote (dev push / prod PR) |
+
+### Job graph (PR CI)
+
+```text
+lint  ||  unit-tests  ||  prepare-pr-images → build-pr-images (matrix) → pr-image-build
+```
+
+| Job | When | Behavior |
+|---|---|---|
+| **prepare-pr-images** | `pull_request` only | Diff PR base…head; classify full vs selective bake list (same path rules as publish) |
+| **build-pr-images** | PR and `build_count != 0` | `docker buildx bake` per changed service: **linux/amd64 only**, registry cache disabled, `output=type=cacheonly`, **no** AWS OIDC, **no** ECR login, **no** `--push` |
+| **pr-image-build** | always on PR | Stable required-check aggregator (success if prepare ok and matrix success or skipped) |
+
+`workflow_call` from Build & Push runs **lint + unit-tests only** (PR image jobs are skipped). Publish still owns multi-arch bake + ECR.
+
+**Required check (branch protection):** add check name **`PR image build`** (job `pr-image-build`) so matrix job names do not need individual protection rules.
+
+**PR path classification** (same image-affecting roots as publish):
+
+| Change | PR bake plan |
+|---|---|
+| `src/<release-service>/**` | Selective: bake those services only |
+| `pb/**`, `docker-compose.yml`, `docker-bake.hcl`, `buildkitd.toml`, `.env` | Full: all 21 release services |
+| Docs / workflows / other non-image paths only | Skip bake matrix (`build_count=0`); **pr-image-build** still succeeds |
+
+PR bake intentionally differs from publish: single platform, no registry cache, no push. It exists to catch Dockerfile/context compile failures (e.g. missing `COPY` of a new package) before merge.
 
 ### Job graph (Build & Push)
 
@@ -177,7 +203,7 @@ Build / retag matrix settings:
 
 Environment-level concurrency uses `cancel-in-progress: false` so a canceled publish cannot leave a partially populated global tag.
 
-PR CI does **not** run multi-arch bake. e2e / Cypress / tracetest are out of scope for PR CI.
+PR CI runs **local single-arch** bake for changed services (no ECR). Multi-arch bake + push remains post-merge / dispatch only. e2e / Cypress / tracetest are out of scope for PR CI.
 
 ---
 
@@ -592,4 +618,4 @@ See chart runbook: `techx-corp-chart/docs/operations/gitops-argocd.md`.
 - Native multi-arch runners, image security gates, SBOM/provenance, Cosign
 - Full e2e / tracetest in PR CI
 
-<!-- Change trail: @hungxqt - 2026-07-14 - Document always() guard so chart promote jobs are not cascade-skipped. -->
+<!-- Change trail: @hungxqt - 2026-07-15 - Document PR-only local image bake without ECR push. -->
