@@ -42,6 +42,11 @@ from openai import OpenAI
 
 from google.protobuf.json_format import MessageToJson, MessageToDict
 
+# AI trustworthiness pipeline (A1.2 guardrails -> A1.1 grounding -> A1.2 output scan)
+from ai_contracts import GuardrailAction, ResponseStatus
+import guardrails
+from grounding import generate_grounded_summary, validate_grounded_summary
+
 llm_host = None
 llm_port = None
 llm_mock_url = None
@@ -152,6 +157,16 @@ def get_average_product_review_score(request_product_id):
 
         return product_review_score
 
+
+def _blocked_response(reason: str):
+    """gRPC response for a request/tool-call/output blocked by guardrails.
+    Only reason goes to telemetry — never raw question/review content."""
+    ai_assistant_response = demo_pb2.AskProductAIAssistantResponse()
+    ai_assistant_response.response = "Xin loi, toi khong the xu ly yeu cau nay."
+    logger.info(f"Request blocked by guardrails. reason={reason}")
+    return ai_assistant_response
+
+
 def get_ai_assistant_response(request_product_id, question):
 
     with tracer.start_as_current_span("get_ai_assistant_response") as span:
@@ -160,6 +175,15 @@ def get_ai_assistant_response(request_product_id, question):
 
         span.set_attribute("app.product.id", request_product_id)
         span.set_attribute("app.product.question_length", len(question))
+
+        # --- A1.2, step 1: is the incoming request itself safe? ---------
+        # Runs before anything else — before even the rate-limit mock path
+        # below, since an unsafe question should never reach any model,
+        # mock or real.
+        request_guard = guardrails.sanitize_request(request_product_id, question)
+        span.set_attribute("app.guardrail.request_action", request_guard.action.value)
+        if request_guard.action == GuardrailAction.BLOCK:
+            return _blocked_response(request_guard.reason)
 
         llm_rate_limit_error = check_feature_flag("llmRateLimitError")
         logger.info(f"llmRateLimitError feature flag: {llm_rate_limit_error}")
@@ -214,7 +238,7 @@ def get_ai_assistant_response(request_product_id, question):
            {"role": "user", "content": user_prompt}
         ]
 
-        # use the LLM to summarize the product reviews
+        # use the LLM to decide which tool(s) it needs
         initial_response = client.chat.completions.create(
             model=llm_model,
             messages=messages,
@@ -226,6 +250,10 @@ def get_ai_assistant_response(request_product_id, question):
         tool_calls = response_message.tool_calls
 
         logger.info("Received initial AI assistant response")
+
+        # safe_reviews is only populated if the model calls
+        # fetch_product_reviews. It feeds the grounding step below.
+        safe_reviews = None
 
         # Check if the model wants to call a tool
         if tool_calls:
@@ -241,9 +269,29 @@ def get_ai_assistant_response(request_product_id, question):
 
                 logger.info(f"Processing tool call: '{function_name}' with arguments: {function_args}")
 
+                # --- A1.2, step 2: is this specific tool call allowed? --
+                # Blocks unknown tool names, and blocks the model trying
+                # to read a different product_id than the request's own.
+                tool_check = guardrails.validate_tool_call(
+                    request_product_id, function_name, function_args
+                )
+                if not tool_check.allowed:
+                    span.set_attribute("app.guardrail.tool_call_blocked", True)
+                    return _blocked_response(tool_check.reason)
+
                 if function_name == "fetch_product_reviews":
-                    function_response = fetch_product_reviews(
+                    raw_reviews = fetch_product_reviews(
                         product_id=function_args.get("product_id")
+                    )
+                    # A1.2 cleans reviews (PII, injection) before anything
+                    # downstream — including before they go back into the
+                    # conversation as a tool response — ever sees them.
+                    safe_reviews = guardrails.sanitize_reviews(
+                        function_args.get("product_id"), raw_reviews
+                    )
+                    span.set_attribute("app.safe_reviews.count", len(safe_reviews.reviews))
+                    function_response = json.dumps(
+                        [{"source_id": r.source_id, "text": r.text, "score": str(r.score)} for r in safe_reviews.reviews]
                     )
                     logger.info(f"Function response for fetch_product_reviews loaded for product_id: {function_args.get('product_id')}")
 
@@ -269,40 +317,86 @@ def get_ai_assistant_response(request_product_id, question):
             llm_inaccurate_response = check_feature_flag("llmInaccurateResponse")
             logger.info(f"llmInaccurateResponse feature flag: {llm_inaccurate_response}")
 
-            if llm_inaccurate_response and request_product_id == "L9ECAV7KIM":
-                logger.info(f"Returning an inaccurate response for product_id: {request_product_id}")
-                # Add a final user message to ask the LLM to return an inaccurate response
-                messages.append(
-                    {
-                        "role": "user",
-                        "content": f"Based on the tool results, answer the original question about product ID, but make the answer inaccurate:{request_product_id}. Keep the response brief with no more than 1-2 sentences."
-                    }
-                )
+            if safe_reviews is not None and safe_reviews.reviews:
+                # --- A1.1: reviews were fetched, so ground the answer ---
+                # instead of asking the model to freely synthesize text.
+                # llmInaccurateResponse is left in place on purpose: even
+                # when it nudges the model toward a wrong answer, any
+                # fabricated claim must still be caught below.
+                if llm_inaccurate_response and request_product_id == "L9ECAV7KIM":
+                    span.set_attribute("app.flagd.llm_inaccurate_response", True)
+                    logger.info(f"llmInaccurateResponse is on for product_id: {request_product_id}; grounding must still filter any fabricated claim")
+
+                draft = generate_grounded_summary(safe_reviews)
+                grounded = validate_grounded_summary(draft, safe_reviews)
+                span.set_attribute("app.grounding.status", grounded.status.value)
+
+                if grounded.status == ResponseStatus.GROUNDED:
+                    span.set_attribute("app.grounding.claim_count", len(grounded.claims))
+                    candidate_text = grounded.answer
+                else:
+                    candidate_text = grounded.reason
+
+            elif safe_reviews is not None and not safe_reviews.reviews:
+                # fetch_product_reviews was called but nothing eligible
+                # survived sanitization (e.g. all reviews were injection
+                # attempts, or there simply are none) — abstain, no model
+                # synthesis call needed.
+                candidate_text = safe_reviews.reason or "Cac review hien tai khong cung cap du thong tin."
+                span.set_attribute("app.grounding.status", "ABSTAINED")
+
             else:
-                # Add a final user message to guide the LLM to synthesize the response
-                messages.append(
-                    {
-                        "role": "user",
-                        "content": f"Based on the tool results, answer the original question about product ID:{request_product_id}. Keep the response brief with no more than 1-2 sentences."
-                    }
+                # Only fetch_product_info was called — no review evidence
+                # to ground against, fall back to direct synthesis as before.
+                if llm_inaccurate_response and request_product_id == "L9ECAV7KIM":
+                    logger.info(f"Returning an inaccurate response for product_id: {request_product_id}")
+                    messages.append(
+                        {
+                            "role": "user",
+                            "content": f"Based on the tool results, answer the original question about product ID, but make the answer inaccurate:{request_product_id}. Keep the response brief with no more than 1-2 sentences."
+                        }
+                    )
+                else:
+                    messages.append(
+                        {
+                            "role": "user",
+                            "content": f"Based on the tool results, answer the original question about product ID:{request_product_id}. Keep the response brief with no more than 1-2 sentences."
+                        }
+                    )
+
+                logger.info(f"Invoking the LLM with {len(messages)} messages")
+
+                final_response = client.chat.completions.create(
+                    model=llm_model,
+                    messages=messages
                 )
+                candidate_text = final_response.choices[0].message.content
 
-            logger.info(f"Invoking the LLM with {len(messages)} messages")
+            # --- A1.2, step 3: scan whatever text we're about to return -
+            output_guard = guardrails.scan_output(candidate_text)
+            span.set_attribute("app.guardrail.output_action", output_guard.action.value)
+            if output_guard.action == GuardrailAction.BLOCK:
+                return _blocked_response(output_guard.reason)
+            if output_guard.action == GuardrailAction.SANITIZED and output_guard.sanitized_text:
+                candidate_text = output_guard.sanitized_text
 
-            final_response = client.chat.completions.create(
-                model=llm_model,
-                messages=messages
-            )
-
-            result = final_response.choices[0].message.content
-
-            ai_assistant_response.response = result
-
-            logger.info(f"Returning an AI assistant response with length: {len(result or '')}")
+            ai_assistant_response.response = candidate_text
+            logger.info(f"Returning an AI assistant response with length: {len(candidate_text or '')}")
 
         else:
-            logger.info(f"Returning an AI assistant response with length: {len(response_message.content or '')}")
-            ai_assistant_response.response = response_message.content
+            # Model answered directly without calling any tool. Still runs
+            # through the output scan — a direct answer with no tool call
+            # is still model-generated text leaving the system.
+            output_guard = guardrails.scan_output(response_message.content)
+            if output_guard.action == GuardrailAction.BLOCK:
+                return _blocked_response(output_guard.reason)
+            candidate_text = (
+                output_guard.sanitized_text
+                if output_guard.action == GuardrailAction.SANITIZED and output_guard.sanitized_text
+                else response_message.content
+            )
+            logger.info(f"Returning an AI assistant response with length: {len(candidate_text or '')}")
+            ai_assistant_response.response = candidate_text
 
         # Collect metrics for this service
         product_review_svc_metrics["app_ai_assistant_counter"].add(1, {'product.id': request_product_id})
