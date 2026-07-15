@@ -353,8 +353,6 @@ jobs:
 
           echo "PR image build gate passed (local bake only; nothing pushed to ECR)."
 
-# Change trail: @hungxqt - 2026-07-15 - PR-only local image bake gate without ECR push
-
   product-reviews-tests:
     name: Product reviews tests
     runs-on: ubuntu-latest
@@ -381,3 +379,4 @@ jobs:
 
       - name: Run product reviews tests
         run: python -m pytest src/product-reviews/tests -v
+# Change trail: @hungxqt - 2026-07-15 - PR-only local image bake gate without ECR push

@@ -135,7 +135,14 @@ public final class AdService {
     private static final String AD_FAILURE = "adFailure";
     private static final String AD_MANUAL_GC_FEATURE_FLAG = "adManualGc";
     private static final String AD_HIGH_CPU_FEATURE_FLAG = "adHighCpu";
+    private static final String LOCAL_FLAG_PREFIX = "local-";
     private static final Client ffClient = OpenFeatureAPI.getInstance().getClient();
+
+    /** BTC original || team local- twin. */
+    private static boolean isFlagEnabled(String flagName, MutableContext evaluationContext) {
+      return ffClient.getBooleanValue(flagName, false, evaluationContext)
+          || ffClient.getBooleanValue(LOCAL_FLAG_PREFIX + flagName, false, evaluationContext);
+    }
     
     private AdServiceImpl() {}
 
@@ -169,7 +176,7 @@ public final class AdService {
         }
 
         CPULoad cpuload = CPULoad.getInstance();
-        cpuload.execute(ffClient.getBooleanValue(AD_HIGH_CPU_FEATURE_FLAG, false, evaluationContext));
+        cpuload.execute(isFlagEnabled(AD_HIGH_CPU_FEATURE_FLAG, evaluationContext));
 
         span.setAttribute("app.ads.contextKeys", req.getContextKeysList().toString());
         span.setAttribute("app.ads.contextKeys.count", req.getContextKeysCount());
@@ -202,12 +209,12 @@ public final class AdService {
                 adRequestTypeKey, adRequestType.name(), adResponseTypeKey, adResponseType.name()));
 
         // Throw 1/10 of the time to simulate a failure when the feature flag is enabled
-        if (ffClient.getBooleanValue(AD_FAILURE, false, evaluationContext) && random.nextInt(10) == 0) {
+        if (isFlagEnabled(AD_FAILURE, evaluationContext) && random.nextInt(10) == 0) {
           throw new StatusRuntimeException(Status.UNAVAILABLE);
         }
 
-        if (ffClient.getBooleanValue(AD_MANUAL_GC_FEATURE_FLAG, false, evaluationContext)) {
-          logger.warn("Feature Flag " + AD_MANUAL_GC_FEATURE_FLAG + " enabled, performing a manual gc now");
+        if (isFlagEnabled(AD_MANUAL_GC_FEATURE_FLAG, evaluationContext)) {
+          logger.warn("Feature Flag " + AD_MANUAL_GC_FEATURE_FLAG + " (or local twin) enabled, performing a manual gc now");
           GarbageCollectionTrigger gct = new GarbageCollectionTrigger();
           gct.doExecute();
         }
@@ -326,3 +333,4 @@ public final class AdService {
     service.blockUntilShutdown();
   }
 }
+// Change trail: @hungxqt - 2026-07-15 - Dual-read local- ad flag twins with BTC keys.

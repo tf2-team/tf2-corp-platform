@@ -111,9 +111,11 @@ api.set_provider(OFREPProvider(base_url=base_url))
 api.add_hooks([TracingHook()])
 
 def get_flagd_value(FlagName):
-    # Initialize OpenFeature
+    # BTC original + team local- twin: max so either source can inject.
     client = api.get_client()
-    return client.get_integer_value(FlagName, 0)
+    btc = client.get_integer_value(FlagName, 0)
+    local = client.get_integer_value(f"local-{FlagName}", 0)
+    return max(btc, local)
 
 categories = [
     "binoculars",
@@ -328,4 +330,4 @@ async def add_baggage_header(route: Route, request: Request):
     }
     await route.continue_(headers=headers)
 
-# Change trail: @hungxqt - 2026-07-14 - Guard MasterRunner against stale worker KeyError killing client_listener.
+# Change trail: @hungxqt - 2026-07-15 - Dual-read local- loadGeneratorFloodHomepage with BTC key.
