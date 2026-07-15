@@ -49,7 +49,6 @@
       "type": "threshold",
       "enabled": true,
       "signal_id": "checkout_bad_ratio_24h",
-      "threshold": 0.01,
       "flow": "checkout",
       "service": "checkout",
       "severity": "SEV1",
@@ -70,29 +69,26 @@
       "type": "dependency",
       "enabled": true,
       "signal_id": "checkout_payment_error_rate_5m",
-      "threshold": 0.05,
       "flow": "checkout",
       "service": "checkout",
       "dependency": "payment",
       "severity": "SEV2",
-      "confidence": 0.8,
       "runbook_id": "RB-CHECKOUT-DEPENDENCY"
     }
   ],
+  "detector_thresholds": {
+    "ops01_checkout_slo": 0.01,
+    "ops03_checkout_payment_dependency": 0.05
+  },
+  "detector_confidences": {
+    "ops03_checkout_payment_dependency": 0.8
+  },
   "policy": {
     "protected_targets": ["aiops", "postgresql"],
     "stateful_kinds": ["StatefulSet", "Database"],
-    "non_actionable_flows": ["monitoring"],
-    "default_action_replicas": 3
+    "non_actionable_flows": ["monitoring"]
   },
   "rca": {
-    "enabled": true,
-    "top_k": 5,
-    "min_points": 8,
-    "ewma_alpha": 0.3,
-    "ewma_z_threshold": 3.0,
-    "seasonal_period": 1,
-    "isolation_score_threshold": 4.0,
-    "bocpd_score_threshold": 4.0
+    "enabled": true
   }
 }

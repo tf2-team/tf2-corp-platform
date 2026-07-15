@@ -7,13 +7,14 @@ from pathlib import Path
 from pydantic import ValidationError
 
 from aiops.config import build_detectors, load_runtime_config
+from aiops.config import Settings
 from aiops.schemas import RuntimeConfig
 
 
 class RuntimeConfigTest(unittest.TestCase):
     def test_loads_runtime_json_and_builds_detectors(self):
         config = load_runtime_config(Path("config/runtime.json"))
-        detectors = build_detectors(config)
+        detectors = build_detectors(config, Settings())
 
         self.assertEqual(config.topology.services[0].name, "checkout")
         self.assertEqual([detector.__class__.__name__ for detector in detectors], ["ThresholdDetector", "NoDataDetector", "DependencyDetector"])

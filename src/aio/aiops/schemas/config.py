@@ -40,18 +40,16 @@ class DetectorDefinition(AiopsModel):
     enabled: bool = True
     signal_id: str | None = None
     signal_ids: list[str] = Field(default_factory=list)
-    threshold: float | None = None
     flow: str
     service: str
     severity: Literal["SEV1", "SEV2", "SEV3", "SEV4"]
     runbook_id: str
     dependency: str | None = None
-    confidence: float = 1.0
 
     @model_validator(mode="after")
     def validate_shape(self) -> "DetectorDefinition":
-        if self.type in {"threshold", "dependency"} and (self.signal_id is None or self.threshold is None):
-            raise ValueError(f"{self.type} detector requires signal_id and threshold")
+        if self.type in {"threshold", "dependency"} and self.signal_id is None:
+            raise ValueError(f"{self.type} detector requires signal_id")
         if self.type == "dependency" and self.dependency is None:
             raise ValueError("dependency detector requires dependency")
         if self.type == "no-data" and not self.signal_ids:
@@ -63,18 +61,10 @@ class RuntimePolicyConfig(AiopsModel):
     protected_targets: set[str]
     stateful_kinds: set[str]
     non_actionable_flows: set[str]
-    default_action_replicas: int
 
 
 class RcaConfig(AiopsModel):
     enabled: bool = True
-    top_k: int = 5
-    min_points: int = 8
-    ewma_alpha: float = 0.3
-    ewma_z_threshold: float = 3.0
-    seasonal_period: int = 1
-    isolation_score_threshold: float = 4.0
-    bocpd_score_threshold: float = 4.0
 
 
 class RuntimeConfig(AiopsModel):
@@ -83,6 +73,8 @@ class RuntimeConfig(AiopsModel):
     topology: TopologyConfig
     signals: list[SignalDefinition]
     detectors: list[DetectorDefinition]
+    detector_thresholds: dict[str, float]
+    detector_confidences: dict[str, float] = Field(default_factory=dict)
     policy: RuntimePolicyConfig
     rca: RcaConfig = Field(default_factory=RcaConfig)
 
@@ -99,6 +91,10 @@ class RuntimeConfig(AiopsModel):
             missing = set(referenced) - signal_ids
             if missing:
                 raise ValueError(f"unknown detector signals for {detector.id}: {sorted(missing)}")
+            if detector.type in {"threshold", "dependency"} and detector.id not in self.detector_thresholds:
+                raise ValueError(f"missing detector threshold for {detector.id}")
+            if detector.type == "dependency" and detector.id not in self.detector_confidences:
+                raise ValueError(f"missing detector confidence for {detector.id}")
         reject_unresolved_placeholders(self.model_dump())
         return self
 

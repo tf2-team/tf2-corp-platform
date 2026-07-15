@@ -119,21 +119,15 @@ Loaded from `config/runtime.json`.
   "policy": {
     "protected_targets": [],
     "stateful_kinds": [],
-    "non_actionable_flows": [],
-    "default_action_replicas": 3
+    "non_actionable_flows": []
   },
   "rca": {
-    "enabled": true,
-    "top_k": 5,
-    "min_points": 8,
-    "ewma_alpha": 0.3,
-    "ewma_z_threshold": 3.0,
-    "seasonal_period": 1,
-    "isolation_score_threshold": 4.0,
-    "bocpd_score_threshold": 4.0
+    "enabled": true
   }
 }
 ```
+
+Detector thresholds and detector confidences live in `config/runtime.json`. Other numeric tuning values stay in `.env`: no-data confidence, remediation replica count, and RCA hyperparameters.
 
 ## Block Contracts
 
@@ -264,7 +258,6 @@ Runtime detector config:
   "type": "threshold",
   "enabled": true,
   "signal_id": "checkout_bad_ratio_24h",
-  "threshold": 0.01,
   "flow": "checkout",
   "service": "checkout",
   "severity": "SEV1",
@@ -277,6 +270,19 @@ Supported detector types:
 - `threshold`: emits when `feature.status == "ready"` and `feature.value > threshold`.
 - `dependency`: same threshold rule, but sets `likely_dependency` and configured `confidence`.
 - `no-data`: emits when configured signal has `status == "unknown"`.
+
+Thresholds and confidences come from `config/runtime.json`:
+
+```json
+{
+  "detector_thresholds": {
+    "ops01_checkout_slo": 0.01
+  },
+  "detector_confidences": {
+    "ops03_checkout_payment_dependency": 0.8
+  }
+}
+```
 
 Current gap: production anomaly/RCA detectors are intentionally not implemented yet.
 
@@ -533,8 +539,7 @@ Input:
 
 ```json
 {
-  "metric_series": ["MetricSeries"],
-  "top_k": 5
+  "metric_series": ["MetricSeries"]
 }
 ```
 

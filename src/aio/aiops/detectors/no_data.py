@@ -13,6 +13,8 @@ class NoDataDetector(Detector):
         service: str,
         severity: str,
         runbook_id: str,
+        missing_confidence: float,
+        unknown_confidence: float,
     ):
         self.required_signal_ids = set(required_signal_ids)
         self.detector_id = detector_id
@@ -20,6 +22,8 @@ class NoDataDetector(Detector):
         self.service = service
         self.severity = severity
         self.runbook_id = runbook_id
+        self.missing_confidence = missing_confidence
+        self.unknown_confidence = unknown_confidence
 
     def evaluate(self, features: list[Feature]) -> list[CandidateEvent]:
         candidates: list[CandidateEvent] = []
@@ -38,7 +42,7 @@ class NoDataDetector(Detector):
                     quality=feature.quality,
                     reason=f"signal_{feature.quality.value}",
                     runbook_id=self.runbook_id,
-                    confidence=1.0 if feature.quality in {SignalQuality.MISSING, SignalQuality.STALE} else 0.7,
+                    confidence=self.missing_confidence if feature.quality in {SignalQuality.MISSING, SignalQuality.STALE} else self.unknown_confidence,
                     contributing_signals=(feature.signal_id,),
                 )
             )

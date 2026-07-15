@@ -8,9 +8,9 @@ from aiops.schemas import AnomalyFinding, MetricSeries, RcaResult, RootCauseCand
 
 
 class V001RcaEngine:
-    def __init__(self, config: RuntimeConfig):
+    def __init__(self, config: RuntimeConfig, fallback_split_ratio: float):
         self.graph = GraphTraversalRca(config)
-        self.robust_score = RobustScoreRca()
+        self.robust_score = RobustScoreRca(fallback_split_ratio)
 
     def rank(self, findings: list[AnomalyFinding], series: list[MetricSeries], top_k: int) -> RcaResult:
         anomaly_timestamp = min((finding.timestamp for finding in findings), default=None)

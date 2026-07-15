@@ -4,6 +4,7 @@ import json
 from pathlib import Path
 
 from aiops.detectors import DependencyDetector, Detector, NoDataDetector, ThresholdDetector
+from aiops.config.settings import Settings
 from aiops.schemas import RuntimeConfig
 
 
@@ -11,7 +12,7 @@ def load_runtime_config(path: Path) -> RuntimeConfig:
     return RuntimeConfig.model_validate(json.loads(path.read_text(encoding="utf-8")))
 
 
-def build_detectors(config: RuntimeConfig) -> list[Detector]:
+def build_detectors(config: RuntimeConfig, settings: Settings) -> list[Detector]:
     detectors: list[Detector] = []
     for item in config.detectors:
         if not item.enabled:
@@ -21,7 +22,7 @@ def build_detectors(config: RuntimeConfig) -> list[Detector]:
                 ThresholdDetector(
                     detector_id=item.id,
                     signal_id=item.signal_id or "",
-                    threshold=item.threshold or 0,
+                    threshold=config.detector_thresholds[item.id],
                     flow=item.flow,
                     service=item.service,
                     severity=item.severity,
@@ -33,12 +34,12 @@ def build_detectors(config: RuntimeConfig) -> list[Detector]:
                 DependencyDetector(
                     detector_id=item.id,
                     signal_id=item.signal_id or "",
-                    threshold=item.threshold or 0,
+                    threshold=config.detector_thresholds[item.id],
                     flow=item.flow,
                     service=item.service,
                     dependency=item.dependency or "unknown",
                     severity=item.severity,
-                    confidence=item.confidence,
+                    confidence=config.detector_confidences[item.id],
                     runbook_id=item.runbook_id,
                 )
             )
@@ -51,6 +52,8 @@ def build_detectors(config: RuntimeConfig) -> list[Detector]:
                     service=item.service,
                     severity=item.severity,
                     runbook_id=item.runbook_id,
+                    missing_confidence=settings.no_data_missing_confidence,
+                    unknown_confidence=settings.no_data_unknown_confidence,
                 )
             )
     return detectors

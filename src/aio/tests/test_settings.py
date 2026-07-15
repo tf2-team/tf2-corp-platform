@@ -14,14 +14,13 @@ class SettingsTest(unittest.TestCase):
             env_file = Path(directory) / ".env"
             runtime_config_path = Path(directory) / "runtime.json"
             runtime_config = json.loads(Path("config/runtime.json").read_text(encoding="utf-8"))
-            runtime_config["detectors"][0]["threshold"] = 0.5
+            runtime_config["detector_thresholds"]["ops01_checkout_slo"] = 0.5
             runtime_config_path.write_text(json.dumps(runtime_config), encoding="utf-8")
             env_file.write_text(
                 Path(".env").read_text(encoding="utf-8")
                 + "\n"
                 + "\n".join(
                     [
-                        "AIOPS_CHECKOUT_SLO_THRESHOLD=0.5",
                         "AIOPS_CHECKOUT_SLO_RUNBOOK_ID=RB-TEST",
                         "AIOPS_POLICY_MODE=observe",
                         f"AIOPS_STATE_STORE_PATH={Path(directory) / 'aiops.sqlite3'}",

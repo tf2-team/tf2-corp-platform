@@ -18,7 +18,7 @@ def run_static_pipeline(request: PipelineRunRequest, settings: Settings | None =
     store = SQLiteIncidentStore(path=settings.state_store_path, environment=settings.environment)
     pipeline = AiopsPipeline(
         collector=StaticCollector(request.observations),
-        detectors=build_detectors(runtime_config),
+        detectors=build_detectors(runtime_config, settings),
         store=store,
         policy=PolicyEngine(
             mode=settings.policy_mode,
@@ -27,9 +27,20 @@ def run_static_pipeline(request: PipelineRunRequest, settings: Settings | None =
             non_actionable_flows=runtime_config.policy.non_actionable_flows,
             action_type=settings.action_type_restart,
             target_kind=settings.action_target_kind_deployment,
-            default_replicas=runtime_config.policy.default_action_replicas,
+            default_replicas=settings.default_action_replicas,
         ),
         runtime_config=runtime_config,
+        rca_hyperparameters={
+            "enabled": settings.rca_enabled,
+            "top_k": settings.rca_top_k,
+            "min_points": settings.rca_min_points,
+            "ewma_alpha": settings.rca_ewma_alpha,
+            "ewma_z_threshold": settings.rca_ewma_z_threshold,
+            "seasonal_period": settings.rca_seasonal_period,
+            "isolation_score_threshold": settings.rca_isolation_score_threshold,
+            "bocpd_score_threshold": settings.rca_bocpd_score_threshold,
+            "fallback_split_ratio": settings.rca_fallback_split_ratio,
+        },
     )
     try:
         return pipeline.run_once(metric_series=request.metric_series)

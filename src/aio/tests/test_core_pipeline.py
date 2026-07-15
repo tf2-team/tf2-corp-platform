@@ -32,6 +32,8 @@ def no_data_detector(settings: Settings | None = None) -> NoDataDetector:
         service=settings.no_data_service,
         severity=settings.no_data_severity,
         runbook_id=settings.no_data_runbook_id,
+        missing_confidence=settings.no_data_missing_confidence,
+        unknown_confidence=settings.no_data_unknown_confidence,
     )
 
 

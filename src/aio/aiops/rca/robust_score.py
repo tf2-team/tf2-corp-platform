@@ -8,6 +8,9 @@ os.environ.setdefault("MPLCONFIGDIR", "/tmp")
 
 
 class RobustScoreRca:
+    def __init__(self, fallback_split_ratio: float):
+        self.fallback_split_ratio = fallback_split_ratio
+
     def rank(self, series: list[MetricSeries], anomaly_timestamp: int | None) -> dict[str, float]:
         if not series:
             return {}
@@ -41,7 +44,7 @@ class RobustScoreRca:
             return max(1, len(metric.points) // 2)
         for index, point in enumerate(metric.points):
             if point.timestamp >= anomaly_timestamp:
-                if index >= int(len(metric.points) * 0.8):
+                if index >= int(len(metric.points) * self.fallback_split_ratio):
                     return max(1, len(metric.points) // 2)
                 return max(1, index)
         return max(1, len(metric.points) - 1)

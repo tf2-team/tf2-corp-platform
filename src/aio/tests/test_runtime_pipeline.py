@@ -31,6 +31,8 @@ def no_data_detector(settings: Settings) -> NoDataDetector:
         service=settings.no_data_service,
         severity=settings.no_data_severity,
         runbook_id=settings.no_data_runbook_id,
+        missing_confidence=settings.no_data_missing_confidence,
+        unknown_confidence=settings.no_data_unknown_confidence,
     )
 
 
@@ -77,7 +79,7 @@ class RuntimePipelineTest(unittest.TestCase):
                         dependency="payment",
                         runbook_id="RB-CHECKOUT-DEPENDENCY",
                         severity=settings.dependency_default_severity,
-                        confidence=settings.dependency_default_confidence,
+                        confidence=0.8,
                     ),
                 ],
                 store=store,

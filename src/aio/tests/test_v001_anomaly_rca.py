@@ -25,19 +25,27 @@ class V001AnomalyRcaTest(unittest.TestCase):
             metric("payment", "latency", [1.0, 1.1, 1.0, 1.1, 1.0, 1.1, 1.0, 20.0, 21.0, 22.0]),
             metric("payment", "error", [0.0, 0.1, 0.0, 0.1, 0.0, 0.1, 0.0, 9.0, 10.0, 11.0]),
         ]
-        config_data = load_runtime_config(Path("config/runtime.json")).model_dump()
-        config_data["rca"].update({"top_k": 3, "ewma_z_threshold": 0.5, "bocpd_score_threshold": 1.0})
-        runtime_config = RuntimeConfig.model_validate(config_data)
+        runtime_config = load_runtime_config(Path("config/runtime.json"))
+        rca_hyperparameters = {
+            "top_k": 3,
+            "min_points": 8,
+            "ewma_alpha": 0.3,
+            "ewma_z_threshold": 0.5,
+            "seasonal_period": 1,
+            "isolation_score_threshold": 4.0,
+            "bocpd_score_threshold": 1.0,
+            "fallback_split_ratio": 0.8,
+        }
 
         findings = V001AnomalyEngine(
-            ewma_alpha=runtime_config.rca.ewma_alpha,
-            ewma_z_threshold=runtime_config.rca.ewma_z_threshold,
-            isolation_score_threshold=runtime_config.rca.isolation_score_threshold,
-            bocpd_score_threshold=runtime_config.rca.bocpd_score_threshold,
-            min_points=runtime_config.rca.min_points,
-            seasonal_period=runtime_config.rca.seasonal_period,
+            ewma_alpha=rca_hyperparameters["ewma_alpha"],
+            ewma_z_threshold=rca_hyperparameters["ewma_z_threshold"],
+            isolation_score_threshold=rca_hyperparameters["isolation_score_threshold"],
+            bocpd_score_threshold=rca_hyperparameters["bocpd_score_threshold"],
+            min_points=rca_hyperparameters["min_points"],
+            seasonal_period=rca_hyperparameters["seasonal_period"],
         ).evaluate(series)
-        result = V001RcaEngine(runtime_config).rank(findings, series, top_k=3)
+        result = V001RcaEngine(runtime_config, fallback_split_ratio=rca_hyperparameters["fallback_split_ratio"]).rank(findings, series, top_k=3)
 
         self.assertTrue({finding.algorithm for finding in findings} >= {"ewma_stl", "isolation_forest", "baro_bocpd"})
         self.assertEqual(result.root_causes[0].service, "payment")

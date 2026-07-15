@@ -45,8 +45,9 @@ conda run -n capstone python -B -m unittest discover -s tests
 
 ## Configuration
 
-Runtime secrets, URLs, and paths are loaded from `.env` through `aiops.config.Settings`.
+Runtime secrets, URLs, paths, and all numeric hyperparameters are loaded from `.env` through `aiops.config.Settings`.
 Infrastructure topology, signal IDs, detector definitions, and policy lists are loaded from `config/runtime.json`.
+Detector thresholds and detector confidences are intentionally kept in `config/runtime.json` beside detector IDs.
 
 - Hyperparameters: thresholds, confidence, default replicas.
 - Runtime paths: API paths, evidence dir, state store path.
@@ -54,7 +55,7 @@ Infrastructure topology, signal IDs, detector definitions, and policy lists are 
 - Safety policy values: protected targets, stateful kinds, non-actionable flows.
 - Integration credentials: Prometheus, Grafana webhook, Jaeger, OpenSearch, Kubernetes API, notification webhook, AIE status, CDO cost feed, live executor.
 
-List/set values use JSON array syntax in `.env`:
+List/set/map values use JSON syntax in `.env`:
 
 ```env
 AIOPS_NO_DATA_REQUIRED_SIGNAL_IDS=["checkout_bad_ratio_24h"]

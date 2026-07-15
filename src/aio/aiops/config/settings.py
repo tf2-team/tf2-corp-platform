@@ -19,17 +19,26 @@ class Settings(BaseSettings):
     evidence_dir: Path
     state_store_path: Path
     runtime_config_path: Path
+    no_data_missing_confidence: float
+    no_data_unknown_confidence: float
+    rca_enabled: bool
+    rca_top_k: int
+    rca_min_points: int
+    rca_ewma_alpha: float
+    rca_ewma_z_threshold: float
+    rca_seasonal_period: int
+    rca_isolation_score_threshold: float
+    rca_bocpd_score_threshold: float
+    rca_fallback_split_ratio: float
 
     checkout_slo_detector_id: str
     checkout_bad_ratio_signal_id: str
-    checkout_slo_threshold: float
     checkout_flow: str
     checkout_service: str
     checkout_severity: str
     checkout_slo_runbook_id: str
 
     dependency_default_severity: str
-    dependency_default_confidence: float
 
     no_data_detector_id: str
     no_data_flow: str

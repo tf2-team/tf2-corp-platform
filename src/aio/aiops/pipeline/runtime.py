@@ -31,6 +31,7 @@ class AiopsPipeline:
         store: IncidentStore,
         policy: PolicyEngine,
         runtime_config: RuntimeConfig | None = None,
+        rca_hyperparameters: dict[str, float | int | bool] | None = None,
     ):
         self.collector = collector
         self.qualification = QualificationGate()
@@ -44,6 +45,7 @@ class AiopsPipeline:
         self.policy = policy
         self.verification = VerificationEngine()
         self.runtime_config = runtime_config
+        self.rca_hyperparameters = rca_hyperparameters or {}
 
     def run_once(self, metric_series: list[MetricSeries] | None = None) -> PipelineResult:
         observations = self.collector.collect()
@@ -76,15 +78,17 @@ class AiopsPipeline:
         )
 
     def _run_v001_rca(self, metric_series: list[MetricSeries]) -> RcaResult:
-        if self.runtime_config is None or not self.runtime_config.rca.enabled or not metric_series:
+        if self.runtime_config is None or not self.rca_hyperparameters.get("enabled", self.runtime_config.rca.enabled) or not metric_series:
             return RcaResult()
-        config = self.runtime_config.rca
+        config = self.rca_hyperparameters
         findings = V001AnomalyEngine(
-            ewma_alpha=config.ewma_alpha,
-            ewma_z_threshold=config.ewma_z_threshold,
-            isolation_score_threshold=config.isolation_score_threshold,
-            bocpd_score_threshold=config.bocpd_score_threshold,
-            min_points=config.min_points,
-            seasonal_period=config.seasonal_period,
+            ewma_alpha=float(config["ewma_alpha"]),
+            ewma_z_threshold=float(config["ewma_z_threshold"]),
+            isolation_score_threshold=float(config["isolation_score_threshold"]),
+            bocpd_score_threshold=float(config["bocpd_score_threshold"]),
+            min_points=int(config["min_points"]),
+            seasonal_period=int(config["seasonal_period"]),
         ).evaluate(metric_series)
-        return V001RcaEngine(self.runtime_config).rank(findings, metric_series, top_k=config.top_k)
+        return V001RcaEngine(self.runtime_config, fallback_split_ratio=float(config["fallback_split_ratio"])).rank(
+            findings, metric_series, top_k=int(config["top_k"])
+        )
