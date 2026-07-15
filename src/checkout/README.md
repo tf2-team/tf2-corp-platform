@@ -2,6 +2,18 @@
 
 This service provides checkout services for the application.
 
+## Durable Kafka outbox
+
+Set `CHECKOUT_OUTBOX_TABLE` in production to enable the DynamoDB durable
+outbox. Checkout persists the protobuf order event under the order ID and
+returns without waiting for Kafka. A background worker retries pending records
+and deletes them only after broker acknowledgement.
+
+The pod uses the AWS default credential chain; on EKS, configure a dedicated
+IRSA ServiceAccount with `PutItem`, `Query`, `UpdateItem`, and `DeleteItem`
+limited to the outbox table/index. If the variable is absent, the service keeps
+the direct Kafka behavior for local development.
+
 ## Local Build
 
 To build the service binary, run:

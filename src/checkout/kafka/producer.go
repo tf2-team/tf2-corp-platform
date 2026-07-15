@@ -50,12 +50,10 @@ func CreateKafkaProducer(brokers []string, logger *slog.Logger) (sarama.AsyncPro
 		return nil, err
 	}
 
-	// We will log to STDOUT if we're not able to produce messages.
-	go func() {
-		for err := range producer.Errors() {
-			logger.Error(fmt.Sprintf("Failed to write message: %+v", err))
-
-		}
-	}()
+	// Do not drain producer.Errors() here. Callers (e.g. sendToPostProcessor)
+	// select on Successes() and Errors(); a background consumer would race and
+	// steal failures so the caller hangs until context cancel.
 	return producer, nil
 }
+
+// Change trail: @hungxqt - 2026-07-14 - Stop draining Errors in CreateKafkaProducer so callers can observe failures.

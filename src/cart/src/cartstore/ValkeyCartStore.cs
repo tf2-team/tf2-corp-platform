@@ -23,7 +23,7 @@ public class ValkeyCartStore : ICartStore
 
     private readonly object _locker = new();
     private readonly byte[] _emptyCartBytes;
-    private readonly string _connectionString;
+    private readonly string _safeEndpoint;
 
     private static readonly ActivitySource CartActivitySource = new("OpenTelemetry.Demo.Cart");
     private static readonly Meter CartMeter = new Meter("OpenTelemetry.Demo.Cart");
@@ -43,15 +43,32 @@ public class ValkeyCartStore : ICartStore
         });
     private readonly ConfigurationOptions _redisConnectionOptions;
 
-    public ValkeyCartStore(ILogger<ValkeyCartStore> logger, string valkeyAddress)
+    public ValkeyCartStore(
+        ILogger<ValkeyCartStore> logger,
+        string valkeyAddress,
+        bool useTls = false,
+        string password = null,
+        string tlsHost = null)
     {
         _logger = logger;
         // Serialize empty cart into byte array.
         var cart = new Oteldemo.Cart();
         _emptyCartBytes = cart.ToByteArray();
-        _connectionString = $"{valkeyAddress},ssl=false,allowAdmin=true,abortConnect=false";
+        _safeEndpoint = valkeyAddress;
+        _redisConnectionOptions = ConfigurationOptions.Parse(valkeyAddress);
+        _redisConnectionOptions.Ssl = useTls;
+        _redisConnectionOptions.AbortOnConnectFail = false;
+        _redisConnectionOptions.AllowAdmin = true;
 
-        _redisConnectionOptions = ConfigurationOptions.Parse(_connectionString);
+        if (!string.IsNullOrWhiteSpace(password))
+        {
+            _redisConnectionOptions.Password = password;
+        }
+
+        if (useTls && !string.IsNullOrWhiteSpace(tlsHost))
+        {
+            _redisConnectionOptions.SslHost = tlsHost;
+        }
 
         // Try to reconnect multiple times if the first retry fails.
         _redisConnectionOptions.ConnectRetry = RedisRetryNumber;
@@ -88,7 +105,7 @@ public class ValkeyCartStore : ICartStore
 
             if (_logger.IsEnabled(LogLevel.Debug))
             {
-                _logger.LogDebug("Connecting to Redis: {connectionString}", _connectionString);
+                _logger.LogDebug("Connecting to Redis: {endpoint}; TLS: {useTls}", _safeEndpoint, _redisConnectionOptions.Ssl);
             }
 
             _redis = ConnectionMultiplexer.Connect(_redisConnectionOptions);

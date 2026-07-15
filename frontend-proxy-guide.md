@@ -61,68 +61,64 @@ Bạn có thể truy cập toàn bộ các dịch vụ (cả ứng dụng chính
 
 ---
 
-## 6. Public ALB Ingress (Production Environment)
+## 6. Storefront edge (CloudFront + internal ALB)
 
-To expose the storefront publicly on EKS, an opt-in public ALB-backed Ingress can be deployed. This routes public traffic to `frontend-proxy` while securing internal administrative and telemetry interfaces at the platform level.
+Production storefront traffic does **not** use an internet-facing ALB. Path:
 
-### 🛡️ Public vs. Blocked Surfaces
+```
+Browser (HTTPS) → CloudFront → VPC origin → Internal ALB (scheme=internal) → frontend-proxy
+```
 
-When the public ALB is active, the following access control routing rules are enforced:
+* Chart overlay: `values-public-alb.yaml` (`scheme: internal`, `blockSensitivePaths: false`).
+* Public HTTPS + sensitive-path **403**s: CloudFront Function (`techx-corp-infra` `docs/cloudfront.md`).
+* Internal ALB forwards **all** paths to Envoy (including admin routes).
 
-* **Public Surface (ALLOWED - Returns 200 OK)**:
-  * `http://<ALB_DNS_NAME>/` (Storefront main page)
-  * `http://<ALB_DNS_NAME>/api/*` (API backend services)
-  * `http://<ALB_DNS_NAME>/images/*` (Product images)
+### Public vs admin surfaces
 
-* **Blocked Surfaces (FORBIDDEN - Returns 403 Access Denied)**:
-  * `/grafana` (Grafana Dashboards)
-  * `/jaeger` (Jaeger Tracing UI)
-  * `/loadgen/` (Locust Load Generator UI)
-  * `/feature` (Flagd feature flag UI)
-  * `/flagservice/` (Flagd API gateway)
-  * `/otlp-http/` (OpenTelemetry Collector ingestion endpoint)
+| Path | CloudFront (public) | Internal ALB (private / Client VPN) |
+|---|---|---|
+| `/`, `/api/*`, `/images/*` | Allowed | Allowed |
+| `/grafana`, `/jaeger`, `/loadgen`, `/feature`, `/flagservice`, `/otlp-http` | **403** when edge blocking on | **Open** (app auth still applies) |
+
+### Operator admin access (Client VPN)
+
+Do **not** turn off CloudFront path blocking for day-to-day Grafana/Jaeger access. Connect **AWS Client VPN**, then use the **internal ALB** hostname:
+
+* Runbook: `techx-corp-infra/docs/client-vpn.md`
+* Example: `http://<INTERNAL_ALB_DNS>/grafana/` after VPN connect
+
+Port-forward (section 5) remains valid for cluster-side debugging without VPN.
 
 ---
 
-### 🔍 Verification / Smoke-Test Commands
+### Verification / smoke-test commands
 
-After deploying or updating the Helm chart with the public ALB enabled, operators should execute the following smoke-tests to ensure proper routing and access controls are in place.
-
-1. **Verify the Ingress resource and fetch the ALB Hostname**:
-   ```bash
-   kubectl -n techx-tf2 get ingress frontend-proxy-public
+1. **Ingress / internal ALB hostname**:
+   ```cmd
+   kubectl -n techx-corp get ingress frontend-proxy-public
    ```
-   *(Note: AWS Load Balancer creation and DNS registration may take 2-5 minutes.)*
 
-2. **Verify public storefront access**:
-   * Access the home page (expect `200 OK`):
-     ```bash
-     curl -i http://<ALB_DNS_NAME>/
-     ```
-   * Access a static asset/image (expect `200 OK`):
-     ```bash
-     curl -i http://<ALB_DNS_NAME>/images/logo.png
-     ```
+2. **Public storefront via CloudFront** (expect `200` on `/` and `/images/*`):
+   ```cmd
+   curl -i https://<cloudfront-alias>/
+   curl -i https://<cloudfront-alias>/images/logo.png
+   ```
 
-3. **Verify blocked endpoints are rejected with `403 Forbidden`**:
-   * Test Grafana (expect `403 Forbidden`):
-     ```bash
-     curl -i http://<ALB_DNS_NAME>/grafana/
-     ```
-   * Test Jaeger UI (expect `403 Forbidden`):
-     ```bash
-     curl -i http://<ALB_DNS_NAME>/jaeger/
-     ```
-   * Test Load Generator (expect `403 Forbidden`):
-     ```bash
-     curl -i http://<ALB_DNS_NAME>/loadgen/
-     ```
+3. **Admin blocked at edge** (expect `403`):
+   ```cmd
+   curl -i https://<cloudfront-alias>/grafana/
+   curl -i https://<cloudfront-alias>/jaeger/
+   curl -i https://<cloudfront-alias>/loadgen/
+   ```
+
+4. **Admin via Client VPN + internal ALB** (expect not edge 403):
+   ```cmd
+   curl -i http://<INTERNAL_ALB_DNS>/grafana/
+   ```
 
 ---
 
-### ⚠️ Security Warning & Hardening Roadmap
+### Security notes
 
-> [!WARNING]
-> **HTTP-Only Access is Temporary**: The current public ALB is configured for HTTP (Port 80) access only. This HTTP-first setup is intended strictly for initial deployment validation and integration smoke-testing.
-> 
-> **Production Hardening Next Step**: Before deploying to production, you must implement HTTPS and integrate an AWS Certificate Manager (ACM) SSL/TLS certificate. Running an unencrypted HTTP endpoint exposes raw storefront and API transmission to Man-in-the-Middle (MitM) attacks.
+* Public edge HTTPS is terminated at **CloudFront** (ACM in `us-east-1`). The internal ALB listens HTTP:80 for VPC origin and private clients.
+* Grafana/Jaeger credentials remain separate (ESO/Secrets Manager); Client VPN is network access only.

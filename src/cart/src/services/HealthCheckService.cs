@@ -31,8 +31,9 @@ namespace cart.healthcheck
         {
 
             #pragma warning disable CA2016 // OpenFeature does not support CancellationToken
-            // Await the async call instead of blocking
-            bool isSet = await _featureClient.GetBooleanValueAsync("failedReadinessProbe", false); // Replace with actual check
+            // BTC original || team local- twin.
+            bool isSet = await _featureClient.GetBooleanValueAsync("failedReadinessProbe", false)
+                || await _featureClient.GetBooleanValueAsync("local-failedReadinessProbe", false);
             #pragma warning restore CA2016
             if (isSet)
             {
@@ -116,3 +117,4 @@ namespace cart.healthcheck
         }
     }
 }
+// Change trail: @hungxqt - 2026-07-15 - Dual-read local-failedReadinessProbe with BTC key.

@@ -94,6 +94,265 @@ jobs:
         working-directory: ${{ matrix.workdir }}
         run: dotnet test --configuration Release --verbosity minimal
 
+  # ---------------------------------------------------------------------------
+  # PR-only: bake changed release images locally (no ECR login, no --push).
+  # Catches Dockerfile/context compile failures before merge. Skipped on
+  # workflow_call (publish path already bakes multi-arch with push).
+  # ---------------------------------------------------------------------------
+  prepare-pr-images:
+    name: Prepare PR image builds
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    outputs:
+      build_services: ${{ steps.classify.outputs.build_services }}
+      build_count: ${{ steps.classify.outputs.build_count }}
+      mode: ${{ steps.classify.outputs.mode }}
+      reason: ${{ steps.classify.outputs.reason }}
+    steps:
+      - name: Checkout
+        # actions/checkout@v7.0.0
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
+        with:
+          fetch-depth: 0
+
+      - name: Classify services to bake
+        id: classify
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+
+          # Canonical release set (must match docker-bake.hcl group "release").
+          RELEASE_JSON='["accounting","ad","cart","checkout","currency","email","flagd-ui","fraud-detection","frontend","frontend-proxy","image-provider","kafka","llm","load-generator","opensearch","payment","product-catalog","product-reviews","quote","recommendation","shipping"]'
+          mapfile -t RELEASE < <(printf '%s' "${RELEASE_JSON}" | jq -r '.[]')
+          declare -A IS_RELEASE=()
+          for s in "${RELEASE[@]}"; do
+            IS_RELEASE["${s}"]=1
+          done
+
+          MODE="none"
+          REASON="no image-affecting paths in PR"
+          declare -A BUILD_SET=()
+          FULL_TRIGGER=0
+
+          if ! git cat-file -e "${BASE_SHA}^{commit}" 2>/dev/null; then
+            echo "::error::PR base SHA ${BASE_SHA} not in fetch history"
+            exit 1
+          fi
+          if ! git cat-file -e "${HEAD_SHA}^{commit}" 2>/dev/null; then
+            echo "::error::PR head SHA ${HEAD_SHA} not in fetch history"
+            exit 1
+          fi
+
+          mapfile -t CHANGED < <(git diff --name-only "${BASE_SHA}" "${HEAD_SHA}" | sort -u)
+          echo "Changed files (${#CHANGED[@]}):"
+          printf '  %s\n' "${CHANGED[@]}"
+
+          for f in "${CHANGED[@]}"; do
+            case "${f}" in
+              pb/*|docker-compose.yml|docker-bake.hcl|buildkitd.toml|.env)
+                FULL_TRIGGER=1
+                echo "Full rebuild trigger: ${f}"
+                ;;
+              src/*)
+                rest="${f#src/}"
+                svc="${rest%%/*}"
+                if [[ -n "${svc}" && -n "${IS_RELEASE[${svc}]+x}" ]]; then
+                  BUILD_SET["${svc}"]=1
+                  echo "Service change: ${svc} (${f})"
+                else
+                  echo "Non-release src path (no bake): ${f}"
+                fi
+                ;;
+              *)
+                echo "Non-image path (ignored): ${f}"
+                ;;
+            esac
+          done
+
+          BUILD_LIST=()
+          if [[ "${FULL_TRIGGER}" -eq 1 ]]; then
+            MODE="full"
+            REASON="shared/global image path changed"
+            BUILD_LIST=("${RELEASE[@]}")
+          elif [[ "${#BUILD_SET[@]}" -gt 0 ]]; then
+            MODE="selective"
+            REASON="path-based selective PR image build"
+            for s in "${RELEASE[@]}"; do
+              if [[ -n "${BUILD_SET[${s}]+x}" ]]; then
+                BUILD_LIST+=("${s}")
+              fi
+            done
+          fi
+
+          BUILD_JSON="$(printf '%s\n' "${BUILD_LIST[@]+"${BUILD_LIST[@]}"}" | jq -R . | jq -s -c .)"
+          if [[ "${#BUILD_LIST[@]}" -eq 0 ]]; then
+            BUILD_JSON='[]'
+          fi
+
+          {
+            echo "build_services=${BUILD_JSON}"
+            echo "build_count=${#BUILD_LIST[@]}"
+            echo "mode=${MODE}"
+            echo "reason=${REASON}"
+          } >> "${GITHUB_OUTPUT}"
+
+          {
+            echo "## PR image build plan"
+            echo ""
+            echo "| Field | Value |"
+            echo "|---|---|"
+            echo "| Mode | \`${MODE}\` |"
+            echo "| Reason | ${REASON} |"
+            echo "| Build count | ${#BUILD_LIST[@]} |"
+            echo "| Services | \`${BUILD_JSON}\` |"
+            echo ""
+            echo "Local bake only (linux/amd64, no ECR login, no \`--push\`)."
+          } >> "${GITHUB_STEP_SUMMARY}"
+
+          echo "mode=${MODE} count=${#BUILD_LIST[@]} reason=${REASON}"
+          echo "services=${BUILD_JSON}"
+
+  build-pr-images:
+    name: Build ${{ matrix.service }} (PR local)
+    needs: [prepare-pr-images]
+    if: >
+      github.event_name == 'pull_request' &&
+      needs.prepare-pr-images.outputs.build_count != '0'
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      max-parallel: 8
+      matrix:
+        service: ${{ fromJson(needs.prepare-pr-images.outputs.build_services) }}
+    steps:
+      - name: Checkout
+        # actions/checkout@v7.0.0
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
+
+      - name: Free disk space
+        run: |
+          set -euo pipefail
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL || true
+          sudo docker image prune -af || true
+          df -h
+
+      - name: Set up Docker Buildx
+        # docker/setup-buildx-action@v4.2.0
+        uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c
+        with:
+          driver-opts: |
+            image=moby/buildkit:buildx-stable-1
+          buildkitd-config: ./buildkitd.toml
+
+      - name: Bake service (local only, no push)
+        env:
+          SERVICE: ${{ matrix.service }}
+        run: |
+          set -euo pipefail
+
+          # Load Dockerfile paths and build args from committed .env.
+          # Do NOT source .env.override. Do NOT use real ECR IMAGE_NAME.
+          set -a
+          # shellcheck disable=SC1091
+          source .env
+          set +a
+
+          export IMAGE_NAME="local.invalid/pr-check"
+          export DEMO_VERSION="pr-local"
+          export IMAGE_VERSION="pr-local"
+
+          echo "PR local bake service=${SERVICE}"
+          echo "  IMAGE_NAME=${IMAGE_NAME}"
+          echo "  DEMO_VERSION=${DEMO_VERSION}"
+          echo "  platform=linux/amd64 (PR validation only)"
+          echo "  cache=disabled (no ECR)"
+          echo "  output=type=cacheonly (no load/push)"
+
+          # Overrides:
+          # - single platform for PR speed (publish path still multi-arch)
+          # - clear registry cache-from/to so no AWS/ECR credentials are required
+          # - cacheonly validates the full Dockerfile build without exporting layers
+          docker buildx bake \
+            -f docker-compose.yml \
+            -f docker-bake.hcl \
+            "${SERVICE}" \
+            --set "*.platform=linux/amd64" \
+            --set "*.cache-from=" \
+            --set "*.cache-to=" \
+            --set "*.tags=${IMAGE_NAME}/${SERVICE}:${DEMO_VERSION}" \
+            --set "*.output=type=cacheonly"
+
+      - name: Job summary
+        if: always()
+        env:
+          SERVICE: ${{ matrix.service }}
+        run: |
+          {
+            echo "## PR local build ${SERVICE}"
+            echo ""
+            echo "| Field | Value |"
+            echo "|---|---|"
+            echo "| Service | \`${SERVICE}\` |"
+            echo "| Platform | \`linux/amd64\` |"
+            echo "| Push | no |"
+            echo "| ECR | not used |"
+          } >> "${GITHUB_STEP_SUMMARY}"
+
+  # Stable required-check name for branch protection (not matrix-expanded).
+  pr-image-build:
+    name: PR image build
+    if: always() && github.event_name == 'pull_request'
+    needs: [prepare-pr-images, build-pr-images]
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Evaluate PR image build result
+        env:
+          PREPARE_RESULT: ${{ needs.prepare-pr-images.result }}
+          BUILD_RESULT: ${{ needs.build-pr-images.result }}
+          BUILD_COUNT: ${{ needs.prepare-pr-images.outputs.build_count }}
+          MODE: ${{ needs.prepare-pr-images.outputs.mode }}
+          REASON: ${{ needs.prepare-pr-images.outputs.reason }}
+        run: |
+          set -euo pipefail
+          echo "prepare=${PREPARE_RESULT} build=${BUILD_RESULT} count=${BUILD_COUNT} mode=${MODE}"
+          echo "reason=${REASON}"
+
+          if [[ "${PREPARE_RESULT}" != "success" ]]; then
+            echo "::error::Prepare PR image builds failed (${PREPARE_RESULT})"
+            exit 1
+          fi
+
+          # build-pr-images is skipped when no image-affecting paths changed.
+          if [[ "${BUILD_RESULT}" == "failure" || "${BUILD_RESULT}" == "cancelled" ]]; then
+            echo "::error::PR local image bake failed (${BUILD_RESULT})"
+            exit 1
+          fi
+
+          if [[ "${BUILD_RESULT}" != "success" && "${BUILD_RESULT}" != "skipped" ]]; then
+            echo "::error::Unexpected build-pr-images result: ${BUILD_RESULT}"
+            exit 1
+          fi
+
+          {
+            echo "## PR image build gate"
+            echo ""
+            echo "| Field | Value |"
+            echo "|---|---|"
+            echo "| Prepare | \`${PREPARE_RESULT}\` |"
+            echo "| Build matrix | \`${BUILD_RESULT}\` |"
+            echo "| Build count | \`${BUILD_COUNT}\` |"
+            echo "| Mode | \`${MODE}\` |"
+            echo "| Reason | ${REASON} |"
+            echo "| ECR push | no |"
+          } >> "${GITHUB_STEP_SUMMARY}"
+
+          echo "PR image build gate passed (local bake only; nothing pushed to ECR)."
+
   product-reviews-tests:
     name: Product reviews tests
     runs-on: ubuntu-latest
@@ -120,3 +379,5 @@ jobs:
 
       - name: Run product reviews tests
         run: python -m pytest src/product-reviews/tests -v
+
+# Change trail: @hungxqt - 2026-07-15 - PR-only local image bake gate without ECR push

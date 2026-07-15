@@ -440,9 +440,12 @@ def must_map_env(key: str):
     return value
 
 def check_feature_flag(flag_name: str):
-    # Initialize OpenFeature
+    # BTC original || team local- twin (either source can inject).
     client = api.get_client()
-    return client.get_boolean_value(flag_name, False)
+    return (
+        client.get_boolean_value(flag_name, False)
+        or client.get_boolean_value(f"local-{flag_name}", False)
+    )
 
 if __name__ == "__main__":
     service_name = must_map_env('OTEL_SERVICE_NAME')
@@ -500,3 +503,4 @@ if __name__ == "__main__":
     server.start()
     logger.info(f'Product reviews service started, listening on port {port}')
     server.wait_for_termination()
+# Change trail: @hungxqt - 2026-07-15 - Dual-read local- feature flags with BTC keys.

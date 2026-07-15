@@ -29,7 +29,10 @@ const ProductCard = ({
     },
   },
 }: IProps) => {
-  const imageSlowLoad = useNumberFlagValue('imageSlowLoad', 0);
+  // BTC original + team local- twin: max so either source can inject.
+  const btcImageSlowLoad = useNumberFlagValue('imageSlowLoad', 0);
+  const localImageSlowLoad = useNumberFlagValue('local-imageSlowLoad', 0);
+  const imageSlowLoad = Math.max(btcImageSlowLoad, localImageSlowLoad);
   const [imageSrc, setImageSrc] = useState<string>('');
 
   useEffect(() => {
@@ -63,3 +66,4 @@ const ProductCard = ({
 };
 
 export default ProductCard;
+// Change trail: @hungxqt - 2026-07-15 - Dual-read local-imageSlowLoad (max with BTC).
