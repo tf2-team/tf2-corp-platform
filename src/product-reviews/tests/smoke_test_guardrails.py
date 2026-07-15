@@ -61,7 +61,7 @@ def run_case_5():
     print("\n[Scenario 5] Tool Call Validation:")
     t1 = validate_tool_call("P001", "fetch_product_reviews", {"product_id": "P001"})
     print(f"Valid Tool Call: fetch_product_reviews (P001) -> Allowed: {t1.allowed} (Expected: True)")
-    
+
     t2 = validate_tool_call("P001", "fetch_product_reviews", {"product_id": "P999"})
     print(f"Wrong Product ID: fetch_product_reviews (P999) -> Allowed: {t2.allowed} (Expected: False)")
     print(f"  Reason: {t2.reason}")

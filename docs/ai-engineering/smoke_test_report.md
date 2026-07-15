@@ -48,7 +48,7 @@ Safe reviews count: 2 (Expected: 2)
 
 ## Case 4: Nhận diện và Xóa Thông tin cá nhân (PII Redaction)
 **Mục đích:** Đảm bảo thông tin định danh cá nhân (Email, Số điện thoại, Số thẻ tín dụng...) của khách hàng không bao giờ bị gửi cho LLM.
-- **Dữ liệu đầu vào:** 
+- **Dữ liệu đầu vào:**
   - Yêu cầu người dùng chứa email và SĐT: *"Contact me via email test@example.com or phone 0912345678"*
   - Review chứa email và SĐT: *"Customer needs to contact via email test@example.com or phone 0987654321"*
 - **Kết quả mong đợi:** `SANITIZED` (Làm sạch) và thay thế bằng `[REDACTED]`.
@@ -64,7 +64,7 @@ Sanitized Review Text: "Customer needs to contact via email [REDACTED] or phone 
 
 ## Case 5: Xác thực việc gọi Tool/Hàm của AI (Tool Call Validation)
 **Mục đích:** Ngăn chặn AI tự ý gọi các hàm ghi/thay đổi dữ liệu hoặc gọi nhầm sang dữ liệu của Product ID khác.
-- **Dữ liệu đầu vào:** 
+- **Dữ liệu đầu vào:**
   1. Gọi đúng hàm `fetch_product_reviews` với `product_id = P001`.
   2. Gọi hàm `fetch_product_reviews` nhưng sai ID: `product_id = P999`.
   3. Gọi hàm không được phép: `checkout_cart`.

@@ -59,7 +59,7 @@ class TestGuardrails(unittest.TestCase):
         self.assertIsInstance(res, SafeReviewSet)
         self.assertEqual(res.product_id, "P001")
         self.assertEqual(len(res.reviews), 2)
-        
+
         self.assertEqual(res.reviews[0].source_id, "101")
         self.assertEqual(res.reviews[0].text, "Battery lasts very long, comfortable for all day use.")
         self.assertEqual(res.reviews[0].score, Decimal("5"))
