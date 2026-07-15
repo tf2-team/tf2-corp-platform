@@ -34,16 +34,17 @@ Build ALL services → Push ECR → Verify every required tag exists
    - Job sau `release-ready` thành công (development):  
      - `aws ecr describe-images` đã pass cho full catalog  
      - **Direct push** chart `values-dev.yaml` (`default.image.tag`) lên branch `techx-dev-corp`  
-   - Prod: vẫn **manual** PR `values-prod.yaml` (required review)  
+   - Job sau `release-ready` thành công (production):  
+     - **Open PR** chart `values-prod.yaml` (`default.image.tag`) base `main` (human merge / required review)
 
-4. **Không** gọi Helm/kubectl deploy từ platform workflow v1.
+4. **Không** gọi Helm/kubectl deploy từ platform workflow v1; **không** auto-merge prod chart PR.
 
 ## Acceptance Criteria
 
 - [x] `docs/CICD.md` mô tả clear contract rebuild-all + verify-before-PR.
-- [x] Workflow job **Verify ECR** (`aws ecr describe-images` cho full release catalog) trước khi **release-ready** — gate cho manual chart PR.
+- [x] Workflow job **Verify ECR** (`aws ecr describe-images` cho full release catalog) trước khi **release-ready** — gate cho chart promote.
 - [x] (Phase 6) Automated **dev** chart tag promote after `release-ready` (`update-chart-dev` direct-push to `values-dev.yaml`).
-- [ ] (Follow-up) Optional automated **prod** chart PR for `values-prod.yaml` with required review.
+- [x] Automated **prod** chart PR for `values-prod.yaml` after `release-ready` (`create-chart-prod-pr`; human merge).
 - [x] Không path-filtered partial bake khi vẫn dùng global tag cho promotion (`src/**` gate is all-or-nothing full catalog rebuild).
 - [x] Tài liệu: không promote values khi push chưa xong / `release-ready` chưa xanh.
 
@@ -70,4 +71,4 @@ aws ecr describe-images --repository-name techx-corp/ad \
 
 ## English Summary
 
-Platform-level REL-09: enforce full multi-service bake + ECR verification before advancing the global image tag. Phase 6 (dev): after `release-ready`, direct-push `values-dev.yaml` tag to the chart branch tracked by Argo CD. Production remains a manual chart values PR.
+Platform-level REL-09: enforce full multi-service bake + ECR verification before advancing the global image tag. Phase 6: after `release-ready`, development direct-pushes `values-dev.yaml`; production opens a chart PR for `values-prod.yaml` (human merge remains the prod deploy gate).

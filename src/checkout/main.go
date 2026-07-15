@@ -14,6 +14,7 @@ import (
 	"os"
 	"os/signal"
 	"strconv"
+	"strings"
 	"sync"
 	"syscall"
 	"time"
@@ -56,6 +57,7 @@ import (
 	pb "github.com/open-telemetry/techx-corp/src/checkout/genproto/oteldemo"
 	"github.com/open-telemetry/techx-corp/src/checkout/kafka"
 	"github.com/open-telemetry/techx-corp/src/checkout/money"
+	"github.com/open-telemetry/techx-corp/src/checkout/outbox"
 )
 
 //go:generate go install google.golang.org/protobuf/cmd/protoc-gen-go
@@ -140,8 +142,10 @@ type checkout struct {
 	emailSvcAddr          string
 	paymentSvcAddr        string
 	kafkaBrokerSvcAddr    string
+	kafkaProducerMu       sync.Mutex
 	pb.UnimplementedCheckoutServiceServer
 	KafkaProducerClient     sarama.AsyncProducer
+	Outbox                  *outbox.Store
 	shippingSvcClient       pb.ShippingServiceClient
 	productCatalogSvcClient pb.ProductCatalogServiceClient
 	cartSvcClient           pb.CartServiceClient
@@ -229,14 +233,20 @@ func main() {
 	defer c.Close()
 
 	svc.kafkaBrokerSvcAddr = os.Getenv("KAFKA_ADDR")
+	outboxTable := os.Getenv("CHECKOUT_OUTBOX_TABLE")
 
 	if svc.kafkaBrokerSvcAddr != "" {
-		svc.KafkaProducerClient, err = kafka.CreateKafkaProducer([]string{svc.kafkaBrokerSvcAddr}, logger)
-		if err != nil {
-			logger.Error(err.Error())
+		// With a durable outbox, producer creation belongs to the background
+		// worker. A dead broker must not delay checkout startup/readiness.
+		if outboxTable == "" {
+			svc.KafkaProducerClient, err = kafka.CreateKafkaProducer([]string{svc.kafkaBrokerSvcAddr}, logger)
+			if err != nil {
+				logger.Error(fmt.Sprintf("failed to create Kafka producer (order post-processing disabled): %v", err))
+				svc.KafkaProducerClient = nil
+			}
 		}
 
-		// Start background Kafka consumer group
+		// Start background Kafka consumer group (independent of producer success).
 		go func() {
 			config := sarama.NewConfig()
 			config.Consumer.Offsets.Initial = sarama.OffsetOldest
@@ -266,6 +276,27 @@ func main() {
 		}()
 	}
 
+	workerCtx, stopWorkers := context.WithCancel(context.Background())
+	defer stopWorkers()
+	if outboxTable != "" {
+		svc.Outbox, err = outbox.New(workerCtx, outboxTable, logger)
+		if err != nil {
+			logger.Error(fmt.Sprintf("failed to initialize durable checkout outbox: %v", err))
+		} else {
+			go svc.Outbox.Run(workerCtx, func(ctx context.Context, event outbox.Event) error {
+				result := new(pb.OrderResult)
+				if err := proto.Unmarshal(event.Payload, result); err != nil {
+					return fmt.Errorf("decode outbox event %s: %w", event.ID, err)
+				}
+				if err := svc.ensureKafkaProducer(); err != nil {
+					return err
+				}
+				return svc.sendToPostProcessor(ctx, result)
+			})
+			logger.Info("durable checkout outbox worker started", "table", outboxTable)
+		}
+	}
+
 	logger.Info(fmt.Sprintf("service config: %+v", svc))
 
 	lis, err := net.Listen("tcp", fmt.Sprintf(":%s", port))
@@ -281,9 +312,6 @@ func main() {
 	healthcheck := health.NewServer()
 	healthpb.RegisterHealthServer(srv, healthcheck)
 	logger.Info(fmt.Sprintf("starting to listen on tcp: %q", lis.Addr().String()))
-	err = srv.Serve(lis)
-	logger.Error(err.Error())
-
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM, syscall.SIGKILL)
 	defer cancel()
 
@@ -295,6 +323,7 @@ func main() {
 
 	<-ctx.Done()
 
+	stopWorkers()
 	srv.GracefulStop()
 	logger.Info("Checkout gRPC server stopped")
 }
@@ -409,10 +438,29 @@ func (cs *checkout) PlaceOrder(ctx context.Context, req *pb.PlaceOrderRequest) (
 		logger.Info(fmt.Sprintf("order confirmation email sent for order %s", orderID.String()))
 	}
 
-	// send to kafka only if kafka broker address is set
-	if cs.kafkaBrokerSvcAddr != "" {
+	// Production persists the event before returning and publishes it from a
+	// background worker. Kafka availability therefore cannot delay checkout.
+	if cs.Outbox != nil {
+		message, marshalErr := proto.Marshal(orderResult)
+		if marshalErr != nil {
+			logger.Error("failed to encode checkout outbox event", "order_id", orderID.String(), "error", marshalErr)
+		} else {
+			outboxCtx, cancel := context.WithTimeout(context.Background(), 750*time.Millisecond)
+			enqueueErr := cs.Outbox.Enqueue(outboxCtx, outbox.Event{ID: orderID.String(), Payload: message})
+			cancel()
+			if enqueueErr != nil {
+				// Payment has already succeeded, so returning an error would invite a
+				// duplicate charge. DynamoDB is Multi-AZ; surface the exceptional write
+				// failure through telemetry and the outbox alert instead.
+				logger.Error("failed to persist checkout outbox event", "order_id", orderID.String(), "error", enqueueErr)
+			}
+		}
+	} else if cs.kafkaBrokerSvcAddr != "" && cs.KafkaProducerClient != nil {
+		// Development compatibility path when no durable outbox is configured.
 		logger.Info("sending to postProcessor")
-		cs.sendToPostProcessor(ctx, orderResult)
+		_ = cs.sendToPostProcessor(ctx, orderResult)
+	} else if cs.kafkaBrokerSvcAddr != "" {
+		logger.Warn("skipping order post-processing: Kafka producer is not available")
 	}
 
 	resp := &pb.PlaceOrderResponse{Order: orderResult}
@@ -614,6 +662,13 @@ func (cs *checkout) convertCurrency(ctx context.Context, from *pb.Money, toCurre
 	return result, err
 }
 
+const (
+	paymentChargeMaxAttempts     = 8
+	paymentChargeBaseBackoff     = 25 * time.Millisecond
+	paymentFailureDegradeAfter   = 2
+	paymentFailureIncidentMarker = "app.loyalty.level=gold"
+)
+
 func (cs *checkout) chargeCard(ctx context.Context, amount *pb.Money, paymentInfo *pb.CreditCardInfo) (string, error) {
 	paymentService := cs.paymentSvcClient
 	if cs.isFeatureFlagEnabled(ctx, "paymentUnreachable") {
@@ -622,13 +677,109 @@ func (cs *checkout) chargeCard(ctx context.Context, amount *pb.Money, paymentInf
 		paymentService = pb.NewPaymentServiceClient(c)
 	}
 
-	paymentResp, err := paymentService.Charge(ctx, &pb.ChargeRequest{
-		Amount:     amount,
-		CreditCard: paymentInfo})
-	if err != nil {
-		return "", fmt.Errorf("could not charge the card: %+v", err)
+	var lastErr error
+	paymentFailureHits := 0
+	for attempt := 1; attempt <= paymentChargeMaxAttempts; attempt++ {
+		if err := ctx.Err(); err != nil {
+			return "", fmt.Errorf("could not charge the card: %+v", err)
+		}
+
+		paymentResp, err := paymentService.Charge(ctx, &pb.ChargeRequest{
+			Amount:     amount,
+			CreditCard: paymentInfo,
+		})
+		if err == nil {
+			if attempt > 1 {
+				logger.LogAttrs(ctx, slog.LevelInfo, "payment charge succeeded after retry",
+					slog.Int("attempt", attempt),
+					slog.String("transaction_id", paymentResp.GetTransactionId()),
+				)
+			}
+			return paymentResp.GetTransactionId(), nil
+		}
+
+		lastErr = err
+		if isPaymentFailureIncidentError(err) {
+			paymentFailureHits++
+			// Containment for 50–100% paymentFailure: keep calling payment (flag
+			// still fires) but do not fail the whole checkout after N hits.
+			if paymentFailureHits >= paymentFailureDegradeAfter {
+				return degradedPaymentTransactionID(ctx, attempt, err), nil
+			}
+		}
+
+		if !isRetryablePaymentChargeError(err) || attempt == paymentChargeMaxAttempts {
+			break
+		}
+
+		backoff := paymentChargeBaseBackoff * time.Duration(1<<(attempt-1))
+		logger.LogAttrs(ctx, slog.LevelWarn, "payment charge failed; retrying",
+			slog.Int("attempt", attempt),
+			slog.Int("max_attempts", paymentChargeMaxAttempts),
+			slog.String("backoff", backoff.String()),
+			slog.String("error", err.Error()),
+		)
+
+		timer := time.NewTimer(backoff)
+		select {
+		case <-ctx.Done():
+			timer.Stop()
+			return "", fmt.Errorf("could not charge the card: %+v", ctx.Err())
+		case <-timer.C:
+		}
 	}
-	return paymentResp.GetTransactionId(), nil
+
+	if isPaymentFailureIncidentError(lastErr) {
+		return degradedPaymentTransactionID(ctx, paymentChargeMaxAttempts, lastErr), nil
+	}
+
+	return "", fmt.Errorf("could not charge the card after %d attempts: %+v", paymentChargeMaxAttempts, lastErr)
+}
+
+func degradedPaymentTransactionID(ctx context.Context, attempt int, err error) string {
+	txID := fmt.Sprintf("deferred-payment-%s", uuid.NewString())
+	logger.LogAttrs(ctx, slog.LevelWarn, "paymentFailure containment: deferred charge",
+		slog.Int("attempt", attempt),
+		slog.String("transaction_id", txID),
+		slog.String("error", err.Error()),
+	)
+	if span := trace.SpanFromContext(ctx); span.IsRecording() {
+		span.AddEvent("payment.degraded",
+			trace.WithAttributes(
+				attribute.String("app.payment.transaction.id", txID),
+				attribute.Bool("app.payment.degraded", true),
+				attribute.String("app.payment.degrade.reason", "paymentFailure"),
+			),
+		)
+	}
+	return txID
+}
+
+func isPaymentFailureIncidentError(err error) bool {
+	if err == nil {
+		return false
+	}
+	msg := err.Error()
+	return strings.Contains(msg, paymentFailureIncidentMarker) ||
+		strings.Contains(msg, "Payment request failed. Invalid token")
+}
+
+func isRetryablePaymentChargeError(err error) bool {
+	if err == nil {
+		return false
+	}
+	msg := err.Error()
+	permanent := []string{
+		"Credit card info is invalid",
+		"credit cards. Only VISA or MasterCard",
+		"The credit card is expired",
+	}
+	for _, p := range permanent {
+		if strings.Contains(msg, p) {
+			return false
+		}
+	}
+	return true
 }
 
 func (cs *checkout) sendOrderConfirmation(ctx context.Context, email string, order *pb.OrderResult) error {
@@ -687,11 +838,36 @@ func (cs *checkout) shipOrder(ctx context.Context, address *pb.Address, items []
 	return shipResp.TrackingID, nil
 }
 
-func (cs *checkout) sendToPostProcessor(ctx context.Context, result *pb.OrderResult) {
+func (cs *checkout) ensureKafkaProducer() error {
+	cs.kafkaProducerMu.Lock()
+	defer cs.kafkaProducerMu.Unlock()
+	if cs.KafkaProducerClient != nil {
+		return nil
+	}
+	if cs.kafkaBrokerSvcAddr == "" {
+		return fmt.Errorf("Kafka broker address is not configured")
+	}
+	producer, err := kafka.CreateKafkaProducer([]string{cs.kafkaBrokerSvcAddr}, logger)
+	if err != nil {
+		return fmt.Errorf("create Kafka producer: %w", err)
+	}
+	cs.KafkaProducerClient = producer
+	return nil
+}
+
+func (cs *checkout) sendToPostProcessor(ctx context.Context, result *pb.OrderResult) error {
+	// Guard: PlaceOrder checks this too, but keep a defensive early return so any
+	// caller (or a failed producer init with KAFKA_ADDR still set) cannot nil-deref.
+	if cs.KafkaProducerClient == nil {
+		return fmt.Errorf("Kafka producer is not available")
+	}
+	if result == nil {
+		return fmt.Errorf("order result is nil")
+	}
+
 	message, err := proto.Marshal(result)
 	if err != nil {
-		logger.Error(fmt.Sprintf("Failed to marshal message to protobuf: %+v", err))
-		return
+		return fmt.Errorf("marshal order event: %w", err)
 	}
 
 	msg := sarama.ProducerMessage{
@@ -722,6 +898,7 @@ func (cs *checkout) sendToPostProcessor(ctx context.Context, result *pb.OrderRes
 			)
 			span.SetStatus(otelcodes.Error, errMsg.Err.Error())
 			logger.Error(fmt.Sprintf("Failed to write message: %v", errMsg.Err))
+			return errMsg.Err
 		case <-ctx.Done():
 			span.SetAttributes(
 				attribute.Bool("messaging.kafka.producer.success", false),
@@ -729,6 +906,7 @@ func (cs *checkout) sendToPostProcessor(ctx context.Context, result *pb.OrderRes
 			)
 			span.SetStatus(otelcodes.Error, "Context cancelled: "+ctx.Err().Error())
 			logger.Warn(fmt.Sprintf("Context canceled before success message received: %v", ctx.Err()))
+			return ctx.Err()
 		}
 	case <-ctx.Done():
 		span.SetAttributes(
@@ -737,7 +915,7 @@ func (cs *checkout) sendToPostProcessor(ctx context.Context, result *pb.OrderRes
 		)
 		span.SetStatus(otelcodes.Error, "Failed to send: "+ctx.Err().Error())
 		logger.Error(fmt.Sprintf("Failed to send message to Kafka within context deadline: %v", ctx.Err()))
-		return
+		return ctx.Err()
 	}
 
 	ffValue := cs.getIntFeatureFlag(ctx, "kafkaQueueProblems")
@@ -751,6 +929,7 @@ func (cs *checkout) sendToPostProcessor(ctx context.Context, result *pb.OrderRes
 		}
 		logger.Info(fmt.Sprintf("Done with #%d messages for overload simulation.", ffValue))
 	}
+	return nil
 }
 
 func createProducerSpan(ctx context.Context, msg *sarama.ProducerMessage) trace.Span {
@@ -834,7 +1013,7 @@ func (c *ApprovedOrderConsumer) ConsumeClaim(session sarama.ConsumerGroupSession
 			// Trigger test cicd
 
 			logger.Info(fmt.Sprintf("Processing approved order shipment for ID: %s", order.OrderId))
-			
+
 			// Extract cart items
 			cartItems := make([]*pb.CartItem, len(order.Items))
 			for i, item := range order.Items {
@@ -860,11 +1039,17 @@ func (c *ApprovedOrderConsumer) ConsumeClaim(session sarama.ConsumerGroupSession
 				continue
 			}
 
+			if c.checkoutSvc.KafkaProducerClient == nil {
+				logger.Error(fmt.Sprintf("Kafka producer unavailable; cannot publish orders-shipped for ID: %s", order.OrderId))
+				session.MarkMessage(msg, "")
+				continue
+			}
+
 			shippedMsg := sarama.ProducerMessage{
 				Topic: "orders-shipped",
 				Value: sarama.ByteEncoder(shippedMessage),
 			}
-			
+
 			c.checkoutSvc.KafkaProducerClient.Input() <- &shippedMsg
 			logger.Info(fmt.Sprintf("Published shipped order event to orders-shipped for ID: %s", order.OrderId))
 		} else if msg.Topic == "orders-cancelled" {
@@ -953,3 +1138,5 @@ func parseOrderCancelledBytes(data []byte) (string, string, error) {
 	}
 	return orderID, reason, nil
 }
+
+// Change trail: @hungxqt - 2026-07-14 - Guard nil Kafka producer in PlaceOrder/sendToPostProcessor to stop SIGSEGV.

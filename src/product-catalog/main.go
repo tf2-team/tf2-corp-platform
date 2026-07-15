@@ -152,6 +152,14 @@ func initDatabase() error {
 		return fmt.Errorf("failed to open database connection: %w", err)
 	}
 
+	// Cap the pool so multi-replica HPA cannot exhaust PostgreSQL max_connections.
+	// With catalog maxReplicas 12: 5 open × 12 = 60; leave headroom for other apps
+	// and the superuser reserve (default 3 of 100/200 slots).
+	db.SetMaxOpenConns(5)
+	db.SetMaxIdleConns(2)
+	db.SetConnMaxLifetime(5 * time.Minute)
+	db.SetConnMaxIdleTime(time.Minute)
+
 	reg, err = otelsql.RegisterDBStatsMetrics(db, otelsql.WithAttributes(semconv.DBSystemNamePostgreSQL))
 	if err != nil {
 		return fmt.Errorf("failed to register database metrics: %w", err)
@@ -493,3 +501,5 @@ func (p *productCatalog) checkProductFailure(ctx context.Context, id string) boo
 	)
 	return failureEnabled
 }
+
+// Change trail: @hungxqt - 2026-07-14 - Cap sql.DB pool to protect PostgreSQL under HPA scale-out.

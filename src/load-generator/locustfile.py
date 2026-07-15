@@ -12,6 +12,37 @@ import logging
 from locust import HttpUser, task, between
 from locust_plugins.users.playwright import PlaywrightUser, pw, PageWithRetry, event
 
+# Durable guard for distributed mode: stale worker messages (HPA scale-down, Spot
+# interrupt, pod restart) must not KeyError-kill MasterRunner.client_listener.
+# Without this, the master UI shows worker_count=0 until the master process restarts.
+def _install_master_stale_worker_guard():
+    try:
+        from locust.runners import MasterRunner
+    except ImportError:
+        return
+    if getattr(MasterRunner, "_techx_stale_worker_guard", False):
+        return
+
+    _orig_handle_message = MasterRunner.handle_message
+
+    def _safe_handle_message(self, client_id, msg):
+        try:
+            return _orig_handle_message(self, client_id, msg)
+        except KeyError:
+            node_id = getattr(msg, "node_id", None) or client_id
+            logging.warning(
+                "Ignoring message from unknown/disconnected Locust worker node_id=%s type=%s",
+                node_id,
+                getattr(msg, "type", None),
+            )
+            return None
+
+    MasterRunner.handle_message = _safe_handle_message
+    MasterRunner._techx_stale_worker_guard = True
+
+
+_install_master_stale_worker_guard()
+
 from opentelemetry import context, baggage, trace
 from opentelemetry.context import Context
 from opentelemetry.metrics import set_meter_provider
@@ -19,15 +50,15 @@ from opentelemetry.sdk.metrics import MeterProvider
 from opentelemetry.sdk.metrics.export import PeriodicExportingMetricReader
 from opentelemetry.sdk.trace import TracerProvider
 from opentelemetry.sdk.trace.export import BatchSpanProcessor
-from opentelemetry.exporter.otlp.proto.grpc.metric_exporter import OTLPMetricExporter
-from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import OTLPSpanExporter
+from opentelemetry.exporter.otlp.proto.http.metric_exporter import OTLPMetricExporter
+from opentelemetry.exporter.otlp.proto.http.trace_exporter import OTLPSpanExporter
 from opentelemetry.instrumentation.jinja2 import Jinja2Instrumentor
 from opentelemetry.instrumentation.requests import RequestsInstrumentor
 from opentelemetry.instrumentation.system_metrics import SystemMetricsInstrumentor
 from opentelemetry.instrumentation.urllib3 import URLLib3Instrumentor
 from opentelemetry.instrumentation.logging import LoggingInstrumentor
 from opentelemetry._logs import set_logger_provider
-from opentelemetry.exporter.otlp.proto.grpc._log_exporter import OTLPLogExporter
+from opentelemetry.exporter.otlp.proto.http._log_exporter import OTLPLogExporter
 from opentelemetry.sdk._logs import LoggerProvider, LoggingHandler
 from opentelemetry.sdk._logs.export import BatchLogRecordProcessor
 from opentelemetry.sdk.resources import Resource
@@ -41,14 +72,14 @@ from playwright.async_api import Route, Request
 # Configure tracer provider first (needed for trace context in logs)
 tracer_provider = TracerProvider()
 trace.set_tracer_provider(tracer_provider)
-tracer_provider.add_span_processor(BatchSpanProcessor(OTLPSpanExporter(insecure=True)))
+tracer_provider.add_span_processor(BatchSpanProcessor(OTLPSpanExporter()))
 
 # Configure logger provider with the same resource
 logger_provider = LoggerProvider()
 set_logger_provider(logger_provider)
 
 # Set up log exporter and processor
-log_exporter = OTLPLogExporter(insecure=True)
+log_exporter = OTLPLogExporter()
 logger_provider.add_log_record_processor(BatchLogRecordProcessor(log_exporter))
 
 # Create logging handler that will include trace context
@@ -60,7 +91,7 @@ root_logger.addHandler(handler)
 root_logger.setLevel(logging.INFO)
 
 # Configure metrics
-metric_exporter = OTLPMetricExporter(insecure=True)
+metric_exporter = OTLPMetricExporter()
 set_meter_provider(MeterProvider([PeriodicExportingMetricReader(metric_exporter)]))
 
 # Instrument logging to automatically inject trace context
@@ -296,3 +327,5 @@ async def add_baggage_header(route: Route, request: Request):
         'baggage': ', '.join(filter(None, (existing_baggage, 'synthetic_request=true')))
     }
     await route.continue_(headers=headers)
+
+# Change trail: @hungxqt - 2026-07-14 - Guard MasterRunner against stale worker KeyError killing client_listener.
