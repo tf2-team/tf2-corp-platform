@@ -202,7 +202,33 @@ Diễn giải: scale-up này là **dư chấn / autoscaling response** trong lú
 
 ---
 
-## 9. Loại trừ các hướng khác
+## 9. Response / containment
+
+| Hạng mục | Xử lý |
+| --- | --- |
+| **Nguyên tắc BTC** | Không tắt flagd, không sửa flag, không bypass OpenFeature, không chặn traffic BTC |
+| **Code path xử lý** | `checkout.emptyUserCart()` |
+| **Cách xử lý** | Retry ngắn `CartService/EmptyCart` tối đa **3 lần**, backoff 25ms, 50ms |
+| **Degraded mode** | Nếu vẫn fail, ghi log/trace `cart cleanup deferred` và **không làm fail checkout response** |
+| **Telemetry** | Set span attributes `app.cart.cleanup.status=succeeded/deferred`, `app.cart.cleanup.attempts` |
+| **Commit fix** | `e952c98` — `fix(checkout): defer cart cleanup failures` |
+
+### 9.1 Vì sao cách này giảm ảnh hưởng khách hàng tốt nhất?
+
+Trong incident này, lỗi nằm ở bước **dọn giỏ hàng sau khi order đã được xử lý**, không phải ở bước lấy cart, tính tiền hay charge payment. Nếu để lỗi `EmptyCart` làm fail toàn bộ `checkout`, khách sẽ thấy đặt hàng thất bại dù các bước quan trọng đã xong.
+
+Containment mới chuyển `EmptyCart` thành **best-effort cleanup**:
+
+- Nếu cart chỉ lỗi thoáng qua, retry ngắn sẽ tự hồi.
+- Nếu BTC `cartFailure` vẫn làm `EmptyCart` fail, checkout vẫn trả order success cho khách.
+- Dư chấn còn lại chỉ là cart có thể chưa được dọn ngay; mức ảnh hưởng này nhỏ hơn nhiều so với chặn khách đặt hàng.
+- Log/trace vẫn giữ đủ tín hiệu để radar thấy cleanup bị deferred, không che giấu incident.
+
+Điểm quan trọng: cách này **giữ nguyên cơ chế BTC** và chỉ tăng resilience ở application layer, đúng yêu cầu "phát hiện và xử lý, giữ ảnh hưởng tới khách nhỏ nhất (không tắt cơ chế)".
+
+---
+
+## 10. Loại trừ các hướng khác
 
 | Hướng nghi ngờ | Kết quả | Lý do loại trừ |
 | --- | --- | --- |
@@ -214,7 +240,7 @@ Diễn giải: scale-up này là **dư chấn / autoscaling response** trong lú
 
 ---
 
-## 10. Mục lục evidence
+## 11. Mục lục evidence
 
 | # | Artifact | Path |
 | --- | --- | --- |
@@ -228,6 +254,6 @@ Diễn giải: scale-up này là **dư chấn / autoscaling response** trong lú
 
 ---
 
-## 11. One-liner gửi mentor
+## 12. One-liner gửi mentor
 
-> **2026-07-15 ~18:53-19:02 (+07):** Radar bắt alert `HotPathHighErrorRate` trên `cart` và `checkout` (`cart` ~3.29%, `checkout` ~7.78%, ngưỡng 1%). Prometheus cho thấy error-rate `cart` peak ~3.5%, `checkout` peak ~8.2%; span metrics khoanh vùng lỗi vào `CartService/EmptyCart`. Baseline `18:00-18:45` sạch. Sau khi khoanh vùng path, flag metrics confirm BTC central `cartFailure` trả variant `on`, trong khi `local-cartFailure`, `paymentFailure`, `loadGeneratorFloodHomepage` không khớp. RCA hợp lý nhất: BTC inject `cartFailure` làm fail `cart.EmptyCart`, ảnh hưởng lan sang checkout.
+> **2026-07-15 ~18:53-19:02 (+07):** Radar bắt alert `HotPathHighErrorRate` trên `cart` và `checkout` (`cart` ~3.29%, `checkout` ~7.78%, ngưỡng 1%). Prometheus cho thấy error-rate `cart` peak ~3.5%, `checkout` peak ~8.2%; span metrics khoanh vùng lỗi vào `CartService/EmptyCart`. Baseline `18:00-18:45` sạch. Sau khi khoanh vùng path, flag metrics confirm BTC central `cartFailure` trả variant `on`, trong khi `local-cartFailure`, `paymentFailure`, `loadGeneratorFloodHomepage` không khớp. RCA: BTC inject `cartFailure` làm fail `cart.EmptyCart`, ảnh hưởng lan sang checkout. **Response:** checkout retry `EmptyCart` ngắn, nếu vẫn fail thì defer cart cleanup và vẫn trả order success, giảm impact khách hàng mà không tắt/bypass cơ chế BTC.
