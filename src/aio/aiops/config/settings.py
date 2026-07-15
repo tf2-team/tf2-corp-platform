@@ -19,6 +19,15 @@ class Settings(BaseSettings):
     evidence_dir: Path
     state_store_path: Path
     runtime_config_path: Path
+    actions_catalog_path: Path
+    incidents_history_path: Path
+    remediation_audit_path: Path
+    remediation_history_top_k: int
+    remediation_ood_threshold: float
+    remediation_cost_page: float
+    remediation_blast_radius_limit: int
+    remediation_confidence_threshold: float
+    remediation_similarity_weights: dict[str, float]
     no_data_missing_confidence: float
     no_data_unknown_confidence: float
     rca_enabled: bool

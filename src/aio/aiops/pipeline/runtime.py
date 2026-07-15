@@ -13,9 +13,27 @@ from aiops.schemas import MetricSeries, PipelineResult, PolicyDecision, RcaResul
 from aiops.normalization import Normalizer
 from aiops.notifications import NotificationBuilder
 from aiops.qualification import QualificationGate
-from aiops.remediation import PolicyEngine
-from aiops.schemas import CandidateEvent, Incident
+from aiops.remediation import (
+    ActionCatalog,
+    HistoryRetriever,
+    IncidentHistoryStore,
+    PolicyEngine,
+    RemediationAuditLog,
+    RemediationDecisionEngine,
+    RemediationFeatureExtractor,
+)
+from aiops.schemas import CandidateEvent, Incident, RemediationDecision, VerificationResult
 from aiops.verification import VerificationEngine
+
+
+RemediationComponents = tuple[
+    RemediationFeatureExtractor,
+    HistoryRetriever,
+    RemediationDecisionEngine,
+    ActionCatalog,
+    IncidentHistoryStore,
+    RemediationAuditLog,
+]
 
 
 class IncidentStore(Protocol):
@@ -32,6 +50,7 @@ class AiopsPipeline:
         policy: PolicyEngine,
         runtime_config: RuntimeConfig | None = None,
         rca_hyperparameters: dict[str, float | int | bool] | None = None,
+        remediation: RemediationComponents | None = None,
     ):
         self.collector = collector
         self.qualification = QualificationGate()
@@ -46,6 +65,7 @@ class AiopsPipeline:
         self.verification = VerificationEngine()
         self.runtime_config = runtime_config
         self.rca_hyperparameters = rca_hyperparameters or {}
+        self.remediation = remediation
 
     def run_once(self, metric_series: list[MetricSeries] | None = None) -> PipelineResult:
         observations = self.collector.collect()
@@ -65,6 +85,8 @@ class AiopsPipeline:
                 decisions.append(self.policy.evaluate(proposal))
         verification_results = self.verification.verify(incidents, features)
         rca_result = self._run_v001_rca(metric_series or [])
+        remediation_decisions = self._run_remediation_strategy(incidents, rca_result)
+        self._record_verified_history(incidents, verification_results, remediation_decisions, rca_result)
 
         return PipelineResult(
             observations=observations,
@@ -73,6 +95,7 @@ class AiopsPipeline:
             incidents=incidents,
             notifications=notifications,
             policy_decisions=decisions,
+            remediation_decisions=remediation_decisions,
             verification_results=verification_results,
             rca_result=rca_result,
         )
@@ -92,3 +115,34 @@ class AiopsPipeline:
         return V001RcaEngine(self.runtime_config, fallback_split_ratio=float(config["fallback_split_ratio"])).rank(
             findings, metric_series, top_k=int(config["top_k"])
         )
+
+    def _run_remediation_strategy(self, incidents: list[Incident], rca_result: RcaResult) -> list[RemediationDecision]:
+        if self.remediation is None:
+            return []
+        extractor, retriever, decider, catalog, history, audit = self.remediation
+        records = history.load()
+        actions = catalog.load()
+        decisions = []
+        for incident in incidents:
+            features = extractor.extract(incident, rca_result)
+            decision = decider.decide(incident.incident_id, features, retriever.top_matches(features, records), actions)
+            audit.append(decision)
+            decisions.append(decision)
+        return decisions
+
+    def _record_verified_history(
+        self,
+        incidents: list[Incident],
+        verification_results: list[VerificationResult],
+        remediation_decisions: list[RemediationDecision],
+        rca_result: RcaResult,
+    ) -> None:
+        if self.remediation is None:
+            return
+        extractor, _, _, _, history, _ = self.remediation
+        recovered = {result.incident_id for result in verification_results if result.status == "recovered"}
+        for incident in incidents:
+            if incident.incident_id not in recovered:
+                continue
+            related_decisions = [decision for decision in remediation_decisions if decision.incident_id == incident.incident_id]
+            history.append_success(incident, extractor.extract(incident, rca_result), related_decisions)

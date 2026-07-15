@@ -1,13 +1,22 @@
+import json
 import unittest
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
 from aiops.collectors import StaticCollector
 from aiops.config import Settings
-from aiops.detectors import DependencyDetector, NoDataDetector, ThresholdDetector
-from aiops.schemas import Observation, SignalQuality
+from aiops.detectors import DependencyDetector, Detector, NoDataDetector, ThresholdDetector
+from aiops.schemas import CandidateEvent, Feature, Observation, SignalQuality
 from aiops.pipeline import AiopsPipeline
-from aiops.remediation import PolicyEngine
+from aiops.remediation import (
+    ActionCatalog,
+    HistoryRetriever,
+    IncidentHistoryStore,
+    PolicyEngine,
+    RemediationAuditLog,
+    RemediationDecisionEngine,
+    RemediationFeatureExtractor,
+)
 from aiops.storage import SQLiteIncidentStore
 
 
@@ -34,6 +43,26 @@ def no_data_detector(settings: Settings) -> NoDataDetector:
         missing_confidence=settings.no_data_missing_confidence,
         unknown_confidence=settings.no_data_unknown_confidence,
     )
+
+
+class RecoveredDependencyDetector(Detector):
+    def evaluate(self, features: list[Feature]) -> list[CandidateEvent]:
+        return [
+            CandidateEvent(
+                detector_id="test_dependency",
+                flow="checkout",
+                service="checkout",
+                severity="SEV1",
+                signal_id="checkout_payment_error_rate_5m",
+                value=0.2,
+                threshold=0.5,
+                quality=SignalQuality.VERIFIED,
+                reason="dependency_signal_breached",
+                runbook_id="RB-CHECKOUT-DEPENDENCY",
+                likely_dependency="payment",
+                confidence=0.8,
+            )
+        ]
 
 
 class RuntimePipelineTest(unittest.TestCase):
@@ -122,6 +151,97 @@ class RuntimePipelineTest(unittest.TestCase):
 
         self.assertEqual(result.incidents[0].flow, "monitoring")
         self.assertEqual(result.incidents[0].state, "open")
+
+    def test_verified_remediation_is_added_to_incident_history(self):
+        settings = Settings()
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            actions_path = root / "actions.json"
+            history_path = root / "history.json"
+            audit_path = root / "audit.jsonl"
+            actions_path.write_text(
+                json.dumps(
+                    [
+                        {
+                            "action_id": "restart_payment",
+                            "action_type": "restart",
+                            "target": "payment",
+                            "target_kind": "Deployment",
+                            "cost_min": 2.0,
+                            "downtime_min": 1.0,
+                            "blast_radius_services": ["checkout"],
+                            "replicas": 3,
+                        },
+                        {
+                            "action_id": "page_oncall",
+                            "action_type": "page",
+                            "target": "platform-team",
+                            "target_kind": "OnCall",
+                            "cost_min": 20.0,
+                            "downtime_min": 0.0,
+                            "blast_radius_services": [],
+                            "replicas": 0,
+                        },
+                    ]
+                ),
+                encoding="utf-8",
+            )
+            history_path.write_text(
+                json.dumps(
+                    [
+                        {
+                            "incident_id": "hist-payment-latency",
+                            "affected_services": ["checkout", "payment"],
+                            "log_signatures": ["dependency_signal_breached"],
+                            "metric_ratios": {"checkout_payment_error_rate_5m": 0.4},
+                            "actions_taken": [
+                                {"action_id": "restart_payment", "target": "payment", "outcome": "success"}
+                            ],
+                        }
+                    ]
+                ),
+                encoding="utf-8",
+            )
+            store = SQLiteIncidentStore(root / "aiops.sqlite3", environment=settings.environment)
+            pipeline = AiopsPipeline(
+                collector=StaticCollector(
+                    [
+                        Observation(
+                            signal_id="checkout_payment_error_rate_5m",
+                            value=0.2,
+                            unit="ratio",
+                            window="5m",
+                            quality=SignalQuality.VERIFIED,
+                        )
+                    ]
+                ),
+                detectors=[RecoveredDependencyDetector()],
+                store=store,
+                policy=policy(settings),
+                remediation=(
+                    RemediationFeatureExtractor(),
+                    HistoryRetriever({"service": 0.4, "log": 0.3, "metric": 0.3}, top_k=3),
+                    RemediationDecisionEngine(
+                        ood_threshold=0.2,
+                        cost_page=20.0,
+                        blast_radius_limit=3,
+                        confidence_threshold=0.7,
+                    ),
+                    ActionCatalog(actions_path),
+                    IncidentHistoryStore(history_path),
+                    RemediationAuditLog(audit_path),
+                ),
+            )
+
+            result = pipeline.run_once()
+            store.close()
+            history = json.loads(history_path.read_text(encoding="utf-8"))
+
+        self.assertEqual(result.verification_results[0].status, "recovered")
+        self.assertEqual(result.remediation_decisions[0].selected_action, "restart_payment")
+        self.assertEqual(len(history), 2)
+        self.assertEqual(history[1]["incident_id"], result.incidents[0].incident_id)
+        self.assertEqual(history[1]["actions_taken"][0]["outcome"], "success")
 
 
 if __name__ == "__main__":

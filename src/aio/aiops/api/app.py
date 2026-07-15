@@ -7,7 +7,15 @@ from fastapi import FastAPI, Header, HTTPException
 from aiops.collectors import StaticCollector
 from aiops.config import Settings, build_detectors, load_runtime_config
 from aiops.pipeline import AiopsPipeline
-from aiops.remediation import PolicyEngine
+from aiops.remediation import (
+    ActionCatalog,
+    HistoryRetriever,
+    IncidentHistoryStore,
+    PolicyEngine,
+    RemediationAuditLog,
+    RemediationDecisionEngine,
+    RemediationFeatureExtractor,
+)
 from aiops.schemas import GrafanaNormalizedEvent, GrafanaWebhookEvent, HealthResponse, Incident, PipelineResult, PipelineRunRequest
 from aiops.storage import SQLiteIncidentStore
 
@@ -41,6 +49,19 @@ def run_static_pipeline(request: PipelineRunRequest, settings: Settings | None =
             "bocpd_score_threshold": settings.rca_bocpd_score_threshold,
             "fallback_split_ratio": settings.rca_fallback_split_ratio,
         },
+        remediation=(
+            RemediationFeatureExtractor(),
+            HistoryRetriever(settings.remediation_similarity_weights, settings.remediation_history_top_k),
+            RemediationDecisionEngine(
+                ood_threshold=settings.remediation_ood_threshold,
+                cost_page=settings.remediation_cost_page,
+                blast_radius_limit=settings.remediation_blast_radius_limit,
+                confidence_threshold=settings.remediation_confidence_threshold,
+            ),
+            ActionCatalog(settings.actions_catalog_path),
+            IncidentHistoryStore(settings.incidents_history_path),
+            RemediationAuditLog(settings.remediation_audit_path),
+        ),
     )
     try:
         return pipeline.run_once(metric_series=request.metric_series)
