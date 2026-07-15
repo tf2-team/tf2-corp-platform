@@ -10,6 +10,7 @@ Team tập trung phát triển trải nghiệm mua sắm dùng LLM trên nền c
 - [Implementation Guide](./implementation-guide.md): hướng dẫn kỹ thuật để chuyển backlog thành thiết kế và implementation trong codebase hiện tại.
 - [Eight-Day Implementation Plan](./eight-day-implementation-plan.md): phân công theo ngày, dependency, Definition of Done và các integration checkpoint cuối ngày.
 - [Mem0 Self-Hosted Deployment Handoff](./mem0-self-hosted-deployment-handoff.md): contract, ownership và yêu cầu hạ tầng để CDO triển khai Mem0 trên development cluster.
+- [Phân phối AI model từ Amazon S3 đến Kubernetes](./s3-model-delivery-for-beginners.md): tài liệu nhập môn về model artifact, S3, IAM/IRSA, Gateway Endpoint, init container, checksum, rollout và rollback.
 
 ## Ownership boundary
 
