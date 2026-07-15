@@ -162,9 +162,29 @@ def _blocked_response(reason: str):
     """gRPC response for a request/tool-call/output blocked by guardrails.
     Only reason goes to telemetry — never raw question/review content."""
     ai_assistant_response = demo_pb2.AskProductAIAssistantResponse()
-    ai_assistant_response.response = "Xin loi, toi khong the xu ly yeu cau nay."
+    ai_assistant_response.response = "Sorry, I cannot process this request."
     logger.info(f"Request blocked by guardrails. reason={reason}")
     return ai_assistant_response
+
+
+def is_review_related(question: str) -> bool:
+    if not question:
+        return False
+    question_lower = question.lower()
+    import unicodedata
+    def remove_accents(input_str):
+        nfkd_form = unicodedata.normalize('NFKD', input_str)
+        return "".join([c for c in nfkd_form if not unicodedata.combining(c)])
+    
+    normalized_q = remove_accents(question_lower)
+    keywords = [
+        "review", "rating", "comment", "feedback", "opinion", 
+        "danh gia", "nhan xet", "binh luan", "y kien", "phan hoi"
+    ]
+    for kw in keywords:
+        if kw in normalized_q:
+            return True
+    return False
 
 
 def get_ai_assistant_response(request_product_id, question):
@@ -185,6 +205,19 @@ def get_ai_assistant_response(request_product_id, question):
         if request_guard.action == GuardrailAction.BLOCK:
             return _blocked_response(request_guard.reason)
 
+        if request_guard.action == GuardrailAction.SANITIZED and request_guard.sanitized_text:
+            question = request_guard.sanitized_text
+
+        # Instruct the model to call fetch_product_reviews in English for review questions
+        system_prompt = (
+            "You are a helpful assistant that answers related to a specific product. "
+            "Use tools as needed to fetch the product reviews and product information. "
+            "For questions about customer reviews, you must call the fetch_product_reviews tool using the exact product_id of the request. "
+            "Keep the response brief with no more than 1-2 sentences. "
+            "If you don't know the answer, just say you don't know. "
+            "All responses must be written in English."
+        )
+
         llm_rate_limit_error = check_feature_flag("llmRateLimitError")
         logger.info(f"llmRateLimitError feature flag: {llm_rate_limit_error}")
         if llm_rate_limit_error:
@@ -203,7 +236,7 @@ def get_ai_assistant_response(request_product_id, question):
 
                 user_prompt = f"Answer the following question about product ID:{request_product_id}: {question}"
                 messages = [
-                   {"role": "system", "content": "You are a helpful assistant that answers related to a specific product. Use tools as needed to fetch the product reviews and product information. Keep the response brief with no more than 1-2 sentences. If you don't know the answer, just say you don't know."},
+                   {"role": "system", "content": system_prompt},
                    {"role": "user", "content": user_prompt}
                 ]
                 logger.info(f"Invoking mock LLM with model: techx-llm-rate-limit")
@@ -234,7 +267,7 @@ def get_ai_assistant_response(request_product_id, question):
 
         user_prompt = f"Answer the following question about product ID:{request_product_id}: {question}"
         messages = [
-           {"role": "system", "content": "You are a helpful assistant that answers related to a specific product. Use tools as needed to fetch the product reviews and product information. Keep the response brief with no more than 1-2 sentences. If you don't know the answer, just say you don't know."},
+           {"role": "system", "content": system_prompt},
            {"role": "user", "content": user_prompt}
         ]
 
@@ -314,15 +347,21 @@ def get_ai_assistant_response(request_product_id, question):
                     }
                 )
 
-            llm_inaccurate_response = check_feature_flag("llmInaccurateResponse")
-            logger.info(f"llmInaccurateResponse feature flag: {llm_inaccurate_response}")
+        # Automatically fetch reviews from DB if model didn't call fetch_product_reviews for a review-related query
+        if is_review_related(question) and safe_reviews is None:
+            logger.info("Model did not call fetch_product_reviews for review-related question. Fetching reviews directly.")
+            raw_reviews = fetch_product_reviews(product_id=request_product_id)
+            safe_reviews = guardrails.sanitize_reviews(request_product_id, raw_reviews)
+            span.set_attribute("app.safe_reviews.count", len(safe_reviews.reviews))
 
+        llm_inaccurate_response = check_feature_flag("llmInaccurateResponse")
+        logger.info(f"llmInaccurateResponse feature flag: {llm_inaccurate_response}")
+
+        candidate_text = ""
+
+        # Enforce grounding pipeline for all review-related queries
+        if is_review_related(question):
             if safe_reviews is not None and safe_reviews.reviews:
-                # --- A1.1: reviews were fetched, so ground the answer ---
-                # instead of asking the model to freely synthesize text.
-                # llmInaccurateResponse is left in place on purpose: even
-                # when it nudges the model toward a wrong answer, any
-                # fabricated claim must still be caught below.
                 if llm_inaccurate_response and request_product_id == "L9ECAV7KIM":
                     span.set_attribute("app.flagd.llm_inaccurate_response", True)
                     logger.info(f"llmInaccurateResponse is on for product_id: {request_product_id}; grounding must still filter any fabricated claim")
@@ -336,31 +375,26 @@ def get_ai_assistant_response(request_product_id, question):
                     candidate_text = grounded.answer
                 else:
                     candidate_text = grounded.reason
-
-            elif safe_reviews is not None and not safe_reviews.reviews:
-                # fetch_product_reviews was called but nothing eligible
-                # survived sanitization (e.g. all reviews were injection
-                # attempts, or there simply are none) — abstain, no model
-                # synthesis call needed.
-                candidate_text = safe_reviews.reason or "Cac review hien tai khong cung cap du thong tin."
-                span.set_attribute("app.grounding.status", "ABSTAINED")
-
             else:
-                # Only fetch_product_info was called — no review evidence
-                # to ground against, fall back to direct synthesis as before.
+                # No reviews or all blocked
+                candidate_text = "The current reviews do not provide enough information."
+                span.set_attribute("app.grounding.status", "ABSTAINED")
+        else:
+            # Non-review queries
+            if tool_calls:
                 if llm_inaccurate_response and request_product_id == "L9ECAV7KIM":
                     logger.info(f"Returning an inaccurate response for product_id: {request_product_id}")
                     messages.append(
                         {
                             "role": "user",
-                            "content": f"Based on the tool results, answer the original question about product ID, but make the answer inaccurate:{request_product_id}. Keep the response brief with no more than 1-2 sentences."
+                            "content": f"Based on the tool results, answer the original question about product ID, but make the answer inaccurate:{request_product_id}. Keep the response brief with no more than 1-2 sentences. Reply in English."
                         }
                     )
                 else:
                     messages.append(
                         {
                             "role": "user",
-                            "content": f"Based on the tool results, answer the original question about product ID:{request_product_id}. Keep the response brief with no more than 1-2 sentences."
+                            "content": f"Based on the tool results, answer the original question about product ID:{request_product_id}. Keep the response brief with no more than 1-2 sentences. Reply in English."
                         }
                     )
 
@@ -371,32 +405,19 @@ def get_ai_assistant_response(request_product_id, question):
                     messages=messages
                 )
                 candidate_text = final_response.choices[0].message.content
+            else:
+                candidate_text = response_message.content
 
-            # --- A1.2, step 3: scan whatever text we're about to return -
-            output_guard = guardrails.scan_output(candidate_text)
-            span.set_attribute("app.guardrail.output_action", output_guard.action.value)
-            if output_guard.action == GuardrailAction.BLOCK:
-                return _blocked_response(output_guard.reason)
-            if output_guard.action == GuardrailAction.SANITIZED and output_guard.sanitized_text:
-                candidate_text = output_guard.sanitized_text
+        # --- A1.2, step 3: scan whatever text we're about to return -
+        output_guard = guardrails.scan_output(candidate_text)
+        span.set_attribute("app.guardrail.output_action", output_guard.action.value)
+        if output_guard.action == GuardrailAction.BLOCK:
+            return _blocked_response(output_guard.reason)
+        if output_guard.action == GuardrailAction.SANITIZED and output_guard.sanitized_text:
+            candidate_text = output_guard.sanitized_text
 
-            ai_assistant_response.response = candidate_text
-            logger.info(f"Returning an AI assistant response with length: {len(candidate_text or '')}")
-
-        else:
-            # Model answered directly without calling any tool. Still runs
-            # through the output scan — a direct answer with no tool call
-            # is still model-generated text leaving the system.
-            output_guard = guardrails.scan_output(response_message.content)
-            if output_guard.action == GuardrailAction.BLOCK:
-                return _blocked_response(output_guard.reason)
-            candidate_text = (
-                output_guard.sanitized_text
-                if output_guard.action == GuardrailAction.SANITIZED and output_guard.sanitized_text
-                else response_message.content
-            )
-            logger.info(f"Returning an AI assistant response with length: {len(candidate_text or '')}")
-            ai_assistant_response.response = candidate_text
+        ai_assistant_response.response = candidate_text
+        logger.info(f"Returning an AI assistant response with length: {len(candidate_text or '')}")
 
         # Collect metrics for this service
         product_review_svc_metrics["app_ai_assistant_counter"].add(1, {'product.id': request_product_id})
