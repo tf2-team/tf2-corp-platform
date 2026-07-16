@@ -24,6 +24,32 @@ def sha256(path: Path) -> str:
     return digest.hexdigest()
 
 
+def _portable_linkname(linkname: str) -> str:
+    """Return a tar link target that can be resolved by Linux extractors."""
+    return linkname.replace("\\", "/")
+
+
+def create_archive(cache: Path, archive: Path) -> None:
+    """Package a Hugging Face cache without leaking host path semantics."""
+    with tarfile.open(archive, "w:gz") as bundle:
+        for item in cache.rglob("*"):
+            archive_name = item.relative_to(cache).as_posix()
+            info = bundle.gettarinfo(str(item), arcname=archive_name)
+
+            # Hugging Face snapshots link back to files in blobs/. When the
+            # cache is built on Windows, those targets contain backslashes.
+            # BusyBox/Linux preserves the backslashes literally and creates
+            # broken links, so store all tar link targets in POSIX form.
+            if info.issym() or info.islnk():
+                info.linkname = _portable_linkname(info.linkname)
+
+            if info.isfile():
+                with item.open("rb") as stream:
+                    bundle.addfile(info, stream)
+            else:
+                bundle.addfile(info)
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--output", type=Path, default=Path("dist/ai-model"))
@@ -64,9 +90,7 @@ def main() -> None:
     (cache / ".model-ready").write_text(json.dumps(manifest, sort_keys=True), encoding="utf-8")
 
     archive = output / "model.tar.gz"
-    with tarfile.open(archive, "w:gz") as bundle:
-        for item in cache.rglob("*"):
-            bundle.add(item, arcname=item.relative_to(cache), recursive=False)
+    create_archive(cache, archive)
 
     checksum = sha256(archive)
     (output / "model.tar.gz.sha256").write_text(
