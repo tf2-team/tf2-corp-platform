@@ -7,6 +7,25 @@ Source files:
 - `docs/mandates/7a/ADR-DETECT-001.md`
 - `docs/pipelines/v0.0.1.md`
 
+Use this file as the Jira copy source for the two required Mandate #7 tickets.
+
+---
+
+## Grading Coverage Map
+
+| Mandate requirement | Covered by | Status |
+|---|---|---|
+| Submit 2 separate Jira tickets | Ticket 1 `#7a`, Ticket 2 `#7b` | Ready |
+| #7a has detector + baseline implementation evidence | Ticket 1: Implementation Evidence | Ready, attach PR/commit before submit |
+| #7a analyzes at least 3 metrics | Ticket 1: Metrics Analysis | Ready |
+| Each metric has why, baseline, anomaly rule, method | Ticket 1: Metrics Analysis table | Ready |
+| #7a has signed ADR | Ticket 1: ADR | Needs owner/reviewer signature |
+| #7b shows detector firing end-to-end | Ticket 2: Required Evidence | Planned |
+| #7b includes reproduction steps | Ticket 2: Execution Plan + Evidence | Planned |
+| #7b reports precision/recall/lead-time over labeled incidents | Ticket 2: Measurement Plan | Planned |
+| Alerts are impact-based and non-spammy | Both tickets: Anti-spam controls | Ready/planned |
+| No heavy infra, no request-path latency, no `flagd` mutation | Both tickets: Safety / Scope | Ready |
+
 ---
 
 ## Ticket 1
@@ -21,7 +40,7 @@ Task
 
 ### Labels
 
-`ai-mandate`, `m7`, `aiops`, `detection`, `baseline`, `tf2`
+`ai-mandate`, `m7`, `m7a`, `aiops`, `detection`, `baseline`, `rca`, `tf2`
 
 ### Due Date
 
@@ -31,83 +50,136 @@ Task
 
 ## Context
 
-Mandate #7 requires AIOps to build automated "eyes" for the platform: incidents should surface through detector output instead of waiting for a human to watch Grafana or for users to complain. Stage #7a is the implementation-and-analysis stage. It does not require a live production run yet; that evidence belongs to #7b.
+Mandate #7 requires TF2 AIOps to build automated detection so incidents surface through detector output instead of waiting for a human to watch Grafana or for users to complain.
 
-This ticket documents the first baseline anomaly detection approach for TF2 AIOps. The implementation is intentionally lightweight and repository-reviewable: it reuses the current Python AIOps runtime, reads telemetry-shaped metric series, computes baseline/deviation signals, and passes evidence into the existing incident/RCA path.
+This ticket is the #7a submission: implementation evidence plus baseline/metric analysis. It does not claim a live production run yet. Live detector firing, screenshots/logs, precision, recall, and lead-time belong to #7b.
+
+## Definition Of Done Checklist
+
+- [ ] PR/commit link attached showing detector + baseline code.
+- [x] Analysis covers at least 3 important metrics.
+- [x] Each metric documents why it was chosen.
+- [x] Each metric documents the normal baseline.
+- [x] Each metric documents the anomaly rule/threshold.
+- [x] Each metric documents the detection method.
+- [ ] ADR signed by owner/reviewer.
+- [x] Scope explicitly excludes production auto-remediation and `flagd` mutation.
 
 ## Implementation Evidence
 
-Current implementation evidence exists in `src/aio`:
+Implementation exists in `src/aio` and follows the v0.0.1 AIOps detection/RCA path.
 
-- `aiops/anomaly/v001.py` implements the v0.0.1 anomaly engine, including EWMA/STL-style residual detection, service-level robust scoring, and BARO BOCPD integration.
-- `aiops/anomaly/stats.py` provides statistical helpers: mean, standard deviation, median, IQR, and robust score.
-- `aiops/detectors/threshold.py` provides SLO-style threshold detection.
-- `aiops/detectors/dependency.py` detects dependency signal breaches and attaches likely dependency evidence.
-- `aiops/detectors/no_data.py` detects missing, stale, or invalid required signals.
-- `aiops/pipeline/runtime.py` wires the runtime flow: collect -> qualify -> normalize -> feature build -> detect -> correlate -> enrich -> incident -> notify -> policy -> verify -> RCA/remediation.
-- `aiops/rca/engine.py` combines topology and metric evidence into ranked root-cause candidates.
-- `config/runtime.json` owns topology, signal definitions, detector definitions, thresholds, policy, and RCA enablement.
+| Area | File | Evidence |
+|---|---|---|
+| Anomaly engine | `aiops/anomaly/v001.py` | `V001AnomalyEngine` runs EWMA/STL-style residual detection, service-level robust scoring, and BARO BOCPD correlation. |
+| Baseline/stat helpers | `aiops/anomaly/stats.py` | Mean, standard deviation, median, IQR, and `robust_score()` helpers. IQR has a non-zero fallback for flat baselines. |
+| SLO threshold detector | `aiops/detectors/threshold.py` | Rule-based guard for hard SLO/burn-rate style thresholds. |
+| Dependency detector | `aiops/detectors/dependency.py` | Detects dependency breach evidence and attaches likely dependency context. |
+| No-data detector | `aiops/detectors/no_data.py` | Detects missing/stale/invalid required telemetry signals. |
+| Pipeline runtime | `aiops/pipeline/runtime.py` | Orchestrates collect -> qualify -> normalize -> feature build -> detect -> correlate -> enrich -> incident -> notify -> policy -> verify -> RCA/remediation. |
+| RCA engine | `aiops/rca/engine.py` | Ranks root-cause candidates from topology and metric evidence. |
+| Runtime config | `config/runtime.json` | Owns topology, signals, detector definitions, thresholds, policy, and RCA enablement. |
+| Regression tests | `tests/test_v001_anomaly_rca.py`, `tests/test_runtime_pipeline.py` | Exercise anomaly/RCA behavior and pipeline path. |
+| Evaluation runner | `evaluate/e2e_pipeline.py` | Computes incident/RCA evaluation metrics on labeled datasets. |
+
+PR/commit evidence to attach in Jira: `TODO: paste PR or commit URL`.
 
 ## Detection / RCA Architecture
 
-The detector architecture follows `docs/pipelines/v0.0.1.md`: run lightweight anomaly detection on univariate and multivariate metric shapes, then feed anomaly evidence into RCA ranking.
+The architecture follows `docs/pipelines/v0.0.1.md`: score metric anomalies, then feed evidence into RCA ranking.
 
 ```mermaid
 graph LR
-    A["Multivariate per service"] -- "Feature builder" --> D["Isolation Forest"]
-    B["Univariate signal"] --> E["EWMA + STL"]
-    C["Multivariate across all services"] --> F["Normalize + BOCPD"]
-
-    D --> G["Graph Traversal RCA"]
-    E --> G
-
-    F --> H["Robust Score RCA"]
-
-    G --> I["Top-k services<br/>with root-cause metrics"]
-    H -- "Top-k set merge" --> I
+    A["Service metric series"] --> B["Univariate EWMA/STL"]
+    A --> C["Service-level robust score"]
+    A --> D["Global BARO BOCPD correlation"]
+    B --> E["Anomaly findings"]
+    C --> E
+    D --> E
+    E --> F["Graph + metric RCA ranking"]
+    F --> G["Top-k suspected services and root-cause metrics"]
 ```
 
-For #7a, this architecture is used as implementation evidence and analysis scope. The minimum required floor is univariate detection per service/signal; multivariate correlation and BOCPD improve confidence but are not required as the only detection path.
+Minimum floor for #7a is univariate detection per service/signal. Multivariate correlation is included as bonus confidence, not as the only detection path.
 
 ## Metrics Analysis
 
-The #7a analysis covers three important metrics across three signal types: latency, error rate, and saturation. These metrics were selected because they cover user-visible symptoms and early-warning resource pressure on the checkout path.
+The #7a analysis selects three metrics across latency, error rate, and saturation. They cover both user-visible symptoms and early resource pressure on the checkout path.
 
-| Metric | Service | Signal Type | Why It Matters | Baseline | Anomaly Rule | Method |
+| Metric | Service | Signal type | Why selected | Normal baseline | Anomaly rule | Detection method |
 |---|---|---|---|---|---|---|
-| p95 latency | `checkout` | Latency | Checkout is the revenue path and naturally aggregates dependency slowness. | Normal load p95 around 62-87 ms; idle around 4.5-5 ms. | Warning above 200 ms for 3 cycles; critical above 500 ms for 2 cycles; statistical anomaly when EWMA residual z-score >= 3.0. | EWMA + STL-style residual scoring, backed by hard threshold. |
-| HTTP 5xx error rate | `cart` | Error rate | Cart is required before checkout; its SLO is 99.5%, so the error budget is only 0.5%. | Normal baseline around 0.0% 5xx under current load. | Warning above 0.5% for 2 cycles; critical above 2.0% for 2 cycles; robust score >= 4.0 vs recent baseline. | Median/IQR robust score plus SLO threshold. |
-| CPU usage | `product-catalog` | Saturation | Product catalog is a critical shared read path; saturation can precede latency and error symptoms. | Normal usage around 2-4 millicores per pod; total around 6 millicores for 2 pods. | Warning above 20 millicores for 3 cycles; critical above 50 millicores for 2 cycles; EWMA z-score >= 3.0. | EWMA z-score, with BARO BOCPD as bonus correlation signal. |
+| p95 latency | `checkout` | Latency | Checkout is the revenue path and aggregates dependency slowness across cart, product-catalog, currency, shipping, payment, email, accounting, and fraud-detection. It maps to prior incident history where checkout p95 rose before full failure. | Normal load p95 around 62-87 ms; idle around 4.5-5 ms. Measured with `rpc_server_duration_milliseconds_bucket` because checkout uses gRPC. | Warning: > 200 ms for 3 cycles. Critical: > 500 ms for 2 cycles. Statistical anomaly: EWMA residual z-score >= 3.0. | EWMA/STL-style residual scoring plus hard latency guard. |
+| HTTP 5xx error rate | `cart` | Error rate | Cart is required before checkout. Its SLO is >= 99.5%, so the error budget is only 0.5%. Cart also depends on `valkey-cart`, a known risk from incident history. | Normal baseline around 0.0% 5xx under current load. Short deploy/restart spikes up to about 1.0% are expected noise. | Warning: > 0.5% for 2 cycles. Critical: > 2.0% for 2 cycles. Statistical anomaly: robust score >= 4.0 vs recent baseline. Only evaluate when traffic is present. | Median/IQR robust score plus SLO threshold. |
+| CPU usage | `product-catalog` | Saturation | Product-catalog is a critical shared read path used by frontend, recommendation, product-reviews, and checkout. CPU saturation can precede latency and error symptoms. | Normal usage around 2-4 millicores per pod; total around 6 millicores for 2 pods. No CPU limit is configured, so absolute millicores are used instead of percent utilization. | Warning: > 20 millicores for 3 cycles. Critical: > 50 millicores for 2 cycles. Statistical anomaly: EWMA z-score >= 3.0. Correlate with QPS to avoid alerting on normal load growth. | EWMA z-score, with BARO BOCPD as corroborating cross-service signal. |
 
-Full analysis is available in:
+Full supporting analysis: `docs/mandates/7a/MANDATE-07a-detection-analysis.md`.
 
-- `docs/mandates/7a/MANDATE-07a-detection-analysis.md`
+## Anti-Spam Controls
+
+- Warm-up suppression through `min_points` before scoring.
+- Consecutive-cycle requirements so a single spike does not page.
+- Hard SLO guards only for meaningful thresholds.
+- Robust median/IQR scoring to avoid baselines being pulled by old spikes.
+- Correlation/RCA ranking so alerts include likely affected service and root-cause metric, not just "metric high".
+- #7b will measure false positives over a labeled incident set rather than isolated anecdotes.
 
 ## ADR
 
-Architecture decision record:
+ADR file: `docs/mandates/7a/ADR-DETECT-001.md`.
 
-- `docs/mandates/7a/ADR-DETECT-001.md`
+Decision: use the in-repository Python detector as the Mandate #7a architecture. It is lightweight, observe-only, evaluation-first, and does not approve production auto-remediation.
 
-The ADR selects the in-repository Python detector as the Mandate #7a architecture. The detector is observe-only, evaluation-first, and does not approve production auto-remediation. Production readiness, live alerting, and mutation boundaries remain separate future decisions.
+Signature status:
 
-## Evidence To Attach In Jira
+| Role | Name | Date | Status |
+|---|---|---|---|
+| Owner | Nguyen Quy Hung | 2026-07-15 | Proposed |
+| Reviewer | TODO | TODO | Pending sign-off |
 
-- PR/commit link: `TBD`
-- Analysis doc: `docs/mandates/7a/MANDATE-07a-detection-analysis.md`
-- ADR: `docs/mandates/7a/ADR-DETECT-001.md`
-- Optional local verification command, when dependencies are available:
+## Verification Commands
+
+Run all local tests:
 
 ```bash
 cd tf2-corp-platform/src/aio
 conda run -n capstone python -B -m unittest discover -s tests
 ```
 
+Run focused anomaly/RCA test:
+
+```bash
+cd tf2-corp-platform/src/aio
+conda run -n capstone python -B -m unittest tests.test_v001_anomaly_rca
+```
+
+Run evaluation on a labeled dataset when available:
+
+```bash
+cd tf2-corp-platform/src/aio
+conda run -n capstone python -B evaluate/e2e_pipeline.py --limit 10 --out evaluate/report.json
+```
+
+## Evidence To Attach Before Submit
+
+- PR/commit link: `TODO`
+- Test output: `TODO`
+- Signed ADR confirmation: `TODO`
+- Analysis doc: `docs/mandates/7a/MANDATE-07a-detection-analysis.md`
+- ADR: `docs/mandates/7a/ADR-DETECT-001.md`
+
 ## Scope Notes
 
-This ticket is for #7a only. It proves implementation plus analysis. It does not need a live e2e screenshot, precision/recall numbers, or lead-time numbers. Those belong to #7b.
+This ticket is only for #7a. It proves implementation plus analysis.
 
-The detector must remain lightweight. This ticket does not approve Kubernetes mutation, production auto-remediation, disabling `flagd`, or creating a new heavy telemetry/ML cluster.
+Out of scope for #7a:
+
+- Live detector screenshot/log.
+- Production alert routing.
+- Precision/recall/lead-time numbers.
+- Production auto-remediation.
+- Kubernetes mutation.
+- Disabling or mutating `flagd`.
+- Adding a heavy telemetry/ML cluster.
 
 ---
 
@@ -123,7 +195,7 @@ Task
 
 ### Labels
 
-`ai-mandate`, `m7`, `aiops`, `detection`, `e2e`, `measurement`, `tf2`
+`ai-mandate`, `m7`, `m7b`, `aiops`, `detection`, `e2e`, `measurement`, `precision-recall`, `tf2`
 
 ### Due Date
 
@@ -133,90 +205,108 @@ Task
 
 ## Context
 
-Mandate #7b is the live-evidence stage for AIOps detection. After #7a proves the detector implementation and analysis, #7b must show that the detection path actually fires when an incident is injected or replayed through an approved labeled scenario.
+Mandate #7b is the live-evidence stage. After #7a proves detector implementation and baseline analysis, #7b must show that the detector actually fires during an injected or replayed incident and must report detection quality over a labeled incident set.
 
-The goal is to demonstrate that incidents surface automatically through alert/log/dashboard evidence and to measure detection quality with precision, recall, and lead-time over a labeled incident set.
+## Definition Of Done Checklist
+
+- [ ] Detector runs against live telemetry or approved replay data.
+- [ ] One injected/replayed incident causes visible detector output.
+- [ ] Evidence includes screenshot, detector log, dashboard panel, or alert payload.
+- [ ] Evidence includes timestamps and enough context to reproduce the run.
+- [ ] Precision is reported as correct fires / total fires.
+- [ ] Recall is reported as caught incidents / total labeled incidents.
+- [ ] Lead-time is reported as incident start time -> detector fire time.
+- [ ] False positives, missed incidents, and anti-spam behavior are documented.
+- [ ] Detector does not mutate production state or `flagd`.
 
 ## Planned Detection Flow
 
-The detector should run against live telemetry or an approved replay/evaluation source. The expected flow is:
-
 ```text
-Telemetry / labeled incident period
+Live telemetry or labeled replay
   -> metric collection
   -> baseline and anomaly scoring
   -> incident detection
   -> RCA ranking
   -> alert/log/dashboard evidence
-  -> measurement report
+  -> precision/recall/lead-time report
 ```
-
-The architecture to validate during #7b is the v0.0.1 Detection/RCA flow:
 
 ```mermaid
 graph LR
-    A["Live metric series<br/>per service"] --> B["Univariate path<br/>EWMA + STL"]
-    A --> C["Per-service multivariate path<br/>Isolation Forest"]
-    A --> D["All-service multivariate path<br/>Normalize + BOCPD"]
-
-    B --> E["Graph Traversal RCA"]
-    C --> E
-    D --> F["Robust Score RCA"]
-
-    E --> G["Top-k suspected services"]
-    F --> G
-    G --> H["Detector alert / log / dashboard evidence"]
-    H --> I["Precision / recall / lead-time report"]
+    A["Live or replayed metric series"] --> B["Baseline + anomaly scoring"]
+    B --> C["Incident detection"]
+    C --> D["RCA ranking"]
+    D --> E["Alert/log/dashboard evidence"]
+    E --> F["Precision / recall / lead-time report"]
 ```
 
-For the first #7b run, use the same core metrics documented in #7a:
+Use the #7a core metrics for the first reproducible #7b run:
 
 - `checkout` p95 latency
 - `cart` HTTP 5xx error rate
 - `product-catalog` CPU usage
 
-These should be expanded only after the initial e2e path is reproducible.
+Expand to more services only after this path is reproducible.
 
 ## Required Evidence
 
-The Jira ticket should include a visible detector-firing proof from an injected or mentor-approved incident. Acceptable evidence can be a screenshot, detector log, dashboard panel, or alert payload, as long as it shows the detector firing end-to-end and includes enough timestamp/context to reproduce the run.
+Attach one visible proof that the detector fired end-to-end during an injected or approved replayed incident.
 
-The ticket should also include:
+Acceptable evidence:
 
-- Exact reproduction steps.
-- The labeled incident set or replay source used for measurement.
-- Precision: correct fires / total fires.
-- Recall: caught incidents / total injected incidents.
-- Lead-time: incident start time -> detector fire time.
-- Notes about false positives, missed incidents, and anti-spam behavior.
+- Detector log line showing timestamp, service, metric, severity, score, and RCA candidate.
+- Alert payload showing detector output and incident context.
+- Dashboard screenshot showing anomaly and alert state.
+- Terminal output from a replay/evaluation run, if it includes timestamps and detector result.
 
-## Measurement Notes
+Evidence must include:
 
-Precision and recall should be measured over the labeled incident set, not as isolated per-service anecdotes.
+- Incident scenario name.
+- Incident start timestamp.
+- Detector fire timestamp.
+- Metric(s) that triggered the detector.
+- Severity.
+- Root-cause candidate(s).
+- Reproduction command or runbook.
 
-Lead-time should be reported from incident start to detector fire. If the incident start time comes from mentor injection, use that timestamp as the source of truth.
+## Measurement Plan
 
-Alerting should prioritize user-visible impact and error-budget/burn-rate style signals where available. The detector should avoid spam through consecutive-cycle requirements, warm-up suppression, thresholding, correlation, or equivalent controls.
+Measure over a labeled incident set, not one anecdotal service example.
+
+| Metric | Formula | Required source |
+|---|---|---|
+| Precision | correct detector fires / total detector fires | Detector output + incident labels |
+| Recall | caught labeled incidents / total labeled incidents | Labeled incident set |
+| Lead-time | detector fire timestamp - incident start timestamp | Mentor injection timestamp or replay label |
+
+Also report:
+
+- False positives: detector fired during normal period.
+- False negatives: labeled incident not detected.
+- Duplicate/spam behavior: repeated alerts for the same incident window.
+- RCA top-k result: whether expected root cause appears in top-k.
 
 ## Proposed Execution Steps
 
-1. Confirm live or replay source for the three #7a metrics.
-2. Confirm Prometheus queries and units for each metric.
-3. Capture a normal period to verify baseline/no-alert behavior.
-4. Run the detector during an approved injected incident or labeled replay.
+1. Confirm live Prometheus or approved replay source for the three #7a metrics.
+2. Confirm PromQL queries and units for each metric.
+3. Capture a normal period to prove no-alert behavior.
+4. Inject or replay at least one approved incident.
 5. Save detector output, alert/log/dashboard evidence, and timestamps.
-6. Compute precision, recall, and lead-time.
-7. Attach evidence and final numbers to this ticket.
+6. Run measurement over the labeled incident set.
+7. Attach precision, recall, lead-time, false-positive notes, and reproduction steps.
 
 ## Evidence To Attach In Jira
 
-- Alert screenshot or detector log: `TBD`
-- Reproduction command/runbook: `TBD`
-- Labeled incident set or replay source: `TBD`
-- Precision: `TBD`
-- Recall: `TBD`
-- Lead-time: `TBD`
-- False-positive / spam-control notes: `TBD`
+- Alert screenshot or detector log: `TODO`
+- Reproduction command/runbook: `TODO`
+- Labeled incident set or replay source: `TODO`
+- Normal-period no-alert evidence: `TODO`
+- Precision: `TODO`
+- Recall: `TODO`
+- Lead-time: `TODO`
+- False-positive / spam-control notes: `TODO`
+- RCA top-k result: `TODO`
 
 ## Scope Notes
 
