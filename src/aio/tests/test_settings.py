@@ -15,6 +15,7 @@ class SettingsTest(unittest.TestCase):
         self.assertEqual(settings.prometheus_base_url, "http://localhost:9090")
         self.assertEqual(settings.jaeger_base_url, "http://localhost:16686/jaeger/ui")
         self.assertFalse(settings.opensearch_verify_tls)
+        self.assertEqual(settings.notification_provider, "auto")
         self.assertEqual(settings.runtime_config_path, Path("config/runtime.json"))
 
     def test_settings_load_from_env_file_and_drive_pipeline(self):

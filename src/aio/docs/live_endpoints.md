@@ -13,7 +13,7 @@ Inventory này được kiểm tra với namespace `techx-corp-prod` ngày 2026-
 | Jaeger | `svc/jaeger:16686` | `GET http://localhost:16686/jaeger/ui/api/services`, `/api/traces` | Không cần token qua port-forward |
 | OpenSearch | `svc/opensearch:9200` | `GET https://localhost:9200/`, `/_cat/indices`; `POST /<index>/_search` | HTTPS + Basic Auth bắt buộc |
 | Kubernetes API | `kubectl proxy :8001` | `GET http://localhost:8001/api/v1/namespaces/techx-corp-prod/pods`; deployments API | Dùng credential của kubeconfig; không cần bearer token riêng |
-| Notification | External receiver | `POST $AIOPS_NOTIFICATION_WEBHOOK_URL` | Tùy receiver; URL là bắt buộc, bearer token là tùy chọn |
+| Notification | External receiver | `POST $AIOPS_NOTIFICATION_WEBHOOK_URL` | Generic JSON hoặc Discord webhook; URL là bắt buộc, bearer token chỉ áp dụng cho generic receiver |
 
 ## Trạng thái secret/config
 
@@ -24,7 +24,8 @@ Không ghi giá trị secret vào repository hoặc terminal log. Chỉ tên ngu
 |---|---|---|
 | `AIOPS_OPENSEARCH_USERNAME` | Đã cấu hình và smoke test PASS | Nguồn: Kubernetes Secret `techx-corp-opensearch`, key `username`; không ghi giá trị vào tài liệu |
 | `AIOPS_OPENSEARCH_PASSWORD` | Đã cấu hình và smoke test PASS | Nguồn: Kubernetes Secret `techx-corp-opensearch`, key `password`; không ghi giá trị vào tài liệu |
-| `AIOPS_NOTIFICATION_WEBHOOK_URL` | Bắt buộc, hiện còn placeholder | Cần một JSON webhook receiver tương thích. Secret `techx-corp-grafana-discord`/`webhook-url` chỉ là candidate; Discord cần adapter/payload riêng trước khi tái sử dụng trực tiếp |
+| `AIOPS_NOTIFICATION_WEBHOOK_URL` | Bắt buộc, hiện còn placeholder | Có thể dùng Secret `techx-corp-grafana-discord`/`webhook-url`; adapter tự nhận diện URL Discord khi `AIOPS_NOTIFICATION_PROVIDER=auto` |
+| `AIOPS_NOTIFICATION_PROVIDER` | Tùy chọn, mặc định `auto` | Hỗ trợ `auto`, `generic`, `discord`; dùng `discord` cho proxy/custom hostname nhận Discord payload |
 | `AIOPS_NOTIFICATION_TOKEN` | Tùy chọn | Chỉ cần nếu receiver yêu cầu Bearer Auth |
 | `AIOPS_GRAFANA_WEBHOOK_SECRET` | Bắt buộc, hiện còn thiếu | Tự sinh shared secret và cấu hình cùng giá trị ở AIOps và Grafana contact point |
 | Grafana admin username/password | Chỉ cần khi provision contact point bằng Grafana API | Kubernetes Secret `techx-corp-grafana-admin` |

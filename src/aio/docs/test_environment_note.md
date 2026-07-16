@@ -22,14 +22,14 @@ thiếu cấu hình bắt buộc.
 |---|---|---|
 | `AIOPS_OPENSEARCH_PASSWORD` | Bắt buộc | Đã cấu hình; smoke test xác nhận Basic Auth hợp lệ. Không ghi giá trị vào tài liệu |
 | `AIOPS_OPENSEARCH_USERNAME` | Bắt buộc | Đã cấu hình; smoke test xác nhận Basic Auth hợp lệ. Không ghi giá trị vào tài liệu |
-| `AIOPS_NOTIFICATION_WEBHOOK_URL` | Bắt buộc | Còn placeholder; cần JSON webhook receiver tương thích với `NotificationMessage` |
+| `AIOPS_NOTIFICATION_WEBHOOK_URL` | Bắt buộc | Còn placeholder; hỗ trợ generic JSON receiver hoặc Discord webhook |
+| `AIOPS_NOTIFICATION_PROVIDER` | Tùy chọn | `auto` tự nhận diện Discord URL; hỗ trợ ép `generic` hoặc `discord` |
 | `AIOPS_NOTIFICATION_TOKEN` | Tùy chọn | Chỉ cần khi notification receiver yêu cầu Bearer Auth |
 | Grafana admin credential | Có điều kiện | Chỉ cần khi provision contact point bằng Grafana API; nguồn: Secret `techx-corp-grafana-admin` |
 | `AIOPS_GRAFANA_WEBHOOK_SECRET` | Bắt buộc | Chưa cấu hình; cần dùng cùng một secret tại Grafana contact point và AIOps |
 
-Secret `techx-corp-grafana-discord`, key `webhook-url`, chỉ là candidate cho
-notification. Discord yêu cầu payload riêng nên không dùng trực tiếp với normalized
-`NotificationMessage` nếu chưa có adapter.
+Secret `techx-corp-grafana-discord`, key `webhook-url`, có thể dùng trực tiếp qua
+Discord notification adapter.
 
 Không có giá trị Secret nào được đọc, ghi vào repository hoặc in ra terminal trong
 quá trình kiểm tra.

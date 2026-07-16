@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 from pathlib import Path
+from typing import Literal
 
 from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -96,6 +97,7 @@ class Settings(BaseSettings):
     notification_webhook_url: str
     notification_token: str
     notification_account: str
+    notification_provider: Literal["auto", "generic", "discord"] = "auto"
 
     aie_status_url: str
     aie_token: str

@@ -1,4 +1,5 @@
 import base64
+import json
 import unittest
 
 import httpx
@@ -96,7 +97,48 @@ class IntegrationClientTest(unittest.TestCase):
         response = NotificationClient(settings(), transport=httpx.MockTransport(handler)).send(message)
 
         self.assertEqual(response["accepted"], True)
+        self.assertEqual(str(seen[0].url), "https://notification.example")
         self.assertEqual(seen[0].headers["authorization"], "Bearer CHANGE_ME_NOTIFICATION_TOKEN")
+        self.assertEqual(json.loads(seen[0].content)["incident_id"], "inc-1")
+
+    def test_notification_client_auto_detects_discord_and_sends_embed(self):
+        seen: list[httpx.Request] = []
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            seen.append(request)
+            return httpx.Response(204)
+
+        cfg = settings().model_copy(
+            update={
+                "notification_provider": "auto",
+                "notification_webhook_url": "https://discord.com/api/webhooks/123/secret-token",
+            }
+        )
+        message = NotificationMessage(
+            incident_id="inc-discord-1",
+            severity="SEV1",
+            state="open",
+            title="checkout unavailable",
+            summary="Checkout error ratio exceeded the SLO.",
+            flow="checkout",
+            service="checkout",
+            likely_dependency="postgresql",
+            runbook_id="RB-CHECKOUT-SLO",
+        )
+
+        response = NotificationClient(cfg, transport=httpx.MockTransport(handler)).send(message)
+
+        self.assertEqual(response, {"status_code": 204})
+        self.assertEqual(str(seen[0].url), "https://discord.com/api/webhooks/123/secret-token")
+        self.assertNotIn("authorization", seen[0].headers)
+        self.assertNotIn("x-aiops-account", seen[0].headers)
+        payload = json.loads(seen[0].content)
+        self.assertEqual(payload["allowed_mentions"], {"parse": []})
+        self.assertEqual(payload["embeds"][0]["title"], "[SEV1] checkout unavailable")
+        self.assertEqual(payload["embeds"][0]["color"], 0xE74C3C)
+        fields = {field["name"]: field["value"] for field in payload["embeds"][0]["fields"]}
+        self.assertEqual(fields["Likely dependency"], "postgresql")
+        self.assertEqual(fields["Runbook"], "RB-CHECKOUT-SLO")
 
     def test_notification_client_accepts_empty_success_response(self):
         def handler(request: httpx.Request) -> httpx.Response:
