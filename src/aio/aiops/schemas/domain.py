@@ -32,6 +32,7 @@ class Feature(AiopsModel):
     window: str
     quality: SignalQuality
     status: str
+    feature_role: str = "unknown"
     labels: dict[str, str] = Field(default_factory=dict)
 
 
@@ -124,6 +125,8 @@ class CandidateEvent(AiopsModel):
     severity: str
     signal_id: str
     value: float | None
+    unit: str
+    window: str
     threshold: float | None
     quality: SignalQuality
     reason: str

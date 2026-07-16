@@ -1,9 +1,12 @@
 from __future__ import annotations
 
-from aiops.schemas import Feature, Observation, SignalQuality
+from aiops.schemas import Feature, Observation, RuntimeConfig, SignalQuality
 
 
 class FeatureBuilder:
+    def __init__(self, runtime_config: RuntimeConfig | None = None):
+        self._roles = {signal.id: signal.feature_role for signal in runtime_config.signals} if runtime_config else {}
+
     def build(self, observations: list[Observation]) -> list[Feature]:
         return [self._build_one(observation) for observation in observations]
 
@@ -22,6 +25,6 @@ class FeatureBuilder:
             window=observation.window,
             quality=observation.quality,
             status=status,
+            feature_role=self._roles.get(observation.signal_id, "unknown"),
             labels=dict(observation.labels),
         )
-

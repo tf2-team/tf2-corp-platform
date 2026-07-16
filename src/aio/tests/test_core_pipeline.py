@@ -1,12 +1,13 @@
 import unittest
+from pathlib import Path
 
 from pydantic import ValidationError
 
-from aiops.config import Settings
+from aiops.config import Settings, load_runtime_config
 from aiops.deduplication import IncidentManager
-from aiops.detectors import DetectorEngine, NoDataDetector, ThresholdDetector
+from aiops.detectors import DependencyDetector, DetectorEngine, NoDataDetector, ThresholdDetector
 from aiops.features import FeatureBuilder
-from aiops.schemas import ActionProposal, Observation, SignalQuality
+from aiops.schemas import ActionProposal, Feature, Observation, SignalQuality
 from aiops.remediation import PolicyEngine
 
 
@@ -57,10 +58,17 @@ class FeatureBuilderTest(unittest.TestCase):
         self.assertEqual(feature.status, "unknown")
         self.assertIsNone(feature.value)
 
+    def test_feature_role_comes_from_runtime_signal_registry(self):
+        feature = FeatureBuilder(load_runtime_config(Path("config/runtime.json"))).build(
+            [Observation(signal_id="checkout_bad_ratio_24h", value=0.02, unit="ratio", window="24h", quality=SignalQuality.VERIFIED)]
+        )[0]
+
+        self.assertEqual(feature.feature_role, "official_slo")
+
 
 class DetectorEngineTest(unittest.TestCase):
     def test_threshold_detector_fires_from_verified_feature(self):
-        features = FeatureBuilder().build(
+        features = FeatureBuilder(load_runtime_config(Path("config/runtime.json"))).build(
             [Observation(signal_id="checkout_bad_ratio_24h", value=0.017, unit="ratio", window="24h", quality=SignalQuality.VERIFIED)]
         )
         candidates = DetectorEngine(
@@ -79,7 +87,67 @@ class DetectorEngineTest(unittest.TestCase):
 
         self.assertEqual(len(candidates), 1)
         self.assertEqual(candidates[0].detector_id, "ops01_checkout_slo")
+        self.assertEqual(candidates[0].unit, "ratio")
+        self.assertEqual(candidates[0].window, "24h")
         self.assertEqual(candidates[0].likely_dependency, "unknown")
+
+    def test_threshold_detector_ignores_non_official_slo_feature(self):
+        candidates = DetectorEngine(
+            [
+                ThresholdDetector(
+                    detector_id="ops01_checkout_slo",
+                    signal_id="checkout_bad_ratio_24h",
+                    threshold=0.01,
+                    flow="checkout",
+                    service="checkout",
+                    severity="SEV1",
+                    runbook_id="RB-CHECKOUT-SLO",
+                )
+            ]
+        ).evaluate(
+            [
+                Feature(
+                    signal_id="checkout_bad_ratio_24h",
+                    value=0.017,
+                    unit="ratio",
+                    window="24h",
+                    quality=SignalQuality.VERIFIED,
+                    status="ready",
+                    feature_role="diagnostic",
+                )
+            ]
+        )
+
+        self.assertEqual(candidates, [])
+
+    def test_dependency_detector_ignores_official_slo_feature(self):
+        detector = DependencyDetector(
+            detector_id="ops03_checkout_payment_dependency",
+            signal_id="checkout_payment_error_rate_5m",
+            threshold=0.05,
+            flow="checkout",
+            service="checkout",
+            dependency="payment",
+            runbook_id="RB-CHECKOUT-DEPENDENCY",
+            severity="SEV2",
+            confidence=0.8,
+        )
+
+        candidates = detector.evaluate(
+            [
+                Feature(
+                    signal_id="checkout_payment_error_rate_5m",
+                    value=0.2,
+                    unit="ratio",
+                    window="5m",
+                    quality=SignalQuality.VERIFIED,
+                    status="ready",
+                    feature_role="official_slo",
+                )
+            ]
+        )
+
+        self.assertEqual(candidates, [])
 
     def test_no_data_detector_opens_monitoring_loss_candidate(self):
         features = FeatureBuilder().build(
@@ -88,6 +156,8 @@ class DetectorEngineTest(unittest.TestCase):
         candidates = DetectorEngine([no_data_detector()]).evaluate(features)
 
         self.assertEqual(candidates[0].detector_id, "ops02_monitoring_loss")
+        self.assertEqual(candidates[0].unit, "ratio")
+        self.assertEqual(candidates[0].window, "24h")
         self.assertEqual(candidates[0].flow, "monitoring")
 
 
@@ -105,12 +175,12 @@ class IncidentManagerTest(unittest.TestCase):
         )
 
         first = detector.evaluate(
-            FeatureBuilder().build(
+            FeatureBuilder(load_runtime_config(Path("config/runtime.json"))).build(
                 [Observation(signal_id="checkout_bad_ratio_24h", value=0.017, unit="ratio", window="24h", quality=SignalQuality.VERIFIED)]
             )
         )[0]
         second = detector.evaluate(
-            FeatureBuilder().build(
+            FeatureBuilder(load_runtime_config(Path("config/runtime.json"))).build(
                 [Observation(signal_id="checkout_bad_ratio_24h", value=0.021, unit="ratio", window="24h", quality=SignalQuality.VERIFIED)]
             )
         )[0]

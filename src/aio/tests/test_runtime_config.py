@@ -17,6 +17,8 @@ class RuntimeConfigTest(unittest.TestCase):
         detectors = build_detectors(config, Settings())
 
         self.assertEqual(config.topology.services[0].name, "checkout")
+        self.assertEqual(config.signals[0].feature_role, "official_slo")
+        self.assertEqual(config.signals[1].feature_role, "diagnostic")
         self.assertEqual([detector.__class__.__name__ for detector in detectors], ["ThresholdDetector", "NoDataDetector", "DependencyDetector"])
 
     def test_rejects_detector_with_unknown_signal(self):

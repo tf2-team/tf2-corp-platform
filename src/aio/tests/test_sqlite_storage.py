@@ -2,6 +2,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
+from aiops.config import load_runtime_config
 from aiops.detectors import ThresholdDetector
 from aiops.features import FeatureBuilder
 from aiops.schemas import Observation, SignalQuality
@@ -18,7 +19,7 @@ def candidate(value: float):
         severity="SEV1",
         runbook_id="RB-CHECKOUT-SLO",
     )
-    features = FeatureBuilder().build(
+    features = FeatureBuilder(load_runtime_config(Path("config/runtime.json"))).build(
         [Observation(signal_id="checkout_bad_ratio_24h", value=value, unit="ratio", window="24h", quality=SignalQuality.VERIFIED)]
     )
     return detector.evaluate(features)[0]

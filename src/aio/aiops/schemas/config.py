@@ -31,6 +31,7 @@ class SignalDefinition(AiopsModel):
     window: str
     flow: str
     service: str
+    feature_role: Literal["official_slo", "diagnostic", "anomaly_input", "dependency_signal"]
     required_labels: list[str] = Field(default_factory=list)
 
 

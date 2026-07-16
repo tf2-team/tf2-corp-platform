@@ -220,6 +220,8 @@ class RecoveredDependencyDetector(Detector):
                 severity="SEV1",
                 signal_id="checkout_payment_error_rate_5m",
                 value=0.2,
+                unit="ratio",
+                window="5m",
                 threshold=0.5,
                 quality=SignalQuality.VERIFIED,
                 reason="dependency_signal_breached",

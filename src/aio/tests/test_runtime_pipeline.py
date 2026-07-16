@@ -4,8 +4,10 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 
 from aiops.collectors import StaticCollector
-from aiops.config import Settings
+from aiops.config import Settings, load_runtime_config
 from aiops.detectors import DependencyDetector, Detector, NoDataDetector, ThresholdDetector
+from aiops.normalization import load_normalization_schema
+from aiops.qualification import load_qualification_schema
 from aiops.schemas import CandidateEvent, Feature, Observation, SignalQuality
 from aiops.pipeline import AiopsPipeline
 from aiops.remediation import (
@@ -45,6 +47,17 @@ def no_data_detector(settings: Settings) -> NoDataDetector:
     )
 
 
+def runtime_kwargs(settings: Settings) -> dict:
+    runtime_config = load_runtime_config(settings.runtime_config_path)
+    return {
+        "runtime_config": runtime_config,
+        "qualification_schema": load_qualification_schema(settings.qualification_schema_path),
+        "normalization_schema": load_normalization_schema(settings.normalization_schema_path),
+        "qualification_dev": settings.qualification_gate_dev,
+        "qualification_max_sample_age_seconds": settings.qualification_max_sample_age_seconds,
+    }
+
+
 class RecoveredDependencyDetector(Detector):
     def evaluate(self, features: list[Feature]) -> list[CandidateEvent]:
         return [
@@ -55,6 +68,8 @@ class RecoveredDependencyDetector(Detector):
                 severity="SEV1",
                 signal_id="checkout_payment_error_rate_5m",
                 value=0.2,
+                unit="ratio",
+                window="5m",
                 threshold=0.5,
                 quality=SignalQuality.VERIFIED,
                 reason="dependency_signal_breached",
@@ -86,6 +101,7 @@ class RuntimePipelineTest(unittest.TestCase):
                             unit="ratio",
                             window="5m",
                             quality=SignalQuality.VERIFIED,
+                            labels={"service": "checkout", "dependency": "payment"},
                         ),
                     ]
                 ),
@@ -113,6 +129,7 @@ class RuntimePipelineTest(unittest.TestCase):
                 ],
                 store=store,
                 policy=policy(settings),
+                **runtime_kwargs(settings),
             )
 
             result = pipeline.run_once()

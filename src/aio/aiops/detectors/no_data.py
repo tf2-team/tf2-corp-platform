@@ -38,6 +38,8 @@ class NoDataDetector(Detector):
                     severity=self.severity,
                     signal_id=feature.signal_id,
                     value=None,
+                    unit=feature.unit,
+                    window=feature.window,
                     threshold=None,
                     quality=feature.quality,
                     reason=f"signal_{feature.quality.value}",

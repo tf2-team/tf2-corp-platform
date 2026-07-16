@@ -30,6 +30,7 @@
       "window": "24h",
       "flow": "checkout",
       "service": "checkout",
+      "feature_role": "official_slo",
       "required_labels": []
     },
     {
@@ -40,6 +41,7 @@
       "window": "5m",
       "flow": "checkout",
       "service": "checkout",
+      "feature_role": "diagnostic",
       "required_labels": ["service", "dependency"]
     }
   ],

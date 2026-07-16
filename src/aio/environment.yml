@@ -8,3 +8,5 @@ dependencies:
       - pydantic>=2,<3
       - pydantic-settings>=2,<3
       - fse-baro
+      - statsmodels>=0.14,<1
+      - scikit-learn>=1.4,<2

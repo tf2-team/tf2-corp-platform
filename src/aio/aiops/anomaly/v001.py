@@ -1,10 +1,9 @@
 from __future__ import annotations
 
 from collections import defaultdict
-from math import sqrt
 import os
 
-from aiops.anomaly.stats import mean, robust_score, stdev
+from aiops.anomaly.stats import mean, stdev
 from aiops.schemas import AnomalyFinding, MetricSeries
 
 os.environ.setdefault("MPLCONFIGDIR", "/tmp")
@@ -31,19 +30,13 @@ class EwmaStlDetector:
         return findings
 
     def _residuals(self, values: list[float]) -> list[float]:
-        smoothed: list[float] = []
-        current = values[0]
-        for value in values:
-            current = self.alpha * value + (1 - self.alpha) * current
-            smoothed.append(current)
+        from statsmodels.tsa.api import SimpleExpSmoothing
+        from statsmodels.tsa.seasonal import STL
 
+        smoothed = SimpleExpSmoothing(values, initialization_method="estimated").fit(smoothing_level=self.alpha, optimized=False).fittedvalues
         if self.seasonal_period <= 1 or len(values) < self.seasonal_period * 2:
             return [value - smooth for value, smooth in zip(values, smoothed)]
-
-        seasonal = []
-        for index, value in enumerate(values):
-            same_slot = values[index % self.seasonal_period : index : self.seasonal_period]
-            seasonal.append(mean(same_slot) if same_slot else 0.0)
+        seasonal = STL(values, period=self.seasonal_period, robust=True).fit().seasonal
         return [value - smooth - season for value, smooth, season in zip(values, smoothed, seasonal)]
 
     def _finding(self, metric: MetricSeries, algorithm: str, score: float, timestamp: int) -> AnomalyFinding:
@@ -71,11 +64,18 @@ class ServiceIsolationForestDetector:
         for service, metrics in by_service.items():
             if len(metrics) < 2:
                 continue
-            metric_scores = [self._metric_score(metric) for metric in metrics]
-            service_score = sqrt(sum(score * score for score in metric_scores))
+            eligible = [metric for metric in metrics if len(metric.points) >= self.min_points]
+            if len(eligible) < 2:
+                continue
+            # ponytail: preserve existing threshold scale; recalibrate config if sklearn score is used directly.
+            scores = [score * 10.0 for score in self._scores(eligible)]
+            service_score = max(scores)
             if service_score < self.score_threshold:
                 continue
-            top_metric = max(metrics, key=self._metric_score)
+            latest_values = [metric.points[-1].value for metric in eligible]
+            baseline_values = [[metric.points[index].value for metric in eligible] for index in range(-self.min_points, -1)]
+            baseline_center = [mean([row[index] for row in baseline_values]) for index in range(len(eligible))]
+            top_metric = max(eligible, key=lambda metric: abs(latest_values[eligible.index(metric)] - baseline_center[eligible.index(metric)]))
             findings.append(
                 AnomalyFinding(
                     algorithm="isolation_forest",
@@ -88,11 +88,13 @@ class ServiceIsolationForestDetector:
             )
         return findings
 
-    def _metric_score(self, metric: MetricSeries) -> float:
-        values = [point.value for point in metric.points]
-        if len(values) < self.min_points:
-            return 0.0
-        return robust_score(values[:-1], values[-1:])
+    def _scores(self, metrics: list[MetricSeries]) -> list[float]:
+        from sklearn.ensemble import IsolationForest
+
+        length = min(len(metric.points) for metric in metrics)
+        rows = [[metric.points[index].value for metric in metrics] for index in range(-length, 0)]
+        model = IsolationForest(contamination="auto", random_state=0).fit(rows[:-1])
+        return [-score for score in model.score_samples([rows[-1]])]
 
 
 class BaroBocpdDetector:

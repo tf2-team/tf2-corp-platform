@@ -64,7 +64,7 @@ class AiopsPipeline:
             max_sample_age_seconds=qualification_max_sample_age_seconds,
         )
         self.normalizer = Normalizer(normalization_schema)
-        self.feature_builder = FeatureBuilder()
+        self.feature_builder = FeatureBuilder(runtime_config)
         self.detector_engine = DetectorEngine(detectors)
         self.correlator = Correlator()
         self.enricher = Enricher()

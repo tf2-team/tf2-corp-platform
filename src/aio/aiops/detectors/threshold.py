@@ -26,7 +26,13 @@ class ThresholdDetector(Detector):
 
     def evaluate(self, features: list[Feature]) -> list[CandidateEvent]:
         feature = find_feature(features, self.signal_id)
-        if feature is None or feature.status != "ready" or feature.value is None or feature.value <= self.threshold:
+        if (
+            feature is None
+            or feature.status != "ready"
+            or feature.feature_role != "official_slo"
+            or feature.value is None
+            or feature.value <= self.threshold
+        ):
             return []
         return [
             CandidateEvent(
@@ -36,6 +42,8 @@ class ThresholdDetector(Detector):
                 severity=self.severity,
                 signal_id=feature.signal_id,
                 value=feature.value,
+                unit=feature.unit,
+                window=feature.window,
                 threshold=self.threshold,
                 quality=feature.quality,
                 reason="threshold_breached",
@@ -44,4 +52,3 @@ class ThresholdDetector(Detector):
                 contributing_signals=(feature.signal_id,),
             )
         ]
-
