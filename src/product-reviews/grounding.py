@@ -42,7 +42,8 @@ _SYSTEM_PROMPT = (
     "support it. Do not include any claim that is not directly "
     "supported by at least one review. Do not invent numbers, "
     "durations, proper names, or comparisons that are not stated in "
-    "the reviews. The summary and all claims must be written in English."
+    "the reviews. The summary and all claims must be written in English. "
+    "Return the response in JSON format."
 )
 
 _MIN_KEYWORD_LENGTH = 4
@@ -79,7 +80,7 @@ def generate_grounded_summary(safe_reviews: SafeReviewSet) -> GroundedDraft:
     parameters, to match the public signature in the Day 2/3 brief.
     """
     client, model = _get_client_and_model()
-    instructor_client = instructor.from_openai(client)
+    instructor_client = instructor.from_openai(client, mode=instructor.Mode.JSON)
     return instructor_client.chat.completions.create(
         model=model,
         response_model=GroundedDraft,

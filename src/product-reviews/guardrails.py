@@ -40,6 +40,11 @@ def initialize_guardrails() -> None:
             raise
         logger.warning("Prompt-injection model unavailable; keyword fallback is active")
 
+    try:
+        _get_presidio_engines()
+    except Exception as e:
+        logger.warning(f"Presidio model unavailable at startup: {e}")
+
 # Common PII Regex Fallback patterns
 EMAIL_REGEX = re.compile(r"[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+")
 # Match typical telephone formats: +XX XXX XXX XXXX or domestic digits
@@ -57,6 +62,12 @@ SYSTEM_PROMPT_KEYWORDS = [
     "secret key", "internal state", "api key", "password"
 ]
 
+@lru_cache(maxsize=1)
+def _get_presidio_engines():
+    from presidio_analyzer import AnalyzerEngine
+    from presidio_anonymizer import AnonymizerEngine
+    return AnalyzerEngine(), AnonymizerEngine()
+
 def redact_pii(text: str) -> str:
     """Redacts email, phone number, location/address and credit cards."""
     if not text:
@@ -65,12 +76,9 @@ def redact_pii(text: str) -> str:
     sanitized = text
     # 1. Try using Presidio Analyzer and Anonymizer
     try:
-        from presidio_analyzer import AnalyzerEngine
-        from presidio_anonymizer import AnonymizerEngine
         from presidio_anonymizer.entities import OperatorConfig
 
-        analyzer = AnalyzerEngine()
-        anonymizer = AnonymizerEngine()
+        analyzer, anonymizer = _get_presidio_engines()
 
         results = analyzer.analyze(
             text=sanitized,
@@ -264,8 +272,7 @@ def scan_output(text: str) -> GuardrailResult:
 
     # Detect PII in output
     try:
-        from presidio_analyzer import AnalyzerEngine
-        analyzer = AnalyzerEngine()
+        analyzer, _ = _get_presidio_engines()
         results = analyzer.analyze(
             text=text,
             language="en",
