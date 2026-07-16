@@ -5,6 +5,7 @@ package main
 import (
 	"bytes"
 	"context"
+	"crypto/tls"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -250,8 +251,15 @@ func main() {
 			config := sarama.NewConfig()
 			config.Consumer.Offsets.Initial = sarama.OffsetOldest
 			config.Version = kafka.ProtocolVersion
+			if os.Getenv("KAFKA_TLS") == "true" {
+				config.Net.TLS.Enable = true
+				config.Net.TLS.Config = &tls.Config{
+					InsecureSkipVerify: true,
+				}
+			}
 
-			consumerGroup, err := sarama.NewConsumerGroup([]string{svc.kafkaBrokerSvcAddr}, "checkout-group", config)
+			brokers := strings.Split(svc.kafkaBrokerSvcAddr, ",")
+			consumerGroup, err := sarama.NewConsumerGroup(brokers, "checkout-group", config)
 			if err != nil {
 				logger.Error(fmt.Sprintf("Failed to create consumer group: %+v", err))
 				return
@@ -920,7 +928,8 @@ func (cs *checkout) ensureKafkaProducer() error {
 	if cs.kafkaBrokerSvcAddr == "" {
 		return fmt.Errorf("Kafka broker address is not configured")
 	}
-	producer, err := kafka.CreateKafkaProducer([]string{cs.kafkaBrokerSvcAddr}, logger)
+	brokers := strings.Split(cs.kafkaBrokerSvcAddr, ",")
+	producer, err := kafka.CreateKafkaProducer(brokers, logger)
 	if err != nil {
 		return fmt.Errorf("create Kafka producer: %w", err)
 	}
