@@ -1,3 +1,8 @@
+#!/usr/bin/python
+
+# Copyright The OpenTelemetry Authors
+# SPDX-License-Identifier: Apache-2.0
+
 """Shared data contracts for the review AI trustworthiness pipeline.
 
 This module contains data shapes and schema-level validation only. Guardrail,
@@ -127,3 +132,4 @@ __all__ = [
     "SafeReviewSet",
     "ToolValidationResult",
 ]
+# Change trail: @hungxqt - 2026-07-16 - Add Apache-2.0 copyright headers for license-checker.

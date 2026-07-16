@@ -1,3 +1,8 @@
+#!/usr/bin/python
+
+# Copyright The OpenTelemetry Authors
+# SPDX-License-Identifier: Apache-2.0
+
 import unittest
 
 from pydantic import ValidationError
@@ -83,3 +88,4 @@ class AIContractsTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+# Change trail: @hungxqt - 2026-07-16 - Add Apache-2.0 copyright headers for license-checker.

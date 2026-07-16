@@ -1,3 +1,8 @@
+#!/usr/bin/python
+
+# Copyright The OpenTelemetry Authors
+# SPDX-License-Identifier: Apache-2.0
+
 import sys
 import os
 
@@ -118,3 +123,4 @@ if __name__ == "__main__":
         print(f"Error: Unknown case '{case}'")
         print_usage()
         sys.exit(1)
+# Change trail: @hungxqt - 2026-07-16 - Add Apache-2.0 copyright headers for license-checker.

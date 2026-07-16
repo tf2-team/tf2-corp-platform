@@ -1,3 +1,8 @@
+#!/usr/bin/python
+
+# Copyright The OpenTelemetry Authors
+# SPDX-License-Identifier: Apache-2.0
+
 import re
 import hashlib
 import json
@@ -285,3 +290,4 @@ def scan_output(text: str) -> GuardrailResult:
             )
 
     return GuardrailResult(action=GuardrailAction.ALLOW)
+# Change trail: @hungxqt - 2026-07-16 - Add Apache-2.0 copyright headers for license-checker.
