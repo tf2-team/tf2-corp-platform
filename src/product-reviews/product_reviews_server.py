@@ -478,8 +478,15 @@ if __name__ == "__main__":
     logger = logging.getLogger('main')
     logger.addHandler(handler)
 
-    # Create gRPC server
-    server = grpc.server(futures.ThreadPoolExecutor(max_workers=10))
+    # gRPC worker pool is shared by business RPCs and Health/Check. AskProductAIAssistant
+    # holds a worker for the full LLM round-trip; a too-small pool makes health probes time
+    # out under load (kubelet: "health rpc did not complete within 5s") and, when liveness
+    # also uses gRPC, restarts the pod. Default 32 leaves headroom for health + short RPCs
+    # while several AI calls are in flight. Override with GRPC_MAX_WORKERS.
+    max_workers = int(os.environ.get('GRPC_MAX_WORKERS', '32'))
+    if max_workers < 4:
+        max_workers = 4
+    server = grpc.server(futures.ThreadPoolExecutor(max_workers=max_workers))
 
     # Add class to gRPC server
     service = ProductReviewService()
@@ -501,6 +508,9 @@ if __name__ == "__main__":
     port = must_map_env('PRODUCT_REVIEWS_PORT')
     server.add_insecure_port(f'[::]:{port}')
     server.start()
-    logger.info(f'Product reviews service started, listening on port {port}')
+    logger.info(
+        f'Product reviews service started, listening on port {port}, '
+        f'grpc_max_workers={max_workers}'
+    )
     server.wait_for_termination()
-# Change trail: @hungxqt - 2026-07-15 - Dual-read local- feature flags with BTC keys.
+# Change trail: @hungxqt - 2026-07-16 - Configurable gRPC max_workers to avoid health probe starvation.

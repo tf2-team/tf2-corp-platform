@@ -627,10 +627,84 @@ func (cs *checkout) getUserCart(ctx context.Context, userID string) ([]*pb.CartI
 }
 
 func (cs *checkout) emptyUserCart(ctx context.Context, userID string) error {
-	if _, err := cs.cartSvcClient.EmptyCart(ctx, &pb.EmptyCartRequest{UserId: userID}); err != nil {
-		return fmt.Errorf("failed to empty user cart during checkout: %+v", err)
+	var lastErr error
+	for attempt := 1; attempt <= emptyCartMaxAttempts; attempt++ {
+		if err := ctx.Err(); err != nil {
+			return fmt.Errorf("failed to empty user cart during checkout: %+v", err)
+		}
+
+		if _, err := cs.cartSvcClient.EmptyCart(ctx, &pb.EmptyCartRequest{UserId: userID}); err == nil {
+			recordCartCleanupSucceeded(ctx, userID, attempt)
+			return nil
+		} else {
+			lastErr = err
+			if attempt == emptyCartMaxAttempts {
+				break
+			}
+
+			backoff := emptyCartBaseBackoff * time.Duration(1<<(attempt-1))
+			logger.LogAttrs(ctx, slog.LevelWarn, "cart cleanup failed; retrying",
+				slog.String("user_id", userID),
+				slog.Int("attempt", attempt),
+				slog.Int("max_attempts", emptyCartMaxAttempts),
+				slog.String("backoff", backoff.String()),
+				slog.String("error", err.Error()),
+			)
+			timer := time.NewTimer(backoff)
+			select {
+			case <-ctx.Done():
+				timer.Stop()
+				return fmt.Errorf("failed to empty user cart during checkout: %+v", ctx.Err())
+			case <-timer.C:
+			}
+		}
 	}
-	return nil
+
+	recordCartCleanupDeferred(ctx, userID, lastErr)
+	return fmt.Errorf("failed to empty user cart during checkout: %+v", lastErr)
+}
+
+const (
+	emptyCartMaxAttempts = 3
+	emptyCartBaseBackoff = 25 * time.Millisecond
+)
+
+func recordCartCleanupSucceeded(ctx context.Context, userID string, attempt int) {
+	span := trace.SpanFromContext(ctx)
+	span.SetAttributes(
+		attribute.String("app.cart.cleanup.status", "succeeded"),
+		attribute.Int("app.cart.cleanup.attempts", attempt),
+	)
+	if attempt > 1 {
+		logger.LogAttrs(ctx, slog.LevelInfo, "cart cleanup succeeded after retry",
+			slog.String("user_id", userID),
+			slog.Int("attempt", attempt),
+		)
+	}
+}
+
+func recordCartCleanupDeferred(ctx context.Context, userID string, err error) {
+	errText := "<nil>"
+	if err != nil {
+		errText = err.Error()
+	}
+
+	span := trace.SpanFromContext(ctx)
+	span.SetAttributes(
+		attribute.String("app.cart.cleanup.status", "deferred"),
+		attribute.Int("app.cart.cleanup.attempts", emptyCartMaxAttempts),
+	)
+	span.AddEvent("cart cleanup deferred",
+		trace.WithAttributes(
+			attribute.String("app.user.id", userID),
+			attribute.String("exception.message", errText),
+		),
+	)
+	logger.LogAttrs(ctx, slog.LevelWarn, "cart cleanup deferred after retries",
+		slog.String("user_id", userID),
+		slog.Int("attempts", emptyCartMaxAttempts),
+		slog.String("error", errText),
+	)
 }
 
 func (cs *checkout) prepOrderItems(ctx context.Context, items []*pb.CartItem, userCurrency string) ([]*pb.OrderItem, error) {
