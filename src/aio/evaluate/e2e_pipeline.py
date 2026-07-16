@@ -14,6 +14,7 @@ from aiops.anomaly.stats import robust_score
 from aiops.config import Settings, load_runtime_config
 from aiops.rca import V001RcaEngine
 from aiops.schemas import MetricPoint, MetricSeries
+from incident_labels import IncidentLabel, label_for_case, load_label_sheet, validate_dataset_coverage
 
 
 def main() -> None:
@@ -23,17 +24,22 @@ def main() -> None:
     parser.add_argument("--limit", type=int, default=0)
     parser.add_argument("--max-metrics", type=int, default=40)
     parser.add_argument("--incident-threshold", type=float, default=1.0)
+    parser.add_argument("--labels", type=Path, default=None)
     parser.add_argument("--out", type=Path, default=None)
     args = parser.parse_args()
 
     settings = Settings()
     top_k = args.top_k or settings.rca_top_k
-    case_dirs = list_case_dirs(args.dataset)
+    dataset = args.dataset.resolve()
+    case_dirs = list_case_dirs(dataset)
     if args.limit:
         case_dirs = case_dirs[: args.limit]
 
     rca = V001RcaEngine(load_runtime_config(settings.runtime_config_path), settings.rca_fallback_split_ratio)
-    cases = [evaluate_case(path, rca, top_k, args.max_metrics, args.incident_threshold) for path in case_dirs]
+    labels = load_label_sheet(args.labels) if args.labels else None
+    if labels is not None:
+        validate_dataset_coverage(dataset, labels)
+    cases = [evaluate_case(path, dataset, labels, rca, top_k, args.max_metrics, args.incident_threshold) for path in case_dirs]
     report = {
         "metrics": score_report(cases),
         "top_k": top_k,
@@ -51,22 +57,34 @@ def list_case_dirs(dataset: Path) -> list[Path]:
     return sorted(path.parent for path in dataset.glob("*/*/*/simple_metrics.csv"))
 
 
-def evaluate_case(path: Path, rca: V001RcaEngine, top_k: int, max_metrics: int, anomaly_threshold: float) -> dict[str, object]:
+def evaluate_case(
+    path: Path,
+    dataset: Path,
+    labels: dict[str, IncidentLabel] | None,
+    rca: V001RcaEngine,
+    top_k: int,
+    max_metrics: int,
+    anomaly_threshold: float,
+) -> dict[str, object]:
     series = read_series(path / "simple_metrics.csv", max_metrics)
     result = rca.rank([], series, top_k)
     predicted_roots = [
         {"service": root.service, "metrics": root.root_cause_metrics}
         for root in result.root_causes[:top_k]
     ]
-    expected_root = expected_service(path)
-    expected_metric = expected_metric_family(path)
+    label = label_for_case(path, dataset, labels) if labels is not None else None
+    expected_incident = label.expected_incident if label else True
+    expected_root = label.expected_root_service if label else expected_service(path)
+    expected_metric = label.expected_root_metric if label else expected_metric_family(path)
+    expected_roots = [expected_root] if expected_root else []
     return {
-        "case_id": str(path.relative_to(ROOT / "evaluate" / "dataset")),
-        "expected_incident": True,
+        "case_id": label.case_id if label else str(path.relative_to(dataset)),
+        "expected_incident": expected_incident,
         "predicted_incident": any(is_anomalous(metric, anomaly_threshold) for metric in series),
         "expected_root_service": expected_root,
         "expected_root_metric": expected_metric,
-        "expected_root_causes": [expected_root],
+        "expected_root_causes": expected_roots,
+        "expected_action": label.expected_action if label else None,
         "predicted_root_causes": predicted_roots,
         "predicted_root_services": [root["service"] for root in predicted_roots],
         "rca_top_k_hit": rca_hit(expected_root, expected_metric, predicted_roots),
