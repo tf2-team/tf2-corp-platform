@@ -9,6 +9,14 @@ from aiops.schemas import Observation, PipelineRunRequest, SignalQuality
 
 
 class SettingsTest(unittest.TestCase):
+    def test_live_example_overrides_tracked_defaults(self):
+        settings = Settings(_env_file=(".env", ".env.live.example"))
+
+        self.assertEqual(settings.prometheus_base_url, "http://localhost:9090")
+        self.assertEqual(settings.jaeger_base_url, "http://localhost:16686/jaeger/ui")
+        self.assertFalse(settings.opensearch_verify_tls)
+        self.assertEqual(settings.runtime_config_path, Path("config/runtime.json"))
+
     def test_settings_load_from_env_file_and_drive_pipeline(self):
         with tempfile.TemporaryDirectory() as directory:
             env_file = Path(directory) / ".env"

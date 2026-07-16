@@ -1,13 +1,23 @@
 from __future__ import annotations
 
+import os
 from pathlib import Path
 
 from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
+def _env_files() -> str | tuple[str, str]:
+    override = os.getenv("AIOPS_ENV_FILE", "").strip()
+    return (".env", override) if override and override != ".env" else ".env"
+
+
 class Settings(BaseSettings):
-    model_config = SettingsConfigDict(env_file=".env", env_prefix="AIOPS_", extra="ignore")
+    model_config = SettingsConfigDict(
+        env_file=_env_files(),
+        env_prefix="AIOPS_",
+        extra="ignore",
+    )
 
     app_title: str
     api_health_live_path: str
@@ -77,6 +87,7 @@ class Settings(BaseSettings):
     opensearch_username: str
     opensearch_password: str
     opensearch_account: str
+    opensearch_verify_tls: bool
 
     kubernetes_api_url: str
     kubernetes_bearer_token: str

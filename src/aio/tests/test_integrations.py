@@ -1,3 +1,4 @@
+import base64
 import unittest
 
 import httpx
@@ -51,11 +52,28 @@ class IntegrationClientTest(unittest.TestCase):
         CostClient(cfg, transport=transport).get_status()
         LiveExecutorClient(cfg, transport=transport).submit_action({"action_id": "act-1"})
 
-        self.assertIn(("GET", "/api/traces"), calls)
+        self.assertIn(("GET", "/jaeger/ui/api/traces"), calls)
         self.assertIn(("POST", "/logs-*/_search"), calls)
         self.assertIn(("GET", "/apis/apps/v1/namespaces/tf2/deployments/checkout"), calls)
         self.assertIn(("GET", "/status"), calls)
         self.assertIn(("POST", "/actions"), calls)
+
+    def test_opensearch_uses_basic_auth(self):
+        seen: list[httpx.Request] = []
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            seen.append(request)
+            return httpx.Response(200, json={"hits": {"total": {"value": 0}, "hits": []}})
+
+        OpenSearchClient(settings(), transport=httpx.MockTransport(handler)).search(
+            index="logs-*",
+            body={"query": {"match_all": {}}},
+        )
+
+        raw = b"CHANGE_ME_OPENSEARCH_USERNAME:CHANGE_ME_OPENSEARCH_PASSWORD"
+        expected = "Basic " + base64.b64encode(raw).decode("ascii")
+        self.assertEqual(seen[0].headers["authorization"], expected)
+        self.assertEqual(seen[0].headers["x-aiops-account"], "CHANGE_ME_OPENSEARCH_ACCOUNT")
 
     def test_notification_client_sends_message(self):
         seen: list[httpx.Request] = []
@@ -79,6 +97,25 @@ class IntegrationClientTest(unittest.TestCase):
 
         self.assertEqual(response["accepted"], True)
         self.assertEqual(seen[0].headers["authorization"], "Bearer CHANGE_ME_NOTIFICATION_TOKEN")
+
+    def test_notification_client_accepts_empty_success_response(self):
+        def handler(request: httpx.Request) -> httpx.Response:
+            return httpx.Response(204)
+
+        message = NotificationMessage(
+            incident_id="inc-1",
+            severity="SEV2",
+            state="open",
+            title="smoke",
+            summary="summary",
+            flow="smoke",
+            service="smoke",
+            likely_dependency="none",
+            runbook_id="RB-SMOKE",
+        )
+        response = NotificationClient(settings(), transport=httpx.MockTransport(handler)).send(message)
+
+        self.assertEqual(response, {"status_code": 204})
 
 
 if __name__ == "__main__":
