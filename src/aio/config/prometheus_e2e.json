@@ -1,0 +1,62 @@
+{
+  "schema_version": "1.0",
+  "observation_queries": [
+    {
+      "query_id": "checkout.bad_ratio.24h",
+      "signal_id": "checkout_bad_ratio_24h",
+      "promql": "(sum(rate(traces_span_metrics_duration_milliseconds_count{service_name=\"checkout\",status_code=\"STATUS_CODE_ERROR\"}[24h])) or vector(0)) / clamp_min(sum(rate(traces_span_metrics_duration_milliseconds_count{service_name=\"checkout\"}[24h])), 0.000000001)",
+      "unit": "ratio",
+      "window": "24h",
+      "labels": {}
+    },
+    {
+      "query_id": "checkout.payment_error_rate.5m",
+      "signal_id": "checkout_payment_error_rate_5m",
+      "promql": "(sum(rate(traces_span_metrics_duration_milliseconds_count{service_name=\"checkout\",status_code=\"STATUS_CODE_ERROR\"}[5m])) or vector(0)) / clamp_min(sum(rate(traces_span_metrics_duration_milliseconds_count{service_name=\"checkout\"}[5m])), 0.000000001)",
+      "unit": "ratio",
+      "window": "5m",
+      "labels": {
+        "service": "checkout",
+        "dependency": "payment"
+      }
+    }
+  ],
+  "metric_series_queries": [
+    {
+      "query_id": "checkout.error_ratio.5m.range",
+      "signal_id": "checkout_error_ratio_5m",
+      "service": "checkout",
+      "metric": "error_ratio_5m",
+      "promql": "(sum(rate(traces_span_metrics_duration_milliseconds_count{service_name=\"checkout\",status_code=\"STATUS_CODE_ERROR\"}[5m])) or vector(0)) / clamp_min(sum(rate(traces_span_metrics_duration_milliseconds_count{service_name=\"checkout\"}[5m])), 0.000000001)",
+      "lookback_seconds": 3600,
+      "step_seconds": 60
+    },
+    {
+      "query_id": "payment.error_ratio.5m.range",
+      "signal_id": "payment_error_ratio_5m",
+      "service": "payment",
+      "metric": "error_ratio_5m",
+      "promql": "(sum(rate(traces_span_metrics_duration_milliseconds_count{service_name=\"payment\",status_code=\"STATUS_CODE_ERROR\"}[5m])) or vector(0)) / clamp_min(sum(rate(traces_span_metrics_duration_milliseconds_count{service_name=\"payment\"}[5m])), 0.000000001)",
+      "lookback_seconds": 3600,
+      "step_seconds": 60
+    },
+    {
+      "query_id": "checkout.p95_latency.5m.range",
+      "signal_id": "checkout_p95_latency_5m",
+      "service": "checkout",
+      "metric": "p95_latency_ms",
+      "promql": "histogram_quantile(0.95, sum(rate(traces_span_metrics_duration_milliseconds_bucket{service_name=\"checkout\"}[5m])) by (le))",
+      "lookback_seconds": 3600,
+      "step_seconds": 60
+    },
+    {
+      "query_id": "payment.p95_latency.5m.range",
+      "signal_id": "payment_p95_latency_5m",
+      "service": "payment",
+      "metric": "p95_latency_ms",
+      "promql": "histogram_quantile(0.95, sum(rate(traces_span_metrics_duration_milliseconds_bucket{service_name=\"payment\"}[5m])) by (le))",
+      "lookback_seconds": 3600,
+      "step_seconds": 60
+    }
+  ]
+}
