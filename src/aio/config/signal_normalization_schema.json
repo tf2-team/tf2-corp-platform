@@ -1,0 +1,13 @@
+{
+  "label_aliases": {
+    "service_name": "service"
+  },
+  "unit_conversions": {
+    "percent": {"to": "ratio", "factor": 0.01},
+    "milliseconds": {"to": "seconds", "factor": 0.001}
+  },
+  "window_aliases": {
+    "300s": "5m",
+    "1d": "24h"
+  }
+}

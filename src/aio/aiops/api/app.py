@@ -6,7 +6,9 @@ from fastapi import FastAPI, Header, HTTPException
 
 from aiops.collectors import StaticCollector
 from aiops.config import Settings, build_detectors, load_runtime_config
+from aiops.normalization import load_normalization_schema
 from aiops.pipeline import AiopsPipeline
+from aiops.qualification import load_qualification_schema
 from aiops.remediation import (
     ActionCatalog,
     HistoryRetriever,
@@ -38,6 +40,10 @@ def run_static_pipeline(request: PipelineRunRequest, settings: Settings | None =
             default_replicas=settings.default_action_replicas,
         ),
         runtime_config=runtime_config,
+        qualification_schema=load_qualification_schema(settings.qualification_schema_path),
+        normalization_schema=load_normalization_schema(settings.normalization_schema_path),
+        qualification_dev=settings.qualification_gate_dev,
+        qualification_max_sample_age_seconds=settings.qualification_max_sample_age_seconds,
         rca_hyperparameters={
             "enabled": settings.rca_enabled,
             "top_k": settings.rca_top_k,

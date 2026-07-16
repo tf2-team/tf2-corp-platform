@@ -66,6 +66,10 @@ class Settings(BaseSettings):
     no_data_severity: str
     no_data_runbook_id: str
     no_data_required_signal_ids: list[str]
+    qualification_gate_dev: bool = False
+    qualification_schema_path: Path = Path("config/signal_qualification_schema.json")
+    normalization_schema_path: Path = Path("config/signal_normalization_schema.json")
+    qualification_max_sample_age_seconds: int = 300
 
     action_type_restart: str
     action_target_kind_deployment: str

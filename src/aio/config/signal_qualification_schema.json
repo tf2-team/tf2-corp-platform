@@ -1,0 +1,16 @@
+{
+  "timestamp_label": "sample_timestamp",
+  "series_count_label": "series_count",
+  "max_series_count": 1,
+  "registry_labels": ["query_id", "service", "flow"],
+  "units": {
+    "ratio": {"min": 0.0, "max": 1.0},
+    "seconds": {"min": 0.0},
+    "milliseconds": {"min": 0.0},
+    "count": {"min": 0.0},
+    "requests_per_second": {"min": 0.0},
+    "bytes": {"min": 0.0},
+    "percent": {"min": 0.0, "max": 100.0},
+    "boolean": {"allowed": [0.0, 1.0]}
+  }
+}

@@ -152,6 +152,33 @@ class RuntimePipelineTest(unittest.TestCase):
         self.assertEqual(result.incidents[0].flow, "monitoring")
         self.assertEqual(result.incidents[0].state, "open")
 
+    def test_pipeline_opens_monitoring_incident_for_unqualified_signal(self):
+        settings = Settings()
+        with TemporaryDirectory() as tmp:
+            store = SQLiteIncidentStore(Path(tmp) / "aiops.sqlite3", environment=settings.environment)
+            pipeline = AiopsPipeline(
+                collector=StaticCollector(
+                    [
+                        Observation(
+                            signal_id="checkout_bad_ratio_24h",
+                            value=0.02,
+                            unit="ratio",
+                            window="24h",
+                            quality=SignalQuality.UNQUALIFIED,
+                        )
+                    ]
+                ),
+                detectors=[no_data_detector(settings)],
+                store=store,
+                policy=policy(settings),
+            )
+
+            result = pipeline.run_once()
+            store.close()
+
+        self.assertEqual(result.incidents[0].flow, "monitoring")
+        self.assertEqual(result.incidents[0].events[0].reason, "signal_unqualified")
+
     def test_verified_remediation_is_added_to_incident_history(self):
         settings = Settings()
         with TemporaryDirectory() as tmp:

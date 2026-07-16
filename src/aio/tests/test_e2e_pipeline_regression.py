@@ -7,7 +7,9 @@ from unittest.mock import patch
 from aiops.collectors import StaticCollector
 from aiops.config import Settings, build_detectors, load_runtime_config
 from aiops.detectors import Detector
+from aiops.normalization import load_normalization_schema
 from aiops.pipeline import AiopsPipeline
+from aiops.qualification import load_qualification_schema
 from aiops.remediation import (
     ActionCatalog,
     HistoryRetriever,
@@ -40,7 +42,9 @@ def temp_workspace() -> TemporaryDirectory:
 
 
 def observation(signal_id: str, value: float | None, quality: SignalQuality = SignalQuality.VERIFIED) -> Observation:
-    return Observation(signal_id=signal_id, value=value, unit="ratio", window="5m", quality=quality)
+    labels = {"service": "checkout", "dependency": "payment"} if signal_id == "checkout_payment_error_rate_5m" else {}
+    window = "24h" if signal_id == "checkout_bad_ratio_24h" else "5m"
+    return Observation(signal_id=signal_id, value=value, unit="ratio", window=window, quality=quality, labels=labels)
 
 
 def metric(service: str, name: str, values: list[float]) -> MetricSeries:
@@ -136,6 +140,10 @@ def run_pipeline(
             default_replicas=settings.default_action_replicas,
         ),
         runtime_config=runtime_config,
+        qualification_schema=load_qualification_schema(settings.qualification_schema_path),
+        normalization_schema=load_normalization_schema(settings.normalization_schema_path),
+        qualification_dev=settings.qualification_gate_dev,
+        qualification_max_sample_age_seconds=settings.qualification_max_sample_age_seconds,
         rca_hyperparameters={
             "enabled": rca_enabled,
             "top_k": settings.rca_top_k,

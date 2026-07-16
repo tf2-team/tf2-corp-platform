@@ -50,11 +50,20 @@ class AiopsPipeline:
         policy: PolicyEngine,
         runtime_config: RuntimeConfig | None = None,
         rca_hyperparameters: dict[str, float | int | bool] | None = None,
+        qualification_schema: dict | None = None,
+        normalization_schema: dict | None = None,
+        qualification_dev: bool = False,
+        qualification_max_sample_age_seconds: int = 300,
         remediation: RemediationComponents | None = None,
     ):
         self.collector = collector
-        self.qualification = QualificationGate()
-        self.normalizer = Normalizer()
+        self.qualification = QualificationGate(
+            runtime_config,
+            qualification_schema,
+            dev=qualification_dev,
+            max_sample_age_seconds=qualification_max_sample_age_seconds,
+        )
+        self.normalizer = Normalizer(normalization_schema)
         self.feature_builder = FeatureBuilder()
         self.detector_engine = DetectorEngine(detectors)
         self.correlator = Correlator()
@@ -69,9 +78,9 @@ class AiopsPipeline:
 
     def run_once(self, metric_series: list[MetricSeries] | None = None) -> PipelineResult:
         observations = self.collector.collect()
-        qualified = self.qualification.evaluate(observations)
-        normalized = self.normalizer.normalize(qualified)
-        features = self.feature_builder.build(normalized)
+        normalized = self.normalizer.normalize(observations)
+        qualified = self.qualification.evaluate(normalized)
+        features = self.feature_builder.build(qualified)
         candidates = self.detector_engine.evaluate(features)
         correlated = self.correlator.correlate(candidates)
         enriched = self.enricher.enrich(correlated, features)

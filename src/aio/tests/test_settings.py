@@ -57,6 +57,65 @@ class SettingsTest(unittest.TestCase):
 
         self.assertEqual(result.incidents, [])
 
+    def test_qualification_dev_env_reaches_pipeline(self):
+        with tempfile.TemporaryDirectory() as directory:
+            env_file = Path(directory) / ".env"
+            env_file.write_text(
+                Path(".env").read_text(encoding="utf-8")
+                + "\n"
+                + "\n".join(
+                    [
+                        "AIOPS_QUALIFICATION_GATE_DEV=true",
+                        f"AIOPS_STATE_STORE_PATH={Path(directory) / 'aiops.sqlite3'}",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+            settings = Settings(_env_file=env_file)
+
+            result = run_static_pipeline(
+                PipelineRunRequest(
+                    observations=[
+                        Observation(
+                            signal_id="checkout_bad_ratio_24h",
+                            value=0.2,
+                            unit="count",
+                            window="24h",
+                            quality=SignalQuality.VERIFIED,
+                        )
+                    ]
+                ),
+                settings=settings,
+            )
+
+        self.assertEqual(result.incidents[0].flow, "checkout")
+
+    def test_pipeline_normalizes_before_strict_qualification(self):
+        with tempfile.TemporaryDirectory() as directory:
+            settings = Settings(state_store_path=Path(directory) / "aiops.sqlite3")
+
+            result = run_static_pipeline(
+                PipelineRunRequest(
+                    observations=[
+                        Observation(
+                            signal_id="checkout_bad_ratio_24h",
+                            value=2.0,
+                            unit="percent",
+                            window="1d",
+                            quality=SignalQuality.UNQUALIFIED,
+                            labels={"service_name": "checkout"},
+                        )
+                    ]
+                ),
+                settings=settings,
+            )
+
+        self.assertEqual(result.features[0].value, 0.02)
+        self.assertEqual(result.features[0].unit, "ratio")
+        self.assertEqual(result.features[0].window, "24h")
+        self.assertEqual(result.features[0].labels["service"], "checkout")
+        self.assertEqual(result.candidates[0].detector_id, "ops01_checkout_slo")
+
     def test_fastapi_routes_come_from_settings(self):
         settings = Settings(api_health_live_path="/livez", api_pipeline_run_path="/run-now")
         paths = {route.path for route in create_app(settings).routes}
