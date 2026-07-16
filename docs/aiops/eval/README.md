@@ -10,3 +10,5 @@ Store reproducible detection/remediation evaluation outputs here. Include comman
 - [Naive threshold raw report](naive_threshold_report.json)
 - [Naive baseline vs. E2E comparison](pipeline-comparison.md)
 - [E2E pipeline raw report](e2e_pipeline_report.json)
+- [Service change score baseline](service-change-score-baseline.md)
+- [Service change score raw report](service_change_score_report.json)
