@@ -5,7 +5,7 @@ from datetime import UTC, datetime
 from fastapi import FastAPI, Header, HTTPException
 
 from aiops.collectors import StaticCollector
-from aiops.config import Settings, build_detectors, load_runtime_config
+from aiops.config import Settings, build_detectors, load_hyperparameters, load_runtime_config
 from aiops.normalization import load_normalization_schema
 from aiops.pipeline import AiopsPipeline
 from aiops.qualification import load_qualification_schema
@@ -25,10 +25,11 @@ from aiops.storage import SQLiteIncidentStore
 def run_static_pipeline(request: PipelineRunRequest, settings: Settings | None = None) -> PipelineResult:
     settings = settings or Settings()
     runtime_config = load_runtime_config(settings.runtime_config_path)
+    hyperparameters = load_hyperparameters(settings.hyperparameters_path)
     store = SQLiteIncidentStore(path=settings.state_store_path, environment=settings.environment)
     pipeline = AiopsPipeline(
         collector=StaticCollector(request.observations),
-        detectors=build_detectors(runtime_config, settings),
+        detectors=build_detectors(runtime_config, settings, hyperparameters["no_data"]),
         store=store,
         policy=PolicyEngine(
             mode=settings.policy_mode,
@@ -44,25 +45,16 @@ def run_static_pipeline(request: PipelineRunRequest, settings: Settings | None =
         normalization_schema=load_normalization_schema(settings.normalization_schema_path),
         qualification_dev=settings.qualification_gate_dev,
         qualification_max_sample_age_seconds=settings.qualification_max_sample_age_seconds,
-        rca_hyperparameters={
-            "enabled": settings.rca_enabled,
-            "top_k": settings.rca_top_k,
-            "min_points": settings.rca_min_points,
-            "ewma_alpha": settings.rca_ewma_alpha,
-            "ewma_z_threshold": settings.rca_ewma_z_threshold,
-            "seasonal_period": settings.rca_seasonal_period,
-            "isolation_score_threshold": settings.rca_isolation_score_threshold,
-            "bocpd_score_threshold": settings.rca_bocpd_score_threshold,
-            "fallback_split_ratio": settings.rca_fallback_split_ratio,
-        },
+        rca_hyperparameters=hyperparameters["rca"],
+        correlation_hyperparameters=hyperparameters["correlation"],
         remediation=(
             RemediationFeatureExtractor(),
-            HistoryRetriever(settings.remediation_similarity_weights, settings.remediation_history_top_k),
+            HistoryRetriever(hyperparameters["remediation"]["similarity_weights"], hyperparameters["remediation"]["history_top_k"]),
             RemediationDecisionEngine(
-                ood_threshold=settings.remediation_ood_threshold,
-                cost_page=settings.remediation_cost_page,
-                blast_radius_limit=settings.remediation_blast_radius_limit,
-                confidence_threshold=settings.remediation_confidence_threshold,
+                ood_threshold=hyperparameters["remediation"]["ood_threshold"],
+                cost_page=hyperparameters["remediation"]["cost_page"],
+                blast_radius_limit=hyperparameters["remediation"]["blast_radius_limit"],
+                confidence_threshold=hyperparameters["remediation"]["confidence_threshold"],
             ),
             ActionCatalog(settings.actions_catalog_path),
             IncidentHistoryStore(settings.incidents_history_path),

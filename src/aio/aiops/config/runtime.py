@@ -12,7 +12,11 @@ def load_runtime_config(path: Path) -> RuntimeConfig:
     return RuntimeConfig.model_validate(json.loads(path.read_text(encoding="utf-8")))
 
 
-def build_detectors(config: RuntimeConfig, settings: Settings) -> list[Detector]:
+def build_detectors(
+    config: RuntimeConfig,
+    settings: Settings | None,
+    no_data_hyperparameters: dict[str, float],
+) -> list[Detector]:
     detectors: list[Detector] = []
     for item in config.detectors:
         if not item.enabled:
@@ -52,8 +56,8 @@ def build_detectors(config: RuntimeConfig, settings: Settings) -> list[Detector]
                     service=item.service,
                     severity=item.severity,
                     runbook_id=item.runbook_id,
-                    missing_confidence=settings.no_data_missing_confidence,
-                    unknown_confidence=settings.no_data_unknown_confidence,
+                    missing_confidence=no_data_hyperparameters["missing_confidence"],
+                    unknown_confidence=no_data_hyperparameters["unknown_confidence"],
                 )
             )
     return detectors

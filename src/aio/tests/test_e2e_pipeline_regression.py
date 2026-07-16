@@ -5,7 +5,7 @@ from tempfile import TemporaryDirectory
 from unittest.mock import patch
 
 from aiops.collectors import StaticCollector
-from aiops.config import Settings, build_detectors, load_runtime_config
+from aiops.config import Settings, build_detectors, load_hyperparameters, load_runtime_config
 from aiops.detectors import Detector
 from aiops.normalization import load_normalization_schema
 from aiops.pipeline import AiopsPipeline
@@ -111,7 +111,6 @@ def settings_for(root: Path, *, rca_enabled: bool = False) -> Settings:
             "actions_catalog_path": root / "actions.json",
             "incidents_history_path": root / "history.json",
             "remediation_audit_path": root / "remediation_audit.jsonl",
-            "rca_enabled": rca_enabled,
         }
     )
 
@@ -125,10 +124,12 @@ def run_pipeline(
 ):
     settings = settings_for(root, rca_enabled=rca_enabled)
     runtime_config = load_runtime_config(settings.runtime_config_path)
+    hyperparameters = load_hyperparameters(settings.hyperparameters_path)
+    rca_hyperparameters = {**hyperparameters["rca"], "enabled": rca_enabled}
     store = SQLiteIncidentStore(root / "aiops.sqlite3", environment=settings.environment)
     pipeline = AiopsPipeline(
         collector=StaticCollector(observations),
-        detectors=build_detectors(runtime_config, settings),
+        detectors=build_detectors(runtime_config, settings, hyperparameters["no_data"]),
         store=store,
         policy=PolicyEngine(
             mode=settings.policy_mode,
@@ -144,25 +145,16 @@ def run_pipeline(
         normalization_schema=load_normalization_schema(settings.normalization_schema_path),
         qualification_dev=settings.qualification_gate_dev,
         qualification_max_sample_age_seconds=settings.qualification_max_sample_age_seconds,
-        rca_hyperparameters={
-            "enabled": rca_enabled,
-            "top_k": settings.rca_top_k,
-            "min_points": settings.rca_min_points,
-            "ewma_alpha": settings.rca_ewma_alpha,
-            "ewma_z_threshold": settings.rca_ewma_z_threshold,
-            "seasonal_period": settings.rca_seasonal_period,
-            "isolation_score_threshold": settings.rca_isolation_score_threshold,
-            "bocpd_score_threshold": settings.rca_bocpd_score_threshold,
-            "fallback_split_ratio": settings.rca_fallback_split_ratio,
-        },
+        rca_hyperparameters=rca_hyperparameters,
+        correlation_hyperparameters=hyperparameters["correlation"],
         remediation=(
             RemediationFeatureExtractor(),
-            HistoryRetriever(settings.remediation_similarity_weights, settings.remediation_history_top_k),
+            HistoryRetriever(hyperparameters["remediation"]["similarity_weights"], hyperparameters["remediation"]["history_top_k"]),
             RemediationDecisionEngine(
-                ood_threshold=settings.remediation_ood_threshold,
-                cost_page=settings.remediation_cost_page,
-                blast_radius_limit=settings.remediation_blast_radius_limit,
-                confidence_threshold=settings.remediation_confidence_threshold,
+                ood_threshold=hyperparameters["remediation"]["ood_threshold"],
+                cost_page=hyperparameters["remediation"]["cost_page"],
+                blast_radius_limit=hyperparameters["remediation"]["blast_radius_limit"],
+                confidence_threshold=hyperparameters["remediation"]["confidence_threshold"],
             ),
             ActionCatalog(settings.actions_catalog_path),
             IncidentHistoryStore(settings.incidents_history_path),
@@ -348,6 +340,7 @@ class E2EPipelineRegressionTest(unittest.TestCase):
             write_actions(actions_path)
             write_history(history_path, metric_ratio=0.4)
             settings = settings_for(root)
+            hyperparameters = load_hyperparameters(settings.hyperparameters_path)
             store = SQLiteIncidentStore(root / "aiops.sqlite3", environment=settings.environment)
             pipeline = AiopsPipeline(
                 collector=StaticCollector([observation("checkout_payment_error_rate_5m", 0.2)]),
@@ -362,14 +355,15 @@ class E2EPipelineRegressionTest(unittest.TestCase):
                     target_kind=settings.action_target_kind_deployment,
                     default_replicas=settings.default_action_replicas,
                 ),
+                correlation_hyperparameters=hyperparameters["correlation"],
                 remediation=(
                     RemediationFeatureExtractor(),
-                    HistoryRetriever({"service": 0.4, "log": 0.3, "metric": 0.3}, top_k=3),
+                    HistoryRetriever(hyperparameters["remediation"]["similarity_weights"], hyperparameters["remediation"]["history_top_k"]),
                     RemediationDecisionEngine(
-                        ood_threshold=0.2,
-                        cost_page=20.0,
-                        blast_radius_limit=3,
-                        confidence_threshold=0.7,
+                        ood_threshold=hyperparameters["remediation"]["ood_threshold"],
+                        cost_page=hyperparameters["remediation"]["cost_page"],
+                        blast_radius_limit=hyperparameters["remediation"]["blast_radius_limit"],
+                        confidence_threshold=hyperparameters["remediation"]["confidence_threshold"],
                     ),
                     ActionCatalog(actions_path),
                     IncidentHistoryStore(history_path),

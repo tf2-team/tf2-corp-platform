@@ -3,11 +3,12 @@ from pathlib import Path
 
 from pydantic import ValidationError
 
-from aiops.config import Settings, load_runtime_config
+from aiops.config import Settings, load_hyperparameters, load_runtime_config
+from aiops.correlation import Correlator
 from aiops.deduplication import IncidentManager
 from aiops.detectors import DependencyDetector, DetectorEngine, NoDataDetector, ThresholdDetector
 from aiops.features import FeatureBuilder
-from aiops.schemas import ActionProposal, Feature, Observation, SignalQuality
+from aiops.schemas import ActionProposal, CandidateEvent, EvidenceItem, Feature, Observation, SignalQuality
 from aiops.remediation import PolicyEngine
 
 
@@ -26,6 +27,7 @@ def policy(settings: Settings | None = None, mode: str | None = None) -> PolicyE
 
 def no_data_detector(settings: Settings | None = None) -> NoDataDetector:
     settings = settings or Settings()
+    no_data = load_hyperparameters(settings.hyperparameters_path)["no_data"]
     return NoDataDetector(
         settings.no_data_required_signal_ids,
         detector_id=settings.no_data_detector_id,
@@ -33,8 +35,8 @@ def no_data_detector(settings: Settings | None = None) -> NoDataDetector:
         service=settings.no_data_service,
         severity=settings.no_data_severity,
         runbook_id=settings.no_data_runbook_id,
-        missing_confidence=settings.no_data_missing_confidence,
-        unknown_confidence=settings.no_data_unknown_confidence,
+        missing_confidence=no_data["missing_confidence"],
+        unknown_confidence=no_data["unknown_confidence"],
     )
 
 
@@ -159,6 +161,60 @@ class DetectorEngineTest(unittest.TestCase):
         self.assertEqual(candidates[0].unit, "ratio")
         self.assertEqual(candidates[0].window, "24h")
         self.assertEqual(candidates[0].flow, "monitoring")
+
+    def test_correlator_ranks_dependency_with_transparent_components(self):
+        primary = CandidateEvent(
+            environment="tf2",
+            timestamp=100,
+            detector_id="ops01_checkout_slo",
+            flow="checkout",
+            service="checkout",
+            severity="SEV1",
+            signal_id="checkout_bad_ratio_24h",
+            value=0.02,
+            unit="ratio",
+            window="24h",
+            threshold=0.01,
+            quality=SignalQuality.VERIFIED,
+            reason="threshold_breached",
+            runbook_id="RB-CHECKOUT-SLO",
+            confidence=1.0,
+            contributing_signals=("checkout_bad_ratio_24h",),
+        )
+        dependency = CandidateEvent(
+            environment="tf2",
+            timestamp=95,
+            detector_id="ops03_checkout_payment_dependency",
+            flow="checkout",
+            service="checkout",
+            severity="SEV2",
+            signal_id="checkout_payment_error_rate_5m",
+            value=0.2,
+            unit="ratio",
+            window="5m",
+            threshold=0.05,
+            quality=SignalQuality.VERIFIED,
+            reason="dependency_signal_breached",
+            runbook_id="RB-CHECKOUT-DEPENDENCY",
+            likely_dependency="payment",
+            confidence=0.1,
+            contributing_signals=("checkout_payment_error_rate_5m",),
+            labels={"operation": "charge"},
+            evidence=(EvidenceItem(source="trace", reference="trace-1", summary="payment timeout"),),
+        )
+
+        hyperparameters = load_hyperparameters(Path("config/hyperparameters.json"))
+        candidates = Correlator(load_runtime_config(Path("config/runtime.json")), **hyperparameters["correlation"]).correlate([primary, dependency])
+
+        self.assertEqual(len(candidates), 1)
+        self.assertEqual(candidates[0].likely_dependency, "payment")
+        self.assertEqual(candidates[0].confidence, 1.0)
+        self.assertEqual(candidates[0].severity, "SEV1")
+        self.assertEqual(candidates[0].contributing_signals, ("checkout_bad_ratio_24h", "checkout_payment_error_rate_5m"))
+        self.assertEqual(
+            set(candidates[0].correlation_components),
+            {"verified_primary_signal", "temporal_precedence", "topology_path", "operation_specificity", "trace_log_kubernetes_corroboration"},
+        )
 
 
 class IncidentManagerTest(unittest.TestCase):

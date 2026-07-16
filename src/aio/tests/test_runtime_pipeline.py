@@ -4,7 +4,7 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 
 from aiops.collectors import StaticCollector
-from aiops.config import Settings, load_runtime_config
+from aiops.config import Settings, load_hyperparameters, load_runtime_config
 from aiops.detectors import DependencyDetector, Detector, NoDataDetector, ThresholdDetector
 from aiops.normalization import load_normalization_schema
 from aiops.qualification import load_qualification_schema
@@ -35,6 +35,7 @@ def policy(settings: Settings) -> PolicyEngine:
 
 
 def no_data_detector(settings: Settings) -> NoDataDetector:
+    no_data = load_hyperparameters(settings.hyperparameters_path)["no_data"]
     return NoDataDetector(
         settings.no_data_required_signal_ids,
         detector_id=settings.no_data_detector_id,
@@ -42,19 +43,21 @@ def no_data_detector(settings: Settings) -> NoDataDetector:
         service=settings.no_data_service,
         severity=settings.no_data_severity,
         runbook_id=settings.no_data_runbook_id,
-        missing_confidence=settings.no_data_missing_confidence,
-        unknown_confidence=settings.no_data_unknown_confidence,
+        missing_confidence=no_data["missing_confidence"],
+        unknown_confidence=no_data["unknown_confidence"],
     )
 
 
 def runtime_kwargs(settings: Settings) -> dict:
     runtime_config = load_runtime_config(settings.runtime_config_path)
+    hyperparameters = load_hyperparameters(settings.hyperparameters_path)
     return {
         "runtime_config": runtime_config,
         "qualification_schema": load_qualification_schema(settings.qualification_schema_path),
         "normalization_schema": load_normalization_schema(settings.normalization_schema_path),
         "qualification_dev": settings.qualification_gate_dev,
         "qualification_max_sample_age_seconds": settings.qualification_max_sample_age_seconds,
+        "correlation_hyperparameters": hyperparameters["correlation"],
     }
 
 
@@ -247,6 +250,7 @@ class RuntimePipelineTest(unittest.TestCase):
                 encoding="utf-8",
             )
             store = SQLiteIncidentStore(root / "aiops.sqlite3", environment=settings.environment)
+            hyperparameters = load_hyperparameters(settings.hyperparameters_path)
             pipeline = AiopsPipeline(
                 collector=StaticCollector(
                     [
@@ -262,14 +266,15 @@ class RuntimePipelineTest(unittest.TestCase):
                 detectors=[RecoveredDependencyDetector()],
                 store=store,
                 policy=policy(settings),
+                correlation_hyperparameters=hyperparameters["correlation"],
                 remediation=(
                     RemediationFeatureExtractor(),
-                    HistoryRetriever({"service": 0.4, "log": 0.3, "metric": 0.3}, top_k=3),
+                    HistoryRetriever(hyperparameters["remediation"]["similarity_weights"], hyperparameters["remediation"]["history_top_k"]),
                     RemediationDecisionEngine(
-                        ood_threshold=0.2,
-                        cost_page=20.0,
-                        blast_radius_limit=3,
-                        confidence_threshold=0.7,
+                        ood_threshold=hyperparameters["remediation"]["ood_threshold"],
+                        cost_page=hyperparameters["remediation"]["cost_page"],
+                        blast_radius_limit=hyperparameters["remediation"]["blast_radius_limit"],
+                        confidence_threshold=hyperparameters["remediation"]["confidence_threshold"],
                     ),
                     ActionCatalog(actions_path),
                     IncidentHistoryStore(history_path),

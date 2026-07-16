@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from aiops.detectors.base import Detector
 from aiops.schemas import CandidateEvent, Feature
-from aiops.shared.features import find_feature
+from aiops.shared.features import feature_timestamp, find_feature
 
 
 class ThresholdDetector(Detector):
@@ -37,6 +37,7 @@ class ThresholdDetector(Detector):
         return [
             CandidateEvent(
                 detector_id=self.detector_id,
+                timestamp=feature_timestamp(feature),
                 flow=self.flow,
                 service=self.service,
                 severity=self.severity,
@@ -50,5 +51,6 @@ class ThresholdDetector(Detector):
                 runbook_id=self.runbook_id,
                 confidence=1.0,
                 contributing_signals=(feature.signal_id,),
+                labels=feature.labels,
             )
         ]

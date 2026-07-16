@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from aiops.detectors.base import Detector
 from aiops.schemas import CandidateEvent, Feature, SignalQuality
+from aiops.shared.features import feature_timestamp
 
 
 class NoDataDetector(Detector):
@@ -33,6 +34,7 @@ class NoDataDetector(Detector):
             candidates.append(
                 CandidateEvent(
                     detector_id=self.detector_id,
+                    timestamp=feature_timestamp(feature),
                     flow=self.flow,
                     service=self.service,
                     severity=self.severity,
@@ -46,6 +48,7 @@ class NoDataDetector(Detector):
                     runbook_id=self.runbook_id,
                     confidence=self.missing_confidence if feature.quality in {SignalQuality.MISSING, SignalQuality.STALE} else self.unknown_confidence,
                     contributing_signals=(feature.signal_id,),
+                    labels=feature.labels,
                 )
             )
         return candidates

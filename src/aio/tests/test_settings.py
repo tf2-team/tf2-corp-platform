@@ -4,7 +4,7 @@ import unittest
 from pathlib import Path
 
 from aiops.api.app import create_app, run_static_pipeline
-from aiops.config import Settings
+from aiops.config import Settings, build_detectors, load_hyperparameters, load_runtime_config
 from aiops.schemas import Observation, PipelineRunRequest, SignalQuality
 
 
@@ -56,6 +56,25 @@ class SettingsTest(unittest.TestCase):
             )
 
         self.assertEqual(result.incidents, [])
+
+    def test_hyperparameters_load_from_config_file(self):
+        config = load_hyperparameters(Path("config/hyperparameters.json"))
+
+        self.assertEqual(config["rca"]["top_k"], 5)
+        self.assertEqual(config["remediation"]["similarity_weights"]["service"], 0.4)
+        self.assertEqual(config["no_data"]["missing_confidence"], 1.0)
+
+    def test_build_detectors_gets_no_data_confidence_from_hyperparameters(self):
+        runtime_config = load_runtime_config(Path("config/runtime.json"))
+        detectors = build_detectors(
+            runtime_config,
+            None,
+            no_data_hyperparameters={"missing_confidence": 0.42, "unknown_confidence": 0.24},
+        )
+        no_data = next(item for item in detectors if item.detector_id == "ops02_monitoring_loss")
+
+        self.assertEqual(no_data.missing_confidence, 0.42)
+        self.assertEqual(no_data.unknown_confidence, 0.24)
 
     def test_qualification_dev_env_reaches_pipeline(self):
         with tempfile.TemporaryDirectory() as directory:

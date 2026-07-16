@@ -80,8 +80,9 @@ Set `AIOPS_ENV_FILE=.env.live` to select the ignored live file without copying
 secrets into the tracked template.
 Infrastructure topology, signal IDs, detector definitions, and policy lists are loaded from `config/runtime.json`.
 Detector thresholds and detector confidences are intentionally kept in `config/runtime.json` beside detector IDs.
+RCA, remediation, no-data, and correlation hyperparameters are loaded from `config/hyperparameters.json`.
 
-- Hyperparameters: thresholds, confidence, default replicas.
+- Hyperparameters: RCA, remediation, no-data, correlation.
 - Runtime paths: API paths, evidence dir, state store path.
 - Operational IDs: detector IDs, signal IDs, runbook IDs, severity, environment.
 - Safety policy values: protected targets, stateful kinds, non-actionable flows.

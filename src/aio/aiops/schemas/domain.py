@@ -119,6 +119,8 @@ class EvidenceItem(AiopsModel):
 
 
 class CandidateEvent(AiopsModel):
+    environment: str = "unknown"
+    timestamp: int = 0
     detector_id: str
     flow: str
     service: str
@@ -134,6 +136,8 @@ class CandidateEvent(AiopsModel):
     likely_dependency: str = "unknown"
     confidence: float = 0.0
     contributing_signals: tuple[str, ...] = ()
+    labels: dict[str, str] = Field(default_factory=dict)
+    correlation_components: dict[str, float] = Field(default_factory=dict)
     evidence: tuple[EvidenceItem, ...] = ()
 
 

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from aiops.detectors.base import Detector
 from aiops.schemas import CandidateEvent, Feature
-from aiops.shared.features import find_feature
+from aiops.shared.features import feature_timestamp, find_feature
 
 
 class DependencyDetector(Detector):
@@ -41,6 +41,7 @@ class DependencyDetector(Detector):
         return [
             CandidateEvent(
                 detector_id=self.detector_id,
+                timestamp=feature_timestamp(feature),
                 flow=self.flow,
                 service=self.service,
                 severity=self.severity,
@@ -55,5 +56,6 @@ class DependencyDetector(Detector):
                 likely_dependency=self.dependency,
                 confidence=self.confidence,
                 contributing_signals=(feature.signal_id,),
+                labels=feature.labels,
             )
         ]

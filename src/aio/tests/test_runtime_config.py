@@ -6,7 +6,7 @@ from pathlib import Path
 
 from pydantic import ValidationError
 
-from aiops.config import build_detectors, load_runtime_config
+from aiops.config import build_detectors, load_hyperparameters, load_runtime_config
 from aiops.config import Settings
 from aiops.schemas import RuntimeConfig
 
@@ -14,7 +14,8 @@ from aiops.schemas import RuntimeConfig
 class RuntimeConfigTest(unittest.TestCase):
     def test_loads_runtime_json_and_builds_detectors(self):
         config = load_runtime_config(Path("config/runtime.json"))
-        detectors = build_detectors(config, Settings())
+        hyperparameters = load_hyperparameters(Settings().hyperparameters_path)
+        detectors = build_detectors(config, Settings(), hyperparameters["no_data"])
 
         self.assertEqual(config.topology.services[0].name, "checkout")
         self.assertEqual(config.signals[0].feature_role, "official_slo")

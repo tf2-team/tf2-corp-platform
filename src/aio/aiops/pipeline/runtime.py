@@ -54,6 +54,7 @@ class AiopsPipeline:
         normalization_schema: dict | None = None,
         qualification_dev: bool = False,
         qualification_max_sample_age_seconds: int = 300,
+        correlation_hyperparameters: dict | None = None,
         remediation: RemediationComponents | None = None,
     ):
         self.collector = collector
@@ -66,7 +67,7 @@ class AiopsPipeline:
         self.normalizer = Normalizer(normalization_schema)
         self.feature_builder = FeatureBuilder(runtime_config)
         self.detector_engine = DetectorEngine(detectors)
-        self.correlator = Correlator()
+        self.correlator = Correlator(runtime_config, **correlation_hyperparameters) if correlation_hyperparameters else Correlator(runtime_config)
         self.enricher = Enricher()
         self.store = store
         self.notifier = NotificationBuilder()
