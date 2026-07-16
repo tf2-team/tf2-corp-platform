@@ -356,6 +356,7 @@ jobs:
   product-reviews-tests:
     name: Product reviews tests
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
       - name: Checkout
         # actions/checkout@v7.0.0
@@ -379,4 +380,21 @@ jobs:
 
       - name: Run product reviews tests
         run: python -m pytest src/product-reviews/tests -v
+
+      # Production receives this model as an external, read-only cache rather
+      # than baking weights into the application image. Build the exact pinned
+      # artifact here so a missing/corrupt model blocks the PR before merge.
+      - name: Build and validate pinned guardrail model artifact
+        run: >-
+          python src/product-reviews/scripts/build_model_artifact.py
+          --output "${RUNNER_TEMP}/ai-model"
+
+      - name: Validate strict guardrail startup from offline artifact
+        env:
+          HF_HOME: ${{ runner.temp }}/ai-model/huggingface
+          HF_HUB_OFFLINE: "1"
+          TRANSFORMERS_OFFLINE: "1"
+          AI_GUARDRAIL_REQUIRE_MODEL: "true"
+          PYTHONPATH: src/product-reviews
+        run: python -c "import guardrails; guardrails.initialize_guardrails()"
 # Change trail: @hungxqt - 2026-07-15 - PR-only local image bake gate without ECR push

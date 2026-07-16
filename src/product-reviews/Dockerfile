@@ -35,7 +35,11 @@ COPY --from=build-venv /venv/ /venv/
 WORKDIR /app
 
 RUN groupadd --gid 10001 appgroup && \
-    useradd --uid 10001 --gid appgroup --no-create-home appuser
+    useradd --uid 10001 --gid appgroup --no-create-home appuser && \
+    mkdir -p /home/appuser/.cache/huggingface && \
+    chown -R appuser:appgroup /home/appuser
+
+ENV HF_HOME=/home/appuser/.cache/huggingface
 
 COPY --chown=appuser:appgroup ./src/product-reviews/demo_pb2_grpc.py demo_pb2_grpc.py
 COPY --chown=appuser:appgroup ./src/product-reviews/demo_pb2.py demo_pb2.py
