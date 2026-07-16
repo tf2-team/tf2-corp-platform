@@ -1,3 +1,8 @@
+#!/usr/bin/python
+
+# Copyright The OpenTelemetry Authors
+# SPDX-License-Identifier: Apache-2.0
+
 """Tests for grounding.py (A1.1), per the Day 2/3 implementation brief.
 
 validate_grounded_summary is pure logic — it takes a GroundedDraft you
@@ -174,3 +179,4 @@ def test_safe_review_set_rejects_duplicate_source_ids():
             product_id="P001",
             reviews=_reviews(("r1", "text a"), ("r1", "text b")),
         )
+# Change trail: @hungxqt - 2026-07-16 - Add Apache-2.0 copyright headers for license-checker.

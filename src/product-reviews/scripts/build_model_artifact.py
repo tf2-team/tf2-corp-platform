@@ -1,3 +1,8 @@
+#!/usr/bin/python
+
+# Copyright The OpenTelemetry Authors
+# SPDX-License-Identifier: Apache-2.0
+
 """Build the immutable Hugging Face cache artifact consumed by the EKS init container."""
 
 import argparse
@@ -100,3 +105,4 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
+# Change trail: @hungxqt - 2026-07-16 - Add Apache-2.0 copyright headers for license-checker.

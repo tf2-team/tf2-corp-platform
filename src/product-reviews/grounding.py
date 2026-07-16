@@ -1,3 +1,8 @@
+#!/usr/bin/python
+
+# Copyright The OpenTelemetry Authors
+# SPDX-License-Identifier: Apache-2.0
+
 """Grounding pipeline for AI-generated product review summaries (A1.1).
 
 Public API (per Day 2/3 implementation brief):
@@ -180,3 +185,4 @@ def validate_grounded_summary(
         answer=answer,
         claims=surviving_claims,
     )
+# Change trail: @hungxqt - 2026-07-16 - Add Apache-2.0 copyright headers for license-checker.

@@ -1,3 +1,8 @@
+#!/usr/bin/python
+
+# Copyright The OpenTelemetry Authors
+# SPDX-License-Identifier: Apache-2.0
+
 import sys
 import os
 import json
@@ -294,3 +299,4 @@ def test_no_unvalidated_model_output_for_reviews(mocker, mock_fetch_reviews, moc
     resp = get_ai_assistant_response("P001", "Reviews?")
     assert resp.response == "Grounded Output"
     assert resp.response != "Direct unvalidated model text."
+# Change trail: @hungxqt - 2026-07-16 - Add Apache-2.0 copyright headers for license-checker.
