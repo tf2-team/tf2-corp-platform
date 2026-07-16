@@ -9,7 +9,7 @@ import random
 import uuid
 import logging
 
-from locust import HttpUser, task, between
+from locust import HttpUser, task, tag, between
 from locust_plugins.users.playwright import PlaywrightUser, pw, PageWithRetry, event
 
 # Durable guard for distributed mode: stale worker messages (HPA scale-down, Spot
@@ -182,6 +182,7 @@ class WebsiteUser(HttpUser):
             logging.info(f"User getting product reviews for product: {product}")
             self.client.get("/api/product-reviews/" + product)
 
+    @tag("ai")
     @task(1)
     def ask_product_ai_assistant(self):
         product = random.choice(products)
