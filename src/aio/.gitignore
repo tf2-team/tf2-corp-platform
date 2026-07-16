@@ -4,3 +4,5 @@ __pycache__/
 state/*.sqlite3
 state/*.sqlite3-*
 state/*.jsonl
+evidence/
+.env.live
