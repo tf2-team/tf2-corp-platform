@@ -208,6 +208,9 @@ def get_ai_assistant_response(request_product_id, question):
         if request_guard.action == GuardrailAction.SANITIZED and request_guard.sanitized_text:
             question = request_guard.sanitized_text
 
+        span.set_attribute("app.guardrail.sanitized_question", question)
+        logger.info(f"Sanitized AI Assistant question: {question}")
+
         # Instruct the model to call fetch_product_reviews in English for review questions
         system_prompt = (
             "You are a helpful assistant that answers related to a specific product. "

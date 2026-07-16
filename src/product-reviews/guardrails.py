@@ -23,11 +23,26 @@ def _model_is_required() -> bool:
     }
 
 
-@lru_cache(maxsize=1)
-def _prompt_injection_scanner():
-    from llm_guard.input_scanners import PromptInjection
+_scanner_cache = None
+_scanner_initialized = False
 
-    return PromptInjection(threshold=0.5)
+
+def _prompt_injection_scanner():
+    global _scanner_cache, _scanner_initialized
+    if _scanner_initialized:
+        return _scanner_cache
+
+    try:
+        from llm_guard.input_scanners import PromptInjection
+        _scanner_cache = PromptInjection(threshold=0.5)
+    except Exception as e:
+        if _model_is_required():
+            raise e
+        logger.warning(f"Failed to load LLM Guard PromptInjection scanner: {e}")
+        _scanner_cache = None
+
+    _scanner_initialized = True
+    return _scanner_cache
 
 
 def initialize_guardrails() -> None:
