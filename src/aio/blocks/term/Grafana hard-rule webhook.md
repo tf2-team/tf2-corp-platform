@@ -81,7 +81,10 @@ Ví dụ:
 
 ```text
 POST /api/v1/events/grafana
+X-AIOps-Grafana-Secret: <same value as AIOPS_GRAFANA_WEBHOOK_SECRET>
 ```
+
+AIOps runtime phải đọc `AIOPS_GRAFANA_WEBHOOK_SECRET` từ env, so sánh header `X-AIOps-Grafana-Secret` bằng constant-time compare, và trả `401` khi header thiếu/sai hoặc runtime cluster thiếu cấu hình secret. Không ghi secret hoặc raw header vào log.
 
 Grafana gửi payload kiểu:
 
