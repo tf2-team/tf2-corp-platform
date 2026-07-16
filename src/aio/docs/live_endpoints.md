@@ -15,30 +15,44 @@ Inventory này được kiểm tra với namespace `techx-corp-prod` ngày 2026-
 | Kubernetes API | `kubectl proxy :8001` | `GET http://localhost:8001/api/v1/namespaces/techx-corp-prod/pods`; deployments API | Dùng credential của kubeconfig; không cần bearer token riêng |
 | Notification | External receiver | `POST $AIOPS_NOTIFICATION_WEBHOOK_URL` | Tùy receiver; URL là bắt buộc, bearer token là tùy chọn |
 
-## Secret/config còn thiếu
+## Trạng thái secret/config
 
 Không ghi giá trị secret vào repository hoặc terminal log. Chỉ tên nguồn được ghi ở
 đây.
 
 | Biến | Trạng thái | Nguồn/việc cần làm |
 |---|---|---|
-| `AIOPS_OPENSEARCH_USERNAME` | Bắt buộc | Kubernetes Secret `techx-corp-opensearch`, key `username` |
-| `AIOPS_OPENSEARCH_PASSWORD` | Bắt buộc, hiện còn placeholder | Kubernetes Secret `techx-corp-opensearch`, key `password` |
+| `AIOPS_OPENSEARCH_USERNAME` | Đã cấu hình và smoke test PASS | Nguồn: Kubernetes Secret `techx-corp-opensearch`, key `username`; không ghi giá trị vào tài liệu |
+| `AIOPS_OPENSEARCH_PASSWORD` | Đã cấu hình và smoke test PASS | Nguồn: Kubernetes Secret `techx-corp-opensearch`, key `password`; không ghi giá trị vào tài liệu |
 | `AIOPS_NOTIFICATION_WEBHOOK_URL` | Bắt buộc, hiện còn placeholder | Cần một JSON webhook receiver tương thích. Secret `techx-corp-grafana-discord`/`webhook-url` chỉ là candidate; Discord cần adapter/payload riêng trước khi tái sử dụng trực tiếp |
 | `AIOPS_NOTIFICATION_TOKEN` | Tùy chọn | Chỉ cần nếu receiver yêu cầu Bearer Auth |
-| `AIOPS_GRAFANA_WEBHOOK_SECRET` | Bắt buộc | Tự sinh shared secret và cấu hình cùng giá trị ở AIOps và Grafana contact point |
+| `AIOPS_GRAFANA_WEBHOOK_SECRET` | Bắt buộc, hiện còn thiếu | Tự sinh shared secret và cấu hình cùng giá trị ở AIOps và Grafana contact point |
 | Grafana admin username/password | Chỉ cần khi provision contact point bằng Grafana API | Kubernetes Secret `techx-corp-grafana-admin` |
 
 Prometheus token, Jaeger token và Kubernetes bearer token được để trống có chủ đích
 khi chạy qua `kubectl port-forward`/`kubectl proxy`.
 
+## Kết quả live smoke gần nhất
+
+| Integration | Kết quả | Chi tiết |
+|---|---:|---|
+| Prometheus | **PASS 3/3** | Instant query, range query và active targets |
+| Jaeger | **PASS 2/2** | Service discovery và trace query |
+| OpenSearch | **PASS 3/3** | Cluster info, danh sách index và tìm kiếm `otel-logs-*` |
+| Kubernetes API | **PASS 2/2** | Danh sách pod và Deployment `checkout` ready `2/2` |
+| Grafana | **PASS 1/2** | Health PASS; inbound webhook FAIL vì thiếu shared secret |
+| Notification | **FAIL 0/1** | Thiếu webhook URL bắt buộc |
+
+Tổng kết: **11/13 PASS, 2/13 FAIL**.
+
 ## Blocker của Grafana webhook end-to-end
 
 Cluster hiện chưa có Deployment hoặc Service AIOps. Vì vậy Grafana trong EKS không
-thể gọi `localhost:8000` trên máy developer. Test hiện tại xác minh hai phần độc lập:
+thể gọi `localhost:8000` trên máy developer. Test hiện tại xử lý hai phần độc lập:
 
 1. Grafana thật trả health OK qua tunnel.
-2. Payload Grafana-compatible được POST vào AIOps local với shared-secret auth.
+2. AIOps local nhận payload Grafana-compatible qua shared-secret auth. Lần chạy gần
+   nhất chưa gửi request này vì `AIOPS_GRAFANA_WEBHOOK_SECRET` còn thiếu.
 
 Để nghiệm thu end-to-end, cần deploy AIOps thành ClusterIP Service (ví dụ
 `http://aiops:8000/api/v1/events/grafana`) và provision Grafana contact point trỏ tới

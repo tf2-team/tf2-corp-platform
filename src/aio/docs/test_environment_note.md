@@ -12,19 +12,20 @@ không còn trường hợp endpoint bị bỏ qua nhưng toàn bộ suite vẫn
 công.
 
 Prometheus, Jaeger, Kubernetes API và Grafana health không cần credential dịch vụ
-riêng khi kết nối qua port-forward hoặc Kubernetes proxy. OpenSearch và notification
-vẫn cần thông tin xác thực/endpoint thật.
+riêng khi kết nối qua port-forward hoặc Kubernetes proxy. OpenSearch đã có Basic Auth
+hợp lệ và vượt qua toàn bộ smoke test. Grafana inbound webhook và notification vẫn
+thiếu cấu hình bắt buộc.
 
-## 2. Credential và secret còn thiếu
+## 2. Trạng thái credential và secret
 
 | Biến/thông tin | Mức độ | Trạng thái và nguồn |
 |---|---|---|
-| `AIOPS_OPENSEARCH_PASSWORD` | Bắt buộc | Còn placeholder. Nguồn: Kubernetes Secret `techx-corp-opensearch`, key `password` |
-| `AIOPS_OPENSEARCH_USERNAME` | Bắt buộc | Đã có giá trị local nhưng cần xác nhận từ Secret `techx-corp-opensearch`, key `username` |
+| `AIOPS_OPENSEARCH_PASSWORD` | Bắt buộc | Đã cấu hình; smoke test xác nhận Basic Auth hợp lệ. Không ghi giá trị vào tài liệu |
+| `AIOPS_OPENSEARCH_USERNAME` | Bắt buộc | Đã cấu hình; smoke test xác nhận Basic Auth hợp lệ. Không ghi giá trị vào tài liệu |
 | `AIOPS_NOTIFICATION_WEBHOOK_URL` | Bắt buộc | Còn placeholder; cần JSON webhook receiver tương thích với `NotificationMessage` |
 | `AIOPS_NOTIFICATION_TOKEN` | Tùy chọn | Chỉ cần khi notification receiver yêu cầu Bearer Auth |
 | Grafana admin credential | Có điều kiện | Chỉ cần khi provision contact point bằng Grafana API; nguồn: Secret `techx-corp-grafana-admin` |
-| `AIOPS_GRAFANA_WEBHOOK_SECRET` | Bắt buộc | Local smoke test đã có; production phải cấu hình cùng một secret tại Grafana contact point và AIOps |
+| `AIOPS_GRAFANA_WEBHOOK_SECRET` | Bắt buộc | Chưa cấu hình; cần dùng cùng một secret tại Grafana contact point và AIOps |
 
 Secret `techx-corp-grafana-discord`, key `webhook-url`, chỉ là candidate cho
 notification. Discord yêu cầu payload riêng nên không dùng trực tiếp với normalized
@@ -66,12 +67,15 @@ quá trình kiểm tra.
 
 | Integration | Kết quả | Chi tiết |
 |---|---:|---|
-| Prometheus | **PASS 3/3** | Instant query, range query và active targets |
-| Jaeger | **PASS 2/2** | Service discovery và trace query |
-| Kubernetes API | **PASS 2/2** | Pod list và Deployment `checkout` ready `2/2` |
-| Grafana | **PASS 2/2** | Grafana health và AIOps local inbound webhook |
-| OpenSearch | **BLOCKED** | Strict test từ chối chạy khi `AIOPS_OPENSEARCH_PASSWORD` còn placeholder |
-| Notification | **BLOCKED** | Strict test từ chối chạy khi `AIOPS_NOTIFICATION_WEBHOOK_URL` còn placeholder |
+| Prometheus | **PASS 3/3** | Instant query có 28 series, range query có 65 series, 23 active targets |
+| Jaeger | **PASS 2/2** | Có 19 services; truy vấn `frontend` trả về 1 trace |
+| OpenSearch | **PASS 3/3** | Cluster `demo-cluster` phiên bản `3.2.0`, 6 indices; `otel-logs-*` tìm thấy 10.000 hits |
+| Kubernetes API | **PASS 2/2** | 49/49 pod đang Running; Deployment `checkout` ready `2/2` |
+| Grafana | **PASS 1/2** | Health PASS (`database=ok`, version `13.0.1`); inbound webhook FAIL vì thiếu `AIOPS_GRAFANA_WEBHOOK_SECRET` |
+| Notification | **FAIL 0/1** | Thiếu `AIOPS_NOTIFICATION_WEBHOOK_URL`; request chưa được gửi |
+
+Tổng kết live smoke suite: **11/13 PASS, 2/13 FAIL**. Hai lỗi đều xảy ra ở bước
+kiểm tra cấu hình trước khi gửi request, không phải lỗi kết nối hoặc HTTP response.
 
 Các unit test bị tác động đều thành công:
 
@@ -135,10 +139,10 @@ python -B tests/smoke_test_live.py TestNotification
 
 ## 6. Blocker còn lại
 
-1. **OpenSearch credential:** port-forward không bỏ qua application authentication;
-   cần read-only username/password thật.
-2. **Notification receiver:** cần một JSON webhook URL tương thích và token nếu
+1. **Notification receiver:** cần một JSON webhook URL tương thích và token nếu
    receiver yêu cầu.
+2. **Grafana inbound webhook:** cần cấu hình `AIOPS_GRAFANA_WEBHOOK_SECRET` ở AIOps
+   và cùng giá trị tại Grafana contact point.
 3. **Grafana webhook end-to-end:** cluster chưa có Deployment/Service AIOps.
    Grafana trong EKS không thể gọi `localhost:8000` trên máy developer.
 4. **RCA unit test environment:** cần cài dependency `fse-baro` để chạy đủ 36 test.
