@@ -10,6 +10,14 @@ from aiops.schemas import AnomalyFinding, MetricSeries
 os.environ.setdefault("MPLCONFIGDIR", "/tmp")
 
 
+ALGORITHM_WEIGHTS = {
+    "ewma_stl": 0.4,
+    "isolation_forest": 0.25,
+    "baro_bocpd": 0.35,
+}
+WEIGHTED_SCORE_THRESHOLD = 0.4
+
+
 class EwmaStlDetector:
     def __init__(self, alpha: float, z_threshold: float, min_points: int, seasonal_period: int):
         self.alpha = alpha
@@ -140,13 +148,43 @@ class V001AnomalyEngine:
         min_points: int,
         seasonal_period: int,
     ):
+        self.thresholds = {
+            "ewma_stl": ewma_z_threshold,
+            "isolation_forest": isolation_score_threshold,
+            "baro_bocpd": isolation_score_threshold,
+        }
         self.ewma_stl = EwmaStlDetector(ewma_alpha, ewma_z_threshold, min_points, seasonal_period)
         self.isolation_forest = ServiceIsolationForestDetector(isolation_score_threshold, min_points)
         self.baro_bocpd = BaroBocpdDetector(isolation_score_threshold, min_points)
 
     def evaluate(self, series: list[MetricSeries]) -> list[AnomalyFinding]:
-        return [
-            *self.ewma_stl.evaluate(series),
-            *self.isolation_forest.evaluate(series),
-            *self.baro_bocpd.evaluate(series),
-        ]
+        return self._weighted_sum(
+            [
+                *self.ewma_stl.evaluate(series),
+                *self.isolation_forest.evaluate(series),
+                *self.baro_bocpd.evaluate(series),
+            ]
+        )
+
+    def _weighted_sum(self, findings: list[AnomalyFinding]) -> list[AnomalyFinding]:
+        grouped: dict[tuple[str, str, str], list[AnomalyFinding]] = defaultdict(list)
+        for finding in findings:
+            grouped[(finding.service, finding.metric, finding.signal_id)].append(finding)
+
+        combined: list[AnomalyFinding] = []
+        for (_, _, _), items in grouped.items():
+            score = sum(ALGORITHM_WEIGHTS[item.algorithm] * min(item.score / self.thresholds[item.algorithm], 1.0) for item in items)
+            if score < WEIGHTED_SCORE_THRESHOLD:
+                continue
+            top = max(items, key=lambda item: item.score)
+            combined.append(
+                AnomalyFinding(
+                    algorithm="weighted_sum",
+                    service=top.service,
+                    metric=top.metric,
+                    signal_id=top.signal_id,
+                    score=score,
+                    timestamp=top.timestamp,
+                )
+            )
+        return sorted(combined, key=lambda item: item.score, reverse=True)

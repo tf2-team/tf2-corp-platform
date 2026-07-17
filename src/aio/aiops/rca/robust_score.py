@@ -6,6 +6,8 @@ from aiops.schemas import MetricSeries
 
 class RobustScoreRca:
     def rank(self, series: list[MetricSeries], anomaly_timestamp: int | None) -> dict[str, float]:
+        if anomaly_timestamp is None:
+            return {}
         scores: dict[str, float] = {}
         for metric in series:
             values = [point.value for point in metric.points]
