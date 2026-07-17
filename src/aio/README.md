@@ -73,6 +73,38 @@ python -B tests/smoke_test_live.py TestPrometheus
 Missing credentials, authentication errors, non-2xx responses, and unreachable
 endpoints fail the suite; they are not reported as successful skips.
 
+## Prometheus E2E Acceptance Run Through Port-Forward
+
+The E2E runner reads allow-listed PromQL from `config/prometheus_e2e.json`,
+collects real instant and range data through the Prometheus port-forward, and
+runs the complete incident, RCA, and remediation pipeline locally. It refuses
+to start unless `AIOPS_POLICY_MODE=dry-run`; it never constructs or calls the
+live executor.
+
+Keep `scripts/port_forward.ps1` running, then execute from `src/aio`:
+
+```powershell
+conda run -n capstone python -B scripts/run_prometheus_e2e.py --env-file .env.live
+```
+
+Each invocation writes `evidence/e2e/<run_id>.json`. The report contains the
+capture time, Prometheus endpoint, query IDs and PromQL, converted observations,
+range samples used by RCA, incidents, RCA candidates, policy/remediation
+decisions, and a pass/fail result for every acceptance criterion. Secrets and
+authorization headers are not written.
+
+The command exits `0` only when all four criteria pass. A healthy cluster can
+legitimately produce a `failed` report because no incident was opened. For the
+acceptance run, activate an approved existing failure scenario such as
+`paymentFailure`, wait for the five-minute query window to contain failures,
+run the command, and then turn the scenario off. The AIOps runner itself does
+not activate faults or execute remediation.
+
+To change metric names for another cluster, edit the tracked collection plan;
+keep each query aggregated to exactly one Prometheus series. Observation signal
+IDs, query IDs, units, windows, and required labels are validated against
+`config/runtime.json` before any query runs.
+
 ## Configuration
 
 Runtime secrets, URLs, paths, and all numeric hyperparameters are loaded from `.env` through `aiops.config.Settings`.

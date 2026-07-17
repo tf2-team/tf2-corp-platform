@@ -15,8 +15,11 @@ class PrometheusClient:
             transport=transport,
         )
 
-    def query(self, query: str) -> dict:
-        return self._http.get("/api/v1/query", params={"query": query})
+    def query(self, query: str, time: str | None = None) -> dict:
+        params = {"query": query}
+        if time is not None:
+            params["time"] = time
+        return self._http.get("/api/v1/query", params=params)
 
     def query_range(self, query: str, start: str, end: str, step: str) -> dict:
         return self._http.get("/api/v1/query_range", params={"query": query, "start": start, "end": end, "step": step})
