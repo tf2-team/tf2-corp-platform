@@ -6,11 +6,11 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 
 from aiops.anomaly import V001AnomalyEngine
-from aiops.anomaly.v001 import EwmaStlDetector
+from aiops.anomaly.v001 import BaroBocpdDetector, EwmaStlDetector
 from aiops.api.app import run_static_pipeline
 from aiops.config import Settings, load_runtime_config
 from aiops.rca import V001RcaEngine
-from aiops.schemas import MetricPoint, MetricSeries, PipelineRunRequest, RuntimeConfig
+from aiops.schemas import AnomalyFinding, MetricPoint, MetricSeries, PipelineRunRequest, RuntimeConfig
 
 
 def metric(service: str, name: str, values: list[float]) -> MetricSeries:
@@ -71,6 +71,31 @@ class V001AnomalyRcaTest(unittest.TestCase):
 
         self.assertEqual(findings, [])
 
+    def test_baro_bocpd_requires_correlated_metric_change(self):
+        detector = BaroBocpdDetector(score_threshold=4.0, min_points=8)
+
+        findings = detector.evaluate(
+            [
+                metric("checkout", "latency", [1, 1, 1, 1, 1, 1, 1, 20]),
+                metric("payment", "error", [0, 0, 0, 0, 0, 0, 0, 0]),
+            ]
+        )
+
+        self.assertEqual(findings, [])
+
+    def test_baro_bocpd_detects_correlated_metric_change(self):
+        detector = BaroBocpdDetector(score_threshold=4.0, min_points=8)
+
+        findings = detector.evaluate(
+            [
+                metric("checkout", "latency", [1, 1, 1, 1, 1, 1, 1, 20]),
+                metric("payment", "error", [0, 0, 0, 0, 0, 0, 0, 10]),
+            ]
+        )
+
+        self.assertEqual({finding.algorithm for finding in findings}, {"baro_bocpd"})
+        self.assertEqual({finding.service for finding in findings}, {"checkout", "payment"})
+
     def test_v001_pipeline_ranks_top_root_cause_service_and_metrics(self):
         series = [
             metric("checkout", "latency", [1.0, 1.1, 1.0, 1.1, 1.0, 1.1, 1.0, 2.0, 2.1, 2.0]),
@@ -96,12 +121,27 @@ class V001AnomalyRcaTest(unittest.TestCase):
         ).evaluate(series)
         result = V001RcaEngine(runtime_config).rank(findings, series, top_k=3)
 
-        self.assertTrue({finding.algorithm for finding in findings} >= {"ewma_stl", "isolation_forest"})
-        self.assertNotIn("baro_bocpd", {finding.algorithm for finding in findings})
+        self.assertTrue({finding.algorithm for finding in findings} >= {"ewma_stl", "isolation_forest", "baro_bocpd"})
         self.assertEqual(result.anomalies, findings)
         self.assertEqual(result.root_causes[0].service, "payment")
         self.assertIn("latency", result.root_causes[0].root_cause_metrics)
         self.assertTrue(any("robust_score=" in item for item in result.root_causes[0].evidence))
+
+    def test_rca_excludes_observability_testing_and_protected_flagd_roots(self):
+        runtime_config = load_runtime_config(Path("config/runtime.json"))
+        findings = [
+            # Higher raw scores, but not valid business root causes.
+            AnomalyFinding(algorithm="test", service="jaeger", metric="cpu", signal_id="jaeger_cpu", score=99.0, timestamp=1),
+            AnomalyFinding(algorithm="test", service="load-generator", metric="cpu", signal_id="load_generator_cpu", score=98.0, timestamp=1),
+            AnomalyFinding(algorithm="test", service="flagd", metric="cpu", signal_id="flagd_cpu", score=97.0, timestamp=1),
+            AnomalyFinding(algorithm="test", service="checkout", metric="cpu", signal_id="checkout_cpu", score=7.0, timestamp=1),
+        ]
+
+        result = V001RcaEngine(runtime_config).rank(findings, [], top_k=5)
+
+        root_services = [candidate.service for candidate in result.root_causes]
+        self.assertEqual(root_services[0], "checkout")
+        self.assertTrue({"jaeger", "load-generator", "flagd"}.isdisjoint(root_services))
 
     def test_pipeline_api_accepts_metric_series_and_returns_rca_result(self):
         series = [

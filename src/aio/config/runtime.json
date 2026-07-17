@@ -213,10 +213,7 @@
     "shipping",
     "email",
     "quote",
-    "flagd",
-    "fraud-detection",
-    "load-generator",
-    "jaeger"
+    "fraud-detection"
   ],
   "signals": [
     {
@@ -462,16 +459,6 @@
       "runbook_id": "RB-SERVICE-ERROR-RATE"
     },
     {
-      "id": "auto_flagd_error_rate",
-      "type": "threshold",
-      "enabled": true,
-      "signal_id": "flagd_error_rate_5m",
-      "flow": "platform",
-      "service": "flagd",
-      "severity": "SEV2",
-      "runbook_id": "RB-SERVICE-ERROR-RATE"
-    },
-    {
       "id": "auto_fraud_detection_error_rate",
       "type": "threshold",
       "enabled": true,
@@ -479,26 +466,6 @@
       "flow": "checkout",
       "service": "fraud-detection",
       "severity": "SEV2",
-      "runbook_id": "RB-SERVICE-ERROR-RATE"
-    },
-    {
-      "id": "auto_load_generator_error_rate",
-      "type": "threshold",
-      "enabled": true,
-      "signal_id": "load_generator_error_rate_5m",
-      "flow": "testing",
-      "service": "load-generator",
-      "severity": "SEV3",
-      "runbook_id": "RB-SERVICE-ERROR-RATE"
-    },
-    {
-      "id": "auto_jaeger_error_rate",
-      "type": "threshold",
-      "enabled": true,
-      "signal_id": "jaeger_error_rate_5m",
-      "flow": "observability",
-      "service": "jaeger",
-      "severity": "SEV3",
       "runbook_id": "RB-SERVICE-ERROR-RATE"
     }
   ],
