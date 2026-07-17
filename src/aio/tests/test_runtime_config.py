@@ -31,6 +31,34 @@ class RuntimeConfigTest(unittest.TestCase):
 
         self.assertEqual(detector_signal_ids, signal_ids)
 
+    def test_prometheus_services_expand_generated_metrics(self):
+        raw = json.loads(Path("config/runtime.json").read_text(encoding="utf-8"))
+        config = load_runtime_config(Path("config/runtime.json"))
+
+        self.assertNotIn("payment.error_rate.5m", raw["prometheus_queries"])
+        self.assertIn("payment", raw["prometheus_services"])
+        self.assertIn("payment.error_rate.5m", config.prometheus_queries)
+        self.assertIn("payment.cpu_millicores", config.prometheus_queries)
+        self.assertIn("payment.memory_usage_bytes", config.prometheus_queries)
+        self.assertIn("payment.disk_io_bytes_per_second", config.prometheus_queries)
+        self.assertIn("payment.socket_io_bytes_per_second", config.prometheus_queries)
+        self.assertIn("payment.workload_ready_pods", config.prometheus_queries)
+        self.assertIn('service_name="payment"', config.prometheus_queries["payment.error_rate.5m"])
+        self.assertIn('service_name="payment"', config.prometheus_queries["payment.memory_usage_bytes"])
+        self.assertNotIn("target_info", config.prometheus_queries["payment.memory_usage_bytes"])
+        self.assertIn("http_server_request_duration_seconds_count", config.prometheus_queries["cart.error_rate.5m"])
+        self.assertTrue(
+            {
+                "payment_error_rate_5m",
+                "payment_cpu_millicores",
+                "payment_memory_usage_bytes",
+                "payment_disk_io_bytes_per_second",
+                "payment_socket_io_bytes_per_second",
+                "payment_workload_ready_pods",
+            }.issubset({signal.id for signal in config.signals})
+        )
+        self.assertEqual([signal.id for signal in config.signals].count("product_catalog_cpu_millicores"), 1)
+
     def test_no_data_detector_covers_all_prometheus_signals(self):
         config = load_runtime_config(Path("config/runtime.json"))
         prometheus_signal_ids = {signal.id for signal in config.signals if signal.source == "prometheus"}

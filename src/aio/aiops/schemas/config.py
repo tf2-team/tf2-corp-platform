@@ -73,6 +73,7 @@ class RuntimeConfig(AiopsModel):
     environment: str
     topology: TopologyConfig
     prometheus_queries: dict[str, str] = Field(default_factory=dict)
+    prometheus_services: list[str] = Field(default_factory=list)
     signals: list[SignalDefinition]
     detectors: list[DetectorDefinition]
     detector_thresholds: dict[str, float] = Field(default_factory=dict)
@@ -84,6 +85,9 @@ class RuntimeConfig(AiopsModel):
     def validate_references(self) -> "RuntimeConfig":
         signal_ids = {signal.id for signal in self.signals}
         service_names = {service.name for service in self.topology.services}
+        unknown_prometheus_services = set(self.prometheus_services) - service_names
+        if unknown_prometheus_services:
+            raise ValueError(f"unknown prometheus services: {sorted(unknown_prometheus_services)}")
         missing_prometheus_queries = {signal.query_id for signal in self.signals if signal.source == "prometheus"} - set(self.prometheus_queries)
         if missing_prometheus_queries:
             raise ValueError(f"missing prometheus queries: {sorted(missing_prometheus_queries)}")

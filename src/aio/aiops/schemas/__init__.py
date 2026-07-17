@@ -1,6 +1,14 @@
 from aiops.schemas.api import GrafanaAlert, GrafanaNormalizedEvent, GrafanaWebhookEvent, HealthResponse, PipelineRunRequest
 from aiops.schemas.base import AiopsModel
-from aiops.schemas.config import DetectorDefinition, RcaConfig, RuntimeConfig, RuntimePolicyConfig, SignalDefinition, TopologyConfig, TopologyService
+from aiops.schemas.config import (
+    DetectorDefinition,
+    RcaConfig,
+    RuntimeConfig,
+    RuntimePolicyConfig,
+    SignalDefinition,
+    TopologyConfig,
+    TopologyService,
+)
 from aiops.schemas.domain import (
     ActionProposal,
     AnomalyFinding,

@@ -21,6 +21,12 @@ class FakePrometheus:
         return {"data": {"result": [{"metric": {}, "values": [[123 + index, str(index)] for index in range(8)]}]}}
 
 
+class FailingRangePrometheus(FakePrometheus):
+    def query_range(self, query: str, start: str, end: str, step: str) -> dict:
+        self.range_queries.append((query, start, end, step))
+        raise RuntimeError("prometheus rejected query")
+
+
 class PrometheusCollectorTest(unittest.TestCase):
     def test_collects_runtime_signals_as_observations(self):
         config = load_runtime_config(Path("config/runtime.json"))
@@ -54,6 +60,15 @@ class PrometheusCollectorTest(unittest.TestCase):
         self.assertTrue(all(len(item.points) == 8 for item in series))
         self.assertIn("p95_latency_5m", {item.metric for item in series})
         self.assertIn("cpu_millicores", {item.metric for item in series})
+
+    def test_runtime_metric_series_query_failure_returns_empty_series(self):
+        config = load_runtime_config(Path("config/runtime.json"))
+        client = FailingRangePrometheus()
+
+        series = PrometheusCollector(client, config).collect_metric_series(lookback_seconds=3600, step_seconds=60)
+
+        self.assertEqual(len(series), len(client.range_queries))
+        self.assertTrue(all(item.points == [] for item in series))
 
 
 if __name__ == "__main__":

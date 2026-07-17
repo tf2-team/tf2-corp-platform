@@ -2,14 +2,86 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+from string import Template
 
 from aiops.detectors import DependencyDetector, Detector, NoDataDetector, ThresholdDetector
 from aiops.config.settings import Settings
 from aiops.schemas import RuntimeConfig
 
 
+PROMETHEUS_SERVICE_METRICS = {
+    "error_rate.5m": {
+        "template": '((sum(rate(http_server_duration_milliseconds_count{service_name="$service",http_response_status_code=~"5.."}[5m])) or sum(rate(http_server_request_duration_seconds_count{service_name="$service",http_response_status_code=~"5.."}[5m])) or vector(0)) / clamp_min((sum(rate(http_server_duration_milliseconds_count{service_name="$service"}[5m])) or sum(rate(http_server_request_duration_seconds_count{service_name="$service"}[5m]))), 0.000000001))',
+        "unit": "ratio",
+    },
+    "cpu_millicores": {
+        "template": 'sum(k8s_pod_cpu_usage{k8s_deployment_name="$service"})',
+        "unit": "count",
+    },
+    "memory_usage_bytes": {
+        "template": 'sum(system_memory_usage_bytes{service_name="$service",state!="free"}) or sum(system_memory_usage_bytes{k8s_deployment_name="$service",state!="free"}) or vector(0)',
+        "unit": "bytes",
+    },
+    "disk_io_bytes_per_second": {
+        "template": 'sum(rate(system_disk_io_bytes_total{service_name="$service",direction=~"read|write"}[5m])) or sum(rate(system_disk_io_bytes_total{k8s_deployment_name="$service",direction=~"read|write"}[5m])) or vector(0)',
+        "unit": "bytes",
+    },
+    "socket_io_bytes_per_second": {
+        "template": 'sum(rate(system_network_io_bytes_total{service_name="$service",direction=~"receive|transmit"}[5m])) or sum(rate(system_network_io_bytes_total{k8s_deployment_name="$service",direction=~"receive|transmit"}[5m])) or vector(0)',
+        "unit": "bytes",
+    },
+    "workload_ready_pods": {
+        "template": 'sum(k8s_pod_ready{k8s_deployment_name="$service"}) or vector(0)',
+        "unit": "count",
+    },
+}
+
+
 def load_runtime_config(path: Path) -> RuntimeConfig:
-    return RuntimeConfig.model_validate(json.loads(path.read_text(encoding="utf-8")))
+    raw = json.loads(path.read_text(encoding="utf-8"))
+    service_queries, service_signals = _build_service_prometheus(raw)
+    raw["prometheus_queries"] = {**raw.get("prometheus_queries", {}), **service_queries}
+    raw["signals"] = [*raw.get("signals", []), *service_signals]
+    _expand_detector_signal_groups(raw)
+    return RuntimeConfig.model_validate(raw)
+
+
+def _build_service_prometheus(raw: dict) -> tuple[dict[str, str], list[dict]]:
+    topology = {service["name"]: service for service in raw["topology"]["services"]}
+    explicit_queries = set(raw.get("prometheus_queries", {}))
+    explicit_signals = {signal["id"] for signal in raw.get("signals", [])}
+    queries: dict[str, str] = {}
+    signals: list[dict] = []
+    for service in raw.get("prometheus_services", []):
+        flow = topology[service]["flow"]
+        signal_prefix = service.replace("-", "_")
+        for metric, config in PROMETHEUS_SERVICE_METRICS.items():
+            query_id = f"{service}.{metric}"
+            signal_id = f"{signal_prefix}_{metric.replace('.', '_')}"
+            if query_id in explicit_queries or signal_id in explicit_signals:
+                continue
+            queries[query_id] = Template(config["template"]).substitute(service=service)
+            signals.append(
+                {
+                    "id": signal_id,
+                    "source": "prometheus",
+                    "query_id": query_id,
+                    "unit": config["unit"],
+                    "window": "5m",
+                    "flow": flow,
+                    "service": service,
+                    "feature_role": "anomaly_input",
+                    "required_labels": [],
+                }
+            )
+    return queries, signals
+
+
+def _expand_detector_signal_groups(raw: dict) -> None:
+    prometheus_signal_ids = [signal["id"] for signal in raw.get("signals", []) if signal.get("source") == "prometheus"]
+    for detector in raw.get("detectors", []):
+        if "__all_prometheus__" in detector.get("signal_ids", []):
+            detector["signal_ids"] = prometheus_signal_ids
 
 
 def build_detectors(

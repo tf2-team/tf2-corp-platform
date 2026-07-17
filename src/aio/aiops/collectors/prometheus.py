@@ -106,12 +106,15 @@ class PrometheusCollector(Collector):
         assert self.config is not None
         end = self.captured_at
         start = end - timedelta(seconds=lookback_seconds)
-        result = self.client.query_range(
-            self.config.prometheus_queries[signal.query_id],
-            start=str(start.timestamp()),
-            end=str(end.timestamp()),
-            step=str(step_seconds),
-        ).get("data", {}).get("result", [])
+        try:
+            result = self.client.query_range(
+                self.config.prometheus_queries[signal.query_id],
+                start=str(start.timestamp()),
+                end=str(end.timestamp()),
+                step=str(step_seconds),
+            ).get("data", {}).get("result", [])
+        except Exception:
+            result = []
         values = result[0].get("values", []) if result else []
         return MetricSeries(
             service=signal.service,
