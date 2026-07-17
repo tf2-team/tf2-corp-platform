@@ -15,9 +15,15 @@ def init_metrics(meter):
         'app_ai_assistant_counter', unit='summaries', description="Counts the total number of AI Assistant requests"
     )
 
+    # Guardrail checks counter
+    app_guardrail_counter = meter.create_counter(
+        'app_guardrail_counter', unit='checks', description="Counts the total number of guardrail checks"
+    )
+
     product_review_svc_metrics = {
         "app_product_review_counter": app_product_review_counter,
         "app_ai_assistant_counter": app_ai_assistant_counter,
+        "app_guardrail_counter": app_guardrail_counter,
     }
 
     return product_review_svc_metrics
