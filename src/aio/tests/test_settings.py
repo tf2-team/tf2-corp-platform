@@ -22,9 +22,12 @@ class SettingsTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             env_file = Path(directory) / ".env"
             runtime_config_path = Path(directory) / "runtime.json"
+            hyperparameters_path = Path(directory) / "hyperparameters.json"
             runtime_config = json.loads(Path("config/runtime.json").read_text(encoding="utf-8"))
-            runtime_config["detector_thresholds"]["ops01_checkout_slo"] = 0.5
             runtime_config_path.write_text(json.dumps(runtime_config), encoding="utf-8")
+            hyperparameters = json.loads(Path("config/hyperparameters.json").read_text(encoding="utf-8"))
+            hyperparameters["detectors"]["thresholds"]["ops01_checkout_slo"] = 0.5
+            hyperparameters_path.write_text(json.dumps(hyperparameters), encoding="utf-8")
             env_file.write_text(
                 Path(".env").read_text(encoding="utf-8")
                 + "\n"
@@ -34,6 +37,7 @@ class SettingsTest(unittest.TestCase):
                         "AIOPS_POLICY_MODE=observe",
                         f"AIOPS_STATE_STORE_PATH={Path(directory) / 'aiops.sqlite3'}",
                         f"AIOPS_RUNTIME_CONFIG_PATH={runtime_config_path}",
+                        f"AIOPS_HYPERPARAMETERS_PATH={hyperparameters_path}",
                     ]
                 ),
                 encoding="utf-8",
@@ -63,6 +67,8 @@ class SettingsTest(unittest.TestCase):
         self.assertEqual(config["rca"]["top_k"], 5)
         self.assertEqual(config["remediation"]["similarity_weights"]["service"], 0.4)
         self.assertEqual(config["no_data"]["missing_confidence"], 1.0)
+        self.assertEqual(config["detectors"]["thresholds"]["ops01_checkout_slo"], 0.01)
+        self.assertEqual(config["prometheus"]["metric_series"]["lookback_seconds"], 3600)
 
     def test_build_detectors_gets_no_data_confidence_from_hyperparameters(self):
         runtime_config = load_runtime_config(Path("config/runtime.json"))
@@ -70,6 +76,7 @@ class SettingsTest(unittest.TestCase):
             runtime_config,
             None,
             no_data_hyperparameters={"missing_confidence": 0.42, "unknown_confidence": 0.24},
+            detector_hyperparameters=load_hyperparameters(Path("config/hyperparameters.json"))["detectors"],
         )
         no_data = next(item for item in detectors if item.detector_id == "ops02_monitoring_loss")
 

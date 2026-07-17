@@ -53,9 +53,16 @@ class PrometheusCollector(Collector):
         assert self.config is not None
         return [self._collect_one(signal) for signal in self.config.signals if signal.source == "prometheus"]
 
-    def collect_metric_series(self) -> list[MetricSeries]:
+    def collect_metric_series(self, *, lookback_seconds: int | None = None, step_seconds: int | None = None) -> list[MetricSeries]:
         if self.plan is None:
-            return []
+            assert self.config is not None
+            if lookback_seconds is None or step_seconds is None:
+                raise ValueError("runtime metric series collection requires lookback_seconds and step_seconds")
+            return [
+                self._collect_runtime_series(signal, lookback_seconds, step_seconds)
+                for signal in self.config.signals
+                if signal.source == "prometheus" and signal.feature_role == "anomaly_input"
+            ]
         return [self._collect_plan_series(query) for query in self.plan.metric_series_queries]
 
     def _collect_plan_observation(self, query: PrometheusObservationQuery) -> Observation:
@@ -94,6 +101,28 @@ class PrometheusCollector(Collector):
             signal_id=query.signal_id,
             points=[MetricPoint(timestamp=int(float(timestamp)), value=float(value)) for timestamp, value in values],
         )
+
+    def _collect_runtime_series(self, signal, lookback_seconds: int, step_seconds: int) -> MetricSeries:
+        assert self.config is not None
+        end = self.captured_at
+        start = end - timedelta(seconds=lookback_seconds)
+        result = self.client.query_range(
+            self.config.prometheus_queries[signal.query_id],
+            start=str(start.timestamp()),
+            end=str(end.timestamp()),
+            step=str(step_seconds),
+        ).get("data", {}).get("result", [])
+        values = result[0].get("values", []) if result else []
+        return MetricSeries(
+            service=signal.service,
+            metric=self._metric_name(signal.service, signal.id),
+            signal_id=signal.id,
+            points=[MetricPoint(timestamp=int(float(timestamp)), value=float(value)) for timestamp, value in values],
+        )
+
+    def _metric_name(self, service: str, signal_id: str) -> str:
+        prefix = f"{service.replace('-', '_')}_"
+        return signal_id.removeprefix(prefix)
 
     def _collect_one(self, signal) -> Observation:
         labels = {

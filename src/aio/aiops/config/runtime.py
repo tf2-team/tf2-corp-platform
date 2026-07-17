@@ -16,8 +16,12 @@ def build_detectors(
     config: RuntimeConfig,
     settings: Settings | None,
     no_data_hyperparameters: dict[str, float],
+    detector_hyperparameters: dict | None = None,
 ) -> list[Detector]:
     detectors: list[Detector] = []
+    detector_hyperparameters = detector_hyperparameters or {}
+    thresholds = detector_hyperparameters.get("thresholds") or config.detector_thresholds
+    confidences = detector_hyperparameters.get("confidences") or config.detector_confidences
     for item in config.detectors:
         if not item.enabled:
             continue
@@ -26,7 +30,7 @@ def build_detectors(
                 ThresholdDetector(
                     detector_id=item.id,
                     signal_id=item.signal_id or "",
-                    threshold=config.detector_thresholds[item.id],
+                    threshold=thresholds[item.id],
                     flow=item.flow,
                     service=item.service,
                     severity=item.severity,
@@ -38,12 +42,12 @@ def build_detectors(
                 DependencyDetector(
                     detector_id=item.id,
                     signal_id=item.signal_id or "",
-                    threshold=config.detector_thresholds[item.id],
+                    threshold=thresholds[item.id],
                     flow=item.flow,
                     service=item.service,
                     dependency=item.dependency or "unknown",
                     severity=item.severity,
-                    confidence=config.detector_confidences[item.id],
+                    confidence=confidences[item.id],
                     runbook_id=item.runbook_id,
                 )
             )

@@ -15,7 +15,7 @@ class RuntimeConfigTest(unittest.TestCase):
     def test_loads_runtime_json_and_builds_detectors(self):
         config = load_runtime_config(Path("config/runtime.json"))
         hyperparameters = load_hyperparameters(Settings().hyperparameters_path)
-        detectors = build_detectors(config, Settings(), hyperparameters["no_data"])
+        detectors = build_detectors(config, Settings(), hyperparameters["no_data"], hyperparameters["detectors"])
 
         self.assertEqual(config.topology.services[0].name, "checkout")
         self.assertEqual(config.signals[0].feature_role, "official_slo")

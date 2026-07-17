@@ -45,10 +45,17 @@ def run_static_pipeline(request: PipelineRunRequest, settings: Settings | None =
 def run_live_pipeline(settings: Settings | None = None) -> PipelineResult:
     settings = settings or Settings()
     runtime_config = load_runtime_config(settings.runtime_config_path)
+    hyperparameters = load_hyperparameters(settings.hyperparameters_path)
+    collector = PrometheusCollector(PrometheusClient(settings), runtime_config)
+    metric_series_config = hyperparameters["prometheus"]["metric_series"]
     return run_pipeline_with_collector(
-        PrometheusCollector(PrometheusClient(settings), runtime_config),
+        collector,
         settings,
         runtime_config,
+        metric_series=collector.collect_metric_series(
+            lookback_seconds=int(metric_series_config["lookback_seconds"]),
+            step_seconds=int(metric_series_config["step_seconds"]),
+        ),
     )
 
 
@@ -57,7 +64,7 @@ def run_pipeline_with_collector(collector, settings: Settings, runtime_config, m
     store = SQLiteIncidentStore(path=settings.state_store_path, environment=settings.environment)
     pipeline = AiopsPipeline(
         collector=collector,
-        detectors=build_detectors(runtime_config, settings, hyperparameters["no_data"]),
+        detectors=build_detectors(runtime_config, settings, hyperparameters["no_data"], hyperparameters["detectors"]),
         store=store,
         policy=PolicyEngine(
             mode=settings.policy_mode,

@@ -24,6 +24,41 @@
     "missing_confidence": 1.0,
     "unknown_confidence": 0.7
   },
+  "detectors": {
+    "thresholds": {
+      "ops01_checkout_slo": 0.01,
+      "ops03_checkout_payment_dependency": 0.05,
+      "auto_checkout_error_rate": 0.05,
+      "auto_payment_error_rate": 0.05,
+      "auto_frontend_proxy_error_rate": 0.05,
+      "auto_frontend_error_rate": 0.05,
+      "auto_product_catalog_error_rate": 0.05,
+      "auto_product_reviews_error_rate": 0.05,
+      "auto_recommendation_error_rate": 0.05,
+      "auto_cart_error_rate": 0.005,
+      "auto_ad_error_rate": 0.05,
+      "auto_currency_error_rate": 0.05,
+      "auto_shipping_error_rate": 0.05,
+      "auto_email_error_rate": 0.05,
+      "auto_quote_error_rate": 0.05,
+      "auto_flagd_error_rate": 0.05,
+      "auto_fraud_detection_error_rate": 0.05,
+      "auto_load_generator_error_rate": 0.05,
+      "auto_jaeger_error_rate": 0.05,
+      "ops04_checkout_latency_p95": 500.0,
+      "ops05_cart_error_rate": 0.02,
+      "ops06_product_catalog_cpu": 50.0
+    },
+    "confidences": {
+      "ops03_checkout_payment_dependency": 0.8
+    }
+  },
+  "prometheus": {
+    "metric_series": {
+      "lookback_seconds": 3600,
+      "step_seconds": 60
+    }
+  },
   "correlation": {
     "window_seconds": 300,
     "confidence_threshold": 0.5,

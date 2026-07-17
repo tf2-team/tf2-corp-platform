@@ -75,7 +75,7 @@ class RuntimeConfig(AiopsModel):
     prometheus_queries: dict[str, str] = Field(default_factory=dict)
     signals: list[SignalDefinition]
     detectors: list[DetectorDefinition]
-    detector_thresholds: dict[str, float]
+    detector_thresholds: dict[str, float] = Field(default_factory=dict)
     detector_confidences: dict[str, float] = Field(default_factory=dict)
     policy: RuntimePolicyConfig
     rca: RcaConfig = Field(default_factory=RcaConfig)
@@ -96,10 +96,6 @@ class RuntimeConfig(AiopsModel):
             missing = set(referenced) - signal_ids
             if missing:
                 raise ValueError(f"unknown detector signals for {detector.id}: {sorted(missing)}")
-            if detector.type in {"threshold", "dependency"} and detector.id not in self.detector_thresholds:
-                raise ValueError(f"missing detector threshold for {detector.id}")
-            if detector.type == "dependency" and detector.id not in self.detector_confidences:
-                raise ValueError(f"missing detector confidence for {detector.id}")
         reject_unresolved_placeholders(self.model_dump())
         return self
 
