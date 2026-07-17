@@ -3,10 +3,8 @@
 package kafka
 
 import (
-	"crypto/tls"
 	"fmt"
 	"log/slog"
-	"os"
 
 	"github.com/IBM/sarama"
 )
@@ -47,11 +45,8 @@ func CreateKafkaProducer(brokers []string, logger *slog.Logger) (sarama.AsyncPro
 	// So we can know the partition and offset of messages.
 	saramaConfig.Producer.Return.Successes = true
 
-	if os.Getenv("KAFKA_TLS") == "true" {
-		saramaConfig.Net.TLS.Enable = true
-		saramaConfig.Net.TLS.Config = &tls.Config{
-			InsecureSkipVerify: true,
-		}
+	if err := ConfigureSaramaSecurity(saramaConfig); err != nil {
+		return nil, err
 	}
 
 	producer, err := sarama.NewAsyncProducer(brokers, saramaConfig)

@@ -306,6 +306,19 @@ internal class Consumer : IDisposable
             conf.SecurityProtocol = SecurityProtocol.Ssl;
         }
 
+        var saslUsername = Environment.GetEnvironmentVariable("KAFKA_SASL_USERNAME");
+        var saslPassword = Environment.GetEnvironmentVariable("KAFKA_SASL_PASSWORD");
+        if (!string.IsNullOrEmpty(saslUsername) || !string.IsNullOrEmpty(saslPassword))
+        {
+            if (string.IsNullOrEmpty(saslUsername) || string.IsNullOrEmpty(saslPassword))
+                throw new InvalidOperationException("Both Kafka SCRAM credentials are required.");
+
+            conf.SecurityProtocol = SecurityProtocol.SaslSsl;
+            conf.SaslMechanism = SaslMechanism.ScramSha512;
+            conf.SaslUsername = saslUsername;
+            conf.SaslPassword = saslPassword;
+        }
+
         return new ConsumerBuilder<string, byte[]>(conf)
             .Build();
     }

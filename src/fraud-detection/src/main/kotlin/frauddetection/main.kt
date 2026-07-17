@@ -55,6 +55,17 @@ fun main() {
         props["security.protocol"] = "SSL"
     }
 
+    val saslUsername = System.getenv("KAFKA_SASL_USERNAME")
+    val saslPassword = System.getenv("KAFKA_SASL_PASSWORD")
+    if (!saslUsername.isNullOrBlank() || !saslPassword.isNullOrBlank()) {
+        require(!saslUsername.isNullOrBlank() && !saslPassword.isNullOrBlank()) {
+            "Both Kafka SCRAM credentials are required"
+        }
+        props["security.protocol"] = "SASL_SSL"
+        props["sasl.mechanism"] = "SCRAM-SHA-512"
+        props["sasl.jaas.config"] = "org.apache.kafka.common.security.scram.ScramLoginModule required username=\"$saslUsername\" password=\"$saslPassword\";"
+    }
+
     val consumer = KafkaConsumer<String, ByteArray>(props).apply {
         subscribe(listOf(topic))
     }
@@ -66,6 +77,11 @@ fun main() {
 
     if (System.getenv("KAFKA_TLS") == "true") {
         producerProps["security.protocol"] = "SSL"
+    }
+    if (!saslUsername.isNullOrBlank() && !saslPassword.isNullOrBlank()) {
+        producerProps["security.protocol"] = "SASL_SSL"
+        producerProps["sasl.mechanism"] = "SCRAM-SHA-512"
+        producerProps["sasl.jaas.config"] = "org.apache.kafka.common.security.scram.ScramLoginModule required username=\"$saslUsername\" password=\"$saslPassword\";"
     }
 
     val producer = KafkaProducer<String, ByteArray>(producerProps)
