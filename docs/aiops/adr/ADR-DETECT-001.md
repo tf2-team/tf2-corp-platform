@@ -3,7 +3,7 @@
 > Status: Proposed, pending reviewer sign-off  
 > Owner: Nguyen Quy Hung  
 > Reviewers: Pending team review  
-> Last updated: 2026-07-15  
+> Last updated: 2026-07-17
 > Related docs: `docs/aiops/mandate/MANDATE-07a-detection-analysis.md`
 
 ## Summary
@@ -37,9 +37,11 @@ The current AIOps prototype already contains the relevant runtime pieces:
 | ----------------------- | ---------------------------------- | ------------------------------------------------------------------------------------- |
 | Runtime config          | `src/aio/config/runtime.json`      | Defines topology, signals, detector ids, thresholds, policy, and RCA enablement.      |
 | Baseline helpers        | `src/aio/aiops/anomaly/stats.py`   | Provides median, IQR, standard deviation, and robust score helpers.                   |
-| Detector implementation | `src/aio/aiops/anomaly/v001.py`    | Contains EWMA/STL-style residual detection and service-level metric scoring.          |
+| Detector implementation | `src/aio/aiops/anomaly/v001.py`    | Contains EWMA/STL, service-level Isolation Forest, and BARO/BOCPD detector paths.      |
 | RCA engine              | `src/aio/aiops/rca/engine.py`      | Combines topology/graph evidence and metric scores into ranked root-cause candidates. |
-| Evaluation runner       | `src/aio/evaluate/e2e_pipeline.py` | Runs anomaly/RCA evaluation on dataset folders and emits incident/RCA metrics.        |
+| Evaluation runner       | `src/aio/evaluate/e2e_pipeline.py` | Runs hybrid anomaly/RCA evaluation and emits incident/RCA metrics.                     |
+| Ground-truth labels     | `src/aio/evaluate/incident_labels.csv` | Supplies reviewable expected incident, service, metric, and optional action labels. |
+| Evaluation evidence     | `docs/aiops/eval/e2e_pipeline_labeled_report.json` | Stores the full-dataset labeled evaluation result.                       |
 
 
 ## Decision
@@ -48,13 +50,21 @@ Use the Python AIOps detector path already present in `src/aio` as the Mandate 7
 
 The selected architecture is:
 
-```text
-Telemetry or evaluation dataset
-  -> MetricSeries normalization
-  -> Baseline calculation
-  -> Anomaly scoring
-  -> RCA ranking
-  -> Incident/RCA evidence output
+```mermaid
+flowchart LR
+    A["Telemetry or evaluation dataset"] --> B["MetricSeries[]"]
+    B --> C["V001AnomalyEngine"]
+    C --> C1["EWMA/STL"]
+    C --> C2["Service Isolation Forest"]
+    C --> C3["BARO/BOCPD"]
+    C1 --> D["AnomalyFinding[]"]
+    C2 --> D
+    C3 --> D
+    D --> E["Graph Traversal RCA"]
+    B --> F["BARO Robust Score RCA"]
+    E --> G["Merge service scores"]
+    F --> G
+    G --> H["Top-K root services and metrics"]
 ```
 
 The detector will run outside the user request path. For Mandate 7a, the output is evidence for review and evaluation, not an automatic production action.
@@ -109,8 +119,8 @@ The selected detector path uses lightweight statistical scoring:
 | --------------------- | ---------------------------------------------------------- | -------------------------------- |
 | Robust score baseline | Compare latest metric value against historical median/IQR. | `src/aio/aiops/anomaly/stats.py` |
 | EWMA residual scoring | Detect drift/spike in one time series after smoothing.     | `src/aio/aiops/anomaly/v001.py`  |
-| Service-level scoring | Combine multiple metric deviations inside one service.     | `src/aio/aiops/anomaly/v001.py`  |
-| BARO/BOCPD changepoint scoring | Optional multivariate changepoint signal for cross-service corroboration. | `src/aio/aiops/anomaly/v001.py` |
+| Service Isolation Forest | Detect multivariate deviation across metrics within one service. | `src/aio/aiops/anomaly/v001.py` |
+| BARO/BOCPD changepoint scoring | Detect a multivariate changepoint across services for corroboration. | `src/aio/aiops/anomaly/v001.py` |
 
 
 The BARO/BOCPD path is treated as a corroborating multivariate signal in Mandate 7a, not as a production auto-remediation trigger. The core approval remains the lightweight in-repository detector architecture and its documented baseline/scoring behavior.
@@ -132,16 +142,26 @@ These thresholds are prototype/evaluation thresholds. They should be reviewed af
 
 After anomaly scoring, RCA ranking combines:
 
+- `AnomalyFinding[]` emitted by EWMA/STL, Service Isolation Forest, and BARO/BOCPD.
 - Graph/topology evidence from runtime config.
-- Metric deviation evidence from scored metric series.
+- BARO robust metric-deviation evidence from the original metric series.
 - Service dependency information, for example checkout depending on payment.
+
+The evaluation runner now follows the runtime RCA contract:
+
+```python
+findings = anomaly_engine.evaluate(series)
+result = rca.rank(findings, series, top_k)
+```
+
+Incident prediction remains a separate last-point robust-score threshold in the offline evaluator. The hybrid findings feed RCA ranking; they do not yet replace `predicted_incident`.
 
 The expected output shape follows `src/aio/evaluate/e2e_pipeline.py`:
 
 
 | Output                    | Meaning                                                         |
 | ------------------------- | --------------------------------------------------------------- |
-| `predicted_incident`      | Whether detector believes an incident exists.                   |
+| `predicted_incident`      | Offline last-point robust-score threshold decision.              |
 | `predicted_root_services` | Ranked top-k suspected root-cause services.                     |
 | `predicted_root_causes`   | Service plus metric evidence.                                   |
 | `rca_top_k_hit`           | Whether expected root cause appears in top-k during evaluation. |
@@ -219,17 +239,23 @@ Before this ADR is marked accepted, attach or reference:
 
 1. Metrics analysis doc with at least three user-impact metrics.
 2. Code/PR/commit link showing baseline and detector logic.
-3. Evaluation command and output from the current detector/RCA path.
+3. Ground-truth evaluation command and labeled output from the current detector/RCA path.
 4. Reviewer comment approving this architecture.
 
-Suggested local evaluation command, when dependencies are available:
+Suggested local evaluation command from `src/aio`, using the existing virtual environment:
 
-```bash
-cd src/aio
-python -B evaluate/e2e_pipeline.py --limit 10 --out evaluate/report.json
+```powershell
+.venv\Scripts\python.exe -B evaluate\e2e_pipeline.py `
+  --dataset evaluate\dataset `
+  --labels evaluate\incident_labels.csv `
+  --top-k 5 `
+  --incident-threshold 1.0 `
+  --out ..\..\docs\aiops\eval\e2e_pipeline_labeled_report.json
 ```
 
-If the team uses the `capstone` conda environment, run the same command through `conda run -n capstone`.
+Ground-truth sheet: `src/aio/evaluate/incident_labels.csv`.
+
+Evaluation evidence: `docs/aiops/eval/e2e_pipeline_labeled_report.json`.
 
 ## Rollout Plan
 
