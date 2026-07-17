@@ -22,7 +22,17 @@ const ProductReviewGateway = () => ({
     },
     askProductAIAssistant(productId: string, question: string) {
         return new Promise<string>((resolve, reject) =>
-            client.askProductAiAssistant({ productId, question }, (error, response) => (error ? reject(error) : resolve(response.response)))
+            client.askProductAiAssistant({ productId, question }, (error, response) => {
+                if (error) return reject(error);
+                // response.response contains a JSON string with status, answer, reason, claims
+                try {
+                    const parsed = JSON.parse(response.response);
+                    resolve(parsed as any);
+                } catch {
+                    // Backward compatibility: plain text response from older backends
+                    resolve({ status: 'GROUNDED', answer: response.response, reason: '', claims: [] } as any);
+                }
+            })
         );
     },
 });
