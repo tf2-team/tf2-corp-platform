@@ -11,6 +11,7 @@ import (
 	"testing"
 
 	pb "github.com/open-telemetry/techx-corp/src/checkout/genproto/oteldemo"
+	"google.golang.org/grpc"
 )
 
 func TestIsRetryablePaymentChargeError(t *testing.T) {
@@ -228,6 +229,66 @@ func TestSendToPostProcessor_NilResultDoesNotPanic(t *testing.T) {
 
 	cs := &checkout{KafkaProducerClient: nil}
 	cs.sendToPostProcessor(context.Background(), nil)
+}
+
+func TestEmptyUserCart_RetriesAndSucceeds(t *testing.T) {
+	prev := logger
+	logger = slog.New(slog.NewTextHandler(io.Discard, nil))
+	t.Cleanup(func() { logger = prev })
+
+	cartClient := &stubCartServiceClient{
+		emptyCartErrors: []error{
+			errors.New("rpc error: code = Unknown desc = cartFailure"),
+			errors.New("rpc error: code = Unknown desc = cartFailure"),
+			nil,
+		},
+	}
+	cs := &checkout{cartSvcClient: cartClient}
+
+	if err := cs.emptyUserCart(context.Background(), "user-123"); err != nil {
+		t.Fatalf("emptyUserCart returned error: %v", err)
+	}
+	if cartClient.emptyCartCalls != 3 {
+		t.Fatalf("EmptyCart calls = %d, want 3", cartClient.emptyCartCalls)
+	}
+}
+
+func TestEmptyUserCart_DefersAfterRetries(t *testing.T) {
+	prev := logger
+	logger = slog.New(slog.NewTextHandler(io.Discard, nil))
+	t.Cleanup(func() { logger = prev })
+
+	cartClient := &stubCartServiceClient{
+		emptyCartErrors: []error{
+			errors.New("rpc error: code = Unknown desc = cartFailure"),
+			errors.New("rpc error: code = Unknown desc = cartFailure"),
+			errors.New("rpc error: code = Unknown desc = cartFailure"),
+		},
+	}
+	cs := &checkout{cartSvcClient: cartClient}
+
+	err := cs.emptyUserCart(context.Background(), "user-123")
+	if err == nil {
+		t.Fatal("expected emptyUserCart to return the deferred cleanup error")
+	}
+	if cartClient.emptyCartCalls != emptyCartMaxAttempts {
+		t.Fatalf("EmptyCart calls = %d, want %d", cartClient.emptyCartCalls, emptyCartMaxAttempts)
+	}
+}
+
+type stubCartServiceClient struct {
+	pb.CartServiceClient
+	emptyCartErrors []error
+	emptyCartCalls  int
+}
+
+func (s *stubCartServiceClient) EmptyCart(ctx context.Context, in *pb.EmptyCartRequest, opts ...grpc.CallOption) (*pb.Empty, error) {
+	s.emptyCartCalls++
+	idx := s.emptyCartCalls - 1
+	if idx < len(s.emptyCartErrors) && s.emptyCartErrors[idx] != nil {
+		return nil, s.emptyCartErrors[idx]
+	}
+	return &pb.Empty{}, nil
 }
 
 // Change trail: @hungxqt - 2026-07-14 - Regression tests for nil Kafka producer / nil order in sendToPostProcessor.
