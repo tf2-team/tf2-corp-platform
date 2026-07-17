@@ -6,9 +6,7 @@
     "ewma_alpha": 0.3,
     "ewma_z_threshold": 3.0,
     "seasonal_period": 1,
-    "isolation_score_threshold": 4.0,
-    "bocpd_score_threshold": 4.0,
-    "fallback_split_ratio": 0.8
+    "isolation_score_threshold": 4.0
   },
   "remediation": {
     "history_top_k": 3,

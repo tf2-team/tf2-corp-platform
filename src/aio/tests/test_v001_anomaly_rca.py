@@ -1,4 +1,6 @@
+import io
 import unittest
+from contextlib import redirect_stdout
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
@@ -33,23 +35,23 @@ class V001AnomalyRcaTest(unittest.TestCase):
             "ewma_z_threshold": 0.5,
             "seasonal_period": 1,
             "isolation_score_threshold": 4.0,
-            "bocpd_score_threshold": 1.0,
-            "fallback_split_ratio": 0.8,
         }
 
         findings = V001AnomalyEngine(
             ewma_alpha=rca_hyperparameters["ewma_alpha"],
             ewma_z_threshold=rca_hyperparameters["ewma_z_threshold"],
             isolation_score_threshold=rca_hyperparameters["isolation_score_threshold"],
-            bocpd_score_threshold=rca_hyperparameters["bocpd_score_threshold"],
             min_points=rca_hyperparameters["min_points"],
             seasonal_period=rca_hyperparameters["seasonal_period"],
         ).evaluate(series)
-        result = V001RcaEngine(runtime_config, fallback_split_ratio=rca_hyperparameters["fallback_split_ratio"]).rank(findings, series, top_k=3)
+        result = V001RcaEngine(runtime_config).rank(findings, series, top_k=3)
 
-        self.assertTrue({finding.algorithm for finding in findings} >= {"ewma_stl", "isolation_forest", "baro_bocpd"})
+        self.assertTrue({finding.algorithm for finding in findings} >= {"ewma_stl", "isolation_forest"})
+        self.assertNotIn("baro_bocpd", {finding.algorithm for finding in findings})
+        self.assertEqual(result.anomalies, findings)
         self.assertEqual(result.root_causes[0].service, "payment")
         self.assertIn("latency", result.root_causes[0].root_cause_metrics)
+        self.assertTrue(any("robust_score=" in item for item in result.root_causes[0].evidence))
 
     def test_pipeline_api_accepts_metric_series_and_returns_rca_result(self):
         series = [
@@ -59,9 +61,15 @@ class V001AnomalyRcaTest(unittest.TestCase):
         ]
         with TemporaryDirectory() as tmp:
             settings = Settings().model_copy(update={"state_store_path": Path(tmp) / "aiops.sqlite3"})
-            result = run_static_pipeline(PipelineRunRequest(metric_series=series), settings=settings)
+            output = io.StringIO()
+            with redirect_stdout(output):
+                result = run_static_pipeline(PipelineRunRequest(metric_series=series), settings=settings)
 
         self.assertEqual(result.rca_result.root_causes[0].service, "payment")
+        logs = output.getvalue()
+        self.assertIn("AIOPS_ANOMALY", logs)
+        self.assertIn("AIOPS_ROOT_CAUSE", logs)
+        self.assertNotIn("AIOPS_INCIDENT", logs)
 
 
 if __name__ == "__main__":

@@ -297,6 +297,20 @@ class E2EPipelineRegressionTest(unittest.TestCase):
         self.assertEqual(result.incidents[0].flow, "monitoring")
         self.assertEqual(result.policy_decisions, [])
 
+    def test_missing_payment_signal_opens_monitoring_incident(self):
+        with temp_workspace() as tmp:
+            root = Path(tmp)
+            write_actions(root / "actions.json")
+            write_history(root / "history.json")
+            result = run_pipeline(root, [observation("payment_error_rate_5m", None, SignalQuality.MISSING)])
+
+        self.assertEqual(len(result.incidents), 1)
+        self.assertEqual(result.candidates[0].detector_id, "ops02_monitoring_loss")
+        self.assertEqual(result.candidates[0].signal_id, "payment_error_rate_5m")
+        self.assertEqual(result.candidates[0].reason, "signal_missing")
+        self.assertEqual(result.incidents[0].flow, "monitoring")
+        self.assertEqual(result.policy_decisions, [])
+
     def test_pipeline_returns_rca_result_for_metric_series(self):
         with temp_workspace() as tmp:
             root = Path(tmp)

@@ -1,14 +1,17 @@
 from __future__ import annotations
 
+import asyncio
+import logging
+from contextlib import asynccontextmanager
 from datetime import UTC, datetime
 from urllib.parse import urlparse
 
 from fastapi import FastAPI, Header, HTTPException
 
-from aiops.collectors import StaticCollector
+from aiops.collectors import PrometheusCollector, StaticCollector
 from aiops.config import Settings, build_detectors, load_hyperparameters, load_runtime_config
 from aiops.enrichment import Enricher
-from aiops.integrations import JaegerClient, KubernetesClient, OpenSearchClient
+from aiops.integrations import JaegerClient, KubernetesClient, OpenSearchClient, PrometheusClient
 from aiops.normalization import load_normalization_schema
 from aiops.pipeline import AiopsPipeline
 from aiops.qualification import load_qualification_schema
@@ -25,13 +28,35 @@ from aiops.schemas import GrafanaNormalizedEvent, GrafanaWebhookEvent, HealthRes
 from aiops.storage import SQLiteIncidentStore
 
 
+logger = logging.getLogger(__name__)
+
+
 def run_static_pipeline(request: PipelineRunRequest, settings: Settings | None = None) -> PipelineResult:
     settings = settings or Settings()
     runtime_config = load_runtime_config(settings.runtime_config_path)
+    return run_pipeline_with_collector(
+        StaticCollector(request.observations),
+        settings,
+        runtime_config,
+        metric_series=request.metric_series,
+    )
+
+
+def run_live_pipeline(settings: Settings | None = None) -> PipelineResult:
+    settings = settings or Settings()
+    runtime_config = load_runtime_config(settings.runtime_config_path)
+    return run_pipeline_with_collector(
+        PrometheusCollector(PrometheusClient(settings), runtime_config),
+        settings,
+        runtime_config,
+    )
+
+
+def run_pipeline_with_collector(collector, settings: Settings, runtime_config, metric_series=None) -> PipelineResult:
     hyperparameters = load_hyperparameters(settings.hyperparameters_path)
     store = SQLiteIncidentStore(path=settings.state_store_path, environment=settings.environment)
     pipeline = AiopsPipeline(
-        collector=StaticCollector(request.observations),
+        collector=collector,
         detectors=build_detectors(runtime_config, settings, hyperparameters["no_data"]),
         store=store,
         policy=PolicyEngine(
@@ -66,9 +91,42 @@ def run_static_pipeline(request: PipelineRunRequest, settings: Settings | None =
         ),
     )
     try:
-        return pipeline.run_once(metric_series=request.metric_series)
+        result = pipeline.run_once(metric_series=metric_series or [])
+        print_rca_result(result)
+        return result
     finally:
         store.close()
+
+
+def print_rca_result(result: PipelineResult) -> None:
+    for anomaly in result.rca_result.anomalies:
+        print(
+            "AIOPS_ANOMALY "
+            f"algorithm={anomaly.algorithm} "
+            f"service={anomaly.service} "
+            f"metric={anomaly.metric} "
+            f"signal={anomaly.signal_id} "
+            f"score={anomaly.score:.3f} "
+            f"timestamp={anomaly.timestamp}",
+            flush=True,
+        )
+    for root in result.rca_result.root_causes:
+        print(
+            "AIOPS_ROOT_CAUSE "
+            f"service={root.service} "
+            f"score={root.score:.3f} "
+            f"metrics={','.join(root.root_cause_metrics)}",
+            flush=True,
+        )
+
+
+async def auto_run_loop(settings: Settings) -> None:
+    while True:
+        try:
+            await asyncio.to_thread(run_live_pipeline, settings)
+        except Exception:
+            logger.exception("AIOps live pipeline run failed")
+        await asyncio.sleep(settings.auto_run_interval_seconds)
 
 
 def build_enricher(settings: Settings, runtime_config) -> Enricher:
@@ -123,7 +181,20 @@ def handle_grafana_webhook(
 
 def create_app(settings: Settings | None = None) -> FastAPI:
     settings = settings or Settings()
-    app = FastAPI(title=settings.app_title)
+
+    @asynccontextmanager
+    async def lifespan(app: FastAPI):
+        app.state.aiops_auto_run_task = None
+        if settings.auto_run_enabled:
+            app.state.aiops_auto_run_task = asyncio.create_task(auto_run_loop(settings))
+        try:
+            yield
+        finally:
+            task = app.state.aiops_auto_run_task
+            if task is not None:
+                task.cancel()
+
+    app = FastAPI(title=settings.app_title, lifespan=lifespan)
 
     @app.get(settings.api_health_live_path, response_model=HealthResponse)
     def live() -> HealthResponse:
@@ -132,6 +203,10 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     @app.post(settings.api_pipeline_run_path, response_model=PipelineResult)
     def run_pipeline(request: PipelineRunRequest) -> PipelineResult:
         return run_static_pipeline(request, settings)
+
+    @app.post("/api/v1/pipeline/run/live", response_model=PipelineResult)
+    def run_live() -> PipelineResult:
+        return run_live_pipeline(settings)
 
     @app.get("/api/v1/incidents", response_model=list[Incident])
     def list_incidents() -> list[Incident]:

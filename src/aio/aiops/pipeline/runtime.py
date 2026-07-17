@@ -119,13 +119,10 @@ class AiopsPipeline:
             ewma_alpha=float(config["ewma_alpha"]),
             ewma_z_threshold=float(config["ewma_z_threshold"]),
             isolation_score_threshold=float(config["isolation_score_threshold"]),
-            bocpd_score_threshold=float(config["bocpd_score_threshold"]),
             min_points=int(config["min_points"]),
             seasonal_period=int(config["seasonal_period"]),
         ).evaluate(metric_series)
-        return V001RcaEngine(self.runtime_config, fallback_split_ratio=float(config["fallback_split_ratio"])).rank(
-            findings, metric_series, top_k=int(config["top_k"])
-        )
+        return V001RcaEngine(self.runtime_config).rank(findings, metric_series, top_k=int(config["top_k"]))
 
     def _run_remediation_strategy(self, incidents: list[Incident], rca_result: RcaResult) -> list[RemediationDecision]:
         if self.remediation is None:

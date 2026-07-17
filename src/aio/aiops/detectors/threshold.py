@@ -29,7 +29,7 @@ class ThresholdDetector(Detector):
         if (
             feature is None
             or feature.status != "ready"
-            or feature.feature_role != "official_slo"
+            or feature.feature_role not in {"official_slo", "anomaly_input"}
             or feature.value is None
             or feature.value <= self.threshold
         ):

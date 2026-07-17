@@ -12,8 +12,8 @@ aiops/
 ├── normalization/    # normalizer.py
 ├── features/         # builder.py
 ├── detectors/        # base.py, engine.py, threshold.py, no_data.py, dependency.py
-├── anomaly/          # v0.0.1 EWMA/STL, service isolation score, BARO BOCPD
-├── rca/              # v0.0.1 graph traversal and BARO robust scorer ranking
+├── anomaly/          # v0.0.1 EWMA/STL and service isolation score
+├── rca/              # v0.0.1 graph traversal and repo-native robust score ranking
 ├── correlation/      # correlator.py
 ├── enrichment/       # enricher.py
 ├── incidents/        # manager.py
@@ -101,8 +101,7 @@ This baseline includes FastAPI routes, SQLite incident persistence, config-drive
 
 - univariate EWMA plus seasonal residual scoring
 - per-service multivariate isolation-style scoring
-- BARO `bocpd`
-- graph traversal RCA plus BARO `robust_scorer`
+- graph traversal RCA plus repo-native robust score ranking
 
 It still does not perform Kubernetes mutation directly.
 

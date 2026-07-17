@@ -93,7 +93,7 @@ class DetectorEngineTest(unittest.TestCase):
         self.assertEqual(candidates[0].window, "24h")
         self.assertEqual(candidates[0].likely_dependency, "unknown")
 
-    def test_threshold_detector_ignores_non_official_slo_feature(self):
+    def test_threshold_detector_ignores_diagnostic_feature(self):
         candidates = DetectorEngine(
             [
                 ThresholdDetector(
@@ -121,6 +121,28 @@ class DetectorEngineTest(unittest.TestCase):
         )
 
         self.assertEqual(candidates, [])
+
+    def test_threshold_detector_fires_from_anomaly_input_feature(self):
+        features = FeatureBuilder(load_runtime_config(Path("config/runtime.json"))).build(
+            [Observation(signal_id="payment_error_rate_5m", value=0.2, unit="ratio", window="5m", quality=SignalQuality.VERIFIED)]
+        )
+        candidates = DetectorEngine(
+            [
+                ThresholdDetector(
+                    detector_id="auto_payment_error_rate",
+                    signal_id="payment_error_rate_5m",
+                    threshold=0.05,
+                    flow="checkout",
+                    service="payment",
+                    severity="SEV2",
+                    runbook_id="RB-SERVICE-ERROR-RATE",
+                )
+            ]
+        ).evaluate(features)
+
+        self.assertEqual(len(candidates), 1)
+        self.assertEqual(candidates[0].detector_id, "auto_payment_error_rate")
+        self.assertEqual(candidates[0].service, "payment")
 
     def test_dependency_detector_ignores_official_slo_feature(self):
         detector = DependencyDetector(

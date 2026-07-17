@@ -54,6 +54,8 @@ class Settings(BaseSettings):
     qualification_schema_path: Path = Path("config/signal_qualification_schema.json")
     normalization_schema_path: Path = Path("config/signal_normalization_schema.json")
     qualification_max_sample_age_seconds: int = 300
+    auto_run_enabled: bool = False
+    auto_run_interval_seconds: int = 60
 
     action_type_restart: str
     action_target_kind_deployment: str

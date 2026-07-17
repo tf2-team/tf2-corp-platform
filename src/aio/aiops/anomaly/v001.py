@@ -97,63 +97,20 @@ class ServiceIsolationForestDetector:
         return [-score for score in model.score_samples([rows[-1]])]
 
 
-class BaroBocpdDetector:
-    def __init__(self, score_threshold: float, min_points: int):
-        self.score_threshold = score_threshold
-        self.min_points = min_points
-
-    def evaluate(self, series: list[MetricSeries]) -> list[AnomalyFinding]:
-        aligned = [metric for metric in series if len(metric.points) >= self.min_points]
-        if not aligned:
-            return []
-
-        from baro.anomaly_detection import bocpd
-
-        frame = self._to_frame(aligned)
-        anomalies = bocpd(frame)
-        if not anomalies:
-            return []
-
-        anomaly_index = int(anomalies[0])
-        timestamp = aligned[0].points[min(anomaly_index, len(aligned[0].points) - 1)].timestamp
-        return [
-            AnomalyFinding(
-                algorithm="baro_bocpd",
-                service="global",
-                metric="multivariate_norm",
-                signal_id="global_multivariate_norm",
-                score=1.0,
-                timestamp=timestamp,
-            )
-        ]
-
-    def _to_frame(self, series: list[MetricSeries]):
-        import pandas as pd
-
-        length = min(len(metric.points) for metric in series)
-        data: dict[str, list[float | int]] = {"time": [point.timestamp for point in series[0].points[-length:]]}
-        for metric in series:
-            data[f"{metric.service}_{metric.metric}"] = [point.value for point in metric.points[-length:]]
-        return pd.DataFrame(data)
-
-
 class V001AnomalyEngine:
     def __init__(
         self,
         ewma_alpha: float,
         ewma_z_threshold: float,
         isolation_score_threshold: float,
-        bocpd_score_threshold: float,
         min_points: int,
         seasonal_period: int,
     ):
         self.ewma_stl = EwmaStlDetector(ewma_alpha, ewma_z_threshold, min_points, seasonal_period)
         self.isolation_forest = ServiceIsolationForestDetector(isolation_score_threshold, min_points)
-        self.baro_bocpd = BaroBocpdDetector(bocpd_score_threshold, min_points)
 
     def evaluate(self, series: list[MetricSeries]) -> list[AnomalyFinding]:
         return [
             *self.ewma_stl.evaluate(series),
             *self.isolation_forest.evaluate(series),
-            *self.baro_bocpd.evaluate(series),
         ]
