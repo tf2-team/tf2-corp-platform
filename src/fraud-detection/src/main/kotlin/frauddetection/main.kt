@@ -50,6 +50,11 @@ fun main() {
         exitProcess(1)
     }
     props[BOOTSTRAP_SERVERS_CONFIG] = bootstrapServers
+
+    if (System.getenv("KAFKA_TLS") == "true") {
+        props["security.protocol"] = "SSL"
+    }
+
     val consumer = KafkaConsumer<String, ByteArray>(props).apply {
         subscribe(listOf(topic))
     }
@@ -58,6 +63,11 @@ fun main() {
     producerProps[ProducerConfig.BOOTSTRAP_SERVERS_CONFIG] = bootstrapServers
     producerProps[ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG] = StringSerializer::class.java.name
     producerProps[ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG] = ByteArraySerializer::class.java.name
+
+    if (System.getenv("KAFKA_TLS") == "true") {
+        producerProps["security.protocol"] = "SSL"
+    }
+
     val producer = KafkaProducer<String, ByteArray>(producerProps)
 
     val redisAddr = System.getenv("REDIS_ADDR") ?: "valkey-cart:6379"

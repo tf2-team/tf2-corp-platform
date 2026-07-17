@@ -21,21 +21,28 @@ docker compose build product-reviews
 
 ## LLM Configuration
 
-By default, this service uses a mock LLM service, as configured in
-the `.env` file:
+Local Docker Compose runs use GroqCloud through `.env`:
 
 ``` yaml
-LLM_BASE_URL=http://${LLM_HOST}:${LLM_PORT}/v1
-LLM_MODEL=techx-llm
-OPENAI_API_KEY=dummy
+LLM_BASE_URL=https://api.groq.com/openai/v1
+LLM_MODEL=openai/gpt-oss-20b
+OPENAI_API_KEY=replace-with-groq-api-key
 ```
 
-If desired, the configuration can be changed to point to a real, OpenAI API
-compatible LLM in the file `.env.override`. For example, the following
-configuration can be used to utilize OpenAI's gpt-4o-mini model:
+Replace the API key placeholder locally, then start the stack:
 
-``` yaml
-LLM_BASE_URL=https://api.openai.com/v1
-LLM_MODEL=gpt-4o-mini
-OPENAI_API_KEY=<replace with API key>
+```sh
+docker compose up -d
 ```
+
+Never commit a real API key. The `OPENAI_API_KEY` variable name remains
+unchanged because the service uses the OpenAI-compatible interface for every
+provider.
+
+The selected model must support local tool calling because the service reads
+`message.tool_calls` and uses `tool_choice="auto"`.
+
+For a future Amazon Bedrock migration, `.env` includes a commented
+configuration using the OpenAI-compatible `bedrock-mantle` endpoint. Confirm
+that the chosen Bedrock model supports Chat Completions and client-side tool
+use before enabling it.

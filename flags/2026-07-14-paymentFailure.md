@@ -58,7 +58,7 @@ Containment (không tắt flag): checkout **retry + deferred-charge** đã merge
 
 ### 4.1 Webstore SLOs & Resources — `14:00–15:00`
 
-![Webstore SLOs dashboard](./evidence/webstore-dashboard.png)
+![Webstore SLOs dashboard](./evidence/evidence1/webstore-dashboard.png)
 
 | Panel | Giá trị | Ý nghĩa |
 | --- | --- | --- |
@@ -69,7 +69,7 @@ Containment (không tắt flag): checkout **retry + deferred-charge** đã merge
 
 ### 4.2 Demo Dashboard — service `payment` — `14:00–15:00`
 
-![Demo Dashboard payment RED metrics](./evidence/demo-payment.png)
+![Demo Dashboard payment RED metrics](./evidence/evidence1/demo-payment.png)
 
 | Tín hiệu | Quan sát |
 | --- | --- |
@@ -79,7 +79,7 @@ Containment (không tắt flag): checkout **retry + deferred-charge** đã merge
 
 ### 4.3 Demo Dashboard — service `checkout` — `14:00–15:00`
 
-![Demo Dashboard checkout RED metrics](./evidence/demo-checkout.png)
+![Demo Dashboard checkout RED metrics](./evidence/evidence1/demo-checkout.png)
 
 | Tín hiệu | Quan sát |
 | --- | --- |
@@ -89,13 +89,13 @@ Containment (không tắt flag): checkout **retry + deferred-charge** đã merge
 
 ### 4.4 Telegram auto-alert
 
-![Telegram flagd ON/OFF alerts](./evidence/alert-telegram.png)
+![Telegram flagd ON/OFF alerts](./evidence/evidence1/alert-telegram.png)
 
 Message watcher có full chuỗi escalate `paymentFailure` (10% → 50% → 100% → off → 100% → off) → chứng minh **detect tự động** dư chấn flag BTC.
 
 ### 4.5 Explore Prometheus — checkout error rate — `14:00–15:00`
 
-![Prometheus checkout error rate](./evidence/prometheus-errorrate.png)
+![Prometheus checkout error rate](./evidence/evidence1/prometheus-errorrate.png)
 
 Query:
 
@@ -120,7 +120,7 @@ Khớp escalate `paymentFailure` → **100%** và user window 14:15–14:30.
 
 ### 4.6 Explore Prometheus — checkout success rate — `14:00–15:00`
 
-![Prometheus checkout success rate](./evidence/prometheus-sucessrate.png)
+![Prometheus checkout success rate](./evidence/evidence1/prometheus-sucessrate.png)
 
 Query:
 
@@ -142,7 +142,7 @@ Củng cố panel Webstore Checkout **98.6%** (aggregate cả giờ) — peak fa
 
 ### 4.7 Explore OpenSearch — log payment fail — `14:00–15:00`
 
-![OpenSearch payment failure logs](./evidence/paymentfail-opensearch.png)
+![OpenSearch payment failure logs](./evidence/evidence1/paymentfail-opensearch.png)
 
 | Field | Evidence |
 | --- | --- |
@@ -178,7 +178,7 @@ Code: `src/checkout/main.go` (`chargeCard`, `degradedPaymentTransactionID`, clas
 
 ### 5.1 GitHub commits (evidence fix)
 
-![GitHub commits fix paymentFailure](./evidence/commit-fix.png)
+![GitHub commits fix paymentFailure](./evidence/evidence1/commit-fix.png)
 
 | Commit | Message | CI |
 | --- | --- | --- |
@@ -193,14 +193,14 @@ Branch: `fix/checkout-payment-retry-paymentFailure` · author `tmcmanhcuong` · 
 
 | # | Artifact | Path / vị trí |
 | --- | --- | --- |
-| 1 | Screenshot Webstore SLO | [`evidence/webstore-dashboard.png`](./evidence/webstore-dashboard.png) |
-| 2 | Demo · payment spanmetrics | [`evidence/demo-payment.png`](./evidence/demo-payment.png) |
-| 3 | Demo · checkout spanmetrics | [`evidence/demo-checkout.png`](./evidence/demo-checkout.png) |
-| 4 | Telegram flagd alerts | [`evidence/alert-telegram.png`](./evidence/alert-telegram.png) |
-| 5 | Explore Prometheus — error rate | [`evidence/prometheus-errorrate.png`](./evidence/prometheus-errorrate.png) |
-| 6 | Explore Prometheus — success rate | [`evidence/prometheus-sucessrate.png`](./evidence/prometheus-sucessrate.png) |
-| 7 | Explore OpenSearch — payment fail logs | [`evidence/paymentfail-opensearch.png`](./evidence/paymentfail-opensearch.png) |
-| 8 | **GitHub commits fix** | [`evidence/commit-fix.png`](./evidence/commit-fix.png) |
+| 1 | Screenshot Webstore SLO | [`evidence/evidence1/webstore-dashboard.png`](./evidence/evidence1/webstore-dashboard.png) |
+| 2 | Demo · payment spanmetrics | [`evidence/evidence1/demo-payment.png`](./evidence/evidence1/demo-payment.png) |
+| 3 | Demo · checkout spanmetrics | [`evidence/evidence1/demo-checkout.png`](./evidence/evidence1/demo-checkout.png) |
+| 4 | Telegram flagd alerts | [`evidence/evidence1/alert-telegram.png`](./evidence/evidence1/alert-telegram.png) |
+| 5 | Explore Prometheus — error rate | [`evidence/evidence1/prometheus-errorrate.png`](./evidence/evidence1/prometheus-errorrate.png) |
+| 6 | Explore Prometheus — success rate | [`evidence/evidence1/prometheus-sucessrate.png`](./evidence/evidence1/prometheus-sucessrate.png) |
+| 7 | Explore OpenSearch — payment fail logs | [`evidence/evidence1/paymentfail-opensearch.png`](./evidence/evidence1/paymentfail-opensearch.png) |
+| 8 | **GitHub commits fix** | [`evidence/evidence1/commit-fix.png`](./evidence/evidence1/commit-fix.png) |
 | 9 | Platform fix PRs | GitHub `tf2-corp-platform` PR #16 / #17 |
 | 10 | Jaeger historical | **Không còn** trong cửa sổ incident (đã ghi) |
 
