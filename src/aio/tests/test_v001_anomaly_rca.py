@@ -32,6 +32,45 @@ class V001AnomalyRcaTest(unittest.TestCase):
 
         self.assertEqual(len(residuals), 8)
 
+    def test_v001_detects_hidden_error_signal_that_ramps_up_slowly(self):
+        findings = V001AnomalyEngine(
+            ewma_alpha=0.3,
+            ewma_z_threshold=3.0,
+            isolation_score_threshold=4.0,
+            min_points=8,
+            seasonal_period=1,
+        ).evaluate(
+            [
+                metric(
+                    "payment",
+                    "error_ratio_5m",
+                    [0.001, 0.001, 0.001, 0.001, 0.001, 0.002, 0.003, 0.005, 0.008, 0.013, 0.021, 0.034],
+                )
+            ]
+        )
+
+        self.assertEqual([(finding.algorithm, finding.service, finding.metric) for finding in findings], [("ewma_stl", "payment", "error_ratio_5m")])
+        self.assertGreater(findings[0].score, 3.0)
+
+    def test_v001_does_not_flag_low_noise_as_hidden_error_signal(self):
+        findings = V001AnomalyEngine(
+            ewma_alpha=0.3,
+            ewma_z_threshold=3.0,
+            isolation_score_threshold=4.0,
+            min_points=8,
+            seasonal_period=1,
+        ).evaluate(
+            [
+                metric(
+                    "payment",
+                    "error_ratio_5m",
+                    [0.001, 0.0012, 0.0009, 0.0011, 0.001, 0.0012, 0.0008, 0.0011, 0.001, 0.0012, 0.0009, 0.001],
+                )
+            ]
+        )
+
+        self.assertEqual(findings, [])
+
     def test_v001_pipeline_ranks_top_root_cause_service_and_metrics(self):
         series = [
             metric("checkout", "latency", [1.0, 1.1, 1.0, 1.1, 1.0, 1.1, 1.0, 2.0, 2.1, 2.0]),

@@ -1,17 +1,20 @@
 from __future__ import annotations
 
 import sqlite3
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 from aiops.incidents import incident_fingerprint
-from aiops.schemas import CandidateEvent, Incident
+from aiops.notifications import NotificationBuilder
+from aiops.schemas import CandidateEvent, Incident, NotificationMessage
 
 
 class SQLiteIncidentStore:
-    def __init__(self, path: Path, environment: str):
+    def __init__(self, path: Path, environment: str, runbooks_dir: Path | None = None):
         self.path = path
         self.environment = environment
+        self.runbooks_dir = runbooks_dir or _default_runbooks_dir()
+        self._last_enqueued_incident_ids: set[str] = set()
         self.path.parent.mkdir(parents=True, exist_ok=True)
         self._connection = sqlite3.connect(self.path)
         self._connection.execute("PRAGMA journal_mode=WAL")
@@ -37,9 +40,25 @@ class SQLiteIncidentStore:
             )
             """
         )
+        self._connection.execute(
+            """
+            CREATE TABLE IF NOT EXISTS notification_outbox (
+                incident_id TEXT PRIMARY KEY,
+                fingerprint TEXT NOT NULL,
+                notification_json TEXT NOT NULL,
+                status TEXT NOT NULL DEFAULT 'pending',
+                attempt_count INTEGER NOT NULL DEFAULT 0,
+                next_attempt_at TEXT NOT NULL,
+                last_error TEXT,
+                created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+            )
+            """
+        )
         self._ensure_event_columns()
 
     def upsert(self, candidate: CandidateEvent) -> Incident:
+        self._validate_runbook(candidate.runbook_id)
         fingerprint = incident_fingerprint(self.environment, candidate)
         seen_at = _seen_at(candidate)
         row = self._connection.execute(
@@ -47,7 +66,8 @@ class SQLiteIncidentStore:
             (fingerprint,),
         ).fetchone()
 
-        if row is None:
+        is_new = row is None
+        if is_new:
             digest = fingerprint.removeprefix("sha256:")
             incident = Incident(
                 incident_id=f"inc-{digest[:12]}",
@@ -67,6 +87,7 @@ class SQLiteIncidentStore:
             incident.last_seen = seen_at
             incident.severity = min(incident.severity, candidate.severity)
 
+        notification = NotificationBuilder().build([incident])[0] if is_new else None
         with self._connection:
             self._connection.execute(
                 """
@@ -83,14 +104,79 @@ class SQLiteIncidentStore:
                 """,
                 (fingerprint, candidate.model_dump_json(), incident.state, incident.last_seen, incident.recovered_at, incident.cooldown_until),
             )
+            if notification is not None:
+                self._connection.execute(
+                    """
+                    INSERT OR IGNORE INTO notification_outbox (
+                        incident_id, fingerprint, notification_json, status, next_attempt_at
+                    )
+                    VALUES (?, ?, ?, 'pending', ?)
+                    """,
+                    (incident.incident_id, fingerprint, notification.model_dump_json(), seen_at),
+                )
+                self._last_enqueued_incident_ids.add(incident.incident_id)
         return incident
 
     def list_incidents(self) -> list[Incident]:
         rows = self._connection.execute("SELECT incident_json FROM incidents ORDER BY fingerprint").fetchall()
         return [Incident.model_validate_json(row[0]) for row in rows]
 
+    def pending_notifications_for(self, incidents: list[Incident]) -> list[NotificationMessage]:
+        incident_ids = [incident.incident_id for incident in incidents if incident.incident_id in self._last_enqueued_incident_ids]
+        if not incident_ids:
+            return []
+        placeholders = ",".join("?" for _ in incident_ids)
+        rows = self._connection.execute(
+            f"SELECT notification_json FROM notification_outbox WHERE status = 'pending' AND incident_id IN ({placeholders}) ORDER BY created_at",
+            incident_ids,
+        ).fetchall()
+        return [NotificationMessage.model_validate_json(row[0]) for row in rows]
+
+    def due_notifications(self, limit: int = 100) -> list[NotificationMessage]:
+        rows = self._connection.execute(
+            """
+            SELECT notification_json
+            FROM notification_outbox
+            WHERE status IN ('pending', 'retry') AND next_attempt_at <= ?
+            ORDER BY next_attempt_at
+            LIMIT ?
+            """,
+            (_now(), limit),
+        ).fetchall()
+        return [NotificationMessage.model_validate_json(row[0]) for row in rows]
+
+    def mark_notification_sent(self, incident_id: str) -> None:
+        with self._connection:
+            self._connection.execute(
+                "UPDATE notification_outbox SET status = 'sent', updated_at = ? WHERE incident_id = ?",
+                (_now(), incident_id),
+            )
+
+    def mark_notification_failed(self, incident_id: str, error: str) -> None:
+        row = self._connection.execute(
+            "SELECT attempt_count FROM notification_outbox WHERE incident_id = ?",
+            (incident_id,),
+        ).fetchone()
+        if row is None:
+            return
+        attempt_count = int(row[0]) + 1
+        retry_at = datetime.now(UTC) + timedelta(seconds=min(60 * (2 ** (attempt_count - 1)), 3600))
+        with self._connection:
+            self._connection.execute(
+                """
+                UPDATE notification_outbox
+                SET status = 'retry', attempt_count = ?, next_attempt_at = ?, last_error = ?, updated_at = ?
+                WHERE incident_id = ?
+                """,
+                (attempt_count, retry_at.isoformat(), error[:512], _now(), incident_id),
+            )
+
     def close(self) -> None:
         self._connection.close()
+
+    def _validate_runbook(self, runbook_id: str) -> None:
+        if not (self.runbooks_dir / f"{runbook_id}.md").is_file():
+            raise ValueError(f"missing canonical runbook: {runbook_id}")
 
     def _ensure_event_columns(self) -> None:
         columns = {row[1] for row in self._connection.execute("PRAGMA table_info(incident_events)").fetchall()}
@@ -107,4 +193,12 @@ class SQLiteIncidentStore:
 def _seen_at(candidate: CandidateEvent) -> str:
     if candidate.timestamp:
         return datetime.fromtimestamp(candidate.timestamp, UTC).isoformat()
+    return _now()
+
+
+def _now() -> str:
     return datetime.now(UTC).isoformat()
+
+
+def _default_runbooks_dir() -> Path:
+    return Path(__file__).resolve().parents[2] / "runbooks"

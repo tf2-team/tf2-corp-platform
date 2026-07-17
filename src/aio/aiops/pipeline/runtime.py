@@ -10,9 +10,8 @@ from aiops.enrichment import Enricher
 from aiops.features import FeatureBuilder
 from aiops.anomaly import V001AnomalyEngine
 from aiops.rca import V001RcaEngine
-from aiops.schemas import MetricSeries, PipelineResult, PolicyDecision, RcaResult, RuntimeConfig
+from aiops.schemas import MetricSeries, NotificationMessage, PipelineResult, PolicyDecision, RcaResult, RuntimeConfig
 from aiops.normalization import Normalizer
-from aiops.notifications import NotificationBuilder
 from aiops.qualification import QualificationGate
 from aiops.remediation import (
     ActionCatalog,
@@ -41,6 +40,9 @@ RemediationComponents = tuple[
 
 class IncidentStore(Protocol):
     def upsert(self, candidate: CandidateEvent) -> Incident:
+        ...
+
+    def pending_notifications_for(self, incidents: list[Incident]) -> list[NotificationMessage]:
         ...
 
 
@@ -74,7 +76,6 @@ class AiopsPipeline:
         self.correlator = Correlator(runtime_config, **correlation_hyperparameters) if correlation_hyperparameters else Correlator(runtime_config)
         self.enricher = enricher or Enricher(runtime_config=runtime_config)
         self.store = store
-        self.notifier = NotificationBuilder()
         self.policy = policy
         self.verification = VerificationEngine()
         self.runtime_config = runtime_config
@@ -105,7 +106,7 @@ class AiopsPipeline:
         logger.info("AIOPS_BLOCK enrich candidates=%s evidence=%s", len(enriched), [len(candidate.evidence) for candidate in enriched])
         incidents = [self.store.upsert(candidate) for candidate in enriched]
         logger.info("AIOPS_BLOCK incident incidents=%s ids=%s", len(incidents), [incident.incident_id for incident in incidents])
-        notifications = self.notifier.build(incidents)
+        notifications = self.store.pending_notifications_for(incidents)
         logger.info("AIOPS_BLOCK notify notifications=%s", len(notifications))
 
         decisions: list[PolicyDecision] = []

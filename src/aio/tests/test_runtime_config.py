@@ -43,6 +43,12 @@ class RuntimeConfigTest(unittest.TestCase):
 
         self.assertEqual(no_data_signal_ids, prometheus_signal_ids)
 
+    def test_enabled_detector_runbooks_have_canonical_files(self):
+        config = load_runtime_config(Path("config/runtime.json"))
+        runbook_ids = {detector.runbook_id for detector in config.detectors if detector.enabled}
+
+        self.assertEqual({path.stem for path in Path("runbooks").glob("*.md")}, runbook_ids)
+
     def test_rejects_detector_with_unknown_signal(self):
         config = json.loads(Path("config/runtime.json").read_text(encoding="utf-8"))
         config["detectors"][0]["signal_id"] = "missing_signal"
