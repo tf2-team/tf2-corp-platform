@@ -5,6 +5,22 @@ from typing import Any
 import httpx
 
 
+def safe_error_text(exc: Exception) -> str:
+    """Return an operator-facing error without request URLs or credentials.
+
+    ``httpx`` status errors include the complete request URL in their default
+    string representation. That is unsafe for notification webhooks because a
+    webhook token is commonly embedded in the URL path.
+    """
+
+    name = type(exc).__name__
+    if isinstance(exc, httpx.HTTPStatusError):
+        return f"{name}: HTTP {exc.response.status_code}"
+    if isinstance(exc, httpx.RequestError):
+        return f"{name}: request failed"
+    return f"{name}: operation failed"
+
+
 class HttpApiClient:
     def __init__(
         self,

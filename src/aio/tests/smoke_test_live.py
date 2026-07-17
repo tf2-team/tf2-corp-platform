@@ -52,6 +52,7 @@ from aiops.integrations import (  # noqa: E402
     OpenSearchClient,
     PrometheusClient,
 )
+from aiops.integrations.http import safe_error_text  # noqa: E402
 from aiops.schemas import NotificationMessage  # noqa: E402
 
 
@@ -120,7 +121,7 @@ def smoke(name: str):
                 print(f"  PASS  {name}  ({elapsed:.0f}ms)")
             except Exception as exc:
                 elapsed = (time.perf_counter() - start) * 1000
-                error = f"{type(exc).__name__}: {exc}"
+                error = safe_error_text(exc)
                 results.append(TestResult(name=name, passed=False, duration_ms=elapsed, error=error))
                 print(f"  FAIL  {name}  ({elapsed:.0f}ms)")
                 print(textwrap.indent(error, "        "))

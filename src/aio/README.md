@@ -73,6 +73,16 @@ python -B tests/smoke_test_live.py TestPrometheus
 Missing credentials, authentication errors, non-2xx responses, and unreachable
 endpoints fail the suite; they are not reported as successful skips.
 
+Run the deterministic integration-client contract smoke tests (including cost and
+the non-mutating mocked live-executor contract) with:
+
+```powershell
+python -B -m unittest tests.test_integrations tests.test_api_and_schemas -v
+```
+
+These tests load `.env` followed by `.env.live`. Test output and assertions never
+print configured token, password, shared-secret, or webhook URL values.
+
 ## Configuration
 
 Runtime secrets, URLs, paths, and all numeric hyperparameters are loaded from `.env` through `aiops.config.Settings`.

@@ -1,6 +1,6 @@
 # Live endpoint inventory (AWS EKS via port-forward)
 
-Inventory này được kiểm tra với namespace `techx-corp-prod` ngày 2026-07-16. Các URL
+Inventory này được kiểm tra với namespace `techx-corp-prod` ngày 2026-07-17. Các URL
 `localhost` là tunnel tới workload thật trên EKS, không phải mock service.
 
 ## Endpoint bắt buộc
@@ -24,10 +24,10 @@ Không ghi giá trị secret vào repository hoặc terminal log. Chỉ tên ngu
 |---|---|---|
 | `AIOPS_OPENSEARCH_USERNAME` | Đã cấu hình và smoke test PASS | Nguồn: Kubernetes Secret `techx-corp-opensearch`, key `username`; không ghi giá trị vào tài liệu |
 | `AIOPS_OPENSEARCH_PASSWORD` | Đã cấu hình và smoke test PASS | Nguồn: Kubernetes Secret `techx-corp-opensearch`, key `password`; không ghi giá trị vào tài liệu |
-| `AIOPS_NOTIFICATION_WEBHOOK_URL` | Bắt buộc, hiện còn placeholder | Có thể dùng Secret `techx-corp-grafana-discord`/`webhook-url`; adapter tự nhận diện URL Discord khi `AIOPS_NOTIFICATION_PROVIDER=auto` |
+| `AIOPS_NOTIFICATION_WEBHOOK_URL` | Đã cấu hình và smoke test PASS | Adapter tự nhận diện URL Discord khi `AIOPS_NOTIFICATION_PROVIDER=auto`; không ghi URL vào tài liệu |
 | `AIOPS_NOTIFICATION_PROVIDER` | Tùy chọn, mặc định `auto` | Hỗ trợ `auto`, `generic`, `discord`; dùng `discord` cho proxy/custom hostname nhận Discord payload |
 | `AIOPS_NOTIFICATION_TOKEN` | Tùy chọn | Chỉ cần nếu receiver yêu cầu Bearer Auth |
-| `AIOPS_GRAFANA_WEBHOOK_SECRET` | Bắt buộc, hiện còn thiếu | Tự sinh shared secret và cấu hình cùng giá trị ở AIOps và Grafana contact point |
+| `AIOPS_GRAFANA_WEBHOOK_SECRET` | Đã cấu hình | Cần dùng cùng giá trị ở AIOps và Grafana contact point; không ghi giá trị vào tài liệu |
 | Grafana admin username/password | Chỉ cần khi provision contact point bằng Grafana API | Kubernetes Secret `techx-corp-grafana-admin` |
 
 Prometheus token, Jaeger token và Kubernetes bearer token được để trống có chủ đích
@@ -37,14 +37,14 @@ khi chạy qua `kubectl port-forward`/`kubectl proxy`.
 
 | Integration | Kết quả | Chi tiết |
 |---|---:|---|
-| Prometheus | **PASS 3/3** | Instant query, range query và active targets |
-| Jaeger | **PASS 2/2** | Service discovery và trace query |
-| OpenSearch | **PASS 3/3** | Cluster info, danh sách index và tìm kiếm `otel-logs-*` |
-| Kubernetes API | **PASS 2/2** | Danh sách pod và Deployment `checkout` ready `2/2` |
-| Grafana | **PASS 1/2** | Health PASS; inbound webhook FAIL vì thiếu shared secret |
-| Notification | **FAIL 0/1** | Thiếu webhook URL bắt buộc |
+| Prometheus | **PASS 3/3** | Instant query 23 series, range query 28 series, 23 active targets |
+| Jaeger | **PASS 2/2** | 21 services; truy vấn `frontend` trả về 1 trace |
+| OpenSearch | **PASS 3/3** | Cluster `demo-cluster` phiên bản `3.2.0`, 7 indices; `otel-logs-*` có 10.000 hits |
+| Kubernetes API | **PASS 2/2** | 49/49 pod đang Running; Deployment `checkout` ready `2/2` |
+| Grafana | **PASS 1/2** | Health PASS; inbound webhook bị connection refused vì chưa có AIOps listener tại `localhost:8000` |
+| Notification | **PASS 1/1** | Receiver trả HTTP `204` |
 
-Tổng kết: **11/13 PASS, 2/13 FAIL**.
+Tổng kết: **12/13 PASS, 1/13 FAIL**.
 
 ## Blocker của Grafana webhook end-to-end
 
@@ -53,7 +53,7 @@ thể gọi `localhost:8000` trên máy developer. Test hiện tại xử lý ha
 
 1. Grafana thật trả health OK qua tunnel.
 2. AIOps local nhận payload Grafana-compatible qua shared-secret auth. Lần chạy gần
-   nhất chưa gửi request này vì `AIOPS_GRAFANA_WEBHOOK_SECRET` còn thiếu.
+   nhất đã có secret nhưng chưa có process lắng nghe tại `localhost:8000`.
 
 Để nghiệm thu end-to-end, cần deploy AIOps thành ClusterIP Service (ví dụ
 `http://aiops:8000/api/v1/events/grafana`) và provision Grafana contact point trỏ tới

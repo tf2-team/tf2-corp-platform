@@ -8,9 +8,13 @@ from aiops.config import Settings
 from aiops.schemas import Observation, PipelineRunRequest, SignalQuality
 
 
+ROOT = Path(__file__).resolve().parent.parent
+TEST_ENV_FILES = (ROOT / ".env", ROOT / ".env.live")
+
+
 class SettingsTest(unittest.TestCase):
-    def test_live_example_overrides_tracked_defaults(self):
-        settings = Settings(_env_file=(".env", ".env.live.example"))
+    def test_live_env_overrides_tracked_defaults(self):
+        settings = Settings(_env_file=TEST_ENV_FILES)
 
         self.assertEqual(settings.prometheus_base_url, "http://localhost:9090")
         self.assertEqual(settings.jaeger_base_url, "http://localhost:16686/jaeger/ui")
@@ -26,9 +30,7 @@ class SettingsTest(unittest.TestCase):
             runtime_config["detector_thresholds"]["ops01_checkout_slo"] = 0.5
             runtime_config_path.write_text(json.dumps(runtime_config), encoding="utf-8")
             env_file.write_text(
-                Path(".env").read_text(encoding="utf-8")
-                + "\n"
-                + "\n".join(
+                "\n".join(
                     [
                         "AIOPS_CHECKOUT_SLO_RUNBOOK_ID=RB-TEST",
                         "AIOPS_POLICY_MODE=observe",
@@ -38,7 +40,7 @@ class SettingsTest(unittest.TestCase):
                 ),
                 encoding="utf-8",
             )
-            settings = Settings(_env_file=env_file)
+            settings = Settings(_env_file=(*TEST_ENV_FILES, env_file))
 
             result = run_static_pipeline(
                 PipelineRunRequest(
@@ -58,7 +60,11 @@ class SettingsTest(unittest.TestCase):
         self.assertEqual(result.incidents, [])
 
     def test_fastapi_routes_come_from_settings(self):
-        settings = Settings(api_health_live_path="/livez", api_pipeline_run_path="/run-now")
+        settings = Settings(
+            _env_file=TEST_ENV_FILES,
+            api_health_live_path="/livez",
+            api_pipeline_run_path="/run-now",
+        )
         paths = {route.path for route in create_app(settings).routes}
 
         self.assertIn("/livez", paths)
