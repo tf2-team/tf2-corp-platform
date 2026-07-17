@@ -1,0 +1,76 @@
+import io
+import unittest
+from contextlib import redirect_stdout
+from pathlib import Path
+from tempfile import TemporaryDirectory
+
+from aiops.anomaly import V001AnomalyEngine
+from aiops.api.app import run_static_pipeline
+from aiops.config import Settings, load_runtime_config
+from aiops.rca import V001RcaEngine
+from aiops.schemas import MetricPoint, MetricSeries, PipelineRunRequest, RuntimeConfig
+
+
+def metric(service: str, name: str, values: list[float]) -> MetricSeries:
+    return MetricSeries(
+        service=service,
+        metric=name,
+        signal_id=f"{service}_{name}",
+        points=[MetricPoint(timestamp=index, value=value) for index, value in enumerate(values)],
+    )
+
+
+class V001AnomalyRcaTest(unittest.TestCase):
+    def test_v001_pipeline_ranks_top_root_cause_service_and_metrics(self):
+        series = [
+            metric("checkout", "latency", [1.0, 1.1, 1.0, 1.1, 1.0, 1.1, 1.0, 2.0, 2.1, 2.0]),
+            metric("payment", "latency", [1.0, 1.1, 1.0, 1.1, 1.0, 1.1, 1.0, 20.0, 21.0, 22.0]),
+            metric("payment", "error", [0.0, 0.1, 0.0, 0.1, 0.0, 0.1, 0.0, 9.0, 10.0, 11.0]),
+        ]
+        runtime_config = load_runtime_config(Path("config/runtime.json"))
+        rca_hyperparameters = {
+            "top_k": 3,
+            "min_points": 8,
+            "ewma_alpha": 0.3,
+            "ewma_z_threshold": 0.5,
+            "seasonal_period": 1,
+            "isolation_score_threshold": 4.0,
+        }
+
+        findings = V001AnomalyEngine(
+            ewma_alpha=rca_hyperparameters["ewma_alpha"],
+            ewma_z_threshold=rca_hyperparameters["ewma_z_threshold"],
+            isolation_score_threshold=rca_hyperparameters["isolation_score_threshold"],
+            min_points=rca_hyperparameters["min_points"],
+            seasonal_period=rca_hyperparameters["seasonal_period"],
+        ).evaluate(series)
+        result = V001RcaEngine(runtime_config).rank(findings, series, top_k=3)
+
+        self.assertTrue({finding.algorithm for finding in findings} >= {"ewma_stl", "isolation_forest"})
+        self.assertNotIn("baro_bocpd", {finding.algorithm for finding in findings})
+        self.assertEqual(result.anomalies, findings)
+        self.assertEqual(result.root_causes[0].service, "payment")
+        self.assertIn("latency", result.root_causes[0].root_cause_metrics)
+        self.assertTrue(any("robust_score=" in item for item in result.root_causes[0].evidence))
+
+    def test_pipeline_api_accepts_metric_series_and_returns_rca_result(self):
+        series = [
+            metric("checkout", "latency", [1.0, 1.1, 1.0, 1.1, 1.0, 1.1, 1.0, 2.0, 2.1, 2.0]),
+            metric("payment", "latency", [1.0, 1.1, 1.0, 1.1, 1.0, 1.1, 1.0, 20.0, 21.0, 22.0]),
+            metric("payment", "error", [0.0, 0.1, 0.0, 0.1, 0.0, 0.1, 0.0, 9.0, 10.0, 11.0]),
+        ]
+        with TemporaryDirectory() as tmp:
+            settings = Settings().model_copy(update={"state_store_path": Path(tmp) / "aiops.sqlite3"})
+            output = io.StringIO()
+            with redirect_stdout(output):
+                result = run_static_pipeline(PipelineRunRequest(metric_series=series), settings=settings)
+
+        self.assertEqual(result.rca_result.root_causes[0].service, "payment")
+        logs = output.getvalue()
+        self.assertIn("AIOPS_ANOMALY", logs)
+        self.assertIn("AIOPS_ROOT_CAUSE", logs)
+        self.assertNotIn("AIOPS_INCIDENT", logs)
+
+
+if __name__ == "__main__":
+    unittest.main()

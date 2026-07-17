@@ -1,0 +1,116 @@
+from __future__ import annotations
+
+import os
+from pathlib import Path
+from typing import Literal
+
+from pydantic import field_validator
+from pydantic_settings import BaseSettings, SettingsConfigDict
+
+
+def _env_files() -> str | tuple[str, str]:
+    override = os.getenv("AIOPS_ENV_FILE", "").strip()
+    return (".env", override) if override and override != ".env" else ".env"
+
+
+class Settings(BaseSettings):
+    model_config = SettingsConfigDict(
+        env_file=_env_files(),
+        env_prefix="AIOPS_",
+        extra="ignore",
+    )
+
+    app_title: str
+    api_health_live_path: str
+    api_pipeline_run_path: str
+    health_status: str
+
+    environment: str
+    policy_mode: str
+    evidence_dir: Path
+    state_store_path: Path
+    runtime_config_path: Path
+    hyperparameters_path: Path = Path("config/hyperparameters.json")
+    actions_catalog_path: Path
+    incidents_history_path: Path
+    remediation_audit_path: Path
+
+    checkout_slo_detector_id: str
+    checkout_bad_ratio_signal_id: str
+    checkout_flow: str
+    checkout_service: str
+    checkout_severity: str
+    checkout_slo_runbook_id: str
+
+    dependency_default_severity: str
+
+    no_data_detector_id: str
+    no_data_flow: str
+    no_data_service: str
+    no_data_severity: str
+    no_data_runbook_id: str
+    no_data_required_signal_ids: list[str]
+    qualification_gate_dev: bool = False
+    qualification_schema_path: Path = Path("config/signal_qualification_schema.json")
+    normalization_schema_path: Path = Path("config/signal_normalization_schema.json")
+    qualification_max_sample_age_seconds: int = 300
+    auto_run_enabled: bool = False
+    auto_run_interval_seconds: int = 60
+
+    action_type_restart: str
+    action_target_kind_deployment: str
+    default_action_replicas: int
+    protected_targets: set[str]
+    stateful_kinds: set[str]
+    non_actionable_flows: set[str]
+
+    prometheus_base_url: str
+    prometheus_token: str
+    prometheus_account: str
+
+    grafana_webhook_secret: str
+
+    jaeger_base_url: str
+    jaeger_token: str
+    jaeger_account: str
+
+    opensearch_base_url: str
+    opensearch_username: str
+    opensearch_password: str
+    opensearch_account: str
+    opensearch_verify_tls: bool
+
+    kubernetes_api_url: str
+    kubernetes_bearer_token: str
+    kubernetes_account: str
+
+    notification_webhook_url: str
+    notification_token: str
+    notification_account: str
+    notification_provider: Literal["auto", "generic", "discord"] = "auto"
+
+    aie_status_url: str
+    aie_token: str
+    aie_account: str
+
+    cdo_cost_url: str
+    cdo_cost_token: str
+    cdo_cost_account: str
+
+    live_executor_url: str
+    live_executor_token: str
+    live_executor_account: str
+
+    @field_validator("no_data_required_signal_ids", mode="before")
+    @classmethod
+    def _split_csv_list(cls, value: object) -> object:
+        if isinstance(value, str):
+            return [item.strip() for item in value.split(",") if item.strip()]
+        return value
+
+    @field_validator("protected_targets", "stateful_kinds", "non_actionable_flows", mode="before")
+    @classmethod
+    def _split_csv_set(cls, value: object) -> object:
+        if isinstance(value, str):
+            return {item.strip() for item in value.split(",") if item.strip()}
+        return value

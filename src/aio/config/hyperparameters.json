@@ -1,0 +1,39 @@
+{
+  "rca": {
+    "enabled": true,
+    "top_k": 5,
+    "min_points": 8,
+    "ewma_alpha": 0.3,
+    "ewma_z_threshold": 3.0,
+    "seasonal_period": 1,
+    "isolation_score_threshold": 4.0
+  },
+  "remediation": {
+    "history_top_k": 3,
+    "ood_threshold": 0.2,
+    "cost_page": 20.0,
+    "blast_radius_limit": 3,
+    "confidence_threshold": 0.7,
+    "similarity_weights": {
+      "service": 0.4,
+      "log": 0.3,
+      "metric": 0.3
+    }
+  },
+  "no_data": {
+    "missing_confidence": 1.0,
+    "unknown_confidence": 0.7
+  },
+  "correlation": {
+    "window_seconds": 300,
+    "confidence_threshold": 0.5,
+    "weights": {
+      "verified_primary_signal": 0.25,
+      "temporal_precedence": 0.2,
+      "topology_path": 0.25,
+      "operation_specificity": 0.1,
+      "trace_log_kubernetes_corroboration": 0.2,
+      "stale_or_missing_evidence_penalty": -0.3
+    }
+  }
+}

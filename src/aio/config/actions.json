@@ -1,0 +1,62 @@
+[
+  {
+    "action_id": "restart_payment",
+    "action_type": "restart",
+    "target": "payment",
+    "target_kind": "Deployment",
+    "cost_min": 2.0,
+    "downtime_min": 1.0,
+    "blast_radius_services": ["checkout"],
+    "replicas": 3
+  },
+  {
+    "action_id": "restart_checkout",
+    "action_type": "restart",
+    "target": "checkout",
+    "target_kind": "Deployment",
+    "cost_min": 3.0,
+    "downtime_min": 1.0,
+    "blast_radius_services": ["frontend", "frontend-proxy"],
+    "replicas": 3
+  },
+  {
+    "action_id": "restart_cart",
+    "action_type": "restart",
+    "target": "cart",
+    "target_kind": "Deployment",
+    "cost_min": 2.0,
+    "downtime_min": 1.0,
+    "blast_radius_services": ["checkout", "frontend"],
+    "replicas": 3
+  },
+  {
+    "action_id": "restart_frontend",
+    "action_type": "restart",
+    "target": "frontend",
+    "target_kind": "Deployment",
+    "cost_min": 3.0,
+    "downtime_min": 1.0,
+    "blast_radius_services": ["frontend-proxy"],
+    "replicas": 3
+  },
+  {
+    "action_id": "restart_frontend_proxy",
+    "action_type": "restart",
+    "target": "frontend-proxy",
+    "target_kind": "Deployment",
+    "cost_min": 4.0,
+    "downtime_min": 1.0,
+    "blast_radius_services": ["frontend", "checkout", "product-catalog", "cart"],
+    "replicas": 3
+  },
+  {
+    "action_id": "page_oncall",
+    "action_type": "page",
+    "target": "platform-team",
+    "target_kind": "OnCall",
+    "cost_min": 20.0,
+    "downtime_min": 0.0,
+    "blast_radius_services": [],
+    "replicas": 0
+  }
+]
