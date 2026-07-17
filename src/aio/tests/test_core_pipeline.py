@@ -238,6 +238,42 @@ class DetectorEngineTest(unittest.TestCase):
             {"verified_primary_signal", "temporal_precedence", "topology_path", "operation_specificity", "trace_log_kubernetes_corroboration"},
         )
 
+    def test_correlator_keeps_independent_same_service_candidates(self):
+        slo = CandidateEvent(
+            environment="tf2",
+            timestamp=100,
+            detector_id="ops01_checkout_slo",
+            flow="checkout",
+            service="checkout",
+            severity="SEV1",
+            signal_id="checkout_bad_ratio_24h",
+            value=0.02,
+            unit="ratio",
+            window="24h",
+            threshold=0.01,
+            quality=SignalQuality.VERIFIED,
+            reason="threshold_breached",
+            runbook_id="RB-CHECKOUT-SLO",
+            confidence=1.0,
+            contributing_signals=("checkout_bad_ratio_24h",),
+        )
+        latency = slo.model_copy(
+            update={
+                "detector_id": "ops04_checkout_latency_p95",
+                "signal_id": "checkout_p95_latency_5m",
+                "value": 600.0,
+                "unit": "milliseconds",
+                "window": "5m",
+                "threshold": 500.0,
+                "runbook_id": "RB-CHECKOUT-LATENCY",
+                "contributing_signals": ("checkout_p95_latency_5m",),
+            }
+        )
+
+        candidates = Correlator(load_runtime_config(Path("config/runtime.json"))).correlate([slo, latency])
+
+        self.assertEqual([candidate.signal_id for candidate in candidates], ["checkout_bad_ratio_24h", "checkout_p95_latency_5m"])
+
 
 class IncidentManagerTest(unittest.TestCase):
     def test_deduplicates_by_stable_fingerprint_not_metric_value(self):

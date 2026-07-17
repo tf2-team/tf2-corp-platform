@@ -4,57 +4,52 @@
     {
       "query_id": "checkout.bad_ratio.24h",
       "signal_id": "checkout_bad_ratio_24h",
-      "promql": "(sum(rate(traces_span_metrics_duration_milliseconds_count{service_name=\"checkout\",status_code=\"STATUS_CODE_ERROR\"}[24h])) or vector(0)) / clamp_min(sum(rate(traces_span_metrics_duration_milliseconds_count{service_name=\"checkout\"}[24h])), 0.000000001)",
+      "promql": "(sum(increase(rpc_server_duration_milliseconds_count{service_name=\"checkout\",rpc_method=\"PlaceOrder\",rpc_grpc_status_code!=\"0\"}[24h])) / clamp_min(sum(increase(rpc_server_duration_milliseconds_count{service_name=\"checkout\",rpc_method=\"PlaceOrder\"}[24h])), 1)) or vector(0)",
       "unit": "ratio",
       "window": "24h",
-      "labels": {}
+      "labels": {
+        "service": "checkout",
+        "flow": "checkout"
+      }
     },
     {
       "query_id": "checkout.payment_error_rate.5m",
       "signal_id": "checkout_payment_error_rate_5m",
-      "promql": "(sum(rate(traces_span_metrics_duration_milliseconds_count{service_name=\"checkout\",status_code=\"STATUS_CODE_ERROR\"}[5m])) or vector(0)) / clamp_min(sum(rate(traces_span_metrics_duration_milliseconds_count{service_name=\"checkout\"}[5m])), 0.000000001)",
+      "promql": "(sum by (span_name) (rate(traces_span_metrics_calls_total{service_name=\"checkout\",status_code=\"STATUS_CODE_ERROR\"}[5m]))) or vector(0)",
       "unit": "ratio",
       "window": "5m",
       "labels": {
         "service": "checkout",
+        "flow": "checkout",
         "dependency": "payment"
       }
     }
   ],
   "metric_series_queries": [
     {
-      "query_id": "checkout.error_ratio.5m.range",
-      "signal_id": "checkout_error_ratio_5m",
-      "service": "checkout",
-      "metric": "error_ratio_5m",
-      "promql": "(sum(rate(traces_span_metrics_duration_milliseconds_count{service_name=\"checkout\",status_code=\"STATUS_CODE_ERROR\"}[5m])) or vector(0)) / clamp_min(sum(rate(traces_span_metrics_duration_milliseconds_count{service_name=\"checkout\"}[5m])), 0.000000001)",
-      "lookback_seconds": 3600,
-      "step_seconds": 60
-    },
-    {
-      "query_id": "payment.error_ratio.5m.range",
-      "signal_id": "payment_error_ratio_5m",
-      "service": "payment",
-      "metric": "error_ratio_5m",
-      "promql": "(sum(rate(traces_span_metrics_duration_milliseconds_count{service_name=\"payment\",status_code=\"STATUS_CODE_ERROR\"}[5m])) or vector(0)) / clamp_min(sum(rate(traces_span_metrics_duration_milliseconds_count{service_name=\"payment\"}[5m])), 0.000000001)",
-      "lookback_seconds": 3600,
-      "step_seconds": 60
-    },
-    {
       "query_id": "checkout.p95_latency.5m.range",
       "signal_id": "checkout_p95_latency_5m",
       "service": "checkout",
       "metric": "p95_latency_ms",
-      "promql": "histogram_quantile(0.95, sum(rate(traces_span_metrics_duration_milliseconds_bucket{service_name=\"checkout\"}[5m])) by (le))",
+      "promql": "histogram_quantile(0.95, sum(rate(rpc_server_duration_milliseconds_bucket{service_name=\"checkout\"}[5m])) by (le))",
       "lookback_seconds": 3600,
       "step_seconds": 60
     },
     {
-      "query_id": "payment.p95_latency.5m.range",
-      "signal_id": "payment_p95_latency_5m",
-      "service": "payment",
-      "metric": "p95_latency_ms",
-      "promql": "histogram_quantile(0.95, sum(rate(traces_span_metrics_duration_milliseconds_bucket{service_name=\"payment\"}[5m])) by (le))",
+      "query_id": "cart.error_rate.5m.range",
+      "signal_id": "cart_error_rate_5m",
+      "service": "cart",
+      "metric": "error_ratio_5m",
+      "promql": "((sum(rate(http_server_request_duration_seconds_count{service_name=\"cart\",http_response_status_code=~\"5..\"}[5m])) or vector(0)) / clamp_min(sum(rate(http_server_request_duration_seconds_count{service_name=\"cart\"}[5m])), 0.000000001))",
+      "lookback_seconds": 3600,
+      "step_seconds": 60
+    },
+    {
+      "query_id": "product-catalog.cpu_millicores.range",
+      "signal_id": "product_catalog_cpu_millicores",
+      "service": "product-catalog",
+      "metric": "cpu_millicores",
+      "promql": "sum(k8s_pod_cpu_usage{k8s_deployment_name=\"product-catalog\"})",
       "lookback_seconds": 3600,
       "step_seconds": 60
     }

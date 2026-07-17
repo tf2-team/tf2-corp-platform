@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from typing import Protocol
 
 from aiops.collectors import Collector
@@ -25,6 +26,8 @@ from aiops.remediation import (
 from aiops.schemas import CandidateEvent, Incident, RemediationDecision, VerificationResult
 from aiops.verification import VerificationEngine
 
+
+logger = logging.getLogger(__name__)
 
 RemediationComponents = tuple[
     RemediationFeatureExtractor,
@@ -79,23 +82,52 @@ class AiopsPipeline:
         self.remediation = remediation
 
     def run_once(self, metric_series: list[MetricSeries] | None = None) -> PipelineResult:
+        logger.info("AIOPS_BLOCK start metric_series=%s", len(metric_series or []))
         collected = self.collector.collect()
+        logger.info("AIOPS_BLOCK collect observations=%s", len(collected))
         observations = self.qualification.evaluate(self.normalizer.normalize(collected))
+        logger.info(
+            "AIOPS_BLOCK qualify observations=%s quality_counts=%s",
+            len(observations),
+            _counts(observation.quality.value for observation in observations),
+        )
         features = self.feature_builder.build(observations)
+        logger.info(
+            "AIOPS_BLOCK feature features=%s status_counts=%s",
+            len(features),
+            _counts(feature.status for feature in features),
+        )
         candidates = self.detector_engine.evaluate(features)
+        logger.info("AIOPS_BLOCK detect candidates=%s ids=%s", len(candidates), [candidate.detector_id for candidate in candidates])
         correlated = self.correlator.correlate(candidates)
+        logger.info("AIOPS_BLOCK correlate candidates=%s ids=%s", len(correlated), [candidate.detector_id for candidate in correlated])
         enriched = self.enricher.enrich(correlated, features)
+        logger.info("AIOPS_BLOCK enrich candidates=%s evidence=%s", len(enriched), [len(candidate.evidence) for candidate in enriched])
         incidents = [self.store.upsert(candidate) for candidate in enriched]
+        logger.info("AIOPS_BLOCK incident incidents=%s ids=%s", len(incidents), [incident.incident_id for incident in incidents])
         notifications = self.notifier.build(incidents)
+        logger.info("AIOPS_BLOCK notify notifications=%s", len(notifications))
 
         decisions: list[PolicyDecision] = []
         for incident in incidents:
             proposal = self.policy.proposal_for(incident)
             if proposal is not None:
                 decisions.append(self.policy.evaluate(proposal))
+        logger.info("AIOPS_BLOCK policy decisions=%s results=%s", len(decisions), [decision.result for decision in decisions])
         verification_results = self.verification.verify(incidents, features)
+        logger.info("AIOPS_BLOCK verify results=%s statuses=%s", len(verification_results), [result.status for result in verification_results])
         rca_result = self._run_v001_rca(metric_series or [])
+        logger.info(
+            "AIOPS_BLOCK rca anomalies=%s root_causes=%s",
+            len(rca_result.anomalies),
+            [root.service for root in rca_result.root_causes],
+        )
         remediation_decisions = self._run_remediation_strategy(incidents, rca_result)
+        logger.info(
+            "AIOPS_BLOCK remediation decisions=%s selected=%s",
+            len(remediation_decisions),
+            [decision.selected_action for decision in remediation_decisions],
+        )
         self._record_verified_history(incidents, verification_results, remediation_decisions, rca_result)
 
         return PipelineResult(
@@ -112,6 +144,7 @@ class AiopsPipeline:
 
     def _run_v001_rca(self, metric_series: list[MetricSeries]) -> RcaResult:
         if self.runtime_config is None or not self.rca_hyperparameters.get("enabled", self.runtime_config.rca.enabled) or not metric_series:
+            logger.info("AIOPS_BLOCK rca skipped enabled=%s metric_series=%s", self.rca_hyperparameters.get("enabled", None), len(metric_series))
             return RcaResult()
         config = self.rca_hyperparameters
         findings = V001AnomalyEngine(
@@ -133,6 +166,13 @@ class AiopsPipeline:
         for incident in incidents:
             features = extractor.extract(incident, rca_result)
             decision = decider.decide(incident.incident_id, features, retriever.top_matches(features, records), actions)
+            logger.info(
+                "AIOPS_BLOCK remediation_decide incident=%s action=%s decision=%s reasons=%s",
+                incident.incident_id,
+                decision.selected_action,
+                decision.decision,
+                decision.reasons,
+            )
             audit.append(decision)
             decisions.append(decision)
         return decisions
@@ -152,4 +192,12 @@ class AiopsPipeline:
             if incident.incident_id not in recovered:
                 continue
             related_decisions = [decision for decision in remediation_decisions if decision.incident_id == incident.incident_id]
+            logger.info("AIOPS_BLOCK history_append incident=%s decisions=%s", incident.incident_id, [decision.selected_action for decision in related_decisions])
             history.append_success(incident, extractor.extract(incident, rca_result), related_decisions)
+
+
+def _counts(values) -> dict[str, int]:
+    counts: dict[str, int] = {}
+    for value in values:
+        counts[value] = counts.get(value, 0) + 1
+    return counts

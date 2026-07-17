@@ -53,7 +53,7 @@ class FakeRcaEngine:
         )
 
 
-def test_settings(root: Path, policy_mode: str = "dry-run") -> Settings:
+def _settings_for_test(root: Path, policy_mode: str = "dry-run") -> Settings:
     return Settings().model_copy(
         update={
             "policy_mode": policy_mode,
@@ -108,7 +108,7 @@ class PrometheusCollectorTest(unittest.TestCase):
         self.assertEqual(len(observations), 2)
         self.assertTrue(all(item.quality == SignalQuality.VERIFIED for item in observations))
         self.assertEqual(observations[1].labels["dependency"], "payment")
-        self.assertEqual(len(series), 4)
+        self.assertEqual(len(series), 3)
         self.assertTrue(all(len(item.points) == 8 for item in series))
         instant_requests = [request for request in requests if request.url.path.endswith("/query")]
         self.assertTrue(all(request.url.params.get("time") == str(CAPTURED_AT.timestamp()) for request in instant_requests))
@@ -118,7 +118,7 @@ class PrometheusE2ETest(unittest.TestCase):
     def test_real_metric_bridge_writes_passing_full_pipeline_report(self):
         with TemporaryDirectory() as tmp:
             root = Path(tmp)
-            settings = test_settings(root)
+            settings = _settings_for_test(root)
             requests: list[httpx.Request] = []
             client = PrometheusClient(settings, transport=prometheus_transport(requests))
 
@@ -151,7 +151,7 @@ class PrometheusE2ETest(unittest.TestCase):
     def test_non_dry_run_mode_is_blocked_before_prometheus_call_and_reported(self):
         with TemporaryDirectory() as tmp:
             root = Path(tmp)
-            settings = test_settings(root, policy_mode="live-approved")
+            settings = _settings_for_test(root, policy_mode="live-approved")
             requests: list[httpx.Request] = []
             client = PrometheusClient(settings, transport=prometheus_transport(requests))
 

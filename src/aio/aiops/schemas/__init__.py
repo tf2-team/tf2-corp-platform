@@ -24,6 +24,7 @@ from aiops.schemas.domain import (
     SignalQuality,
     VerificationResult,
 )
+from aiops.schemas.prometheus import PrometheusCollectionPlan, PrometheusMetricSeriesQuery, PrometheusObservationQuery
 
 __all__ = [
     "ActionProposal",
@@ -49,6 +50,9 @@ __all__ = [
     "PipelineResult",
     "PipelineRunRequest",
     "PolicyDecision",
+    "PrometheusCollectionPlan",
+    "PrometheusMetricSeriesQuery",
+    "PrometheusObservationQuery",
     "RcaConfig",
     "RcaResult",
     "RemediationDecision",

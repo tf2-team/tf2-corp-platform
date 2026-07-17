@@ -1,6 +1,11 @@
 from __future__ import annotations
 
+import logging
+
 from aiops.schemas import CandidateEvent, RuntimeConfig, SignalQuality
+
+
+logger = logging.getLogger(__name__)
 
 
 class Correlator:
@@ -28,6 +33,18 @@ class Correlator:
         for group in grouped.values():
             primary_signal = next((item for item in group if item.likely_dependency == "unknown"), group[0])
             dependency, components = self._rank_dependency(group, primary_signal)
+            logger.info(
+                "AIOPS_BLOCK correlate_group service=%s flow=%s candidates=%s primary=%s dependency=%s components=%s",
+                primary_signal.service,
+                primary_signal.flow,
+                [item.detector_id for item in group],
+                primary_signal.detector_id,
+                dependency.detector_id if dependency else None,
+                components,
+            )
+            if dependency is None:
+                correlated.extend(group)
+                continue
             primary = dependency or primary_signal
             contributing = tuple(dict.fromkeys(signal for item in group for signal in item.contributing_signals))
             confidence = max(dependency.confidence, sum(components.values())) if dependency else max(item.confidence for item in group)
@@ -44,6 +61,7 @@ class Correlator:
                     }
                 )
             )
+            correlated.extend(item for item in group if item.likely_dependency == "unknown" and item is not primary_signal)
         return correlated
 
     def _rank_dependency(self, group: list[CandidateEvent], primary: CandidateEvent) -> tuple[CandidateEvent | None, dict[str, float]]:

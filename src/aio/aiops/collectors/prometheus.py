@@ -1,28 +1,99 @@
 from __future__ import annotations
 
+import json
 import time
+from datetime import UTC, datetime, timedelta
+from pathlib import Path
 from typing import Protocol
 
 from aiops.collectors.base import Collector
-from aiops.schemas import Observation, RuntimeConfig, SignalQuality
+from aiops.schemas import (
+    MetricPoint,
+    MetricSeries,
+    Observation,
+    PrometheusCollectionPlan,
+    PrometheusMetricSeriesQuery,
+    PrometheusObservationQuery,
+    RuntimeConfig,
+    SignalQuality,
+)
+
+
+def load_prometheus_collection_plan(path: Path) -> PrometheusCollectionPlan:
+    return PrometheusCollectionPlan.model_validate(json.loads(path.read_text(encoding="utf-8")))
 
 
 class PrometheusClientLike(Protocol):
-    def query(self, query: str) -> dict: ...
+    def query(self, query: str, time: str | None = None) -> dict: ...
+
+    def query_range(self, query: str, start: str, end: str, step: str) -> dict: ...
 
 
 class PrometheusCollector(Collector):
-    def __init__(self, client: PrometheusClientLike, runtime_config: RuntimeConfig):
+    def __init__(
+        self,
+        client: PrometheusClientLike,
+        runtime_config_or_plan: RuntimeConfig | PrometheusCollectionPlan,
+        *,
+        captured_at: datetime | None = None,
+    ):
         self.client = client
-        self.config = runtime_config
+        self.config = runtime_config_or_plan if isinstance(runtime_config_or_plan, RuntimeConfig) else None
+        self.plan = runtime_config_or_plan if isinstance(runtime_config_or_plan, PrometheusCollectionPlan) else None
+        self.captured_at = (captured_at or datetime.now(UTC)).astimezone(UTC)
         self._dependencies = {
             detector.signal_id: detector.dependency
-            for detector in runtime_config.detectors
+            for detector in (self.config.detectors if self.config else [])
             if detector.type == "dependency" and detector.signal_id and detector.dependency
         }
 
     def collect(self) -> list[Observation]:
+        if self.plan is not None:
+            return [self._collect_plan_observation(query) for query in self.plan.observation_queries]
+        assert self.config is not None
         return [self._collect_one(signal) for signal in self.config.signals if signal.source == "prometheus"]
+
+    def collect_metric_series(self) -> list[MetricSeries]:
+        if self.plan is None:
+            return []
+        return [self._collect_plan_series(query) for query in self.plan.metric_series_queries]
+
+    def _collect_plan_observation(self, query: PrometheusObservationQuery) -> Observation:
+        labels = {"query_id": query.query_id, **query.labels}
+        try:
+            result = self.client.query(query.promql, time=str(self.captured_at.timestamp())).get("data", {}).get("result", [])
+        except Exception as exc:
+            return Observation(
+                signal_id=query.signal_id,
+                value=None,
+                unit=query.unit,
+                window=query.window,
+                quality=SignalQuality.MISSING,
+                labels={**labels, "error": type(exc).__name__},
+            )
+        if not result:
+            return Observation(signal_id=query.signal_id, value=None, unit=query.unit, window=query.window, quality=SignalQuality.MISSING, labels=labels)
+        sample = result[0].get("value", [self.captured_at.timestamp(), None])
+        if sample and sample[0]:
+            labels["sample_timestamp"] = str(sample[0])
+        return Observation(signal_id=query.signal_id, value=sample[1], unit=query.unit, window=query.window, quality=SignalQuality.VERIFIED, labels=labels)
+
+    def _collect_plan_series(self, query: PrometheusMetricSeriesQuery) -> MetricSeries:
+        end = self.captured_at
+        start = end - timedelta(seconds=query.lookback_seconds)
+        result = self.client.query_range(
+            query.promql,
+            start=str(start.timestamp()),
+            end=str(end.timestamp()),
+            step=str(query.step_seconds),
+        ).get("data", {}).get("result", [])
+        values = result[0].get("values", []) if result else []
+        return MetricSeries(
+            service=query.service,
+            metric=query.metric,
+            signal_id=query.signal_id,
+            points=[MetricPoint(timestamp=int(float(timestamp)), value=float(value)) for timestamp, value in values],
+        )
 
     def _collect_one(self, signal) -> Observation:
         labels = {

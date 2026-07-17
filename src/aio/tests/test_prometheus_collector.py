@@ -24,10 +24,11 @@ class PrometheusCollectorTest(unittest.TestCase):
         prometheus_signals = [signal for signal in config.signals if signal.source == "prometheus"]
         signal_query_ids = {signal.query_id for signal in config.signals if signal.source == "prometheus"}
         services_with_metrics = {signal.service for signal in config.signals if signal.query_id.endswith(".error_rate.5m")}
+        app_services = {service.name for service in config.topology.services if service.name not in {"postgresql", "valkey-cart"}}
 
         self.assertTrue(signal_query_ids.issubset(config.prometheus_queries))
         self.assertEqual(client.queries, [config.prometheus_queries[signal.query_id] for signal in prometheus_signals])
-        self.assertEqual(services_with_metrics, {service.name for service in config.topology.services})
+        self.assertEqual(services_with_metrics, app_services)
         self.assertEqual(len(observations), len(signal_query_ids))
         self.assertEqual(observations[0].value, 0.2)
         self.assertEqual(observations[0].labels["query_id"], "checkout.bad_ratio.24h")

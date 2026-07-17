@@ -9,7 +9,7 @@ from uuid import uuid4
 
 from aiops.api.app import run_static_pipeline
 from aiops.collectors import PrometheusCollectionPlan, PrometheusCollector, load_prometheus_collection_plan
-from aiops.config import Settings, load_runtime_config
+from aiops.config import Settings, load_hyperparameters, load_runtime_config
 from aiops.integrations import PrometheusClient
 from aiops.schemas import PipelineResult, PipelineRunRequest, RuntimeConfig, SignalQuality
 
@@ -48,7 +48,7 @@ def execute_prometheus_e2e(
         _require_dry_run(settings)
         plan = load_prometheus_collection_plan(plan_path)
         runtime_config = load_runtime_config(settings.runtime_config_path)
-        validate_collection_plan(plan, runtime_config, settings.rca_min_points)
+        validate_collection_plan(plan, runtime_config, int(load_hyperparameters(settings.hyperparameters_path)["rca"]["min_points"]))
 
         collector = PrometheusCollector(client or PrometheusClient(settings), plan, captured_at=started_at)
         observations = collector.collect()
@@ -101,13 +101,12 @@ def validate_collection_plan(
 ) -> None:
     runtime_signals = {signal.id: signal for signal in runtime_config.signals if signal.source == "prometheus"}
     plan_signals = {query.signal_id: query for query in plan.observation_queries}
-    missing = set(runtime_signals) - set(plan_signals)
     extra = set(plan_signals) - set(runtime_signals)
-    if missing or extra:
-        raise ValueError(f"collection plan signal mismatch: missing={sorted(missing)}, extra={sorted(extra)}")
+    if extra:
+        raise ValueError(f"collection plan signal mismatch: extra={sorted(extra)}")
 
-    for signal_id, signal in runtime_signals.items():
-        query = plan_signals[signal_id]
+    for signal_id, query in plan_signals.items():
+        signal = runtime_signals[signal_id]
         if query.query_id != signal.query_id:
             raise ValueError(f"query_id mismatch for {signal_id}: {query.query_id!r} != {signal.query_id!r}")
         if query.unit != signal.unit or query.window != signal.window:

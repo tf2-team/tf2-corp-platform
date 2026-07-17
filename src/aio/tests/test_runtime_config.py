@@ -21,7 +21,8 @@ class RuntimeConfigTest(unittest.TestCase):
         self.assertEqual(config.signals[0].feature_role, "official_slo")
         self.assertEqual(config.signals[1].feature_role, "diagnostic")
         self.assertEqual([detector.__class__.__name__ for detector in detectors[:3]], ["ThresholdDetector", "NoDataDetector", "DependencyDetector"])
-        self.assertTrue(any(detector.detector_id == "auto_payment_error_rate" for detector in detectors))
+        self.assertTrue(any(detector.detector_id == "ops04_checkout_latency_p95" for detector in detectors))
+        self.assertTrue(any(detector.detector_id == "ops06_product_catalog_cpu" for detector in detectors))
 
     def test_each_service_error_rate_signal_has_auto_detector(self):
         config = load_runtime_config(Path("config/runtime.json"))

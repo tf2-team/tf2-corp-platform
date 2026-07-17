@@ -1,8 +1,13 @@
 from __future__ import annotations
 
+import logging
+
 from aiops.detectors.base import Detector
 from aiops.schemas import CandidateEvent, Feature, SignalQuality
 from aiops.shared.features import feature_timestamp
+
+
+logger = logging.getLogger(__name__)
 
 
 class NoDataDetector(Detector):
@@ -31,6 +36,14 @@ class NoDataDetector(Detector):
         for feature in features:
             if feature.signal_id not in self.required_signal_ids or feature.status != "unknown":
                 continue
+            logger.warning(
+                "AIOPS_DETECT no_data_fire detector=%s signal=%s quality=%s service=%s severity=%s",
+                self.detector_id,
+                feature.signal_id,
+                feature.quality.value,
+                self.service,
+                self.severity,
+            )
             candidates.append(
                 CandidateEvent(
                     detector_id=self.detector_id,

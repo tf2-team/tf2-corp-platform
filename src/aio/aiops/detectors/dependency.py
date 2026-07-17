@@ -1,8 +1,13 @@
 from __future__ import annotations
 
+import logging
+
 from aiops.detectors.base import Detector
 from aiops.schemas import CandidateEvent, Feature
 from aiops.shared.features import feature_timestamp, find_feature
+
+
+logger = logging.getLogger(__name__)
 
 
 class DependencyDetector(Detector):
@@ -38,6 +43,17 @@ class DependencyDetector(Detector):
             or feature.value <= self.threshold
         ):
             return []
+        logger.warning(
+            "AIOPS_DETECT dependency_fire detector=%s signal=%s value=%s threshold=%s service=%s dependency=%s severity=%s confidence=%s",
+            self.detector_id,
+            feature.signal_id,
+            feature.value,
+            self.threshold,
+            self.service,
+            self.dependency,
+            self.severity,
+            self.confidence,
+        )
         return [
             CandidateEvent(
                 detector_id=self.detector_id,

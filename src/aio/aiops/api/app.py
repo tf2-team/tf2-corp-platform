@@ -181,6 +181,7 @@ def handle_grafana_webhook(
 
 def create_app(settings: Settings | None = None) -> FastAPI:
     settings = settings or Settings()
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
 
     @asynccontextmanager
     async def lifespan(app: FastAPI):

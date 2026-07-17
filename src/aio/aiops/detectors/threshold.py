@@ -1,8 +1,13 @@
 from __future__ import annotations
 
+import logging
+
 from aiops.detectors.base import Detector
 from aiops.schemas import CandidateEvent, Feature
 from aiops.shared.features import feature_timestamp, find_feature
+
+
+logger = logging.getLogger(__name__)
 
 
 class ThresholdDetector(Detector):
@@ -34,6 +39,15 @@ class ThresholdDetector(Detector):
             or feature.value <= self.threshold
         ):
             return []
+        logger.warning(
+            "AIOPS_DETECT threshold_fire detector=%s signal=%s value=%s threshold=%s service=%s severity=%s",
+            self.detector_id,
+            feature.signal_id,
+            feature.value,
+            self.threshold,
+            self.service,
+            self.severity,
+        )
         return [
             CandidateEvent(
                 detector_id=self.detector_id,

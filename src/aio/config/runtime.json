@@ -58,7 +58,9 @@
         "kind": "Deployment",
         "owner": "catalog-oncall",
         "flow": "catalog",
-        "dependencies": []
+        "dependencies": [
+          "postgresql"
+        ]
       },
       {
         "name": "product-reviews",
@@ -88,7 +90,8 @@
         "owner": "checkout-oncall",
         "flow": "checkout",
         "dependencies": [
-          "flagd"
+          "flagd",
+          "valkey-cart"
         ]
       },
       {
@@ -171,11 +174,27 @@
         "owner": "platform-oncall",
         "flow": "observability",
         "dependencies": []
+      },
+      {
+        "name": "postgresql",
+        "namespace": "techx-corp-prod",
+        "kind": "Deployment",
+        "owner": "data-platform-oncall",
+        "flow": "data",
+        "dependencies": []
+      },
+      {
+        "name": "valkey-cart",
+        "namespace": "techx-corp-prod",
+        "kind": "Deployment",
+        "owner": "checkout-oncall",
+        "flow": "checkout",
+        "dependencies": []
       }
     ]
   },
   "prometheus_queries": {
-    "checkout.bad_ratio.24h": "(sum(rate(http_server_duration_milliseconds_count{service_name=\"checkout\",http_response_status_code=~\"5..\"}[24h])) / clamp_min(sum(rate(http_server_duration_milliseconds_count{service_name=\"checkout\"}[24h])), 1)) or vector(0)",
+    "checkout.bad_ratio.24h": "(sum(increase(rpc_server_duration_milliseconds_count{service_name=\"checkout\",rpc_method=\"PlaceOrder\",rpc_grpc_status_code!=\"0\"}[24h])) / clamp_min(sum(increase(rpc_server_duration_milliseconds_count{service_name=\"checkout\",rpc_method=\"PlaceOrder\"}[24h])), 1)) or vector(0)",
     "checkout.payment_error_rate.5m": "(sum(rate(http_client_duration_milliseconds_count{service_name=\"checkout\",server_address=~\"payment.*\",http_response_status_code=~\"5..\"}[5m])) / clamp_min(sum(rate(http_client_duration_milliseconds_count{service_name=\"checkout\",server_address=~\"payment.*\"}[5m])), 1)) or vector(0)",
     "checkout.error_rate.5m": "(sum(rate(http_server_duration_milliseconds_count{service_name=\"checkout\",http_response_status_code=~\"5..\"}[5m])) / clamp_min(sum(rate(http_server_duration_milliseconds_count{service_name=\"checkout\"}[5m])), 1)) or vector(0)",
     "payment.error_rate.5m": "(sum(rate(http_server_duration_milliseconds_count{service_name=\"payment\",http_response_status_code=~\"5..\"}[5m])) / clamp_min(sum(rate(http_server_duration_milliseconds_count{service_name=\"payment\"}[5m])), 1)) or vector(0)",
@@ -184,7 +203,7 @@
     "product-catalog.error_rate.5m": "(sum(rate(http_server_duration_milliseconds_count{service_name=\"product-catalog\",http_response_status_code=~\"5..\"}[5m])) / clamp_min(sum(rate(http_server_duration_milliseconds_count{service_name=\"product-catalog\"}[5m])), 1)) or vector(0)",
     "product-reviews.error_rate.5m": "(sum(rate(http_server_duration_milliseconds_count{service_name=\"product-reviews\",http_response_status_code=~\"5..\"}[5m])) / clamp_min(sum(rate(http_server_duration_milliseconds_count{service_name=\"product-reviews\"}[5m])), 1)) or vector(0)",
     "recommendation.error_rate.5m": "(sum(rate(http_server_duration_milliseconds_count{service_name=\"recommendation\",http_response_status_code=~\"5..\"}[5m])) / clamp_min(sum(rate(http_server_duration_milliseconds_count{service_name=\"recommendation\"}[5m])), 1)) or vector(0)",
-    "cart.error_rate.5m": "(sum(rate(http_server_duration_milliseconds_count{service_name=\"cart\",http_response_status_code=~\"5..\"}[5m])) / clamp_min(sum(rate(http_server_duration_milliseconds_count{service_name=\"cart\"}[5m])), 1)) or vector(0)",
+    "cart.error_rate.5m": "((sum(rate(http_server_request_duration_seconds_count{service_name=\"cart\",http_response_status_code=~\"5..\"}[5m])) or vector(0)) / clamp_min(sum(rate(http_server_request_duration_seconds_count{service_name=\"cart\"}[5m])), 0.000000001))",
     "ad.error_rate.5m": "(sum(rate(http_server_duration_milliseconds_count{service_name=\"ad\",http_response_status_code=~\"5..\"}[5m])) / clamp_min(sum(rate(http_server_duration_milliseconds_count{service_name=\"ad\"}[5m])), 1)) or vector(0)",
     "currency.error_rate.5m": "(sum(rate(http_server_duration_milliseconds_count{service_name=\"currency\",http_response_status_code=~\"5..\"}[5m])) / clamp_min(sum(rate(http_server_duration_milliseconds_count{service_name=\"currency\"}[5m])), 1)) or vector(0)",
     "shipping.error_rate.5m": "(sum(rate(http_server_duration_milliseconds_count{service_name=\"shipping\",http_response_status_code=~\"5..\"}[5m])) / clamp_min(sum(rate(http_server_duration_milliseconds_count{service_name=\"shipping\"}[5m])), 1)) or vector(0)",
@@ -193,7 +212,9 @@
     "flagd.error_rate.5m": "(sum(rate(http_server_duration_milliseconds_count{service_name=\"flagd\",http_response_status_code=~\"5..\"}[5m])) / clamp_min(sum(rate(http_server_duration_milliseconds_count{service_name=\"flagd\"}[5m])), 1)) or vector(0)",
     "fraud-detection.error_rate.5m": "(sum(rate(http_server_duration_milliseconds_count{service_name=\"fraud-detection\",http_response_status_code=~\"5..\"}[5m])) / clamp_min(sum(rate(http_server_duration_milliseconds_count{service_name=\"fraud-detection\"}[5m])), 1)) or vector(0)",
     "load-generator.error_rate.5m": "(sum(rate(http_server_duration_milliseconds_count{service_name=\"load-generator\",http_response_status_code=~\"5..\"}[5m])) / clamp_min(sum(rate(http_server_duration_milliseconds_count{service_name=\"load-generator\"}[5m])), 1)) or vector(0)",
-    "jaeger.error_rate.5m": "(sum(rate(http_server_duration_milliseconds_count{service_name=\"jaeger\",http_response_status_code=~\"5..\"}[5m])) / clamp_min(sum(rate(http_server_duration_milliseconds_count{service_name=\"jaeger\"}[5m])), 1)) or vector(0)"
+    "jaeger.error_rate.5m": "(sum(rate(http_server_duration_milliseconds_count{service_name=\"jaeger\",http_response_status_code=~\"5..\"}[5m])) / clamp_min(sum(rate(http_server_duration_milliseconds_count{service_name=\"jaeger\"}[5m])), 1)) or vector(0)",
+    "checkout.p95_latency.5m": "histogram_quantile(0.95, sum(rate(rpc_server_duration_milliseconds_bucket{service_name=\"checkout\"}[5m])) by (le))",
+    "product-catalog.cpu_millicores": "sum(k8s_pod_cpu_usage{k8s_deployment_name=\"product-catalog\"})"
   },
   "signals": [
     {
@@ -220,6 +241,17 @@
         "service",
         "dependency"
       ]
+    },
+    {
+      "id": "checkout_p95_latency_5m",
+      "source": "prometheus",
+      "query_id": "checkout.p95_latency.5m",
+      "unit": "milliseconds",
+      "window": "5m",
+      "flow": "checkout",
+      "service": "checkout",
+      "feature_role": "anomaly_input",
+      "required_labels": []
     },
     {
       "id": "checkout_error_rate_5m",
@@ -407,6 +439,17 @@
       "service": "jaeger",
       "feature_role": "anomaly_input",
       "required_labels": []
+    },
+    {
+      "id": "product_catalog_cpu_millicores",
+      "source": "prometheus",
+      "query_id": "product-catalog.cpu_millicores",
+      "unit": "count",
+      "window": "5m",
+      "flow": "catalog",
+      "service": "product-catalog",
+      "feature_role": "anomaly_input",
+      "required_labels": []
     }
   ],
   "detectors": [
@@ -426,6 +469,7 @@
       "enabled": true,
       "signal_ids": [
         "checkout_bad_ratio_24h",
+        "checkout_p95_latency_5m",
         "checkout_payment_error_rate_5m",
         "checkout_error_rate_5m",
         "payment_error_rate_5m",
@@ -443,7 +487,8 @@
         "flagd_error_rate_5m",
         "fraud_detection_error_rate_5m",
         "load_generator_error_rate_5m",
-        "jaeger_error_rate_5m"
+        "jaeger_error_rate_5m",
+        "product_catalog_cpu_millicores"
       ],
       "flow": "monitoring",
       "service": "aiops",
@@ -460,6 +505,36 @@
       "dependency": "payment",
       "severity": "SEV2",
       "runbook_id": "RB-CHECKOUT-DEPENDENCY"
+    },
+    {
+      "id": "ops04_checkout_latency_p95",
+      "type": "threshold",
+      "enabled": true,
+      "signal_id": "checkout_p95_latency_5m",
+      "flow": "checkout",
+      "service": "checkout",
+      "severity": "SEV1",
+      "runbook_id": "RB-CHECKOUT-LATENCY"
+    },
+    {
+      "id": "ops05_cart_error_rate",
+      "type": "threshold",
+      "enabled": true,
+      "signal_id": "cart_error_rate_5m",
+      "flow": "checkout",
+      "service": "cart",
+      "severity": "SEV1",
+      "runbook_id": "RB-CART-ERROR-RATE"
+    },
+    {
+      "id": "ops06_product_catalog_cpu",
+      "type": "threshold",
+      "enabled": true,
+      "signal_id": "product_catalog_cpu_millicores",
+      "flow": "catalog",
+      "service": "product-catalog",
+      "severity": "SEV2",
+      "runbook_id": "RB-PRODUCT-CATALOG-CPU"
     },
     {
       "id": "auto_checkout_error_rate",
@@ -642,7 +717,7 @@
     "auto_product_catalog_error_rate": 0.05,
     "auto_product_reviews_error_rate": 0.05,
     "auto_recommendation_error_rate": 0.05,
-    "auto_cart_error_rate": 0.05,
+    "auto_cart_error_rate": 0.005,
     "auto_ad_error_rate": 0.05,
     "auto_currency_error_rate": 0.05,
     "auto_shipping_error_rate": 0.05,
@@ -651,7 +726,10 @@
     "auto_flagd_error_rate": 0.05,
     "auto_fraud_detection_error_rate": 0.05,
     "auto_load_generator_error_rate": 0.05,
-    "auto_jaeger_error_rate": 0.05
+    "auto_jaeger_error_rate": 0.05,
+    "ops04_checkout_latency_p95": 500.0,
+    "ops05_cart_error_rate": 0.02,
+    "ops06_product_catalog_cpu": 50.0
   },
   "detector_confidences": {
     "ops03_checkout_payment_dependency": 0.8
