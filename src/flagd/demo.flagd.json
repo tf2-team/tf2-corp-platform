@@ -2,22 +2,22 @@
   "$schema": "https://flagd.dev/schema/v0/flags.json",
   "flags": {
     "local-llmInaccurateResponse": {
-      "defaultVariant": "off",
       "description": "(team local) LLM returns an inaccurate product summary for product ID L9ECAV7KIM",
       "state": "ENABLED",
       "variants": {
         "off": false,
         "on": true
-      }
+      },
+      "defaultVariant": "off"
     },
     "local-llmRateLimitError": {
-      "defaultVariant": "off",
       "description": "(team local) LLM intermittently returns a rate limit error",
       "state": "ENABLED",
       "variants": {
         "off": false,
         "on": true
-      }
+      },
+      "defaultVariant": "off"
     },
     "local-productCatalogFailure": {
       "description": "(team local) Fail product catalog service on a specific product",
