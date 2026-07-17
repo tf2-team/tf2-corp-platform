@@ -56,6 +56,7 @@ class AiopsPipeline:
         qualification_max_sample_age_seconds: int = 300,
         correlation_hyperparameters: dict | None = None,
         remediation: RemediationComponents | None = None,
+        enricher: Enricher | None = None,
     ):
         self.collector = collector
         self.qualification = QualificationGate(
@@ -68,7 +69,7 @@ class AiopsPipeline:
         self.feature_builder = FeatureBuilder(runtime_config)
         self.detector_engine = DetectorEngine(detectors)
         self.correlator = Correlator(runtime_config, **correlation_hyperparameters) if correlation_hyperparameters else Correlator(runtime_config)
-        self.enricher = Enricher()
+        self.enricher = enricher or Enricher(runtime_config=runtime_config)
         self.store = store
         self.notifier = NotificationBuilder()
         self.policy = policy

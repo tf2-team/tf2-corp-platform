@@ -347,6 +347,11 @@ Added evidence item:
 Rules:
 
 - For each `contributing_signals` item, attach feature evidence if the feature exists.
+- If configured, query Jaeger/OpenSearch/Kubernetes only after candidates exist and attach bounded evidence:
+  - `trace`: trace UI reference plus service/operation/duration/error-span summary.
+  - `log`: bounded OpenSearch count/excerpts with simple redaction.
+  - `kubernetes`: deployment replica/rollout and pod readiness/restart summary.
+- Integration failures append `source="enrichment_failure"` evidence instead of blocking incident creation.
 
 ### 8. Incident Store / Deduplication
 

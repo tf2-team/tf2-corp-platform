@@ -1,11 +1,14 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime
+from urllib.parse import urlparse
 
 from fastapi import FastAPI, Header, HTTPException
 
 from aiops.collectors import StaticCollector
 from aiops.config import Settings, build_detectors, load_hyperparameters, load_runtime_config
+from aiops.enrichment import Enricher
+from aiops.integrations import JaegerClient, KubernetesClient, OpenSearchClient
 from aiops.normalization import load_normalization_schema
 from aiops.pipeline import AiopsPipeline
 from aiops.qualification import load_qualification_schema
@@ -47,6 +50,7 @@ def run_static_pipeline(request: PipelineRunRequest, settings: Settings | None =
         qualification_max_sample_age_seconds=settings.qualification_max_sample_age_seconds,
         rca_hyperparameters=hyperparameters["rca"],
         correlation_hyperparameters=hyperparameters["correlation"],
+        enricher=build_enricher(settings, runtime_config),
         remediation=(
             RemediationFeatureExtractor(),
             HistoryRetriever(hyperparameters["remediation"]["similarity_weights"], hyperparameters["remediation"]["history_top_k"]),
@@ -65,6 +69,33 @@ def run_static_pipeline(request: PipelineRunRequest, settings: Settings | None =
         return pipeline.run_once(metric_series=request.metric_series)
     finally:
         store.close()
+
+
+def build_enricher(settings: Settings, runtime_config) -> Enricher:
+    jaeger = JaegerClient(settings) if _configured_url(settings.jaeger_base_url) else None
+    opensearch = (
+        OpenSearchClient(settings)
+        if _configured_url(settings.opensearch_base_url) and _configured_secret(settings.opensearch_username) and _configured_secret(settings.opensearch_password)
+        else None
+    )
+    kubernetes = KubernetesClient(settings) if _configured_kubernetes(settings) else None
+    return Enricher(runtime_config=runtime_config, jaeger=jaeger, opensearch=opensearch, kubernetes=kubernetes)
+
+
+def _configured_url(value: str) -> bool:
+    return _configured_secret(value) and ".example" not in value
+
+
+def _configured_secret(value: str) -> bool:
+    text = value.strip().upper()
+    return bool(text) and "CHANGE_ME" not in text and "<FILL_IN" not in text
+
+
+def _configured_kubernetes(settings: Settings) -> bool:
+    if not _configured_secret(settings.kubernetes_api_url):
+        return False
+    host = urlparse(settings.kubernetes_api_url).hostname or ""
+    return _configured_secret(settings.kubernetes_bearer_token) or host in {"localhost", "127.0.0.1"}
 
 
 def handle_grafana_webhook(

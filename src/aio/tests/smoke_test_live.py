@@ -44,7 +44,8 @@ def load_env_file(path: Path) -> None:
 
 load_env_file(ROOT / ".env.live")
 
-from aiops.config import Settings  # noqa: E402
+from aiops.api.app import build_enricher  # noqa: E402
+from aiops.config import Settings, load_runtime_config  # noqa: E402
 from aiops.integrations import (  # noqa: E402
     JaegerClient,
     KubernetesClient,
@@ -52,7 +53,7 @@ from aiops.integrations import (  # noqa: E402
     OpenSearchClient,
     PrometheusClient,
 )
-from aiops.schemas import NotificationMessage  # noqa: E402
+from aiops.schemas import CandidateEvent, Feature, NotificationMessage, SignalQuality  # noqa: E402
 
 
 NAMESPACE = os.getenv("AIOPS_SMOKE_NAMESPACE", "techx-corp-prod")
@@ -202,6 +203,44 @@ def test_jaeger_traces():
     return f"service={service}, traces={len(traces)}"
 
 
+# On-demand enrichment -------------------------------------------------------
+
+
+@smoke("enrichment_trace_evidence")
+def test_enrichment_trace_evidence():
+    service = env("AIOPS_SMOKE_ENRICHMENT_SERVICE", env("AIOPS_SMOKE_JAEGER_SERVICE", "frontend"))
+    candidate = CandidateEvent(
+        detector_id="smoke_enrichment",
+        flow="smoke-test",
+        service=service,
+        severity="SEV2",
+        signal_id="smoke_signal",
+        value=1.0,
+        unit="count",
+        window="5m",
+        threshold=0.0,
+        quality=SignalQuality.VERIFIED,
+        reason="smoke_enrichment",
+        runbook_id="RB-SMOKE-TEST",
+        contributing_signals=("smoke_signal",),
+    )
+    feature = Feature(
+        signal_id="smoke_signal",
+        value=1.0,
+        unit="count",
+        window="5m",
+        quality=SignalQuality.VERIFIED,
+        status="ready",
+    )
+    enricher = build_enricher(settings(), load_runtime_config(settings().runtime_config_path))
+    enriched = enricher.enrich([candidate], [feature])[0]
+    trace_items = [item for item in enriched.evidence if item.source == "trace"]
+    failures = [item for item in enriched.evidence if item.source == "enrichment_failure"]
+
+    assert trace_items, f"no trace evidence for service={service}; failures={[item.reference + ':' + item.summary for item in failures]}"
+    return f"service={service}, trace_ref={trace_items[0].reference}, evidence={len(enriched.evidence)}"
+
+
 # OpenSearch -----------------------------------------------------------------
 
 
@@ -335,6 +374,7 @@ ALL_TESTS = [
     test_prometheus_targets,
     test_jaeger_services,
     test_jaeger_traces,
+    test_enrichment_trace_evidence,
     test_opensearch_cluster,
     test_opensearch_indices,
     test_opensearch_search,
@@ -348,6 +388,7 @@ ALL_TESTS = [
 GROUPS = {
     "TestPrometheus": [test_prometheus_up, test_prometheus_query_range, test_prometheus_targets],
     "TestJaeger": [test_jaeger_services, test_jaeger_traces],
+    "TestEnrichment": [test_enrichment_trace_evidence],
     "TestOpenSearch": [test_opensearch_cluster, test_opensearch_indices, test_opensearch_search],
     "TestKubernetes": [test_k8s_list_pods, test_k8s_deployment],
     "TestGrafana": [test_grafana_health, test_grafana_webhook],
