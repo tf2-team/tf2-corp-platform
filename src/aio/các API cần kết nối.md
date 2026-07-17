@@ -209,7 +209,15 @@ AIOps gọi Prometheus theo hướng read-only bằng query ID đã đăng ký t
 
 ## 3. Grafana webhook API
 
-Grafana gửi alert event vào AIOps tại `POST /api/v1/events/grafana`. Endpoint này phải xác thực bằng shared secret hoặc HMAC trong cluster. Payload alert text không được dùng để sinh PromQL/action.
+Grafana gửi alert event vào AIOps tại `POST /api/v1/events/grafana`. Endpoint này phải xác thực bằng shared secret trong cluster. Payload alert text không được dùng để sinh PromQL/action.
+
+Contract triển khai với infra/chart:
+
+- AIOps runtime đọc env `AIOPS_GRAFANA_WEBHOOK_SECRET`.
+- Grafana Contact Point gửi header `X-AIOps-Grafana-Secret`.
+- Runtime so sánh header với env bằng constant-time compare.
+- Header thiếu, env thiếu trong runtime cluster, hoặc giá trị không khớp phải trả `401`.
+- Không log secret, raw header, hoặc payload chứa secret.
 
 ```json AIO/các API cần kết nối.md
 {

@@ -260,6 +260,9 @@ fun getFeatureFlagValue(ff: String): Int {
     val clientAttrs = mutableMapOf<String, Value>()
     clientAttrs["session"] = Value(uuid.toString())
     client.evaluationContext = ImmutableContext(clientAttrs)
-    val intValue = client.getIntegerValue(ff, 0)
-    return intValue
+    // BTC original + team local- twin: max so either source can inject.
+    val btc = client.getIntegerValue(ff, 0)
+    val local = client.getIntegerValue("local-$ff", 0)
+    return maxOf(btc, local)
 }
+// Change trail: @hungxqt - 2026-07-17 - Dual-read local- integer flag twins (max with BTC).

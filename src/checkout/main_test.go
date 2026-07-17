@@ -21,9 +21,14 @@ func TestIsRetryablePaymentChargeError(t *testing.T) {
 		want bool
 	}{
 		{
-			name: "paymentFailure random fault",
+			name: "paymentFailure inject is not retryable",
 			err:  errors.New("Payment request failed. Invalid token. app.loyalty.level=gold"),
-			want: true,
+			want: false,
+		},
+		{
+			name: "wrapped paymentFailure inject is not retryable",
+			err:  errors.New("rpc error: code = Unknown desc = Payment request failed. Invalid token. app.loyalty.level=gold"),
+			want: false,
 		},
 		{
 			name: "generic unavailable",
@@ -55,42 +60,6 @@ func TestIsRetryablePaymentChargeError(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			if got := isRetryablePaymentChargeError(tc.err); got != tc.want {
 				t.Fatalf("isRetryablePaymentChargeError(%v) = %v, want %v", tc.err, got, tc.want)
-			}
-		})
-	}
-}
-
-func TestIsPaymentFailureIncidentError(t *testing.T) {
-	cases := []struct {
-		name string
-		err  error
-		want bool
-	}{
-		{
-			name: "canonical paymentFailure message",
-			err:  errors.New("Payment request failed. Invalid token. app.loyalty.level=gold"),
-			want: true,
-		},
-		{
-			name: "wrapped grpc error",
-			err:  errors.New("rpc error: code = Unknown desc = Payment request failed. Invalid token. app.loyalty.level=gold"),
-			want: true,
-		},
-		{
-			name: "permanent card error",
-			err:  errors.New("Credit card info is invalid."),
-			want: false,
-		},
-		{
-			name: "nil",
-			err:  nil,
-			want: false,
-		},
-	}
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			if got := isPaymentFailureIncidentError(tc.err); got != tc.want {
-				t.Fatalf("isPaymentFailureIncidentError(%v) = %v, want %v", tc.err, got, tc.want)
 			}
 		})
 	}
@@ -253,7 +222,7 @@ func TestEmptyUserCart_RetriesAndSucceeds(t *testing.T) {
 	}
 }
 
-func TestEmptyUserCart_DefersAfterRetries(t *testing.T) {
+func TestEmptyUserCart_FailsAfterRetries(t *testing.T) {
 	prev := logger
 	logger = slog.New(slog.NewTextHandler(io.Discard, nil))
 	t.Cleanup(func() { logger = prev })
@@ -269,7 +238,7 @@ func TestEmptyUserCart_DefersAfterRetries(t *testing.T) {
 
 	err := cs.emptyUserCart(context.Background(), "user-123")
 	if err == nil {
-		t.Fatal("expected emptyUserCart to return the deferred cleanup error")
+		t.Fatal("expected emptyUserCart to return an error after retries")
 	}
 	if cartClient.emptyCartCalls != emptyCartMaxAttempts {
 		t.Fatalf("EmptyCart calls = %d, want %d", cartClient.emptyCartCalls, emptyCartMaxAttempts)
@@ -291,4 +260,4 @@ func (s *stubCartServiceClient) EmptyCart(ctx context.Context, in *pb.EmptyCartR
 	return &pb.Empty{}, nil
 }
 
-// Change trail: @hungxqt - 2026-07-14 - Regression tests for nil Kafka producer / nil order in sendToPostProcessor.
+// Change trail: @hungxqt - 2026-07-17 - paymentFailure not retryable; cart cleanup fails after retries.
