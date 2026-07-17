@@ -87,12 +87,13 @@ def build_artifact(
     output_dir: Path,
     *,
     snapshot_downloader: Callable[..., str] = _default_snapshot_downloader,
-) -> tuple[Path, Path]:
+) -> tuple[Path, Path, Path]:
     output_dir = output_dir.resolve()
     output_dir.mkdir(parents=True, exist_ok=True)
     archive_name = f"fastembed-paraphrase-multilingual-MiniLM-L12-v2-{SOURCE_REVISION[:12]}.tar.gz"
     archive_path = output_dir / archive_name
     checksum_path = output_dir / f"{archive_name}.sha256"
+    manifest_output_path = output_dir / MANIFEST_NAME
 
     with tempfile.TemporaryDirectory(prefix="mem0-fastembed-") as temporary:
         artifact_root = Path(temporary) / "artifact"
@@ -143,6 +144,7 @@ def build_artifact(
         }
         manifest_path = artifact_root / MANIFEST_NAME
         manifest_path.write_text(json.dumps(manifest, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+        manifest_output_path.write_text(manifest_path.read_text(encoding="utf-8"), encoding="utf-8")
         manifest_digest = sha256_file(manifest_path)
         (artifact_root / READY_MARKER).write_text(
             json.dumps({"manifest_sha256": manifest_digest}, sort_keys=True) + "\n",
@@ -157,7 +159,7 @@ def build_artifact(
             temporary_archive.unlink(missing_ok=True)
 
     checksum_path.write_text(f"{sha256_file(archive_path)}  {archive_path.name}\n", encoding="utf-8")
-    return archive_path, checksum_path
+    return archive_path, checksum_path, manifest_output_path
 
 
 def parse_args() -> argparse.Namespace:
@@ -168,8 +170,8 @@ def parse_args() -> argparse.Namespace:
 
 def main() -> int:
     args = parse_args()
-    archive, checksum = build_artifact(args.output_dir)
-    print(json.dumps({"archive": str(archive), "checksum": str(checksum)}, sort_keys=True))
+    archive, checksum, manifest = build_artifact(args.output_dir)
+    print(json.dumps({"archive": str(archive), "checksum": str(checksum), "manifest": str(manifest)}, sort_keys=True))
     return 0
 
 

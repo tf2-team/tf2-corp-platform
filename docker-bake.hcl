@@ -18,7 +18,7 @@ variable "DEMO_VERSION" {
   default = "dev"
 }
 
-# Exactly the 21 deployable services pushed to ECR by CI (includes customized OpenSearch).
+# Exactly the 22 deployable services pushed to ECR by CI (includes customized OpenSearch).
 group "release" {
   targets = [
     "accounting",
@@ -35,6 +35,7 @@ group "release" {
     "kafka",
     "llm",
     "load-generator",
+    "mem0",
     "opensearch",
     "payment",
     "product-catalog",
@@ -145,6 +146,13 @@ target "load-generator" {
   tags       = ["${IMAGE_NAME}/load-generator:${DEMO_VERSION}"]
   cache-from = ["type=registry,ref=${IMAGE_NAME}/load-generator:buildcache"]
   cache-to   = ["type=registry,ref=${IMAGE_NAME}/load-generator:buildcache,mode=max,oci-mediatypes=true,image-manifest=true"]
+}
+
+target "mem0" {
+  inherits   = ["_release-common"]
+  tags       = ["${IMAGE_NAME}/mem0:${DEMO_VERSION}"]
+  cache-from = ["type=registry,ref=${IMAGE_NAME}/mem0:buildcache"]
+  cache-to   = ["type=registry,ref=${IMAGE_NAME}/mem0:buildcache,mode=max,oci-mediatypes=true,image-manifest=true"]
 }
 
 target "payment" {
