@@ -145,6 +145,9 @@ class Incident(AiopsModel):
     incident_id: str
     fingerprint: str
     state: str
+    last_seen: str | None = None
+    recovered_at: str | None = None
+    cooldown_until: str | None = None
     severity: str
     flow: str
     service: str

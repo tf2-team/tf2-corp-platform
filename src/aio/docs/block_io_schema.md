@@ -383,7 +383,10 @@ environment | detector_id | flow | service | likely_dependency
 Rules:
 
 - New fingerprint creates a new `Incident`.
-- Existing fingerprint increments `occurrence_count`, appends event, and keeps the more severe severity by lexical `min`.
+- New incidents start as `state="open"` with `last_seen` set from the candidate timestamp or the current UTC time.
+- Existing fingerprint increments `occurrence_count`, appends event, updates `last_seen`, and keeps the more severe severity by lexical `min`.
+- `recovered_at` and `cooldown_until` are nullable lifecycle fields reserved for recovery/reopen flow.
+- `incident_events` stores the raw candidate JSON plus the incident `state`, `last_seen`, `recovered_at`, and `cooldown_until` snapshot for that event.
 - Data is persisted to SQLite WAL.
 
 ### 9. Notification Builder

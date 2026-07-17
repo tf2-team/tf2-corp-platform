@@ -22,6 +22,10 @@ def settings() -> Settings:
     return Settings()
 
 
+def fixed_settings(**updates) -> Settings:
+    return settings().model_copy(update=updates)
+
+
 class IntegrationClientTest(unittest.TestCase):
     def test_prometheus_uses_env_url_and_token(self):
         seen: list[httpx.Request] = []
@@ -30,7 +34,12 @@ class IntegrationClientTest(unittest.TestCase):
             seen.append(request)
             return httpx.Response(200, json={"status": "success", "data": {"resultType": "vector", "result": []}})
 
-        result = PrometheusClient(settings(), transport=httpx.MockTransport(handler)).query("up")
+        cfg = fixed_settings(
+            prometheus_base_url="https://prometheus.example",
+            prometheus_token="CHANGE_ME_PROMETHEUS_TOKEN",
+            prometheus_account="CHANGE_ME_PROMETHEUS_ACCOUNT",
+        )
+        result = PrometheusClient(cfg, transport=httpx.MockTransport(handler)).query("up")
 
         self.assertEqual(result["status"], "success")
         self.assertEqual(str(seen[0].url), "https://prometheus.example/api/v1/query?query=up")
@@ -66,7 +75,13 @@ class IntegrationClientTest(unittest.TestCase):
             seen.append(request)
             return httpx.Response(200, json={"hits": {"total": {"value": 0}, "hits": []}})
 
-        OpenSearchClient(settings(), transport=httpx.MockTransport(handler)).search(
+        cfg = fixed_settings(
+            opensearch_base_url="https://opensearch.example",
+            opensearch_username="CHANGE_ME_OPENSEARCH_USERNAME",
+            opensearch_password="CHANGE_ME_OPENSEARCH_PASSWORD",
+            opensearch_account="CHANGE_ME_OPENSEARCH_ACCOUNT",
+        )
+        OpenSearchClient(cfg, transport=httpx.MockTransport(handler)).search(
             index="logs-*",
             body={"query": {"match_all": {}}},
         )

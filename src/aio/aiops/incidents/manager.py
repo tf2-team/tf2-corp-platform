@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from datetime import UTC, datetime
+
 from aiops.incidents.fingerprint import incident_fingerprint
 from aiops.schemas import CandidateEvent, Incident
 
@@ -18,6 +20,7 @@ class IncidentManager:
                 incident_id=f"inc-{digest[:12]}",
                 fingerprint=fingerprint,
                 state="open",
+                last_seen=_seen_at(candidate),
                 severity=candidate.severity,
                 flow=candidate.flow,
                 service=candidate.service,
@@ -29,8 +32,15 @@ class IncidentManager:
 
         incident.occurrence_count += 1
         incident.events.append(candidate)
+        incident.last_seen = _seen_at(candidate)
         incident.severity = min(incident.severity, candidate.severity)
         return incident
 
     def fingerprint(self, candidate: CandidateEvent) -> str:
         return incident_fingerprint(self.environment, candidate)
+
+
+def _seen_at(candidate: CandidateEvent) -> str:
+    if candidate.timestamp:
+        return datetime.fromtimestamp(candidate.timestamp, UTC).isoformat()
+    return datetime.now(UTC).isoformat()

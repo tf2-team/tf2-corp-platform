@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import sqlite3
+from datetime import UTC, datetime
 from pathlib import Path
 
 from aiops.incidents import incident_fingerprint
@@ -28,13 +29,19 @@ class SQLiteIncidentStore:
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 fingerprint TEXT NOT NULL,
                 event_json TEXT NOT NULL,
+                state TEXT NOT NULL DEFAULT 'open',
+                last_seen TEXT,
+                recovered_at TEXT,
+                cooldown_until TEXT,
                 created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
             )
             """
         )
+        self._ensure_event_columns()
 
     def upsert(self, candidate: CandidateEvent) -> Incident:
         fingerprint = incident_fingerprint(self.environment, candidate)
+        seen_at = _seen_at(candidate)
         row = self._connection.execute(
             "SELECT incident_json FROM incidents WHERE fingerprint = ?",
             (fingerprint,),
@@ -46,6 +53,7 @@ class SQLiteIncidentStore:
                 incident_id=f"inc-{digest[:12]}",
                 fingerprint=fingerprint,
                 state="open",
+                last_seen=seen_at,
                 severity=candidate.severity,
                 flow=candidate.flow,
                 service=candidate.service,
@@ -56,6 +64,7 @@ class SQLiteIncidentStore:
             incident = Incident.model_validate_json(row[0])
             incident.occurrence_count += 1
             incident.events.append(candidate)
+            incident.last_seen = seen_at
             incident.severity = min(incident.severity, candidate.severity)
 
         with self._connection:
@@ -68,8 +77,11 @@ class SQLiteIncidentStore:
                 (fingerprint, incident.model_dump_json()),
             )
             self._connection.execute(
-                "INSERT INTO incident_events (fingerprint, event_json) VALUES (?, ?)",
-                (fingerprint, candidate.model_dump_json()),
+                """
+                INSERT INTO incident_events (fingerprint, event_json, state, last_seen, recovered_at, cooldown_until)
+                VALUES (?, ?, ?, ?, ?, ?)
+                """,
+                (fingerprint, candidate.model_dump_json(), incident.state, incident.last_seen, incident.recovered_at, incident.cooldown_until),
             )
         return incident
 
@@ -79,3 +91,20 @@ class SQLiteIncidentStore:
 
     def close(self) -> None:
         self._connection.close()
+
+    def _ensure_event_columns(self) -> None:
+        columns = {row[1] for row in self._connection.execute("PRAGMA table_info(incident_events)").fetchall()}
+        for name, ddl in {
+            "state": "ALTER TABLE incident_events ADD COLUMN state TEXT NOT NULL DEFAULT 'open'",
+            "last_seen": "ALTER TABLE incident_events ADD COLUMN last_seen TEXT",
+            "recovered_at": "ALTER TABLE incident_events ADD COLUMN recovered_at TEXT",
+            "cooldown_until": "ALTER TABLE incident_events ADD COLUMN cooldown_until TEXT",
+        }.items():
+            if name not in columns:
+                self._connection.execute(ddl)
+
+
+def _seen_at(candidate: CandidateEvent) -> str:
+    if candidate.timestamp:
+        return datetime.fromtimestamp(candidate.timestamp, UTC).isoformat()
+    return datetime.now(UTC).isoformat()

@@ -49,7 +49,16 @@ class FastApiAppTest(unittest.TestCase):
         self.assertIn("/api/v1/events/grafana", paths)
 
     def test_template_settings_do_not_enable_external_enrichment_clients(self):
-        settings = Settings()
+        settings = Settings().model_copy(
+            update={
+                "jaeger_base_url": "https://jaeger.example/jaeger/ui",
+                "opensearch_base_url": "https://opensearch.example",
+                "opensearch_username": "CHANGE_ME_OPENSEARCH_USERNAME",
+                "opensearch_password": "CHANGE_ME_OPENSEARCH_PASSWORD",
+                "kubernetes_api_url": "https://kubernetes.default.svc",
+                "kubernetes_bearer_token": "CHANGE_ME_KUBERNETES_TOKEN",
+            }
+        )
         enricher = build_enricher(settings, load_runtime_config(settings.runtime_config_path))
 
         self.assertIsNone(enricher.jaeger)
@@ -57,6 +66,7 @@ class FastApiAppTest(unittest.TestCase):
         self.assertIsNone(enricher.kubernetes)
 
     def test_grafana_webhook_normalizes_event(self):
+        settings = Settings()
         response = handle_grafana_webhook(
             GrafanaWebhookEvent(
                 receiver="aiops",
@@ -69,7 +79,8 @@ class FastApiAppTest(unittest.TestCase):
                     }
                 ],
             ),
-            x_aiops_grafana_secret="CHANGE_ME_GRAFANA_WEBHOOK_SECRET",
+            x_aiops_grafana_secret=settings.grafana_webhook_secret,
+            settings=settings,
         )
 
         self.assertEqual(response.source, "grafana")
