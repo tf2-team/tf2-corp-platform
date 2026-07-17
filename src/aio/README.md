@@ -43,9 +43,51 @@ These are reused by detectors, enrichment, and verification. Other code is still
 conda run -n capstone python -B -m unittest discover -s tests
 ```
 
+## Live Smoke Test Through EKS Port-Forward
+
+The canonical endpoint and credential inventory is in
+[`docs/live_endpoints.md`](docs/live_endpoints.md). From `src/aio`, keep the
+port-forward helper running in one terminal:
+
+```powershell
+Copy-Item .env.live.example .env.live
+powershell -File scripts/port_forward.ps1
+```
+
+To test the inbound Grafana webhook, start AIOps in a second terminal. Use
+`AIOPS_ENV_FILE`; do not copy `.env.live` over the tracked `.env` template:
+
+```powershell
+$env:AIOPS_ENV_FILE = ".env.live"
+python -m uvicorn aiops.api.app:create_app --factory --port 8000
+```
+
+Run all strict connectivity checks, or one integration group, in a third
+terminal:
+
+```powershell
+python -B tests/smoke_test_live.py
+python -B tests/smoke_test_live.py TestPrometheus
+```
+
+Missing credentials, authentication errors, non-2xx responses, and unreachable
+endpoints fail the suite; they are not reported as successful skips.
+
+Run the deterministic integration-client contract smoke tests (including cost and
+the non-mutating mocked live-executor contract) with:
+
+```powershell
+python -B -m unittest tests.test_integrations tests.test_api_and_schemas -v
+```
+
+These tests load `.env` followed by `.env.live`. Test output and assertions never
+print configured token, password, shared-secret, or webhook URL values.
+
 ## Configuration
 
 Runtime secrets, URLs, paths, and all numeric hyperparameters are loaded from `.env` through `aiops.config.Settings`.
+Set `AIOPS_ENV_FILE=.env.live` to select the ignored live file without copying
+secrets into the tracked template.
 Infrastructure topology, signal IDs, detector definitions, and policy lists are loaded from `config/runtime.json`.
 Detector thresholds and detector confidences are intentionally kept in `config/runtime.json` beside detector IDs.
 

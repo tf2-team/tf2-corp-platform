@@ -21,3 +21,6 @@ class PrometheusClient:
     def query_range(self, query: str, start: str, end: str, step: str) -> dict:
         return self._http.get("/api/v1/query_range", params={"query": query, "start": start, "end": end, "step": step})
 
+    def targets(self) -> dict:
+        return self._http.get("/api/v1/targets")
+

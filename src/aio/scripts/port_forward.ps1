@@ -1,77 +1,136 @@
-# Port-Forward Helper for AIOps Smoke Testing
-# =============================================================================
-# Opens all required port-forwards in background jobs.
-# Run this script, then run the smoke tests in another terminal.
-#
-# Usage:  powershell -File scripts/port_forward.ps1
-# Stop:   Get-Job | Stop-Job; Get-Job | Remove-Job
-# =============================================================================
-
-$NS = "techx-corp-prod"
-
-Write-Host "=== AIOps Port-Forward Helper ===" -ForegroundColor Cyan
-Write-Host "Namespace: $NS" -ForegroundColor Gray
-Write-Host ""
-
-# Define port-forward mappings: [local_port, service_name, remote_port]
-$forwards = @(
-    @(9090,  "prometheus",  9090),
-    @(16686, "jaeger",      16686),
-    @(9200,  "opensearch",  9200),
-    @(3000,  "grafana",     80)
+[CmdletBinding()]
+param(
+    [string]$Namespace = $env:AIOPS_SMOKE_NAMESPACE,
+    [int]$StartupTimeoutSeconds = 20
 )
 
-# Start kubectl proxy for Kubernetes API (no token needed)
-Write-Host "[K8s API] Starting kubectl proxy on :8001 ..." -ForegroundColor Yellow
-$proxyJob = Start-Job -ScriptBlock {
-    kubectl proxy --port=8001 2>&1
-}
-Write-Host "[K8s API] kubectl proxy -> localhost:8001  (job $($proxyJob.Id))" -ForegroundColor Green
-
-# Start each port-forward as a background job
-foreach ($fwd in $forwards) {
-    $localPort  = $fwd[0]
-    $svcName    = $fwd[1]
-    $remotePort = $fwd[2]
-
-    Write-Host "[$svcName] Starting port-forward :${localPort} -> svc/${svcName}:${remotePort} ..." -ForegroundColor Yellow
-
-    $job = Start-Job -ScriptBlock {
-        param($ns, $svc, $lp, $rp)
-        kubectl -n $ns port-forward "svc/$svc" "${lp}:${rp}" 2>&1
-    } -ArgumentList $NS, $svcName, $localPort, $remotePort
-
-    Write-Host "[$svcName] localhost:$localPort -> svc/${svcName}:${remotePort}  (job $($job.Id))" -ForegroundColor Green
+$ErrorActionPreference = "Stop"
+if ([string]::IsNullOrWhiteSpace($Namespace)) {
+    $Namespace = "techx-corp-prod"
 }
 
-Write-Host ""
-Write-Host "=== All port-forwards started ===" -ForegroundColor Cyan
-Write-Host ""
-Write-Host "Endpoints ready:" -ForegroundColor White
-Write-Host "  Prometheus   : http://localhost:9090"
-Write-Host "  Jaeger       : http://localhost:16686"
-Write-Host "  OpenSearch   : http://localhost:9200"
-Write-Host "  Grafana      : http://localhost:3000"
-Write-Host "  K8s API Proxy: http://localhost:8001"
-Write-Host ""
-Write-Host "To stop all: Get-Job | Stop-Job; Get-Job | Remove-Job" -ForegroundColor Gray
-Write-Host "Press Ctrl+C to exit (port-forwards keep running as jobs)" -ForegroundColor Gray
-Write-Host ""
+$forwards = @(
+    [pscustomobject]@{ Name = "prometheus"; LocalPort = 9090; RemotePort = 9090; Scheme = "http" },
+    [pscustomobject]@{ Name = "jaeger"; LocalPort = 16686; RemotePort = 16686; Scheme = "http" },
+    [pscustomobject]@{ Name = "opensearch"; LocalPort = 9200; RemotePort = 9200; Scheme = "https" },
+    [pscustomobject]@{ Name = "grafana"; LocalPort = 3000; RemotePort = 80; Scheme = "http" }
+)
+$proxyPort = 8001
+$jobs = @()
 
-# Keep script alive and show job status
+function Test-LocalPort {
+    param([int]$Port)
+    $client = [System.Net.Sockets.TcpClient]::new()
+    try {
+        $task = $client.ConnectAsync("127.0.0.1", $Port)
+        return $task.Wait(250) -and $client.Connected
+    }
+    catch {
+        return $false
+    }
+    finally {
+        $client.Dispose()
+    }
+}
+
+function Assert-KubectlSucceeded {
+    param([string]$Description)
+    if ($LASTEXITCODE -ne 0) {
+        throw "kubectl failed while checking $Description"
+    }
+}
+
 try {
-    while ($true) {
-        Start-Sleep -Seconds 30
-        $failed = Get-Job | Where-Object { $_.State -eq "Failed" }
-        if ($failed) {
-            Write-Host "[WARN] Some port-forwards failed:" -ForegroundColor Red
-            foreach ($f in $failed) {
-                Write-Host "  Job $($f.Id): $($f.ChildJobs[0].JobStateInfo.Reason)" -ForegroundColor Red
-            }
+    if (-not (Get-Command kubectl -ErrorAction SilentlyContinue)) {
+        throw "kubectl is not installed or is not available on PATH"
+    }
+
+    $context = kubectl config current-context
+    Assert-KubectlSucceeded "the current context"
+    Write-Host "AIOps live port-forward" -ForegroundColor Cyan
+    Write-Host "Context: $context" -ForegroundColor Gray
+    Write-Host "Namespace: $Namespace" -ForegroundColor Gray
+
+    kubectl get namespace $Namespace -o name | Out-Null
+    Assert-KubectlSucceeded "namespace/$Namespace"
+
+    foreach ($forward in $forwards) {
+        kubectl -n $Namespace get service $forward.Name -o name | Out-Null
+        Assert-KubectlSucceeded "service/$($forward.Name)"
+    }
+
+    foreach ($port in @($forwards.LocalPort) + $proxyPort) {
+        if (Test-LocalPort -Port $port) {
+            throw "Local port $port is already in use. Stop the old forward or choose a free port."
         }
     }
-} finally {
-    Write-Host "Cleaning up port-forward jobs..." -ForegroundColor Yellow
-    Get-Job | Stop-Job -ErrorAction SilentlyContinue
-    Get-Job | Remove-Job -ErrorAction SilentlyContinue
+
+    foreach ($forward in $forwards) {
+        $job = Start-Job -ScriptBlock {
+            param($Ns, $Service, $LocalPort, $RemotePort)
+            kubectl -n $Ns port-forward "service/$Service" "${LocalPort}:${RemotePort}" 2>&1
+            if ($LASTEXITCODE -ne 0) {
+                throw "kubectl port-forward exited with code $LASTEXITCODE"
+            }
+        } -ArgumentList $Namespace, $forward.Name, $forward.LocalPort, $forward.RemotePort
+        $jobs += $job
+    }
+
+    $jobs += Start-Job -ScriptBlock {
+        param($Port)
+        kubectl proxy --port=$Port 2>&1
+        if ($LASTEXITCODE -ne 0) {
+            throw "kubectl proxy exited with code $LASTEXITCODE"
+        }
+    } -ArgumentList $proxyPort
+
+    $requiredPorts = @($forwards.LocalPort) + $proxyPort
+    $deadline = (Get-Date).AddSeconds($StartupTimeoutSeconds)
+    do {
+        $readyPorts = @($requiredPorts | Where-Object { Test-LocalPort -Port $_ })
+        if ($readyPorts.Count -eq $requiredPorts.Count) {
+            break
+        }
+        $failedJobs = @($jobs | Where-Object { $_.State -ne "Running" })
+        if ($failedJobs) {
+            $details = $failedJobs | Receive-Job -Keep | Out-String
+            throw "A port-forward stopped during startup.`n$details"
+        }
+        Start-Sleep -Milliseconds 300
+    } while ((Get-Date) -lt $deadline)
+
+    if ($readyPorts.Count -ne $requiredPorts.Count) {
+        $missing = @($requiredPorts | Where-Object { $_ -notin $readyPorts }) -join ", "
+        $details = $jobs | Receive-Job -Keep | Out-String
+        throw "Timed out waiting for local port(s): $missing`n$details"
+    }
+
+    Write-Host "`nEndpoints ready:" -ForegroundColor Green
+    foreach ($forward in $forwards) {
+        Write-Host ("  {0,-12} {1}://localhost:{2}" -f $forward.Name, $forward.Scheme, $forward.LocalPort)
+    }
+    Write-Host ("  {0,-12} http://localhost:{1}" -f "kubernetes", $proxyPort)
+    Write-Host "  aiops       http://localhost:8000 (start separately for Grafana inbound test)"
+
+    Write-Host "`nCredential requirements:" -ForegroundColor Yellow
+    Write-Host "  Prometheus, Jaeger, Kubernetes proxy, Grafana health: no service credential"
+    Write-Host "  OpenSearch: Basic Auth username/password is required"
+    Write-Host "  Grafana inbound webhook: shared secret must match the AIOps process"
+    Write-Host "  Notification: external webhook URL; it cannot be port-forwarded"
+    Write-Host "`nPress Ctrl+C to stop only the jobs created by this script." -ForegroundColor Gray
+
+    while ($true) {
+        Wait-Job -Job $jobs -Any -Timeout 5 | Out-Null
+        $stoppedJobs = @($jobs | Where-Object { $_.State -ne "Running" })
+        if ($stoppedJobs) {
+            $details = $stoppedJobs | Receive-Job -Keep | Out-String
+            throw "A port-forward stopped unexpectedly.`n$details"
+        }
+    }
+}
+finally {
+    if ($jobs) {
+        $jobs | Stop-Job -ErrorAction SilentlyContinue
+        $jobs | Remove-Job -Force -ErrorAction SilentlyContinue
+    }
 }

@@ -13,3 +13,6 @@ class JaegerClient:
     def search_traces(self, service: str, limit: int = 20) -> dict:
         return self._http.get("/api/traces", params={"service": service, "limit": limit})
 
+    def list_services(self) -> dict:
+        return self._http.get("/api/services")
+

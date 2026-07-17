@@ -5,6 +5,7 @@ package main
 import (
 	"bytes"
 	"context"
+	"crypto/tls"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -30,7 +31,6 @@ import (
 	flagd "github.com/open-feature/go-sdk-contrib/providers/flagd/pkg"
 	"github.com/open-feature/go-sdk/openfeature"
 
-	"go.opentelemetry.io/contrib/bridges/otelslog"
 	"go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc"
 	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 	"go.opentelemetry.io/contrib/instrumentation/runtime"
@@ -182,7 +182,7 @@ func main() {
 	// this *must* be called after the logger provider is initialized
 	// otherwise the Sarama producer in kafka/producer.go will not be
 	// able to log properly
-	logger = otelslog.NewLogger("checkout")
+	logger = slog.New(slog.NewJSONHandler(os.Stdout, nil))
 	slog.SetDefault(logger)
 
 	err := runtime.Start(runtime.WithMinimumReadMemStatsInterval(time.Second))
@@ -251,8 +251,15 @@ func main() {
 			config := sarama.NewConfig()
 			config.Consumer.Offsets.Initial = sarama.OffsetOldest
 			config.Version = kafka.ProtocolVersion
+			if os.Getenv("KAFKA_TLS") == "true" {
+				config.Net.TLS.Enable = true
+				config.Net.TLS.Config = &tls.Config{
+					InsecureSkipVerify: true,
+				}
+			}
 
-			consumerGroup, err := sarama.NewConsumerGroup([]string{svc.kafkaBrokerSvcAddr}, "checkout-group", config)
+			brokers := strings.Split(svc.kafkaBrokerSvcAddr, ",")
+			consumerGroup, err := sarama.NewConsumerGroup(brokers, "checkout-group", config)
 			if err != nil {
 				logger.Error(fmt.Sprintf("Failed to create consumer group: %+v", err))
 				return
@@ -627,10 +634,84 @@ func (cs *checkout) getUserCart(ctx context.Context, userID string) ([]*pb.CartI
 }
 
 func (cs *checkout) emptyUserCart(ctx context.Context, userID string) error {
-	if _, err := cs.cartSvcClient.EmptyCart(ctx, &pb.EmptyCartRequest{UserId: userID}); err != nil {
-		return fmt.Errorf("failed to empty user cart during checkout: %+v", err)
+	var lastErr error
+	for attempt := 1; attempt <= emptyCartMaxAttempts; attempt++ {
+		if err := ctx.Err(); err != nil {
+			return fmt.Errorf("failed to empty user cart during checkout: %+v", err)
+		}
+
+		if _, err := cs.cartSvcClient.EmptyCart(ctx, &pb.EmptyCartRequest{UserId: userID}); err == nil {
+			recordCartCleanupSucceeded(ctx, userID, attempt)
+			return nil
+		} else {
+			lastErr = err
+			if attempt == emptyCartMaxAttempts {
+				break
+			}
+
+			backoff := emptyCartBaseBackoff * time.Duration(1<<(attempt-1))
+			logger.LogAttrs(ctx, slog.LevelWarn, "cart cleanup failed; retrying",
+				slog.String("user_id", userID),
+				slog.Int("attempt", attempt),
+				slog.Int("max_attempts", emptyCartMaxAttempts),
+				slog.String("backoff", backoff.String()),
+				slog.String("error", err.Error()),
+			)
+			timer := time.NewTimer(backoff)
+			select {
+			case <-ctx.Done():
+				timer.Stop()
+				return fmt.Errorf("failed to empty user cart during checkout: %+v", ctx.Err())
+			case <-timer.C:
+			}
+		}
 	}
-	return nil
+
+	recordCartCleanupDeferred(ctx, userID, lastErr)
+	return fmt.Errorf("failed to empty user cart during checkout: %+v", lastErr)
+}
+
+const (
+	emptyCartMaxAttempts = 3
+	emptyCartBaseBackoff = 25 * time.Millisecond
+)
+
+func recordCartCleanupSucceeded(ctx context.Context, userID string, attempt int) {
+	span := trace.SpanFromContext(ctx)
+	span.SetAttributes(
+		attribute.String("app.cart.cleanup.status", "succeeded"),
+		attribute.Int("app.cart.cleanup.attempts", attempt),
+	)
+	if attempt > 1 {
+		logger.LogAttrs(ctx, slog.LevelInfo, "cart cleanup succeeded after retry",
+			slog.String("user_id", userID),
+			slog.Int("attempt", attempt),
+		)
+	}
+}
+
+func recordCartCleanupDeferred(ctx context.Context, userID string, err error) {
+	errText := "<nil>"
+	if err != nil {
+		errText = err.Error()
+	}
+
+	span := trace.SpanFromContext(ctx)
+	span.SetAttributes(
+		attribute.String("app.cart.cleanup.status", "deferred"),
+		attribute.Int("app.cart.cleanup.attempts", emptyCartMaxAttempts),
+	)
+	span.AddEvent("cart cleanup deferred",
+		trace.WithAttributes(
+			attribute.String("app.user.id", userID),
+			attribute.String("exception.message", errText),
+		),
+	)
+	logger.LogAttrs(ctx, slog.LevelWarn, "cart cleanup deferred after retries",
+		slog.String("user_id", userID),
+		slog.Int("attempts", emptyCartMaxAttempts),
+		slog.String("error", errText),
+	)
 }
 
 func (cs *checkout) prepOrderItems(ctx context.Context, items []*pb.CartItem, userCurrency string) ([]*pb.OrderItem, error) {
@@ -847,7 +928,8 @@ func (cs *checkout) ensureKafkaProducer() error {
 	if cs.kafkaBrokerSvcAddr == "" {
 		return fmt.Errorf("Kafka broker address is not configured")
 	}
-	producer, err := kafka.CreateKafkaProducer([]string{cs.kafkaBrokerSvcAddr}, logger)
+	brokers := strings.Split(cs.kafkaBrokerSvcAddr, ",")
+	producer, err := kafka.CreateKafkaProducer(brokers, logger)
 	if err != nil {
 		return fmt.Errorf("create Kafka producer: %w", err)
 	}
