@@ -47,7 +47,7 @@ Cases are discovered at:
 src/aio/evaluate/dataset/<suite>/<fault>/<case>/simple_metrics.csv
 ```
 
-Expected root service and metric labels are inferred from the fault directory name. For example, `payment_delay` maps to service `payment` and metric family `latency`. All 120 discovered cases are incidents; the dataset has no normal cases.
+Expected results are loaded from the shared ground-truth sheet `src/aio/evaluate/incident_labels.csv`. All 120 labeled cases are incidents; the dataset has no normal cases.
 
 ## Reproduce with uv
 
@@ -62,7 +62,8 @@ uv pip install --python .venv\Scripts\python.exe "pydantic>=2,<3" "pydantic-sett
   --dataset evaluate\dataset `
   --incident-threshold 1.0 `
   --top-k 5 `
-  --out ..\..\docs\aiops\eval\naive_threshold_report.json
+  --labels evaluate\incident_labels.csv `
+  --out ..\..\docs\aiops\eval\naive_threshold_labeled_report.json
 ```
 
 ## Full-dataset result
@@ -75,7 +76,7 @@ Configuration: 120 cases, incident threshold `1.0`, RCA `top_k=5`.
 | RCA Top-K service overlap | 0.0617 | 0.3083 | 0.1028 | 37 | 563 | 83 |
 | RCA Top-K service + metric hit | 0.2083 | 0.2083 | 0.2083 | 25 | 0 | 95 |
 
-Raw result: [`naive_threshold_report.json`](naive_threshold_report.json).
+Ground-truth result: [`naive_threshold_labeled_report.json`](naive_threshold_labeled_report.json).
 
 ## Interpretation and limitations
 

@@ -47,7 +47,8 @@ Run from `src/aio` using the existing venv:
   --dataset evaluate\dataset `
   --incident-threshold 1.0 `
   --top-k 5 `
-  --out ..\..\docs\aiops\eval\service_change_score_report.json
+  --labels evaluate\incident_labels.csv `
+  --out ..\..\docs\aiops\eval\service_change_score_labeled_report.json
 ```
 
 Unit tests:
@@ -66,7 +67,7 @@ Configuration: RE2-SS + RE3-SS, 120 cases, threshold `1.0`, `top_k=5`.
 | RCA Top-K service overlap | 18.00% | 90.00% | 30.00% | 108 | 492 | 12 |
 | RCA service + metric hit | 80.00% | 80.00% | 80.00% | 96 | 0 | 24 |
 
-Raw report: [`service_change_score_report.json`](service_change_score_report.json).
+Ground-truth report: [`service_change_score_labeled_report.json`](service_change_score_labeled_report.json).
 
 ## Three-pipeline comparison
 
@@ -86,7 +87,7 @@ Service aggregation substantially improves over selecting only the largest metri
 - Raw changes are not normalized across metric units, so high-scale metrics can contribute more.
 - Summing can favor services that expose more metric series.
 - There are no normal cases, so false-alert behavior is not measured.
-- Labels are inferred from folder names and contain one expected root service.
+- Expected results are loaded from the shared ground-truth sheet `src/aio/evaluate/incident_labels.csv`.
 - This baseline does not use BARO, topology, dependencies, causal ordering, incident management, remediation, or verification.
 
 ## Implementation

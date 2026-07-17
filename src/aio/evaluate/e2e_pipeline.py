@@ -4,16 +4,19 @@ import argparse
 import csv
 import json
 import sys
+from collections import defaultdict
 from pathlib import Path
+from statistics import mean
 
 ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
+from aiops.anomaly import V001AnomalyEngine
 from aiops.anomaly.stats import robust_score
 from aiops.config import Settings, load_runtime_config
 from aiops.rca import V001RcaEngine
-from aiops.schemas import MetricPoint, MetricSeries
+from aiops.schemas import AnomalyFinding, MetricPoint, MetricSeries
 from incident_labels import IncidentLabel, label_for_case, load_label_sheet, validate_dataset_coverage
 
 
@@ -25,6 +28,11 @@ def main() -> None:
     parser.add_argument("--max-metrics", type=int, default=40)
     parser.add_argument("--incident-threshold", type=float, default=1.0)
     parser.add_argument("--labels", type=Path, default=None)
+    parser.add_argument(
+        "--component-audit",
+        action="store_true",
+        help="Include a detector-by-detector summary in the report.",
+    )
     parser.add_argument("--out", type=Path, default=None)
     args = parser.parse_args()
 
@@ -36,15 +44,27 @@ def main() -> None:
         case_dirs = case_dirs[: args.limit]
 
     rca = V001RcaEngine(load_runtime_config(settings.runtime_config_path), settings.rca_fallback_split_ratio)
+    anomaly_engine = V001AnomalyEngine(
+        ewma_alpha=settings.rca_ewma_alpha,
+        ewma_z_threshold=settings.rca_ewma_z_threshold,
+        isolation_score_threshold=settings.rca_isolation_score_threshold,
+        bocpd_score_threshold=settings.rca_bocpd_score_threshold,
+        min_points=settings.rca_min_points,
+        seasonal_period=settings.rca_seasonal_period,
+    )
     labels = load_label_sheet(args.labels) if args.labels else None
     if labels is not None:
         validate_dataset_coverage(dataset, labels)
-    cases = [evaluate_case(path, dataset, labels, rca, top_k, args.max_metrics, args.incident_threshold) for path in case_dirs]
+    cases = [
+        evaluate_case(path, dataset, labels, rca, anomaly_engine, top_k, args.max_metrics, args.incident_threshold)
+        for path in case_dirs
+    ]
     report = {
         "metrics": score_report(cases),
         "top_k": top_k,
         "incident_threshold": args.incident_threshold,
         "case_count": len(cases),
+        "component_audit": summarize_component_audit(cases, settings) if args.component_audit else None,
         "cases": cases,
     }
 
@@ -62,12 +82,14 @@ def evaluate_case(
     dataset: Path,
     labels: dict[str, IncidentLabel] | None,
     rca: V001RcaEngine,
+    anomaly_engine: V001AnomalyEngine,
     top_k: int,
     max_metrics: int,
     anomaly_threshold: float,
 ) -> dict[str, object]:
     series = read_series(path / "simple_metrics.csv", max_metrics)
-    result = rca.rank([], series, top_k)
+    detector_findings = anomaly_engine.evaluate(series)
+    result = rca.rank(detector_findings, series, top_k)
     predicted_roots = [
         {"service": root.service, "metrics": root.root_cause_metrics}
         for root in result.root_causes[:top_k]
@@ -85,10 +107,67 @@ def evaluate_case(
         "expected_root_metric": expected_metric,
         "expected_root_causes": expected_roots,
         "expected_action": label.expected_action if label else None,
+        "detector_findings": [finding.model_dump(mode="json") for finding in detector_findings],
         "predicted_root_causes": predicted_roots,
         "predicted_root_services": [root["service"] for root in predicted_roots],
         "rca_top_k_hit": rca_hit(expected_root, expected_metric, predicted_roots),
     }
+
+
+def summarize_component_audit(cases: list[dict[str, object]], settings: Settings) -> dict[str, object]:
+    expected_algorithms = ("ewma_stl", "isolation_forest", "baro_bocpd")
+    by_algorithm: dict[str, list[AnomalyFinding]] = defaultdict(list)
+    for case in cases:
+        for raw_finding in case.get("detector_findings", []):
+            finding = AnomalyFinding.model_validate(raw_finding)
+            validate_finding_contract(finding)
+            by_algorithm[finding.algorithm].append(finding)
+
+    components = {}
+    for algorithm in expected_algorithms:
+        findings = by_algorithm[algorithm]
+        scores = [finding.score for finding in findings]
+        timestamps = [finding.timestamp for finding in findings]
+        components[algorithm] = {
+            "finding_count": len(findings),
+            "case_count": sum(
+                any(raw["algorithm"] == algorithm for raw in case.get("detector_findings", []))
+                for case in cases
+            ),
+            "score_range": {
+                "min": min(scores) if scores else None,
+                "max": max(scores) if scores else None,
+                "mean": mean(scores) if scores else None,
+            },
+            "timestamp_range": {
+                "min": min(timestamps) if timestamps else None,
+                "max": max(timestamps) if timestamps else None,
+            },
+        }
+    return {
+        "stage": "hybrid-detector-component-audit",
+        "normalization_applied": False,
+        "fusion_applied": True,
+        "findings_used_for_rca": True,
+        "configuration": {
+            "ewma_alpha": settings.rca_ewma_alpha,
+            "ewma_z_threshold": settings.rca_ewma_z_threshold,
+            "isolation_score_threshold": settings.rca_isolation_score_threshold,
+            "bocpd_score_threshold": settings.rca_bocpd_score_threshold,
+            "min_points": settings.rca_min_points,
+            "seasonal_period": settings.rca_seasonal_period,
+        },
+        "components": components,
+    }
+
+
+def validate_finding_contract(finding: AnomalyFinding) -> None:
+    if finding.algorithm not in {"ewma_stl", "isolation_forest", "baro_bocpd"}:
+        raise ValueError(f"unexpected detector algorithm: {finding.algorithm}")
+    if not finding.service or not finding.metric or not finding.signal_id:
+        raise ValueError(f"incomplete anomaly finding identity: {finding.model_dump()}")
+    if finding.score < 0:
+        raise ValueError(f"negative anomaly score: {finding.model_dump()}")
 
 
 def read_series(path: Path, max_metrics: int) -> list[MetricSeries]:
