@@ -7,6 +7,7 @@ from aiops.anomaly.stats import mean, stdev
 from aiops.schemas import AnomalyFinding, MetricSeries
 
 os.environ.setdefault("MPLCONFIGDIR", "/tmp")
+SMOOTHING_EPSILON = 0.00001
 
 
 class EwmaStlDetector:
@@ -30,14 +31,19 @@ class EwmaStlDetector:
         return findings
 
     def _residuals(self, values: list[float]) -> list[float]:
-        from statsmodels.tsa.api import SimpleExpSmoothing
         from statsmodels.tsa.seasonal import STL
 
-        smoothed = SimpleExpSmoothing(values, initialization_method="estimated").fit(smoothing_level=self.alpha, optimized=False).fittedvalues
+        smoothed = self._ewma(values)
         if self.seasonal_period <= 1 or len(values) < self.seasonal_period * 2:
             return [value - smooth for value, smooth in zip(values, smoothed)]
         seasonal = STL(values, period=self.seasonal_period, robust=True).fit().seasonal
         return [value - smooth - season for value, smooth, season in zip(values, smoothed, seasonal)]
+
+    def _ewma(self, values: list[float]) -> list[float]:
+        smoothed = [values[0]]
+        for value in values[1:]:
+            smoothed.append(self.alpha * value + (1 - self.alpha) * smoothed[-1] + SMOOTHING_EPSILON)
+        return smoothed
 
     def _finding(self, metric: MetricSeries, algorithm: str, score: float, timestamp: int) -> AnomalyFinding:
         return AnomalyFinding(

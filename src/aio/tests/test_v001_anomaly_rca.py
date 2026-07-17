@@ -1,10 +1,12 @@
 import io
 import unittest
+import warnings
 from contextlib import redirect_stdout
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
 from aiops.anomaly import V001AnomalyEngine
+from aiops.anomaly.v001 import EwmaStlDetector
 from aiops.api.app import run_static_pipeline
 from aiops.config import Settings, load_runtime_config
 from aiops.rca import V001RcaEngine
@@ -21,6 +23,15 @@ def metric(service: str, name: str, values: list[float]) -> MetricSeries:
 
 
 class V001AnomalyRcaTest(unittest.TestCase):
+    def test_ewma_formula_does_not_emit_statsmodels_zero_sse_warning(self):
+        detector = EwmaStlDetector(alpha=0.3, z_threshold=3.0, min_points=8, seasonal_period=1)
+
+        with warnings.catch_warnings():
+            warnings.simplefilter("error", RuntimeWarning)
+            residuals = detector._residuals([1.0] * 8)
+
+        self.assertEqual(len(residuals), 8)
+
     def test_v001_pipeline_ranks_top_root_cause_service_and_metrics(self):
         series = [
             metric("checkout", "latency", [1.0, 1.1, 1.0, 1.1, 1.0, 1.1, 1.0, 2.0, 2.1, 2.0]),

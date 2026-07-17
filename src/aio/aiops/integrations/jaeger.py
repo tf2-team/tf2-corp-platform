@@ -11,8 +11,11 @@ class JaegerClient:
         self._base_url = settings.jaeger_base_url.rstrip("/")
         self._http = HttpApiClient(settings.jaeger_base_url, token=settings.jaeger_token, account=settings.jaeger_account, transport=transport)
 
-    def search_traces(self, service: str, limit: int = 20) -> dict:
-        return self._http.get("/api/traces", params={"service": service, "limit": limit})
+    def search_traces(self, service: str, limit: int = 20, start: int | None = None, end: int | None = None) -> dict:
+        params = {"service": service, "limit": limit}
+        if start is not None and end is not None:
+            params.update({"start": start, "end": end})
+        return self._http.get("/api/traces", params=params)
 
     def list_services(self) -> dict:
         return self._http.get("/api/services")

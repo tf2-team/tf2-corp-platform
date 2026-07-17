@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import re
+import time
+from datetime import UTC, datetime
 from typing import Any, Protocol
 
 from aiops.schemas import CandidateEvent, EvidenceItem, Feature
@@ -9,7 +11,7 @@ from aiops.shared.features import index_features
 
 
 class JaegerClientLike(Protocol):
-    def search_traces(self, service: str, limit: int = 20) -> dict: ...
+    def search_traces(self, service: str, limit: int = 20, start: int | None = None, end: int | None = None) -> dict: ...
 
     def trace_ui_url(self, trace_id: str) -> str: ...
 
@@ -71,9 +73,13 @@ class Enricher:
 
     def _jaeger_evidence(self, candidate: CandidateEvent) -> list[EvidenceItem]:
         try:
-            traces = self.jaeger.search_traces(candidate.likely_dependency if candidate.likely_dependency != "unknown" else candidate.service, limit=1).get(
-                "data", []
-            )
+            start, end = _time_bounds(candidate)
+            traces = self.jaeger.search_traces(
+                candidate.likely_dependency if candidate.likely_dependency != "unknown" else candidate.service,
+                limit=1,
+                start=start * 1_000_000,
+                end=end * 1_000_000,
+            ).get("data", [])
             if not traces:
                 return []
             trace = traces[0]
@@ -90,15 +96,23 @@ class Enricher:
 
     def _opensearch_evidence(self, candidate: CandidateEvent) -> list[EvidenceItem]:
         try:
+            start, end = _time_bounds(candidate)
             data = self.opensearch.search(
                 self.opensearch_index,
                 {
                     "size": 3,
                     "query": {
-                        "multi_match": {
-                            "query": candidate.likely_dependency if candidate.likely_dependency != "unknown" else candidate.service,
-                            "fields": ["service.name", "k8s.deployment.name", "message", "body"],
-                        }
+                        "bool": {
+                            "must": [
+                                {
+                                    "multi_match": {
+                                        "query": candidate.likely_dependency if candidate.likely_dependency != "unknown" else candidate.service,
+                                        "fields": ["service.name", "k8s.deployment.name", "message", "body"],
+                                    }
+                                },
+                                {"range": {"@timestamp": {"gte": _iso_utc(start), "lte": _iso_utc(end)}}},
+                            ]
+                        },
                     },
                 },
             )
@@ -171,3 +185,20 @@ def _redact(value: str) -> str:
 
 def _pod_ready(pod: dict) -> bool:
     return any(condition.get("type") == "Ready" and condition.get("status") == "True" for condition in pod.get("status", {}).get("conditions", []))
+
+
+def _time_bounds(candidate: CandidateEvent) -> tuple[int, int]:
+    end = candidate.timestamp or int(time.time())
+    return end - _window_seconds(candidate.window), end
+
+
+def _window_seconds(window: str) -> int:
+    match = re.fullmatch(r"(\d+)([smhd])", window.strip())
+    if not match:
+        return 0
+    value = int(match.group(1))
+    return value * {"s": 1, "m": 60, "h": 3600, "d": 86400}[match.group(2)]
+
+
+def _iso_utc(timestamp: int) -> str:
+    return datetime.fromtimestamp(timestamp, UTC).isoformat().replace("+00:00", "Z")
