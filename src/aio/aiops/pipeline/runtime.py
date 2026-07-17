@@ -79,10 +79,9 @@ class AiopsPipeline:
         self.remediation = remediation
 
     def run_once(self, metric_series: list[MetricSeries] | None = None) -> PipelineResult:
-        observations = self.collector.collect()
-        normalized = self.normalizer.normalize(observations)
-        qualified = self.qualification.evaluate(normalized)
-        features = self.feature_builder.build(qualified)
+        collected = self.collector.collect()
+        observations = self.qualification.evaluate(self.normalizer.normalize(collected))
+        features = self.feature_builder.build(observations)
         candidates = self.detector_engine.evaluate(features)
         correlated = self.correlator.correlate(candidates)
         enriched = self.enricher.enrich(correlated, features)

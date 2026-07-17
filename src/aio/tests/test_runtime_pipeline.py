@@ -145,6 +145,52 @@ class RuntimePipelineTest(unittest.TestCase):
         self.assertEqual(result.policy_decisions[0].result, "dry-run-recorded")
         self.assertEqual(result.verification_results[0].status, "not_recovered")
 
+    def test_pipeline_accepts_current_cdo_signal_shape_before_detection(self):
+        settings = Settings()
+        with TemporaryDirectory() as tmp:
+            store = SQLiteIncidentStore(Path(tmp) / "aiops.sqlite3", environment=settings.environment)
+            pipeline = AiopsPipeline(
+                collector=StaticCollector(
+                    [
+                        Observation(
+                            signal_id="checkout_bad_ratio_24h",
+                            value=2.0,
+                            unit="percent",
+                            window="1d",
+                            quality=SignalQuality.UNQUALIFIED,
+                            labels={
+                                "query_id": "checkout.bad_ratio.24h",
+                                "service_name": "checkout",
+                                "flow": "checkout",
+                            },
+                        )
+                    ]
+                ),
+                detectors=[
+                    ThresholdDetector(
+                        detector_id="ops01_checkout_slo",
+                        signal_id="checkout_bad_ratio_24h",
+                        threshold=0.01,
+                        flow="checkout",
+                        service="checkout",
+                        severity="SEV1",
+                        runbook_id="RB-CHECKOUT-SLO",
+                    )
+                ],
+                store=store,
+                policy=policy(settings),
+                **runtime_kwargs(settings),
+            )
+
+            result = pipeline.run_once()
+            store.close()
+
+        self.assertEqual(result.observations[0].quality, SignalQuality.VERIFIED)
+        self.assertEqual(result.observations[0].unit, "ratio")
+        self.assertEqual(result.observations[0].window, "24h")
+        self.assertEqual(result.observations[0].labels["service"], "checkout")
+        self.assertEqual(result.candidates[0].detector_id, "ops01_checkout_slo")
+
     def test_pipeline_opens_monitoring_incident_for_stale_signal(self):
         settings = Settings()
         with TemporaryDirectory() as tmp:

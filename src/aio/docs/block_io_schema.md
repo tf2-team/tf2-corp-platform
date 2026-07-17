@@ -153,32 +153,7 @@ Output:
 
 Current behavior: `StaticCollector` returns a copy of the observations passed into the API request. Future Prometheus/Grafana/Jaeger collectors must still output `list[Observation]`.
 
-### 2. Qualification Gate
-
-Code: `aiops.qualification.gate.QualificationGate`
-
-Input:
-
-```json
-{
-  "observations": ["Observation"]
-}
-```
-
-Output:
-
-```json
-{
-  "qualified_observations": ["Observation"]
-}
-```
-
-Rules:
-
-- If `quality != "unqualified"`, pass through unchanged.
-- If `quality == "unqualified"`, output `quality = "fallback-only"` and `value = null`.
-
-### 3. Normalization
+### 2. Normalization
 
 Code: `aiops.normalization.normalizer.Normalizer`
 
@@ -186,7 +161,7 @@ Input:
 
 ```json
 {
-  "qualified_observations": ["Observation"]
+  "observations": ["Observation"]
 }
 ```
 
@@ -201,7 +176,35 @@ Output:
 Rules:
 
 - Sorts `labels` by key.
-- Does not change values, units, windows, or quality.
+- Applies CDO metric aliases such as `service_name -> service`.
+- Converts configured unit/window aliases before registry validation.
+
+### 3. Qualification Gate
+
+Code: `aiops.qualification.gate.QualificationGate`
+
+Input:
+
+```json
+{
+  "normalized_observations": ["Observation"]
+}
+```
+
+Output:
+
+```json
+{
+  "qualified_observations": ["Observation"]
+}
+```
+
+Rules:
+
+- Unknown signals become `quality = "unqualified"` and `value = null`.
+- Missing, stale, and invalid signals keep their quality and force `value = null`.
+- Values with wrong unit, window, labels, shape, freshness, or range become invalid.
+- Passing primary signals become `quality = "verified"`; fallback-only stays fallback-only.
 
 ### 4. Feature Builder
 
