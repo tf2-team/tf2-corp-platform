@@ -50,6 +50,13 @@ def create_archive(cache: Path, archive: Path) -> None:
                 bundle.addfile(info)
 
 
+def validate_runtime_model() -> None:
+    """Load the exact scanner used by the service; propagate any loader failure."""
+    from llm_guard.input_scanners import PromptInjection
+
+    PromptInjection(threshold=0.5)
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--output", type=Path, default=Path("dist/ai-model"))
@@ -78,9 +85,7 @@ def main() -> None:
     # Validate the exact runtime loader before packaging the cache.
     os.environ["HF_HUB_OFFLINE"] = "1"
     os.environ["TRANSFORMERS_OFFLINE"] = "1"
-    from llm_guard.input_scanners import PromptInjection
-
-    PromptInjection(threshold=0.5)
+    validate_runtime_model()
 
     manifest = {
         "model_id": MODEL_ID,
