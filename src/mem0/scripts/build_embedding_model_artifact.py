@@ -1,4 +1,8 @@
-#!/usr/bin/env python3
+#!/usr/bin/python
+
+# Copyright The OpenTelemetry Authors
+# SPDX-License-Identifier: Apache-2.0
+
 """Build an immutable FastEmbed cache artifact for the Mem0 workload."""
 
 from __future__ import annotations

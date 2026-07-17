@@ -1,4 +1,8 @@
-#!/usr/bin/env python3
+#!/usr/bin/python
+
+# Copyright The OpenTelemetry Authors
+# SPDX-License-Identifier: Apache-2.0
+
 """Validate a Mem0 FastEmbed artifact without model-network access."""
 
 from __future__ import annotations

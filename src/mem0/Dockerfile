@@ -1,4 +1,6 @@
 # syntax=docker/dockerfile:1.7
+# Copyright The OpenTelemetry Authors
+# SPDX-License-Identifier: Apache-2.0
 
 ARG PYTHON_VERSION=3.12.10
 
