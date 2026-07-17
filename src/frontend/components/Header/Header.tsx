@@ -14,6 +14,9 @@ const Header = () => {
             <S.BrandImg />
           </S.NavBarBrand>
           <S.Controls>
+            <S.CopilotNavBtn href="/copilot">
+              Shopping Copilot
+            </S.CopilotNavBtn>
             <CurrencySwitcher />
             <CartIcon />
           </S.Controls>
@@ -22,5 +25,6 @@ const Header = () => {
     </S.Header>
   );
 };
+
 
 export default Header;

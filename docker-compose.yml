@@ -530,6 +530,54 @@ services:
         condition: service_started
     logging: *logging
 
+  # Shopping Copilot service (A2.1–A2.3)
+  shopping-copilot:
+    image: ${IMAGE_NAME}/shopping-copilot:${DEMO_VERSION}
+    container_name: shopping-copilot
+    build:
+      context: ./
+      dockerfile: ${SHOPPING_COPILOT_DOCKERFILE}
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+    restart: unless-stopped
+    ports:
+      - "${SHOPPING_COPILOT_PORT}"
+    environment:
+      - SHOPPING_COPILOT_PORT
+      - OTEL_PYTHON_LOG_CORRELATION=true
+      - OTEL_EXPORTER_OTLP_ENDPOINT
+      - OTEL_EXPORTER_OTLP_METRICS_TEMPORALITY_PREFERENCE
+      - OTEL_RESOURCE_ATTRIBUTES
+      - OTEL_SERVICE_NAME=shopping-copilot
+      - OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT=true
+      - PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION=python
+      - HF_HOME=/home/appuser/.cache/huggingface
+      - AI_GUARDRAIL_REQUIRE_MODEL=${AI_GUARDRAIL_REQUIRE_MODEL:-false}
+      - LLM_BASE_URL
+      - OPENAI_API_KEY
+      - LLM_MODEL
+      - PRODUCT_CATALOG_ADDR
+      - PRODUCT_REVIEWS_ADDR
+      - CART_ADDR
+      - VALKEY_ADDR
+      - FLAGD_HOST
+      - FLAGD_PORT
+    depends_on:
+      product-catalog:
+        condition: service_started
+      product-reviews:
+        condition: service_started
+      valkey-cart:
+        condition: service_started
+      otel-collector:
+        condition: service_started
+    volumes:
+      - shopping-copilot-hf-cache:/home/appuser/.cache/huggingface
+    logging: *logging
+
+
   # Quote service
   quote:
     image: ${IMAGE_NAME}/quote:${DEMO_VERSION}
@@ -946,3 +994,6 @@ volumes:
   valkey-cart-data:
   postgresql-data:
   kafka-data:
+  product-reviews-hf-cache:
+  shopping-copilot-hf-cache:
+
