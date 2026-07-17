@@ -84,6 +84,7 @@ def generate_grounded_summary(safe_reviews: SafeReviewSet) -> GroundedDraft:
     return instructor_client.chat.completions.create(
         model=model,
         response_model=GroundedDraft,
+        max_retries=3,
         messages=[
             {"role": "system", "content": _SYSTEM_PROMPT},
             {"role": "user", "content": _build_review_prompt(safe_reviews)},

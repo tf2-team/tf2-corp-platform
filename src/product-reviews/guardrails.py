@@ -98,7 +98,7 @@ def redact_pii(text: str) -> str:
         results = analyzer.analyze(
             text=sanitized,
             language="en",
-            entities=["EMAIL_ADDRESS", "PHONE_NUMBER", "LOCATION", "CREDIT_CARD"]
+            entities=["EMAIL_ADDRESS", "PHONE_NUMBER", "LOCATION", "CREDIT_CARD", "PERSON"]
         )
 
         operators = {
@@ -106,6 +106,7 @@ def redact_pii(text: str) -> str:
             "PHONE_NUMBER": OperatorConfig("replace", {"new_value": "[REDACTED]"}),
             "LOCATION": OperatorConfig("replace", {"new_value": "[REDACTED]"}),
             "CREDIT_CARD": OperatorConfig("replace", {"new_value": "[REDACTED]"}),
+            "PERSON": OperatorConfig("replace", {"new_value": "[REDACTED]"}),
         }
 
         anonymized = anonymizer.anonymize(
@@ -291,7 +292,7 @@ def scan_output(text: str) -> GuardrailResult:
         results = analyzer.analyze(
             text=text,
             language="en",
-            entities=["EMAIL_ADDRESS", "PHONE_NUMBER", "LOCATION", "CREDIT_CARD"]
+            entities=["EMAIL_ADDRESS", "PHONE_NUMBER", "LOCATION", "CREDIT_CARD", "PERSON"]
         )
         if results:
             return GuardrailResult(

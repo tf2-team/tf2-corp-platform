@@ -28,6 +28,10 @@ class TestGuardrails(unittest.TestCase):
         # Credit Card
         self.assertEqual(redact_pii("Card: 1234-5678-9012-3456"), "Card: [REDACTED]")
 
+    def test_redact_person_name(self):
+        # Test person name redaction
+        self.assertEqual(redact_pii("My name is John Doe"), "My name is [REDACTED]")
+
     def test_check_prompt_injection(self):
         # Normal content
         self.assertTrue(check_prompt_injection("This product is very good, highly recommended."))
