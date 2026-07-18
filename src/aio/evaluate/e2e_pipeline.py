@@ -33,7 +33,7 @@ def main() -> None:
         case_dirs = case_dirs[: args.limit]
 
     hyperparameters = load_hyperparameters(settings.hyperparameters_path)
-    rca = V001RcaEngine(load_runtime_config(settings.runtime_config_path), hyperparameters["rca"]["graph"])
+    rca = V001RcaEngine(load_runtime_config(settings.runtime_config_path), hyperparameters["rca"]["graph"], hyperparameters["rca"]["combined"])
     cases = [evaluate_case(path, rca, top_k, args.max_metrics, args.incident_threshold) for path in case_dirs]
     report = {
         "metrics": score_report(cases),

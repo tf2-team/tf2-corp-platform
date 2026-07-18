@@ -26,7 +26,7 @@ class RuntimeConfigTest(unittest.TestCase):
 
     def test_each_service_error_rate_signal_has_auto_detector(self):
         config = load_runtime_config(Path("config/runtime.json"))
-        signal_ids = {signal.id for signal in config.signals if signal.query_id.endswith(".error_rate.5m")}
+        signal_ids = {signal.id for signal in config.signals if signal.query_id.endswith(".error_rate_5m")}
         detector_signal_ids = {detector.signal_id for detector in config.detectors if detector.id.startswith("auto_")}
 
         self.assertEqual(detector_signal_ids, signal_ids)
@@ -35,21 +35,27 @@ class RuntimeConfigTest(unittest.TestCase):
         raw = json.loads(Path("config/runtime.json").read_text(encoding="utf-8"))
         config = load_runtime_config(Path("config/runtime.json"))
 
-        self.assertNotIn("payment.error_rate.5m", raw["prometheus_queries"])
+        self.assertNotIn("payment.error_rate_5m", raw["prometheus_queries"])
         self.assertIn("payment", raw["prometheus_services"])
-        self.assertIn("payment.error_rate.5m", config.prometheus_queries)
+        self.assertIn("payment.p95_latency_5m", config.prometheus_queries)
+        self.assertIn("payment.error_rate_5m", config.prometheus_queries)
+        self.assertIn("payment.request_rate_5m", config.prometheus_queries)
         self.assertIn("payment.cpu_millicores", config.prometheus_queries)
         self.assertIn("payment.memory_usage_bytes", config.prometheus_queries)
         self.assertIn("payment.disk_io_bytes_per_second", config.prometheus_queries)
         self.assertIn("payment.socket_io_bytes_per_second", config.prometheus_queries)
         self.assertIn("payment.workload_ready_pods", config.prometheus_queries)
-        self.assertIn('service_name="payment"', config.prometheus_queries["payment.error_rate.5m"])
-        self.assertIn('service_name="payment"', config.prometheus_queries["payment.memory_usage_bytes"])
+        self.assertIn('service_name="payment"', config.prometheus_queries["payment.error_rate_5m"])
+        self.assertIn('service_name="payment"', config.prometheus_queries["payment.p95_latency_5m"])
+        self.assertIn('container="payment"', config.prometheus_queries["payment.memory_usage_bytes"])
         self.assertNotIn("target_info", config.prometheus_queries["payment.memory_usage_bytes"])
-        self.assertIn("traces_span_metrics_calls_total", config.prometheus_queries["cart.error_rate.5m"])
+        self.assertNotIn("system_memory_usage_bytes", config.prometheus_queries["payment.memory_usage_bytes"])
+        self.assertIn("traces_span_metrics_calls_total", config.prometheus_queries["cart.error_rate_5m"])
         self.assertTrue(
             {
+                "payment_p95_latency_5m",
                 "payment_error_rate_5m",
+                "payment_request_rate_5m",
                 "payment_cpu_millicores",
                 "payment_memory_usage_bytes",
                 "payment_disk_io_bytes_per_second",

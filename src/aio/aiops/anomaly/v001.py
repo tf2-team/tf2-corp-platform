@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from collections import defaultdict
+from collections.abc import Callable
 import os
 import warnings
 
@@ -75,8 +76,9 @@ class ServiceIsolationForestDetector:
             service_score = max(scores)
             if service_score < self.score_threshold:
                 continue
-            latest_values = [metric.points[-1].value for metric in eligible]
-            baseline_values = [[metric.points[index].value for metric in eligible] for index in range(-self.min_points, -1)]
+            rows = self._normalized_rows(self._rows(eligible))
+            latest_values = rows[-1]
+            baseline_values = rows[-self.min_points : -1]
             baseline_center = [mean([row[index] for row in baseline_values]) for index in range(len(eligible))]
             top_metric = max(eligible, key=lambda metric: abs(latest_values[eligible.index(metric)] - baseline_center[eligible.index(metric)]))
             findings.append(
@@ -94,21 +96,49 @@ class ServiceIsolationForestDetector:
     def _scores(self, metrics: list[MetricSeries]) -> list[float]:
         from sklearn.ensemble import IsolationForest
 
-        length = min(len(metric.points) for metric in metrics)
-        rows = [[metric.points[index].value for metric in metrics] for index in range(-length, 0)]
+        rows = self._normalized_rows(self._rows(metrics))
         model = IsolationForest(contamination="auto", random_state=0).fit(rows[:-1])
         return [-score for score in model.score_samples([rows[-1]])]
 
+    def _rows(self, metrics: list[MetricSeries]) -> list[list[float]]:
+        length = min(len(metric.points) for metric in metrics)
+        return [[metric.points[index].value for metric in metrics] for index in range(-length, 0)]
+
+    def _normalized_rows(self, rows: list[list[float]]) -> list[list[float]]:
+        if not rows:
+            return []
+        columns = list(zip(*rows))
+        normalized_columns = []
+        for column in columns:
+            low = min(column)
+            high = max(column)
+            spread = high - low
+            normalized_columns.append([0.0 if spread == 0 else (value - low) / spread for value in column])
+        return [list(row) for row in zip(*normalized_columns)]
+
 
 class BaroBocpdDetector:
-    def __init__(self, score_threshold: float, min_points: int, min_changed_metrics: int = 2):
+    def __init__(
+        self,
+        score_threshold: float,
+        min_points: int,
+        min_changed_metrics: int = 2,
+        hazard_lambda: int = 50,
+        max_metrics: int = 8,
+        max_points: int = 120,
+    ):
         self.score_threshold = score_threshold
         self.min_points = min_points
         self.min_changed_metrics = min_changed_metrics
+        self.hazard_lambda = hazard_lambda
+        self.max_metrics = max_metrics
+        self.max_points = max_points
 
-    def evaluate(self, series: list[MetricSeries]) -> list[AnomalyFinding]:
+    def evaluate(self, series: list[MetricSeries], bocpd: Callable[[list[list[float]]], list[int]] | None = None) -> list[AnomalyFinding]:
         scored: list[tuple[MetricSeries, float]] = []
         for metric in series:
+            if not self._is_bocpd_metric(metric.metric):
+                continue
             values = [point.value for point in metric.points]
             if len(values) < self.min_points:
                 continue
@@ -117,6 +147,11 @@ class BaroBocpdDetector:
                 scored.append((metric, score))
 
         if len(scored) < self.min_changed_metrics:
+            return []
+        selected = sorted(scored, key=lambda item: item[1], reverse=True)[: self.max_metrics]
+        rows = self._normalized_rows([metric for metric, _ in selected])
+        changepoints = (bocpd or self._baro_bocpd)(rows)
+        if not changepoints:
             return []
         return [
             AnomalyFinding(
@@ -127,8 +162,25 @@ class BaroBocpdDetector:
                 score=score,
                 timestamp=metric.points[-1].timestamp,
             )
-            for metric, score in scored
+            for metric, score in selected
         ]
+
+    def _normalized_rows(self, metrics: list[MetricSeries]) -> list[list[float]]:
+        length = min(self.max_points, *(len(metric.points) for metric in metrics))
+        rows = [[metric.points[index].value for metric in metrics] for index in range(-length, 0)]
+        return ServiceIsolationForestDetector(self.score_threshold, self.min_points)._normalized_rows(rows)
+
+    def _is_bocpd_metric(self, metric: str) -> bool:
+        return "latency" in metric or "error_rate" in metric
+
+    def _baro_bocpd(self, rows: list[list[float]]) -> list[int]:
+        from functools import partial
+
+        from baro._bocpd import MultivariateT, constant_hazard, online_changepoint_detection
+        from baro.utility import find_cps
+
+        _, maxes = online_changepoint_detection(rows, partial(constant_hazard, self.hazard_lambda), MultivariateT(dims=len(rows[0])))
+        return [point for point, _ in find_cps(maxes)]
 
 
 class V001AnomalyEngine:
@@ -142,26 +194,27 @@ class V001AnomalyEngine:
         algorithm_weights: dict[str, float],
         weighted_score_threshold: float,
         bocpd_min_changed_metrics: int,
+        bocpd_hazard_lambda: int = 50,
+        bocpd_max_metrics: int = 8,
+        bocpd_max_points: int = 120,
+        single_algorithm_min_normalized_score: float = 2.0,
     ):
         self.algorithm_weights = algorithm_weights
         self.weighted_score_threshold = weighted_score_threshold
+        self.single_algorithm_min_normalized_score = single_algorithm_min_normalized_score
         self.thresholds = {
             "ewma_stl": ewma_z_threshold,
             "isolation_forest": isolation_score_threshold,
-            "baro_bocpd": isolation_score_threshold,
         }
         self.ewma_stl = EwmaStlDetector(ewma_alpha, ewma_z_threshold, min_points, seasonal_period)
         self.isolation_forest = ServiceIsolationForestDetector(isolation_score_threshold, min_points)
-        self.baro_bocpd = BaroBocpdDetector(isolation_score_threshold, min_points, bocpd_min_changed_metrics)
+        self.baro_bocpd = BaroBocpdDetector(isolation_score_threshold, min_points, bocpd_min_changed_metrics, bocpd_hazard_lambda, bocpd_max_metrics, bocpd_max_points)
 
     def evaluate(self, series: list[MetricSeries]) -> list[AnomalyFinding]:
-        return self._weighted_sum(
-            [
-                *self.ewma_stl.evaluate(series),
-                *self.isolation_forest.evaluate(series),
-                *self.baro_bocpd.evaluate(series),
-            ]
-        )
+        return self._weighted_sum([*self.ewma_stl.evaluate(series), *self.isolation_forest.evaluate(series)])
+
+    def evaluate_bocpd(self, series: list[MetricSeries]) -> list[AnomalyFinding]:
+        return self.baro_bocpd.evaluate(series)
 
     def _weighted_sum(self, findings: list[AnomalyFinding]) -> list[AnomalyFinding]:
         grouped: dict[tuple[str, str, str], list[AnomalyFinding]] = defaultdict(list)
@@ -170,7 +223,10 @@ class V001AnomalyEngine:
 
         combined: list[AnomalyFinding] = []
         for (_, _, _), items in grouped.items():
-            score = sum(self.algorithm_weights[item.algorithm] * min(item.score / self.thresholds[item.algorithm], 1.0) for item in items)
+            normalized_scores = [item.score / self.thresholds[item.algorithm] for item in items]
+            score = sum(self.algorithm_weights[item.algorithm] * min(normalized_score, 1.0) for item, normalized_score in zip(items, normalized_scores))
+            if len(items) == 1 and normalized_scores[0] >= self.single_algorithm_min_normalized_score:
+                score = max(score, self.weighted_score_threshold)
             if score < self.weighted_score_threshold:
                 continue
             top = max(items, key=lambda item: item.score)

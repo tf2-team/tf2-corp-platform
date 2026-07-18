@@ -148,7 +148,7 @@ class AiopsPipeline:
             logger.info("AIOPS_BLOCK rca skipped enabled=%s metric_series=%s", self.rca_hyperparameters.get("enabled", None), len(metric_series))
             return RcaResult()
         config = self.rca_hyperparameters
-        findings = V001AnomalyEngine(
+        anomaly_engine = V001AnomalyEngine(
             ewma_alpha=float(config["ewma_alpha"]),
             ewma_z_threshold=float(config["ewma_z_threshold"]),
             isolation_score_threshold=float(config["isolation_score_threshold"]),
@@ -157,8 +157,18 @@ class AiopsPipeline:
             algorithm_weights=config["anomaly"]["algorithm_weights"],
             weighted_score_threshold=float(config["anomaly"]["weighted_score_threshold"]),
             bocpd_min_changed_metrics=int(config["anomaly"]["bocpd_min_changed_metrics"]),
-        ).evaluate(metric_series)
-        return V001RcaEngine(self.runtime_config, config["graph"]).rank(findings, metric_series, top_k=int(config["top_k"]))
+            bocpd_hazard_lambda=int(config["anomaly"]["bocpd_hazard_lambda"]),
+            bocpd_max_metrics=int(config["anomaly"]["bocpd_max_metrics"]),
+            bocpd_max_points=int(config["anomaly"]["bocpd_max_points"]),
+            single_algorithm_min_normalized_score=float(config["anomaly"]["single_algorithm_min_normalized_score"]),
+        )
+        findings = anomaly_engine.evaluate(metric_series)
+        bocpd_findings = getattr(anomaly_engine, "evaluate_bocpd", lambda _: [])(metric_series)
+        rca_engine = V001RcaEngine(self.runtime_config, config["graph"], config["combined"])
+        try:
+            return rca_engine.rank(findings, metric_series, top_k=int(config["top_k"]), bocpd_findings=bocpd_findings)
+        except TypeError:
+            return rca_engine.rank(findings, metric_series, top_k=int(config["top_k"]))
 
     def _run_remediation_strategy(self, incidents: list[Incident], rca_result: RcaResult) -> list[RemediationDecision]:
         if self.remediation is None:

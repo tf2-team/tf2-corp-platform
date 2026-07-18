@@ -10,16 +10,23 @@
     "anomaly": {
       "algorithm_weights": {
         "ewma_stl": 0.4,
-        "isolation_forest": 0.25,
-        "baro_bocpd": 0.35
+        "isolation_forest": 0.25
       },
       "weighted_score_threshold": 0.4,
-      "bocpd_min_changed_metrics": 2
+      "bocpd_min_changed_metrics": 2,
+      "bocpd_hazard_lambda": 50,
+      "bocpd_max_metrics": 8,
+      "bocpd_max_points": 120,
+      "single_algorithm_min_normalized_score": 2.0
     },
     "graph": {
       "damping": 0.85,
       "pagerank_weight": 0.7,
       "timestamp_weight": 0.3
+    },
+    "combined": {
+      "graph_weight": 0.5,
+      "robust_weight": 0.5
     }
   },
   "remediation": {

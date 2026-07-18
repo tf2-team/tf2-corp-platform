@@ -35,7 +35,7 @@ class PrometheusCollectorTest(unittest.TestCase):
 
         prometheus_signals = [signal for signal in config.signals if signal.source == "prometheus"]
         signal_query_ids = {signal.query_id for signal in config.signals if signal.source == "prometheus"}
-        services_with_metrics = {signal.service for signal in config.signals if signal.query_id.endswith(".error_rate.5m")}
+        services_with_metrics = {signal.service for signal in config.signals if signal.query_id.endswith(".error_rate_5m")}
 
         self.assertTrue(signal_query_ids.issubset(config.prometheus_queries))
         self.assertEqual(client.queries, [config.prometheus_queries[signal.query_id] for signal in prometheus_signals])
