@@ -409,7 +409,10 @@ func (cs *checkout) PlaceOrder(ctx context.Context, req *pb.PlaceOrderRequest) (
 	shippingTrackingAttribute := attribute.String("app.shipping.tracking.id", shippingTrackingID)
 	span.AddEvent("hold", trace.WithAttributes(shippingTrackingAttribute))
 
-	_ = cs.emptyUserCart(ctx, req.UserId)
+	// Do not swallow EmptyCart errors (e.g. cartFailure / local-cartFailure inject).
+	if err := cs.emptyUserCart(ctx, req.UserId); err != nil {
+		return nil, status.Errorf(codes.Internal, "failed to empty user cart: %+v", err)
+	}
 
 	orderResult := &pb.OrderResult{
 		OrderId:            orderID.String(),
@@ -744,10 +747,8 @@ func (cs *checkout) convertCurrency(ctx context.Context, from *pb.Money, toCurre
 }
 
 const (
-	paymentChargeMaxAttempts     = 8
-	paymentChargeBaseBackoff     = 25 * time.Millisecond
-	paymentFailureDegradeAfter   = 2
-	paymentFailureIncidentMarker = "app.loyalty.level=gold"
+	paymentChargeMaxAttempts = 8
+	paymentChargeBaseBackoff = 25 * time.Millisecond
 )
 
 func (cs *checkout) chargeCard(ctx context.Context, amount *pb.Money, paymentInfo *pb.CreditCardInfo) (string, error) {
@@ -759,7 +760,6 @@ func (cs *checkout) chargeCard(ctx context.Context, amount *pb.Money, paymentInf
 	}
 
 	var lastErr error
-	paymentFailureHits := 0
 	for attempt := 1; attempt <= paymentChargeMaxAttempts; attempt++ {
 		if err := ctx.Err(); err != nil {
 			return "", fmt.Errorf("could not charge the card: %+v", err)
@@ -780,15 +780,8 @@ func (cs *checkout) chargeCard(ctx context.Context, amount *pb.Money, paymentInf
 		}
 
 		lastErr = err
-		if isPaymentFailureIncidentError(err) {
-			paymentFailureHits++
-			// Containment for 50–100% paymentFailure: keep calling payment (flag
-			// still fires) but do not fail the whole checkout after N hits.
-			if paymentFailureHits >= paymentFailureDegradeAfter {
-				return degradedPaymentTransactionID(ctx, attempt, err), nil
-			}
-		}
-
+		// No deferred-payment / soft-success path: flag inject (paymentFailure /
+		// local-paymentFailure) and other charge errors fail PlaceOrder.
 		if !isRetryablePaymentChargeError(err) || attempt == paymentChargeMaxAttempts {
 			break
 		}
@@ -810,39 +803,7 @@ func (cs *checkout) chargeCard(ctx context.Context, amount *pb.Money, paymentInf
 		}
 	}
 
-	if isPaymentFailureIncidentError(lastErr) {
-		return degradedPaymentTransactionID(ctx, paymentChargeMaxAttempts, lastErr), nil
-	}
-
 	return "", fmt.Errorf("could not charge the card after %d attempts: %+v", paymentChargeMaxAttempts, lastErr)
-}
-
-func degradedPaymentTransactionID(ctx context.Context, attempt int, err error) string {
-	txID := fmt.Sprintf("deferred-payment-%s", uuid.NewString())
-	logger.LogAttrs(ctx, slog.LevelWarn, "paymentFailure containment: deferred charge",
-		slog.Int("attempt", attempt),
-		slog.String("transaction_id", txID),
-		slog.String("error", err.Error()),
-	)
-	if span := trace.SpanFromContext(ctx); span.IsRecording() {
-		span.AddEvent("payment.degraded",
-			trace.WithAttributes(
-				attribute.String("app.payment.transaction.id", txID),
-				attribute.Bool("app.payment.degraded", true),
-				attribute.String("app.payment.degrade.reason", "paymentFailure"),
-			),
-		)
-	}
-	return txID
-}
-
-func isPaymentFailureIncidentError(err error) bool {
-	if err == nil {
-		return false
-	}
-	msg := err.Error()
-	return strings.Contains(msg, paymentFailureIncidentMarker) ||
-		strings.Contains(msg, "Payment request failed. Invalid token")
 }
 
 func isRetryablePaymentChargeError(err error) bool {
@@ -850,12 +811,16 @@ func isRetryablePaymentChargeError(err error) bool {
 		return false
 	}
 	msg := err.Error()
-	permanent := []string{
+	// Permanent validation errors and intentional paymentFailure inject: do not retry.
+	// paymentFailure / local-paymentFailure throw Invalid token + loyalty.level=gold.
+	nonRetryable := []string{
 		"Credit card info is invalid",
 		"credit cards. Only VISA or MasterCard",
 		"The credit card is expired",
+		"app.loyalty.level=gold",
+		"Payment request failed. Invalid token",
 	}
-	for _, p := range permanent {
+	for _, p := range nonRetryable {
 		if strings.Contains(msg, p) {
 			return false
 		}
@@ -1222,4 +1187,4 @@ func parseOrderCancelledBytes(data []byte) (string, string, error) {
 	return orderID, reason, nil
 }
 
-// Change trail: @hungxqt - 2026-07-15 - Dual-read local- flag twins (OR bool / max int) with BTC keys.
+// Change trail: @hungxqt - 2026-07-17 - Remove deferred-payment containment; fail PlaceOrder on cart cleanup errors.

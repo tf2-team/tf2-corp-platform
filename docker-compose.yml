@@ -425,6 +425,36 @@ services:
         condition: service_started
     logging: *logging
 
+  # Mem0 self-hosted memory service
+  mem0:
+    image: ${IMAGE_NAME}/mem0:${DEMO_VERSION}
+    container_name: mem0
+    build:
+      context: ./
+      dockerfile: ./src/mem0/Dockerfile
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+    restart: unless-stopped
+    ports:
+      - "8000"
+    environment:
+      - OTEL_EXPORTER_OTLP_ENDPOINT
+      - OTEL_EXPORTER_OTLP_METRICS_TEMPORALITY_PREFERENCE
+      - OTEL_RESOURCE_ATTRIBUTES
+      - OTEL_SERVICE_NAME=mem0
+      - FASTEMBED_CACHE_PATH=/models/fastembed
+      - FASTEMBED_LOCAL_FILES_ONLY=true
+      - MEM0_TELEMETRY=false
+    volumes:
+      - mem0-history:/app/history
+      - mem0-fastembed-cache:/models/fastembed:ro
+    depends_on:
+      otel-collector:
+        condition: service_started
+    logging: *logging
+
   # Payment service
   payment:
     image: ${IMAGE_NAME}/payment:${DEMO_VERSION}
@@ -510,8 +540,10 @@ services:
       - OTEL_EXPORTER_OTLP_METRICS_TEMPORALITY_PREFERENCE
       - OTEL_RESOURCE_ATTRIBUTES
       - OTEL_SERVICE_NAME=product-reviews
-      - OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT=false
+      - OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT=true
       - PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION=python
+      - HF_HOME=/home/appuser/.cache/huggingface
+      - AI_GUARDRAIL_REQUIRE_MODEL=${AI_GUARDRAIL_REQUIRE_MODEL:-false}
       - DB_CONNECTION_STRING=host=${POSTGRES_HOST} user=otelu password=otelp dbname=${POSTGRES_DB}
       - LLM_BASE_URL
       - OPENAI_API_KEY
@@ -530,6 +562,8 @@ services:
         condition: service_started
       otel-collector:
         condition: service_started
+    volumes:
+      - product-reviews-hf-cache:/home/appuser/.cache/huggingface
     logging: *logging
 
   # Quote service
@@ -948,3 +982,6 @@ volumes:
   valkey-cart-data:
   postgresql-data:
   kafka-data:
+  product-reviews-hf-cache:
+  mem0-history:
+  mem0-fastembed-cache:
