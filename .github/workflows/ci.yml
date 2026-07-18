@@ -174,11 +174,16 @@ jobs:
 
           for f in "${CHANGED[@]}"; do
             case "${f}" in
-              pb/*|docker-compose.yml|docker-bake.hcl|buildkitd.toml|.env|.gitmodules)
+              # Match publish classification: compose/bake catalog edits alone do not
+              # force a full PR bake matrix (new services bake selectively).
+              pb/*|buildkitd.toml|.env|.gitmodules)
                 FULL_TRIGGER=1
                 echo "Full rebuild trigger: ${f}"
                 ;;
-              third-party/mem0)
+              docker-compose.yml|docker-bake.hcl)
+                echo "Catalog/definition change (selective; not a full-bake trigger): ${f}"
+                ;;
+              third-party/mem0|third-party/mem0/*)
                 BUILD_SET["mem0"]=1
                 echo "Service change: mem0 (${f})"
                 ;;
@@ -425,4 +430,4 @@ jobs:
           AI_GUARDRAIL_REQUIRE_MODEL: "true"
           PYTHONPATH: src/product-reviews
         run: python -c "import guardrails; guardrails.initialize_guardrails()"
-# Change trail: @hungxqt - 2026-07-15 - PR-only local image bake gate without ECR push
+# Change trail: @hungxqt - 2026-07-17 - Align PR image classification with selective mem0 matrix build.
