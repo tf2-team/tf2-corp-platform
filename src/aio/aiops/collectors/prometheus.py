@@ -1,10 +1,11 @@
 from __future__ import annotations
 
 import json
+import sys
 import time
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
-from typing import Protocol
+from typing import Iterable, Protocol, TypeVar
 
 from aiops.collectors.base import Collector
 from aiops.schemas import (
@@ -17,6 +18,13 @@ from aiops.schemas import (
     RuntimeConfig,
     SignalQuality,
 )
+
+try:
+    from tqdm.auto import tqdm
+except Exception:  # pragma: no cover - keeps old envs working until dependencies are refreshed.
+    tqdm = None
+
+T = TypeVar("T")
 
 
 def load_prometheus_collection_plan(path: Path) -> PrometheusCollectionPlan:
@@ -49,21 +57,26 @@ class PrometheusCollector(Collector):
 
     def collect(self) -> list[Observation]:
         if self.plan is not None:
-            return [self._collect_plan_observation(query) for query in self.plan.observation_queries]
+            return [self._collect_plan_observation(query) for query in _progress(self.plan.observation_queries, "prometheus observations")]
         assert self.config is not None
-        return [self._collect_one(signal) for signal in self.config.signals if signal.source == "prometheus"]
+        signals = [signal for signal in self.config.signals if signal.source == "prometheus"]
+        return [self._collect_one(signal) for signal in _progress(signals, "prometheus observations")]
 
     def collect_metric_series(self, *, lookback_seconds: int | None = None, step_seconds: int | None = None) -> list[MetricSeries]:
         if self.plan is None:
             assert self.config is not None
             if lookback_seconds is None or step_seconds is None:
                 raise ValueError("runtime metric series collection requires lookback_seconds and step_seconds")
-            return [
-                self._collect_runtime_series(signal, lookback_seconds, step_seconds)
+            signals = [
+                signal
                 for signal in self.config.signals
                 if signal.source == "prometheus" and signal.feature_role == "anomaly_input"
             ]
-        return [self._collect_plan_series(query) for query in self.plan.metric_series_queries]
+            return [
+                self._collect_runtime_series(signal, lookback_seconds, step_seconds)
+                for signal in _progress(signals, "prometheus metric series")
+            ]
+        return [self._collect_plan_series(query) for query in _progress(self.plan.metric_series_queries, "prometheus metric series")]
 
     def _collect_plan_observation(self, query: PrometheusObservationQuery) -> Observation:
         labels = {"query_id": query.query_id, **query.labels}
@@ -152,3 +165,9 @@ class PrometheusCollector(Collector):
         if value and value[0]:
             labels["sample_timestamp"] = str(value[0])
         return Observation(signal_id=signal.id, value=value[1], unit=signal.unit, window=signal.window, quality=SignalQuality.UNQUALIFIED, labels=labels)
+
+
+def _progress(items: Iterable[T], desc: str) -> Iterable[T]:
+    if tqdm is None:
+        return items
+    return tqdm(items, desc=desc, unit="query", leave=False, disable=not sys.stderr.isatty())

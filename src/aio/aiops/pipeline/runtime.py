@@ -1,6 +1,11 @@
 from __future__ import annotations
 
+import ast
+import json
 import logging
+import re
+from datetime import UTC, datetime
+from pathlib import Path
 from typing import Protocol
 
 from aiops.collectors import Collector
@@ -77,6 +82,7 @@ class AiopsPipeline:
         remediation: RemediationComponents | None = None,
         enricher: Enricher | None = None,
         notification_sender: NotificationSender | None = None,
+        rca_history_path: Path | None = None,
     ):
         self.collector = collector
         self.qualification = QualificationGate(
@@ -97,50 +103,61 @@ class AiopsPipeline:
         self.rca_hyperparameters = rca_hyperparameters or {}
         self.remediation = remediation
         self.notification_sender = notification_sender
+        self.rca_history_path = rca_history_path
 
     def run_once(self, metric_series: list[MetricSeries] | None = None) -> PipelineResult:
-        logger.info("AIOPS_BLOCK start metric_series=%s", len(metric_series or []))
+        logger.debug("AIOPS_BLOCK start metric_series=%s", len(metric_series or []))
         collected = self.collector.collect()
-        logger.info("AIOPS_BLOCK collect observations=%s", len(collected))
+        logger.debug("AIOPS_BLOCK collect observations=%s", len(collected))
         observations = self.qualification.evaluate(self.normalizer.normalize(collected))
-        logger.info(
+        logger.debug(
             "AIOPS_BLOCK qualify observations=%s quality_counts=%s",
             len(observations),
             _counts(observation.quality.value for observation in observations),
         )
         features = self.feature_builder.build(observations)
-        logger.info(
+        logger.debug(
             "AIOPS_BLOCK feature features=%s status_counts=%s",
             len(features),
             _counts(feature.status for feature in features),
         )
         candidates = self.detector_engine.evaluate(features)
-        logger.info("AIOPS_BLOCK detect candidates=%s ids=%s", len(candidates), [candidate.detector_id for candidate in candidates])
+        (logger.info if candidates else logger.debug)("AIOPS_BLOCK detect candidates=%s ids=%s", len(candidates), [candidate.detector_id for candidate in candidates])
         correlated = self.correlator.correlate(candidates)
-        logger.info("AIOPS_BLOCK correlate candidates=%s ids=%s", len(correlated), [candidate.detector_id for candidate in correlated])
+        logger.debug("AIOPS_BLOCK correlate candidates=%s ids=%s", len(correlated), [candidate.detector_id for candidate in correlated])
         enriched = self.enricher.enrich(correlated, features)
-        logger.info("AIOPS_BLOCK enrich candidates=%s evidence=%s", len(enriched), [len(candidate.evidence) for candidate in enriched])
+        logger.debug("AIOPS_BLOCK enrich candidates=%s evidence=%s", len(enriched), [len(candidate.evidence) for candidate in enriched])
         incidents = [self.store.upsert(candidate) for candidate in enriched]
-        logger.info("AIOPS_BLOCK incident incidents=%s ids=%s", len(incidents), [incident.incident_id for incident in incidents])
+        deduped_incidents = _unique_incidents(incidents)
+        logger.info(
+            "AIOPS_DEDUP_RESULT input_candidates=%s incidents=%s ids=%s services=%s occurrences=%s",
+            len(enriched),
+            len(deduped_incidents),
+            [incident.incident_id for incident in deduped_incidents],
+            [incident.service for incident in deduped_incidents],
+            [incident.occurrence_count for incident in deduped_incidents],
+        )
+        logger.debug("AIOPS_BLOCK incident incidents=%s ids=%s", len(incidents), [incident.incident_id for incident in incidents])
         notifications = self._flush_notifications(incidents)
-        logger.info("AIOPS_BLOCK notify notifications=%s", len(notifications))
+        logger.debug("AIOPS_BLOCK notify notifications=%s", len(notifications))
 
         decisions: list[PolicyDecision] = []
         for incident in incidents:
             proposal = self.policy.proposal_for(incident)
             if proposal is not None:
                 decisions.append(self.policy.evaluate(proposal))
-        logger.info("AIOPS_BLOCK policy decisions=%s results=%s", len(decisions), [decision.result for decision in decisions])
+        logger.debug("AIOPS_BLOCK policy decisions=%s results=%s", len(decisions), [decision.result for decision in decisions])
         verification_results = self.verification.verify(incidents, features)
-        logger.info("AIOPS_BLOCK verify results=%s statuses=%s", len(verification_results), [result.status for result in verification_results])
-        rca_result = self._run_v001_rca(metric_series or [])
+        logger.debug("AIOPS_BLOCK verify results=%s statuses=%s", len(verification_results), [result.status for result in verification_results])
+        rca_result = self._run_v001_rca(metric_series or [], incidents)
         logger.info(
             "AIOPS_BLOCK rca anomalies=%s root_causes=%s",
             len(rca_result.anomalies),
             [root.service for root in rca_result.root_causes],
         )
+        self._record_rca_history(rca_result, incidents, enriched, metric_series or [])
         remediation_decisions = self._run_remediation_strategy(incidents, rca_result)
-        logger.info(
+        logger.debug(
             "AIOPS_BLOCK remediation decisions=%s selected=%s",
             len(remediation_decisions),
             [decision.selected_action for decision in remediation_decisions],
@@ -161,10 +178,26 @@ class AiopsPipeline:
 
     def _flush_notifications(self, incidents: list[Incident]) -> list[NotificationMessage]:
         if self.notification_sender is None:
-            return self.store.pending_notifications_for(incidents)
+            notifications = self.store.pending_notifications_for(incidents)
+            for message in notifications:
+                logger.info(
+                    "AIOPS_NOTIFY_READY incident=%s service=%s severity=%s runbook=%s route=outbox status=pending",
+                    message.incident_id,
+                    message.service,
+                    message.severity,
+                    message.runbook_id,
+                )
+            return notifications
 
         notifications = self.store.due_notifications()
         for message in notifications:
+            logger.info(
+                "AIOPS_NOTIFY_READY incident=%s service=%s severity=%s runbook=%s route=outbox status=dispatching",
+                message.incident_id,
+                message.service,
+                message.severity,
+                message.runbook_id,
+            )
             try:
                 self.notification_sender.send(message)
             except Exception as exc:
@@ -172,11 +205,24 @@ class AiopsPipeline:
                 self.store.mark_notification_failed(message.incident_id, str(exc))
             else:
                 self.store.mark_notification_sent(message.incident_id)
+                logger.info(
+                    "AIOPS_NOTIFY_SENT incident=%s service=%s severity=%s runbook=%s",
+                    message.incident_id,
+                    message.service,
+                    message.severity,
+                    message.runbook_id,
+                )
         return notifications
 
-    def _run_v001_rca(self, metric_series: list[MetricSeries]) -> RcaResult:
-        if self.runtime_config is None or not self.rca_hyperparameters.get("enabled", self.runtime_config.rca.enabled) or not metric_series:
-            logger.info("AIOPS_BLOCK rca skipped enabled=%s metric_series=%s", self.rca_hyperparameters.get("enabled", None), len(metric_series))
+    def _run_v001_rca(self, metric_series: list[MetricSeries], incidents: list[Incident] | None = None) -> RcaResult:
+        log_messages = self._log_messages(incidents or [])
+        if self.runtime_config is None or not self.rca_hyperparameters.get("enabled", self.runtime_config.rca.enabled) or (not metric_series and not log_messages):
+            logger.info(
+                "AIOPS_BLOCK rca skipped enabled=%s metric_series=%s log_messages=%s",
+                self.rca_hyperparameters.get("enabled", None),
+                len(metric_series),
+                len(log_messages),
+            )
             return RcaResult()
         config = self.rca_hyperparameters
         anomaly_engine = V001AnomalyEngine(
@@ -187,19 +233,76 @@ class AiopsPipeline:
             seasonal_period=int(config["seasonal_period"]),
             algorithm_weights=config["anomaly"]["algorithm_weights"],
             weighted_score_threshold=float(config["anomaly"]["weighted_score_threshold"]),
-            bocpd_min_changed_metrics=int(config["anomaly"]["bocpd_min_changed_metrics"]),
-            bocpd_hazard_lambda=int(config["anomaly"]["bocpd_hazard_lambda"]),
-            bocpd_max_metrics=int(config["anomaly"]["bocpd_max_metrics"]),
-            bocpd_max_points=int(config["anomaly"]["bocpd_max_points"]),
+            drain3_config_path=config["anomaly"].get("drain3_config_path", "config/drain3.ini"),
+            log_bucket_seconds=int(config["anomaly"].get("log_bucket_seconds", 60)),
+            log_history_buckets=int(config["anomaly"].get("log_history_buckets", config["min_points"])),
+            log_max_templates_per_service=int(config["anomaly"].get("log_max_templates_per_service", 20)),
+            log_min_nonzero_buckets=int(config["anomaly"].get("log_min_nonzero_buckets", 2)),
+            log_correlation_window_seconds=int(config["anomaly"].get("log_correlation_window_seconds", 300)),
             single_algorithm_min_normalized_score=float(config["anomaly"]["single_algorithm_min_normalized_score"]),
         )
-        findings = anomaly_engine.evaluate(metric_series)
-        bocpd_findings = getattr(anomaly_engine, "evaluate_bocpd", lambda _: [])(metric_series)
+        findings = anomaly_engine.evaluate(metric_series, logs=log_messages) if log_messages else anomaly_engine.evaluate(metric_series)
         rca_engine = V001RcaEngine(self.runtime_config, config["graph"], config["combined"])
-        try:
-            return rca_engine.rank(findings, metric_series, top_k=int(config["top_k"]), bocpd_findings=bocpd_findings)
-        except TypeError:
-            return rca_engine.rank(findings, metric_series, top_k=int(config["top_k"]))
+        return rca_engine.rank(findings, metric_series, top_k=int(config["top_k"]))
+
+    def _record_rca_history(
+        self,
+        rca_result: RcaResult,
+        incidents: list[Incident],
+        candidates: list[CandidateEvent],
+        metric_series: list[MetricSeries],
+    ) -> None:
+        if self.rca_history_path is None or (not rca_result.root_causes and not rca_result.anomalies):
+            return
+        point_counts = [len(series.points) for series in metric_series]
+        incident_rows = [
+            {
+                "incident_id": incident.incident_id,
+                "service": incident.service,
+                "severity": incident.severity,
+                "occurrence_count": incident.occurrence_count,
+                "detectors": [event.detector_id for event in incident.events],
+            }
+            for incident in _unique_incidents(incidents)
+        ]
+        payload = {
+            "recorded_at": datetime.now(UTC).isoformat(),
+            "detectors": [candidate.detector_id for candidate in candidates],
+            "incidents": incident_rows,
+            "parameters": _rca_history_parameters(self.rca_hyperparameters),
+            "series_point_count": {
+                "min": min(point_counts) if point_counts else 0,
+                "max": max(point_counts) if point_counts else 0,
+                "total": sum(point_counts),
+            },
+            "metric_series_count": len(metric_series),
+            "root_causes": [root.model_dump(mode="json") for root in rca_result.root_causes],
+            "anomalies": [anomaly.model_dump(mode="json") for anomaly in rca_result.anomalies],
+        }
+        self.rca_history_path.parent.mkdir(parents=True, exist_ok=True)
+        with self.rca_history_path.open("a", encoding="utf-8") as handle:
+            handle.write(json.dumps(payload, ensure_ascii=False, sort_keys=True) + "\n")
+        logger.info(
+            "AIOPS_RCA_HISTORY path=%s root_causes=%s anomalies=%s",
+            self.rca_history_path,
+            len(rca_result.root_causes),
+            len(rca_result.anomalies),
+        )
+
+    def _log_messages(self, incidents: list[Incident]) -> list[tuple[str, int, str]]:
+        messages = []
+        max_events = int(self.rca_hyperparameters.get("anomaly", {}).get("log_max_events_per_evidence", 100))
+        for incident in incidents:
+            for event in incident.events:
+                service = incident.likely_dependency if incident.likely_dependency != "unknown" else event.likely_dependency
+                if service == "unknown":
+                    service = event.service
+                for item in event.evidence:
+                    if item.source != "log":
+                        continue
+                    for text in _log_excerpts(item.summary, max_events):
+                        messages.append((service, event.timestamp, text))
+        return messages
 
     def _run_remediation_strategy(self, incidents: list[Incident], rca_result: RcaResult) -> list[RemediationDecision]:
         if self.remediation is None:
@@ -246,3 +349,48 @@ def _counts(values) -> dict[str, int]:
     for value in values:
         counts[value] = counts.get(value, 0) + 1
     return counts
+
+
+def _log_excerpts(summary: str, max_events: int = 100) -> list[str]:
+    marker = "excerpts="
+    if marker not in summary:
+        return [summary]
+    try:
+        excerpts = ast.literal_eval(summary.split(marker, 1)[1])
+    except (SyntaxError, ValueError):
+        return [summary]
+    if not isinstance(excerpts, list):
+        return [summary]
+    texts = [str(excerpt) for excerpt in excerpts if excerpt]
+    count = _log_count(summary)
+    if not texts or count <= len(texts):
+        return texts
+    return texts + [texts[0]] * (min(count, max_events) - len(texts))
+
+
+def _log_count(summary: str) -> int:
+    match = re.search(r"\bcount=(\d+)", summary)
+    return int(match.group(1)) if match else 0
+
+
+def _unique_incidents(incidents: list[Incident]) -> list[Incident]:
+    return list({incident.incident_id: incident for incident in incidents}.values())
+
+
+def _rca_history_parameters(config: dict) -> dict:
+    anomaly = config.get("anomaly", {})
+    return {
+        "top_k": config.get("top_k"),
+        "min_points": config.get("min_points"),
+        "ewma_alpha": config.get("ewma_alpha"),
+        "ewma_z_threshold": config.get("ewma_z_threshold"),
+        "isolation_score_threshold": config.get("isolation_score_threshold"),
+        "seasonal_period": config.get("seasonal_period"),
+        "algorithm_weights": anomaly.get("algorithm_weights"),
+        "weighted_score_threshold": anomaly.get("weighted_score_threshold"),
+        "single_algorithm_min_normalized_score": anomaly.get("single_algorithm_min_normalized_score"),
+        "log_bucket_seconds": anomaly.get("log_bucket_seconds"),
+        "log_history_buckets": anomaly.get("log_history_buckets"),
+        "log_min_nonzero_buckets": anomaly.get("log_min_nonzero_buckets"),
+        "log_correlation_window_seconds": anomaly.get("log_correlation_window_seconds"),
+    }

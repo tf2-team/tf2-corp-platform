@@ -14,11 +14,12 @@ from aiops.remediation import HistoryRetriever, PolicyEngine, RemediationDecisio
 
 def policy(settings: Settings | None = None, mode: str | None = None) -> PolicyEngine:
     settings = settings or Settings()
+    runtime_config = load_runtime_config(settings.runtime_config_path)
     return PolicyEngine(
         mode=mode or settings.policy_mode,
-        protected_targets=settings.protected_targets,
-        stateful_kinds=settings.stateful_kinds,
-        non_actionable_flows=settings.non_actionable_flows,
+        protected_targets=runtime_config.policy.protected_targets,
+        stateful_kinds=runtime_config.policy.stateful_kinds,
+        non_actionable_flows=runtime_config.policy.non_actionable_flows,
         action_type=settings.action_type_restart,
         target_kind=settings.action_target_kind_deployment,
         default_replicas=settings.default_action_replicas,
@@ -28,13 +29,15 @@ def policy(settings: Settings | None = None, mode: str | None = None) -> PolicyE
 def no_data_detector(settings: Settings | None = None) -> NoDataDetector:
     settings = settings or Settings()
     no_data = load_hyperparameters(settings.hyperparameters_path)["no_data"]
+    runtime_config = load_runtime_config(settings.runtime_config_path)
+    detector = next(item for item in runtime_config.detectors if item.type == "no-data")
     return NoDataDetector(
-        settings.no_data_required_signal_ids,
-        detector_id=settings.no_data_detector_id,
-        flow=settings.no_data_flow,
-        service=settings.no_data_service,
-        severity=settings.no_data_severity,
-        runbook_id=settings.no_data_runbook_id,
+        detector.signal_ids,
+        detector_id=detector.id,
+        flow=detector.flow,
+        service=detector.service,
+        severity=detector.severity,
+        runbook_id=detector.runbook_id,
         missing_confidence=no_data["missing_confidence"],
         unknown_confidence=no_data["unknown_confidence"],
     )
@@ -261,10 +264,10 @@ class DetectorEngineTest(unittest.TestCase):
             update={
                 "detector_id": "ops04_checkout_latency_p95",
                 "signal_id": "checkout_p95_latency_5m",
-                "value": 600.0,
-                "unit": "milliseconds",
+                "value": 0.6,
+                "unit": "seconds",
                 "window": "5m",
-                "threshold": 500.0,
+                "threshold": 0.5,
                 "runbook_id": "RB-CHECKOUT-LATENCY",
                 "contributing_signals": ("checkout_p95_latency_5m",),
             }

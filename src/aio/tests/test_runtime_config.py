@@ -20,16 +20,17 @@ class RuntimeConfigTest(unittest.TestCase):
         self.assertEqual(config.topology.services[0].name, "checkout")
         self.assertEqual(config.signals[0].feature_role, "official_slo")
         self.assertEqual(config.signals[1].feature_role, "diagnostic")
-        self.assertEqual([detector.__class__.__name__ for detector in detectors[:3]], ["ThresholdDetector", "NoDataDetector", "DependencyDetector"])
-        self.assertTrue(any(detector.detector_id == "ops04_checkout_latency_p95" for detector in detectors))
-        self.assertTrue(any(detector.detector_id == "ops06_product_catalog_cpu" for detector in detectors))
+        self.assertEqual([detector.__class__.__name__ for detector in detectors], ["ThresholdDetector", "NoDataDetector", "DependencyDetector"])
+        self.assertEqual([detector.detector_id for detector in detectors], ["ops01_checkout_slo", "ops02_monitoring_loss", "ops03_checkout_payment_dependency"])
 
     def test_each_service_error_rate_signal_has_auto_detector(self):
         config = load_runtime_config(Path("config/runtime.json"))
         signal_ids = {signal.id for signal in config.signals if signal.query_id.endswith(".error_rate_5m")}
-        detector_signal_ids = {detector.signal_id for detector in config.detectors if detector.id.startswith("auto_")}
+        auto_detectors = [detector for detector in config.detectors if detector.id.startswith("auto_")]
+        detector_signal_ids = {detector.signal_id for detector in auto_detectors}
 
         self.assertEqual(detector_signal_ids, signal_ids)
+        self.assertTrue(all(not detector.enabled for detector in auto_detectors))
 
     def test_prometheus_services_expand_generated_metrics(self):
         raw = json.loads(Path("config/runtime.json").read_text(encoding="utf-8"))
@@ -47,6 +48,12 @@ class RuntimeConfigTest(unittest.TestCase):
         self.assertIn("payment.workload_ready_pods", config.prometheus_queries)
         self.assertIn('service_name="payment"', config.prometheus_queries["payment.error_rate_5m"])
         self.assertIn('service_name="payment"', config.prometheus_queries["payment.p95_latency_5m"])
+        self.assertIn("traces_span_metrics_duration_milliseconds_bucket", config.prometheus_queries["payment.p95_latency_5m"])
+        self.assertIn("traces_span_metrics_duration_milliseconds_count", config.prometheus_queries["payment.p95_latency_5m"])
+        self.assertIn("or on() vector(0)", config.prometheus_queries["payment.p95_latency_5m"])
+        self.assertIn("or on() vector(0)", config.prometheus_queries["checkout.p95_latency.5m"])
+        self.assertTrue(all("or on() vector(0)" in config.prometheus_queries[signal.query_id] for signal in config.signals if signal.source == "prometheus" and signal.feature_role == "anomaly_input"))
+        self.assertNotIn("traces_span_metrics_calls_total", config.prometheus_queries["payment.p95_latency_5m"])
         self.assertIn('container="payment"', config.prometheus_queries["payment.memory_usage_bytes"])
         self.assertNotIn("target_info", config.prometheus_queries["payment.memory_usage_bytes"])
         self.assertNotIn("system_memory_usage_bytes", config.prometheus_queries["payment.memory_usage_bytes"])
@@ -81,7 +88,7 @@ class RuntimeConfigTest(unittest.TestCase):
         config = load_runtime_config(Path("config/runtime.json"))
         runbook_ids = {detector.runbook_id for detector in config.detectors if detector.enabled}
 
-        self.assertEqual({path.stem for path in Path("runbooks").glob("*.md")}, runbook_ids)
+        self.assertTrue(runbook_ids.issubset({path.stem for path in Path("runbooks").glob("*.md")}))
 
     def test_rejects_detector_with_unknown_signal(self):
         config = json.loads(Path("config/runtime.json").read_text(encoding="utf-8"))

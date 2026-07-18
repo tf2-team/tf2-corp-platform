@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import sqlite3
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
@@ -7,6 +8,8 @@ from pathlib import Path
 from aiops.incidents import incident_fingerprint
 from aiops.notifications import NotificationBuilder
 from aiops.schemas import CandidateEvent, Incident, NotificationMessage
+
+logger = logging.getLogger(__name__)
 
 
 class SQLiteIncidentStore:
@@ -127,6 +130,16 @@ class SQLiteIncidentStore:
                     (incident.incident_id, fingerprint, notification.model_dump_json(), _now()),
                 )
                 self._last_enqueued_incident_ids.add(incident.incident_id)
+        (logger.info if is_new else logger.debug)(
+            "AIOPS_INCIDENT_UPSERT action=%s incident=%s fingerprint=%s service=%s detector=%s occurrence=%s notification_enqueued=%s",
+            "created" if is_new else "deduped",
+            incident.incident_id,
+            fingerprint,
+            incident.service,
+            candidate.detector_id,
+            incident.occurrence_count,
+            notification is not None,
+        )
         return incident
 
     def list_incidents(self) -> list[Incident]:

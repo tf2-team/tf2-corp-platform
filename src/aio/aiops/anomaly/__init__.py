@@ -1,3 +1,3 @@
-from aiops.anomaly.v001 import BaroBocpdDetector, EwmaStlDetector, ServiceIsolationForestDetector, V001AnomalyEngine
+from aiops.anomaly.v001 import AnomalyMergeQueue, EwmaStlDetector, LogTemplateAnomalyDetector, ServiceIsolationForestDetector, V001AnomalyEngine
 
-__all__ = ["BaroBocpdDetector", "EwmaStlDetector", "ServiceIsolationForestDetector", "V001AnomalyEngine"]
+__all__ = ["AnomalyMergeQueue", "EwmaStlDetector", "LogTemplateAnomalyDetector", "ServiceIsolationForestDetector", "V001AnomalyEngine"]

@@ -23,9 +23,11 @@ def main() -> int:
 
     os.environ["AIOPS_ENV_FILE"] = str(args.env_file.resolve())
 
+    from aiops.api.app import configure_logging
     from aiops.config import Settings
     from aiops.e2e import execute_prometheus_e2e
 
+    configure_logging()
     settings = Settings()
     report_dir = args.out_dir or settings.evidence_dir / "e2e"
     report = execute_prometheus_e2e(settings, args.plan, report_dir)

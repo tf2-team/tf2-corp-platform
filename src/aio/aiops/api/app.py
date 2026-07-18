@@ -31,6 +31,13 @@ from aiops.storage import SQLiteIncidentStore
 logger = logging.getLogger(__name__)
 
 
+def configure_logging() -> None:
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
+    logging.getLogger("httpx").setLevel(logging.WARNING)
+    logging.getLogger("httpcore").setLevel(logging.WARNING)
+    logging.getLogger("drain3").setLevel(logging.WARNING)
+
+
 def run_static_pipeline(request: PipelineRunRequest, settings: Settings | None = None) -> PipelineResult:
     settings = settings or Settings()
     runtime_config = load_runtime_config(settings.runtime_config_path)
@@ -97,6 +104,7 @@ def run_pipeline_with_collector(collector, settings: Settings, runtime_config, m
             RemediationAuditLog(settings.remediation_audit_path),
         ),
         notification_sender=NotificationClient(settings) if _configured_url(settings.notification_webhook_url) else None,
+        rca_history_path=settings.rca_history_path,
     )
     try:
         result = pipeline.run_once(metric_series=metric_series or [])
@@ -107,7 +115,10 @@ def run_pipeline_with_collector(collector, settings: Settings, runtime_config, m
 
 
 def print_rca_result(result: PipelineResult) -> None:
+    root_pairs = {(root.service, metric) for root in result.rca_result.root_causes for metric in root.root_cause_metrics}
     for anomaly in result.rca_result.anomalies:
+        if root_pairs and (anomaly.service, anomaly.metric) not in root_pairs:
+            continue
         print(
             "AIOPS_ANOMALY "
             f"algorithm={anomaly.algorithm} "
@@ -189,7 +200,7 @@ def handle_grafana_webhook(
 
 def create_app(settings: Settings | None = None) -> FastAPI:
     settings = settings or Settings()
-    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
+    configure_logging()
 
     @asynccontextmanager
     async def lifespan(app: FastAPI):

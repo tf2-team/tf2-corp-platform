@@ -7,6 +7,7 @@ dependencies:
       - httpx>=0.28,<1
       - pydantic>=2,<3
       - pydantic-settings>=2,<3
-      - fse-baro
       - statsmodels>=0.14,<1
       - scikit-learn>=1.4,<2
+      - tqdm>=4.66,<5
+      - drain3>=0.9,<1

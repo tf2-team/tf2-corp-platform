@@ -196,8 +196,8 @@
   "prometheus_queries": {
     "checkout.bad_ratio.24h": "(sum(increase(rpc_server_duration_milliseconds_count{service_name=\"checkout\",rpc_method=\"PlaceOrder\",rpc_grpc_status_code!=\"0\"}[24h])) / clamp_min(sum(increase(rpc_server_duration_milliseconds_count{service_name=\"checkout\",rpc_method=\"PlaceOrder\"}[24h])), 1)) or vector(0)",
     "checkout.payment_error_rate.5m": "(sum(rate(http_client_duration_milliseconds_count{service_name=\"checkout\",server_address=~\"payment.*\",http_response_status_code=~\"5..\"}[5m])) / clamp_min(sum(rate(http_client_duration_milliseconds_count{service_name=\"checkout\",server_address=~\"payment.*\"}[5m])), 1)) or vector(0)",
-    "checkout.p95_latency.5m": "histogram_quantile(0.95, sum(rate(rpc_server_duration_milliseconds_bucket{service_name=\"checkout\"}[5m])) by (le))",
-    "product-catalog.cpu_millicores": "sum(k8s_pod_cpu_usage{k8s_deployment_name=\"product-catalog\"})"
+    "checkout.p95_latency.5m": "((histogram_quantile(0.95, sum(rate(traces_span_metrics_duration_milliseconds_bucket{service_name=\"checkout\"}[5m])) by (le, service_name)) / 1000) and on(service_name) (sum(rate(traces_span_metrics_duration_milliseconds_count{service_name=\"checkout\"}[5m])) by (service_name) > 0)) or on() vector(0)",
+    "product-catalog.cpu_millicores": "sum(k8s_pod_cpu_usage{k8s_deployment_name=\"product-catalog\"}) or on() vector(0)"
   },
   "prometheus_services": [
     "checkout",
@@ -245,7 +245,7 @@
       "id": "checkout_p95_latency_5m",
       "source": "prometheus",
       "query_id": "checkout.p95_latency.5m",
-      "unit": "milliseconds",
+      "unit": "seconds",
       "window": "5m",
       "flow": "checkout",
       "service": "checkout",
@@ -301,7 +301,7 @@
     {
       "id": "ops04_checkout_latency_p95",
       "type": "threshold",
-      "enabled": true,
+      "enabled": false,
       "signal_id": "checkout_p95_latency_5m",
       "flow": "checkout",
       "service": "checkout",
@@ -311,7 +311,7 @@
     {
       "id": "ops05_cart_error_rate",
       "type": "threshold",
-      "enabled": true,
+      "enabled": false,
       "signal_id": "cart_error_rate_5m",
       "flow": "checkout",
       "service": "cart",
@@ -321,7 +321,7 @@
     {
       "id": "ops06_product_catalog_cpu",
       "type": "threshold",
-      "enabled": true,
+      "enabled": false,
       "signal_id": "product_catalog_cpu_millicores",
       "flow": "catalog",
       "service": "product-catalog",
@@ -331,7 +331,7 @@
     {
       "id": "auto_checkout_error_rate",
       "type": "threshold",
-      "enabled": true,
+      "enabled": false,
       "signal_id": "checkout_error_rate_5m",
       "flow": "checkout",
       "service": "checkout",
@@ -341,7 +341,7 @@
     {
       "id": "auto_payment_error_rate",
       "type": "threshold",
-      "enabled": true,
+      "enabled": false,
       "signal_id": "payment_error_rate_5m",
       "flow": "checkout",
       "service": "payment",
@@ -351,7 +351,7 @@
     {
       "id": "auto_frontend_proxy_error_rate",
       "type": "threshold",
-      "enabled": true,
+      "enabled": false,
       "signal_id": "frontend_proxy_error_rate_5m",
       "flow": "edge",
       "service": "frontend-proxy",
@@ -361,7 +361,7 @@
     {
       "id": "auto_frontend_error_rate",
       "type": "threshold",
-      "enabled": true,
+      "enabled": false,
       "signal_id": "frontend_error_rate_5m",
       "flow": "web",
       "service": "frontend",
@@ -371,7 +371,7 @@
     {
       "id": "auto_product_catalog_error_rate",
       "type": "threshold",
-      "enabled": true,
+      "enabled": false,
       "signal_id": "product_catalog_error_rate_5m",
       "flow": "catalog",
       "service": "product-catalog",
@@ -381,7 +381,7 @@
     {
       "id": "auto_product_reviews_error_rate",
       "type": "threshold",
-      "enabled": true,
+      "enabled": false,
       "signal_id": "product_reviews_error_rate_5m",
       "flow": "catalog",
       "service": "product-reviews",
@@ -391,7 +391,7 @@
     {
       "id": "auto_recommendation_error_rate",
       "type": "threshold",
-      "enabled": true,
+      "enabled": false,
       "signal_id": "recommendation_error_rate_5m",
       "flow": "recommendation",
       "service": "recommendation",
@@ -401,7 +401,7 @@
     {
       "id": "auto_cart_error_rate",
       "type": "threshold",
-      "enabled": true,
+      "enabled": false,
       "signal_id": "cart_error_rate_5m",
       "flow": "checkout",
       "service": "cart",
@@ -411,7 +411,7 @@
     {
       "id": "auto_ad_error_rate",
       "type": "threshold",
-      "enabled": true,
+      "enabled": false,
       "signal_id": "ad_error_rate_5m",
       "flow": "platform",
       "service": "ad",
@@ -421,7 +421,7 @@
     {
       "id": "auto_currency_error_rate",
       "type": "threshold",
-      "enabled": true,
+      "enabled": false,
       "signal_id": "currency_error_rate_5m",
       "flow": "checkout",
       "service": "currency",
@@ -431,7 +431,7 @@
     {
       "id": "auto_shipping_error_rate",
       "type": "threshold",
-      "enabled": true,
+      "enabled": false,
       "signal_id": "shipping_error_rate_5m",
       "flow": "checkout",
       "service": "shipping",
@@ -441,7 +441,7 @@
     {
       "id": "auto_email_error_rate",
       "type": "threshold",
-      "enabled": true,
+      "enabled": false,
       "signal_id": "email_error_rate_5m",
       "flow": "checkout",
       "service": "email",
@@ -451,7 +451,7 @@
     {
       "id": "auto_quote_error_rate",
       "type": "threshold",
-      "enabled": true,
+      "enabled": false,
       "signal_id": "quote_error_rate_5m",
       "flow": "checkout",
       "service": "quote",
@@ -461,7 +461,7 @@
     {
       "id": "auto_fraud_detection_error_rate",
       "type": "threshold",
-      "enabled": true,
+      "enabled": false,
       "signal_id": "fraud_detection_error_rate_5m",
       "flow": "checkout",
       "service": "fraud-detection",

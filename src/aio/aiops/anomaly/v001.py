@@ -1,14 +1,23 @@
 from __future__ import annotations
 
-from collections import defaultdict
-from collections.abc import Callable
+from collections import defaultdict, deque
+import hashlib
 import os
+from pathlib import Path
+import re
 import warnings
 
 from aiops.anomaly.stats import mean, robust_score, stdev
 from aiops.schemas import AnomalyFinding, MetricSeries
 
 os.environ.setdefault("MPLCONFIGDIR", "/tmp")
+
+try:
+    from drain3 import TemplateMiner
+    from drain3.template_miner_config import TemplateMinerConfig
+except Exception:  # pragma: no cover - drain3 is optional until the env is refreshed.
+    TemplateMiner = None
+    TemplateMinerConfig = None
 
 
 class EwmaStlDetector:
@@ -117,70 +126,95 @@ class ServiceIsolationForestDetector:
         return [list(row) for row in zip(*normalized_columns)]
 
 
-class BaroBocpdDetector:
+class LogTemplateMetricBuilder:
     def __init__(
         self,
-        score_threshold: float,
-        min_points: int,
-        min_changed_metrics: int = 2,
-        hazard_lambda: int = 50,
-        max_metrics: int = 8,
-        max_points: int = 120,
+        config_path: str | Path = "config/drain3.ini",
+        bucket_seconds: int = 60,
+        history_buckets: int = 8,
+        max_templates_per_service: int = 20,
+        min_nonzero_buckets: int = 2,
     ):
-        self.score_threshold = score_threshold
-        self.min_points = min_points
-        self.min_changed_metrics = min_changed_metrics
-        self.hazard_lambda = hazard_lambda
-        self.max_metrics = max_metrics
-        self.max_points = max_points
+        self.bucket_seconds = bucket_seconds
+        self.history_buckets = history_buckets
+        self.max_templates_per_service = max_templates_per_service
+        self.min_nonzero_buckets = min_nonzero_buckets
+        self.template_miner = TemplateMiner(config=_drain3_config(config_path)) if TemplateMiner is not None and TemplateMinerConfig is not None else None
 
-    def evaluate(self, series: list[MetricSeries], bocpd: Callable[[list[list[float]]], list[int]] | None = None) -> list[AnomalyFinding]:
-        scored: list[tuple[MetricSeries, float]] = []
-        for metric in series:
-            if not self._is_bocpd_metric(metric.metric):
-                continue
-            values = [point.value for point in metric.points]
-            if len(values) < self.min_points:
-                continue
-            score = robust_score(values[:-1], [values[-1]])
-            if score >= self.score_threshold:
-                scored.append((metric, score))
+    def build(self, logs: list[tuple[str, int, str]]) -> list[MetricSeries]:
+        grouped: dict[tuple[str, str], dict[int, float]] = defaultdict(lambda: defaultdict(float))
+        for service, timestamp, message in logs:
+            template = self._template(message)
+            grouped[(service, template)][self._bucket(timestamp)] += 1.0
 
-        if len(scored) < self.min_changed_metrics:
-            return []
-        selected = sorted(scored, key=lambda item: item[1], reverse=True)[: self.max_metrics]
-        rows = self._normalized_rows([metric for metric, _ in selected])
-        changepoints = (bocpd or self._baro_bocpd)(rows)
-        if not changepoints:
-            return []
-        return [
-            AnomalyFinding(
-                algorithm="baro_bocpd",
-                service=metric.service,
-                metric=metric.metric,
-                signal_id=metric.signal_id,
-                score=score,
-                timestamp=metric.points[-1].timestamp,
+        series = []
+        for service, template, buckets in self._top_templates(grouped):
+            if sum(1 for value in buckets.values() if value > 0) < self.min_nonzero_buckets:
+                continue
+            latest = max(buckets) if buckets else 0
+            start = latest - (self.history_buckets - 1) * self.bucket_seconds
+            digest = hashlib.sha1(service.encode() + b":" + template.encode()).hexdigest()[:10]
+            metric = f"log_template_count_{digest}"
+            series.append(
+                MetricSeries(
+                    service=service,
+                    metric=metric,
+                    signal_id=f"{service.replace('-', '_')}_{metric}",
+                    points=[self._point(start + index * self.bucket_seconds, buckets) for index in range(self.history_buckets)],
+                )
             )
-            for metric, score in selected
-        ]
+        return series
 
-    def _normalized_rows(self, metrics: list[MetricSeries]) -> list[list[float]]:
-        length = min(self.max_points, *(len(metric.points) for metric in metrics))
-        rows = [[metric.points[index].value for metric in metrics] for index in range(-length, 0)]
-        return ServiceIsolationForestDetector(self.score_threshold, self.min_points)._normalized_rows(rows)
+    def _template(self, message: str) -> str:
+        if self.template_miner is not None:
+            result = self.template_miner.add_log_message(message)
+            template = result.get("template_mined")
+            if template:
+                return template
+        message = re.sub(r"\b[0-9a-f]{8,}\b", "<*>", message, flags=re.IGNORECASE)
+        message = re.sub(r"\b\d+(?:\.\d+)?\b", "<*>", message)
+        return " ".join(message.split())
 
-    def _is_bocpd_metric(self, metric: str) -> bool:
-        return "latency" in metric or "error_rate" in metric
+    def _bucket(self, timestamp: int) -> int:
+        return (timestamp // self.bucket_seconds) * self.bucket_seconds if timestamp else 0
 
-    def _baro_bocpd(self, rows: list[list[float]]) -> list[int]:
-        from functools import partial
+    def _point(self, timestamp: int, buckets: dict[int, float]):
+        from aiops.schemas import MetricPoint
 
-        from baro._bocpd import MultivariateT, constant_hazard, online_changepoint_detection
-        from baro.utility import find_cps
+        return MetricPoint(timestamp=timestamp, value=buckets.get(timestamp, 0.0))
 
-        _, maxes = online_changepoint_detection(rows, partial(constant_hazard, self.hazard_lambda), MultivariateT(dims=len(rows[0])))
-        return [point for point, _ in find_cps(maxes)]
+    def _top_templates(self, grouped: dict[tuple[str, str], dict[int, float]]):
+        by_service: dict[str, list[tuple[str, dict[int, float], float]]] = defaultdict(list)
+        for (service, template), buckets in grouped.items():
+            by_service[service].append((template, buckets, sum(buckets.values())))
+        for service, items in by_service.items():
+            for template, buckets, _ in sorted(items, key=lambda item: item[2], reverse=True)[: self.max_templates_per_service]:
+                yield service, template, buckets
+
+
+LogTemplateAnomalyDetector = LogTemplateMetricBuilder
+
+
+def _drain3_config(config_path: str | Path):
+    config = TemplateMinerConfig()
+    path = Path(config_path)
+    if path.exists():
+        config.load(str(path))
+    return config
+
+
+class AnomalyMergeQueue:
+    def __init__(self):
+        self._items: deque[AnomalyFinding] = deque()
+
+    def push_many(self, findings: list[AnomalyFinding]) -> None:
+        self._items.extend(findings)
+
+    def drain(self) -> list[AnomalyFinding]:
+        findings: list[AnomalyFinding] = []
+        while self._items:
+            findings.append(self._items.popleft())
+        return findings
 
 
 class V001AnomalyEngine:
@@ -193,28 +227,51 @@ class V001AnomalyEngine:
         seasonal_period: int,
         algorithm_weights: dict[str, float],
         weighted_score_threshold: float,
-        bocpd_min_changed_metrics: int,
-        bocpd_hazard_lambda: int = 50,
-        bocpd_max_metrics: int = 8,
-        bocpd_max_points: int = 120,
+        drain3_config_path: str | Path = "config/drain3.ini",
+        log_bucket_seconds: int = 60,
+        log_history_buckets: int | None = None,
+        log_max_templates_per_service: int = 20,
+        log_min_nonzero_buckets: int = 2,
+        log_correlation_window_seconds: int = 300,
         single_algorithm_min_normalized_score: float = 2.0,
     ):
         self.algorithm_weights = algorithm_weights
         self.weighted_score_threshold = weighted_score_threshold
         self.single_algorithm_min_normalized_score = single_algorithm_min_normalized_score
+        self.log_correlation_window_seconds = log_correlation_window_seconds
         self.thresholds = {
             "ewma_stl": ewma_z_threshold,
             "isolation_forest": isolation_score_threshold,
         }
         self.ewma_stl = EwmaStlDetector(ewma_alpha, ewma_z_threshold, min_points, seasonal_period)
         self.isolation_forest = ServiceIsolationForestDetector(isolation_score_threshold, min_points)
-        self.baro_bocpd = BaroBocpdDetector(isolation_score_threshold, min_points, bocpd_min_changed_metrics, bocpd_hazard_lambda, bocpd_max_metrics, bocpd_max_points)
+        self.log_templates = LogTemplateMetricBuilder(
+            drain3_config_path,
+            log_bucket_seconds,
+            log_history_buckets or min_points,
+            log_max_templates_per_service,
+            log_min_nonzero_buckets,
+        )
+        self.merge_queue = AnomalyMergeQueue()
 
-    def evaluate(self, series: list[MetricSeries]) -> list[AnomalyFinding]:
-        return self._weighted_sum([*self.ewma_stl.evaluate(series), *self.isolation_forest.evaluate(series)])
+    def evaluate(self, series: list[MetricSeries], logs: list[tuple[str, int, str]] | None = None) -> list[AnomalyFinding]:
+        metric_findings = self._weighted_sum([*self.ewma_stl.evaluate(series), *self.isolation_forest.evaluate(series)])
+        log_series = self.log_templates.build(logs or [])
+        log_findings = self._correlated_log_findings(
+            self._weighted_sum([*self.ewma_stl.evaluate(log_series), *self.isolation_forest.evaluate(log_series)]),
+            metric_findings,
+        )
+        return self._suppress_busy_cpu([*metric_findings, *log_findings], [*series, *log_series])
 
-    def evaluate_bocpd(self, series: list[MetricSeries]) -> list[AnomalyFinding]:
-        return self.baro_bocpd.evaluate(series)
+    def _correlated_log_findings(self, log_findings: list[AnomalyFinding], metric_findings: list[AnomalyFinding]) -> list[AnomalyFinding]:
+        return [
+            log
+            for log in log_findings
+            if any(
+                metric.service == log.service and abs(metric.timestamp - log.timestamp) <= self.log_correlation_window_seconds
+                for metric in metric_findings
+            )
+        ]
 
     def _weighted_sum(self, findings: list[AnomalyFinding]) -> list[AnomalyFinding]:
         grouped: dict[tuple[str, str, str], list[AnomalyFinding]] = defaultdict(list)
@@ -241,3 +298,48 @@ class V001AnomalyEngine:
                 )
             )
         return sorted(combined, key=lambda item: item.score, reverse=True)
+
+    def _suppress_busy_cpu(self, findings: list[AnomalyFinding], series: list[MetricSeries]) -> list[AnomalyFinding]:
+        by_service_series: dict[str, list[MetricSeries]] = defaultdict(list)
+        by_service_findings: dict[str, list[AnomalyFinding]] = defaultdict(list)
+        for metric in series:
+            by_service_series[metric.service].append(metric)
+        for finding in findings:
+            by_service_findings[finding.service].append(finding)
+
+        filtered = []
+        for finding in findings:
+            if not _is_cpu_metric(finding.metric):
+                filtered.append(finding)
+                continue
+            service_findings = by_service_findings[finding.service]
+            service_series = by_service_series[finding.service]
+            has_failure_or_memory = any(_is_failure_metric(item.metric) or _is_memory_metric(item.metric) for item in service_findings)
+            if has_failure_or_memory or not _request_rate_increased(service_series) or _failure_metric_increased(service_series):
+                filtered.append(finding)
+        return filtered
+
+
+def _is_cpu_metric(metric: str) -> bool:
+    return "cpu" in metric
+
+
+def _is_memory_metric(metric: str) -> bool:
+    return "memory" in metric or "oom" in metric
+
+
+def _is_failure_metric(metric: str) -> bool:
+    return "latency" in metric or "error_rate" in metric or metric.startswith("log_template_count_") or "ready_pods" in metric
+
+
+def _request_rate_increased(series: list[MetricSeries]) -> bool:
+    return any("request_rate" in metric.metric and _latest_robust_score(metric) >= 3.0 for metric in series)
+
+
+def _failure_metric_increased(series: list[MetricSeries]) -> bool:
+    return any(_is_failure_metric(metric.metric) and _latest_robust_score(metric) >= 3.0 for metric in series)
+
+
+def _latest_robust_score(metric: MetricSeries) -> float:
+    values = [point.value for point in metric.points]
+    return robust_score(values[:-1], [values[-1]]) if len(values) >= 5 else 0.0
