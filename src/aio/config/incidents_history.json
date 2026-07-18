@@ -1,0 +1,17 @@
+[
+  {
+    "incident_id": "hist-payment-latency",
+    "affected_services": ["checkout", "payment"],
+    "log_signatures": ["dependency_signal_breached"],
+    "metric_ratios": {
+      "checkout_payment_error_rate_5m": 2.6
+    },
+    "actions_taken": [
+      {
+        "action_id": "restart_payment",
+        "target": "payment",
+        "outcome": "success"
+      }
+    ]
+  }
+]

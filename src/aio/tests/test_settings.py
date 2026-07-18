@@ -1,0 +1,75 @@
+import tempfile
+import json
+import unittest
+from pathlib import Path
+
+from aiops.api.app import create_app, run_static_pipeline
+from aiops.config import Settings
+from aiops.schemas import Observation, PipelineRunRequest, SignalQuality
+
+
+ROOT = Path(__file__).resolve().parent.parent
+TEST_ENV_FILES = (ROOT / ".env", ROOT / ".env.live")
+
+
+class SettingsTest(unittest.TestCase):
+    def test_live_env_overrides_tracked_defaults(self):
+        settings = Settings(_env_file=TEST_ENV_FILES)
+
+        self.assertEqual(settings.prometheus_base_url, "http://localhost:9090")
+        self.assertEqual(settings.jaeger_base_url, "http://localhost:16686/jaeger/ui")
+        self.assertFalse(settings.opensearch_verify_tls)
+        self.assertEqual(settings.notification_provider, "auto")
+        self.assertEqual(settings.runtime_config_path, Path("config/runtime.json"))
+
+    def test_settings_load_from_env_file_and_drive_pipeline(self):
+        with tempfile.TemporaryDirectory() as directory:
+            env_file = Path(directory) / ".env"
+            runtime_config_path = Path(directory) / "runtime.json"
+            runtime_config = json.loads(Path("config/runtime.json").read_text(encoding="utf-8"))
+            runtime_config["detector_thresholds"]["ops01_checkout_slo"] = 0.5
+            runtime_config_path.write_text(json.dumps(runtime_config), encoding="utf-8")
+            env_file.write_text(
+                "\n".join(
+                    [
+                        "AIOPS_CHECKOUT_SLO_RUNBOOK_ID=RB-TEST",
+                        "AIOPS_POLICY_MODE=observe",
+                        f"AIOPS_STATE_STORE_PATH={Path(directory) / 'aiops.sqlite3'}",
+                        f"AIOPS_RUNTIME_CONFIG_PATH={runtime_config_path}",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+            settings = Settings(_env_file=(*TEST_ENV_FILES, env_file))
+
+            result = run_static_pipeline(
+                PipelineRunRequest(
+                    observations=[
+                        Observation(
+                            signal_id="checkout_bad_ratio_24h",
+                            value=0.2,
+                            unit="ratio",
+                            window="24h",
+                            quality=SignalQuality.VERIFIED,
+                        )
+                    ]
+                ),
+                settings=settings,
+            )
+
+        self.assertEqual(result.incidents, [])
+
+    def test_fastapi_routes_come_from_settings(self):
+        settings = Settings(
+            _env_file=TEST_ENV_FILES,
+            api_health_live_path="/livez",
+            api_pipeline_run_path="/run-now",
+        )
+        paths = {route.path for route in create_app(settings).routes}
+
+        self.assertIn("/livez", paths)
+        self.assertIn("/run-now", paths)
+
+
+if __name__ == "__main__":
+    unittest.main()

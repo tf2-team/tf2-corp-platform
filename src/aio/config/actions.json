@@ -1,0 +1,22 @@
+[
+  {
+    "action_id": "restart_payment",
+    "action_type": "restart",
+    "target": "payment",
+    "target_kind": "Deployment",
+    "cost_min": 2.0,
+    "downtime_min": 1.0,
+    "blast_radius_services": ["checkout"],
+    "replicas": 3
+  },
+  {
+    "action_id": "page_oncall",
+    "action_type": "page",
+    "target": "platform-team",
+    "target_kind": "OnCall",
+    "cost_min": 20.0,
+    "downtime_min": 0.0,
+    "blast_radius_services": [],
+    "replicas": 0
+  }
+]

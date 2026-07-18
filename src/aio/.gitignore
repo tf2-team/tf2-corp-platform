@@ -1,0 +1,8 @@
+__pycache__/
+*.py[cod]
+.test-tmp/
+state/*.sqlite3
+state/*.sqlite3-*
+state/*.jsonl
+evidence/
+.env.live
