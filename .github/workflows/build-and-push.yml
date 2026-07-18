@@ -4,11 +4,13 @@ name: Build and push images
 
 # Job graph: CI → prepare → AWS/ECR preflight (refine build/retag lists)
 #            → build matrix (changed services from source) || retag (unchanged from PREV_TAG)
-#            → verify ECR (all 21 under NEW_TAG) → release-ready
-#            → update-chart-dev (development) | create-chart-prod-pr (production)
+#            → verify ECR (all 22 under NEW_TAG)
+#            → publish Mem0 FastEmbed artifact (build when mem0 bakes; else S3 retag)
+#            → release-ready → update-chart-dev (development) | create-chart-prod-pr (production)
 #
 # Global Helm tag contract: every release service must exist under the same NEW_TAG.
 # Unchanged services are retagged from PREV_TAG (not skipped); changed services bake from source.
+# mem0 is a normal matrix service; compose/bake catalog edits alone do not force full bake.
 # Dev: after release-ready, direct-push default.image.tag to chart repo values-dev.yaml
 #      on branch techx-dev-corp (requires secret CHART_REPO_TOKEN).
 # Prod: after release-ready, open a PR on the chart repo updating values-prod.yaml
@@ -18,10 +20,12 @@ on:
   push:
     branches: [main, techx-dev-corp]
     # Branch pushes: only when image-affecting paths change.
-    # Selective bake+retag still produces the full 21-image set under one global tag.
+    # Selective bake+retag still produces the full 22-image set under one global tag.
     # Tag pushes (v*) and workflow_dispatch always run (no path filter on those entry points).
     paths:
       - "src/**"
+      - "third-party/mem0"
+      - ".gitmodules"
       - "pb/**"
       - "docker-compose.yml"
       - "docker-bake.hcl"
@@ -38,7 +42,7 @@ on:
           - development
           - production
       force_full_rebuild:
-        description: Bake all 21 services from source (ignore path-based selective rebuild)
+        description: Bake all 22 services from source (ignore path-based selective rebuild)
         required: false
         type: boolean
         default: true
@@ -147,7 +151,7 @@ jobs:
           set -euo pipefail
 
           # Canonical release set (must match docker-bake.hcl group "release").
-          RELEASE_JSON='["accounting","ad","cart","checkout","currency","email","flagd-ui","fraud-detection","frontend","frontend-proxy","image-provider","kafka","llm","load-generator","opensearch","payment","product-catalog","product-reviews","quote","recommendation","shipping"]'
+          RELEASE_JSON='["accounting","ad","cart","checkout","currency","email","flagd-ui","fraud-detection","frontend","frontend-proxy","image-provider","kafka","llm","load-generator","mem0","opensearch","payment","product-catalog","product-reviews","quote","recommendation","shipping"]'
 
           mapfile -t RELEASE < <(printf '%s' "${RELEASE_JSON}" | jq -r '.[]')
 
@@ -197,8 +201,8 @@ jobs:
             fi
           done
 
-          if [[ "${#RELEASE[@]}" -ne 21 ]]; then
-            echo "::error::Expected 21 release services, got ${#RELEASE[@]}"
+          if [[ "${#RELEASE[@]}" -ne 22 ]]; then
+            echo "::error::Expected 22 release services, got ${#RELEASE[@]}"
             exit 1
           fi
 
@@ -210,11 +214,11 @@ jobs:
             echo "${BAKE_RAW}"
             exit 1
           fi
-          echo "${BAKE_JSON}" | jq -e '.group.release.targets | length == 21' >/dev/null
+          echo "${BAKE_JSON}" | jq -e '.group.release.targets | length == 22' >/dev/null
 
           mapfile -t BAKE_TARGETS < <(echo "${BAKE_JSON}" | jq -r '.group.release.targets[]' | sort -u)
-          if [[ "${#BAKE_TARGETS[@]}" -ne 21 ]]; then
-            echo "::error::Bake release group has ${#BAKE_TARGETS[@]} unique targets (want 21)"
+          if [[ "${#BAKE_TARGETS[@]}" -ne 22 ]]; then
+            echo "::error::Bake release group has ${#BAKE_TARGETS[@]} unique targets (want 22)"
             exit 1
           fi
 
@@ -319,9 +323,21 @@ jobs:
             local FULL_TRIGGER=0
             for f in "${CHANGED[@]}"; do
               case "${f}" in
-                pb/*|docker-compose.yml|docker-bake.hcl|buildkitd.toml|.env)
+                # Shared contracts that can affect every image. Compose/bake catalog
+                # edits alone do NOT force full bake: new services (e.g. mem0) use the
+                # matrix build path, and unchanged services retag from PREV_TAG.
+                # Preflight moves any service missing PREV_TAG into the build list.
+                # Operators can still force_full_rebuild for platform/bake-wide changes.
+                pb/*|buildkitd.toml|.env|.gitmodules)
                   FULL_TRIGGER=1
                   echo "Full rebuild trigger: ${f}"
+                  ;;
+                docker-compose.yml|docker-bake.hcl)
+                  echo "Catalog/definition change (selective; not a full-bake trigger): ${f}"
+                  ;;
+                third-party/mem0|third-party/mem0/*)
+                  BUILD_SET["mem0"]=1
+                  echo "Service change: mem0 (${f})"
                   ;;
                 src/*)
                   rest="${f#src/}"
@@ -670,7 +686,7 @@ jobs:
       id-token: write
     strategy:
       fail-fast: false
-      max-parallel: 21
+      max-parallel: 22
       matrix:
         service: ${{ fromJson(needs.preflight.outputs.build_services) }}
     env:
@@ -679,6 +695,8 @@ jobs:
       - name: Checkout
         # actions/checkout@v7.0.0
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
+        with:
+          submodules: recursive
 
       - name: Free disk space
         run: |
@@ -786,7 +804,7 @@ jobs:
       id-token: write
     strategy:
       fail-fast: false
-      max-parallel: 21
+      max-parallel: 22
       matrix:
         service: ${{ fromJson(needs.preflight.outputs.retag_services) }}
     env:
@@ -859,7 +877,7 @@ jobs:
           } >> "${GITHUB_STEP_SUMMARY}"
 
   # ---------------------------------------------------------------------------
-  # 6. verify ECR — all 21 tags under NEW_TAG after build and/or retag
+  # 6. verify ECR — all 22 tags under NEW_TAG after build and/or retag
   # ---------------------------------------------------------------------------
   verify-ecr:
     name: Verify ECR tags
@@ -936,12 +954,210 @@ jobs:
           echo "All ${#SERVICES[@]} release images present for tag ${DEMO_VERSION}"
 
   # ---------------------------------------------------------------------------
-  # 7. release-ready — sole gate for chart promotion (auto-dev or auto-prod PR)
+  # 7. publish-mem0-fastembed-artifact — selective like the image matrix:
+  #    rebuild from source when mem0 is in the build list; otherwise retag
+  #    (copy) PREV_TAG → NEW_TAG objects under the same S3 prefix.
+  # ---------------------------------------------------------------------------
+  publish-mem0-fastembed-artifact:
+    name: Publish Mem0 FastEmbed artifact
+    needs: [prepare, preflight]
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    environment: ${{ needs.prepare.outputs.target_environment }}
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      AWS_REGION: ${{ vars.AWS_REGION || 'us-east-1' }}
+      MEM0_FASTEMBED_ARTIFACT_S3_URI: ${{ vars.MEM0_FASTEMBED_ARTIFACT_S3_URI }}
+      VERSION: ${{ needs.prepare.outputs.version }}
+      PREV_TAG: ${{ needs.preflight.outputs.prev_tag }}
+      SHORT_SHA: ${{ needs.prepare.outputs.short_sha }}
+      TARGET_ENV: ${{ needs.prepare.outputs.target_environment }}
+      BUILD_SERVICES_JSON: ${{ needs.preflight.outputs.build_services }}
+      MODE: ${{ needs.prepare.outputs.mode }}
+    steps:
+      - name: Resolve artifact action (build vs retag)
+        id: plan
+        run: |
+          set -euo pipefail
+          # mem0 image is always in build or retag of the release set.
+          # Artifact follows the same classification: rebuild only when mem0 bakes.
+          if printf '%s' "${BUILD_SERVICES_JSON}" | jq -e 'index("mem0") != null' >/dev/null; then
+            ACTION="build"
+            REASON="mem0 is in the image build list (mode=${MODE})"
+          else
+            ACTION="retag"
+            REASON="mem0 is unchanged; retag FastEmbed from PREV_TAG (mode=${MODE})"
+          fi
+          {
+            echo "action=${ACTION}"
+            echo "reason=${REASON}"
+          } >> "${GITHUB_OUTPUT}"
+          echo "action=${ACTION} reason=${REASON}"
+
+      - name: Validate artifact destination
+        id: dest
+        run: |
+          set -euo pipefail
+          if [[ -z "${MEM0_FASTEMBED_ARTIFACT_S3_URI}" ]]; then
+            # Do not block the whole image release when CloudOps has not wired the
+            # model-cache bucket URI yet. Image matrix build/retag still proceeds.
+            echo "::warning::MEM0_FASTEMBED_ARTIFACT_S3_URI is not set on '${TARGET_ENV}'; skipping FastEmbed publish."
+            echo "skip=true" >> "${GITHUB_OUTPUT}"
+            exit 0
+          fi
+          case "${MEM0_FASTEMBED_ARTIFACT_S3_URI}" in
+            s3://*) ;;
+            *)
+              echo "::error::MEM0_FASTEMBED_ARTIFACT_S3_URI must start with s3://"
+              exit 1
+              ;;
+          esac
+          echo "skip=false" >> "${GITHUB_OUTPUT}"
+          echo "base_uri=${MEM0_FASTEMBED_ARTIFACT_S3_URI%/}" >> "${GITHUB_OUTPUT}"
+
+      - name: Checkout
+        if: steps.dest.outputs.skip != 'true' && steps.plan.outputs.action == 'build'
+        # actions/checkout@v7.0.0
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
+
+      - name: Setup Python
+        if: steps.dest.outputs.skip != 'true' && steps.plan.outputs.action == 'build'
+        # actions/setup-python@v6.2.0
+        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: src/mem0/requirements-production.txt
+
+      - name: Install Mem0 artifact dependencies
+        if: steps.dest.outputs.skip != 'true' && steps.plan.outputs.action == 'build'
+        run: python -m pip install -r src/mem0/requirements-production.txt
+
+      - name: Build FastEmbed artifact
+        if: steps.dest.outputs.skip != 'true' && steps.plan.outputs.action == 'build'
+        run: python src/mem0/scripts/build_embedding_model_artifact.py --output-dir "${RUNNER_TEMP}/mem0-fastembed"
+
+      - name: Validate FastEmbed artifact offline
+        if: steps.dest.outputs.skip != 'true' && steps.plan.outputs.action == 'build'
+        run: |
+          set -euo pipefail
+          ARCHIVE="$(find "${RUNNER_TEMP}/mem0-fastembed" -maxdepth 1 -type f -name '*.tar.gz' | head -n 1)"
+          if [[ -z "${ARCHIVE}" ]]; then
+            echo "::error::FastEmbed archive was not created"
+            exit 1
+          fi
+          python src/mem0/scripts/validate_embedding_model_artifact.py \
+            --archive "${ARCHIVE}" \
+            --checksum "${ARCHIVE}.sha256"
+
+      - name: Configure AWS credentials (OIDC)
+        if: steps.dest.outputs.skip != 'true'
+        # aws-actions/configure-aws-credentials@v6.2.2
+        uses: aws-actions/configure-aws-credentials@517a711dbcd0e402f90c77e7e2f81e849156e31d
+        with:
+          role-to-assume: ${{ vars.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Upload rebuilt artifact to S3
+        if: steps.dest.outputs.skip != 'true' && steps.plan.outputs.action == 'build'
+        env:
+          BASE_URI: ${{ steps.dest.outputs.base_uri }}
+        run: |
+          set -euo pipefail
+          DEST="${BASE_URI}/${VERSION}/"
+          aws s3 cp "${RUNNER_TEMP}/mem0-fastembed/" "${DEST}" \
+            --recursive \
+            --exclude "*" \
+            --include "*.tar.gz" \
+            --include "*.sha256" \
+            --include "manifest.json" \
+            --region "${AWS_REGION}"
+
+          ARCHIVE_NAME="$(basename "$(find "${RUNNER_TEMP}/mem0-fastembed" -maxdepth 1 -type f -name '*.tar.gz' | head -n 1)")"
+          for name in "${ARCHIVE_NAME}" "${ARCHIVE_NAME}.sha256" "manifest.json"; do
+            aws s3 ls "${DEST}${name}" --region "${AWS_REGION}" >/dev/null
+          done
+
+          {
+            echo "## Mem0 FastEmbed artifact (build)"
+            echo ""
+            echo "| Field | Value |"
+            echo "|---|---|"
+            echo "| Environment | \`${TARGET_ENV}\` |"
+            echo "| Mode | build from source |"
+            echo "| Prefix | \`${DEST}\` |"
+            echo "| Archive | \`${ARCHIVE_NAME}\` |"
+            echo "| Commit | \`${SHORT_SHA}\` |"
+          } >> "${GITHUB_STEP_SUMMARY}"
+
+      - name: Retag previous FastEmbed artifact to new tag
+        if: steps.dest.outputs.skip != 'true' && steps.plan.outputs.action == 'retag'
+        env:
+          BASE_URI: ${{ steps.dest.outputs.base_uri }}
+        run: |
+          set -euo pipefail
+          if [[ -z "${PREV_TAG}" ]]; then
+            echo "::error::PREV_TAG is empty; cannot retag FastEmbed artifact"
+            exit 1
+          fi
+          if [[ "${PREV_TAG}" == "${VERSION}" ]]; then
+            echo "PREV_TAG equals NEW_TAG (${VERSION}); ensuring objects exist under that prefix."
+          fi
+
+          SRC="${BASE_URI}/${PREV_TAG}/"
+          DST="${BASE_URI}/${VERSION}/"
+          echo "Retag FastEmbed ${SRC} → ${DST}"
+
+          # Fail if the previous tag has no objects (operator must rebuild once).
+          if ! aws s3 ls "${SRC}" --region "${AWS_REGION}" 2>/dev/null | grep -q .; then
+            echo "::error::No FastEmbed objects at ${SRC}. Re-run with mem0 in the build list or set force_full_rebuild."
+            exit 1
+          fi
+
+          aws s3 cp "${SRC}" "${DST}" --recursive --region "${AWS_REGION}"
+
+          # Best-effort presence check for common artifact files.
+          FOUND=0
+          while IFS= read -r line; do
+            [[ -n "${line}" ]] && FOUND=1
+          done < <(aws s3 ls "${DST}" --region "${AWS_REGION}" 2>/dev/null || true)
+          if [[ "${FOUND}" -eq 0 ]]; then
+            echo "::error::Retag completed but destination ${DST} is empty"
+            exit 1
+          fi
+
+          {
+            echo "## Mem0 FastEmbed artifact (retag)"
+            echo ""
+            echo "| Field | Value |"
+            echo "|---|---|"
+            echo "| Environment | \`${TARGET_ENV}\` |"
+            echo "| Mode | retag (S3 copy, no model rebuild) |"
+            echo "| Source | \`${SRC}\` |"
+            echo "| Destination | \`${DST}\` |"
+            echo "| Commit | \`${SHORT_SHA}\` |"
+          } >> "${GITHUB_STEP_SUMMARY}"
+
+      - name: Job summary (skipped)
+        if: steps.dest.outputs.skip == 'true'
+        run: |
+          {
+            echo "## Mem0 FastEmbed artifact"
+            echo ""
+            echo "Skipped: \`MEM0_FASTEMBED_ARTIFACT_S3_URI\` is not set on \`${TARGET_ENV}\`."
+            echo "Image matrix build/retag for mem0 is independent of this artifact job."
+            echo "Planned action was: \`${{ steps.plan.outputs.action }}\` (${{ steps.plan.outputs.reason }})."
+          } >> "${GITHUB_STEP_SUMMARY}"
+
+  # ---------------------------------------------------------------------------
+  # 8. release-ready — sole gate for chart promotion (auto-dev or auto-prod PR)
   # ---------------------------------------------------------------------------
   release-ready:
     name: Release ready
     if: always()
-    needs: [ci, prepare, preflight, build, retag, verify-ecr]
+    needs: [ci, prepare, preflight, build, retag, verify-ecr, publish-mem0-fastembed-artifact]
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -954,6 +1170,7 @@ jobs:
           BUILD_RESULT: ${{ needs.build.result }}
           RETAG_RESULT: ${{ needs.retag.result }}
           VERIFY_RESULT: ${{ needs.verify-ecr.result }}
+          MEM0_ARTIFACT_RESULT: ${{ needs.publish-mem0-fastembed-artifact.result }}
           VERSION: ${{ needs.prepare.outputs.version }}
           SHORT_SHA: ${{ needs.prepare.outputs.short_sha }}
           TARGET_ENV: ${{ needs.prepare.outputs.target_environment }}
@@ -974,6 +1191,7 @@ jobs:
             echo "| build | \`${BUILD_RESULT}\` |"
             echo "| retag | \`${RETAG_RESULT}\` |"
             echo "| verify-ecr | \`${VERIFY_RESULT}\` |"
+            echo "| publish-mem0-fastembed-artifact | \`${MEM0_ARTIFACT_RESULT}\` |"
             echo ""
             echo "| Field | Value |"
             echo "|---|---|"
@@ -995,7 +1213,7 @@ jobs:
 
           FAILED=0
           # build/retag may be skipped when that side of the selective plan is empty.
-          for pair in "ci:${CI_RESULT}:strict" "prepare:${PREPARE_RESULT}:strict" "preflight:${PREFLIGHT_RESULT}:strict" "build:${BUILD_RESULT}:allow_skip" "retag:${RETAG_RESULT}:allow_skip" "verify-ecr:${VERIFY_RESULT}:strict"; do
+          for pair in "ci:${CI_RESULT}:strict" "prepare:${PREPARE_RESULT}:strict" "preflight:${PREFLIGHT_RESULT}:strict" "build:${BUILD_RESULT}:allow_skip" "retag:${RETAG_RESULT}:allow_skip" "verify-ecr:${VERIFY_RESULT}:strict" "publish-mem0-fastembed-artifact:${MEM0_ARTIFACT_RESULT}:strict"; do
             name="${pair%%:*}"
             rest="${pair#*:}"
             result="${rest%%:*}"
@@ -1027,7 +1245,7 @@ jobs:
           echo "Release is ready (tag=${VERSION}, env=${TARGET_ENV}, mode=${MODE})."
 
   # ---------------------------------------------------------------------------
-  # 8. update-chart-dev — direct-push image tag to chart values-dev.yaml
+  # 9. update-chart-dev — direct-push image tag to chart values-dev.yaml
   #    Runs only after release-ready succeeds for the development environment.
   #    Requires repository secret CHART_REPO_TOKEN (contents:write on chart repo).
   # ---------------------------------------------------------------------------
@@ -1215,7 +1433,7 @@ jobs:
           exit 1
 
   # ---------------------------------------------------------------------------
-  # 9. create-chart-prod-pr — open PR to update chart values-prod.yaml tag
+  # 10. create-chart-prod-pr — open PR to update chart values-prod.yaml tag
   #    Runs only after release-ready succeeds for the production environment.
   #    Does not merge; human review remains the production deploy gate.
   #    Requires repository secret CHART_REPO_TOKEN (Contents + Pull requests write).
@@ -1382,7 +1600,7 @@ jobs:
             echo ""
             echo "## Notes"
             echo ""
-            echo "* All **21** release images were built and verified in ECR before this PR was opened."
+            echo "* All **22** release images were built and verified in ECR before this PR was opened."
             echo "* Merge this PR to let Argo CD Application \`techx-corp\` sync the new global tag."
             echo "* Do **not** merge while a platform publish for this tag is still in progress (this job only runs after \`release-ready\`)."
             echo ""
@@ -1464,4 +1682,4 @@ jobs:
             echo "Review and merge the PR to deploy. Argo CD (\`techx-corp\`) will sync after merge to \`${CHART_PROD_BRANCH}\`."
           } >> "${GITHUB_STEP_SUMMARY}"
 
-# Change trail: @hungxqt - 2026-07-15 - Allow sibling keys under default before image when promoting chart tags.
+# Change trail: @hungxqt - 2026-07-17 - Put mem0 on matrix build/retag; selective FastEmbed S3 retag.
