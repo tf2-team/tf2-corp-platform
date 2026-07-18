@@ -194,28 +194,68 @@
     ]
   },
   "prometheus_queries": {
-    "checkout.bad_ratio.24h": "(sum(increase(rpc_server_duration_milliseconds_count{service_name=\"checkout\",rpc_method=\"PlaceOrder\",rpc_grpc_status_code!=\"0\"}[24h])) / clamp_min(sum(increase(rpc_server_duration_milliseconds_count{service_name=\"checkout\",rpc_method=\"PlaceOrder\"}[24h])), 1)) or vector(0)",
-    "checkout.payment_error_rate.5m": "(sum(rate(http_client_duration_milliseconds_count{service_name=\"checkout\",server_address=~\"payment.*\",http_response_status_code=~\"5..\"}[5m])) / clamp_min(sum(rate(http_client_duration_milliseconds_count{service_name=\"checkout\",server_address=~\"payment.*\"}[5m])), 1)) or vector(0)",
-    "checkout.p95_latency.5m": "((histogram_quantile(0.95, sum(rate(traces_span_metrics_duration_milliseconds_bucket{service_name=\"checkout\"}[5m])) by (le, service_name)) / 1000) and on(service_name) (sum(rate(traces_span_metrics_duration_milliseconds_count{service_name=\"checkout\"}[5m])) by (service_name) > 0)) or on() vector(0)",
-    "product-catalog.cpu_millicores": "sum(k8s_pod_cpu_usage{k8s_deployment_name=\"product-catalog\"}) or on() vector(0)"
+    "prometheus.collection_health": "vector(1)",
+    "checkout.bad_ratio.24h": "((sum(increase(rpc_server_duration_milliseconds_count{service_name=\"checkout\",rpc_method=\"PlaceOrder\",rpc_grpc_status_code!=\"0\"}[24h])) or on() (0 * sum(increase(rpc_server_duration_milliseconds_count{service_name=\"checkout\",rpc_method=\"PlaceOrder\"}[24h])))) / clamp_min(sum(increase(rpc_server_duration_milliseconds_count{service_name=\"checkout\",rpc_method=\"PlaceOrder\"}[24h])), 1)) and on() (sum(increase(rpc_server_duration_milliseconds_count{service_name=\"checkout\",rpc_method=\"PlaceOrder\"}[24h])) > 0)",
+    "checkout.burn_rate.fast": "clamp_max(((sum(rate(rpc_server_duration_milliseconds_count{service_name=\"checkout\",rpc_method=\"PlaceOrder\",rpc_grpc_status_code!=\"0\"}[5m])) or on() (0 * sum(rate(rpc_server_duration_milliseconds_count{service_name=\"checkout\",rpc_method=\"PlaceOrder\"}[5m])))) / clamp_min(sum(rate(rpc_server_duration_milliseconds_count{service_name=\"checkout\",rpc_method=\"PlaceOrder\"}[5m])), 0.000001)), scalar(((sum(rate(rpc_server_duration_milliseconds_count{service_name=\"checkout\",rpc_method=\"PlaceOrder\",rpc_grpc_status_code!=\"0\"}[1h])) or on() (0 * sum(rate(rpc_server_duration_milliseconds_count{service_name=\"checkout\",rpc_method=\"PlaceOrder\"}[1h])))) / clamp_min(sum(rate(rpc_server_duration_milliseconds_count{service_name=\"checkout\",rpc_method=\"PlaceOrder\"}[1h])), 0.000001)))) / 0.01",
+    "checkout.burn_rate.slow": "clamp_max(((sum(rate(rpc_server_duration_milliseconds_count{service_name=\"checkout\",rpc_method=\"PlaceOrder\",rpc_grpc_status_code!=\"0\"}[30m])) or on() (0 * sum(rate(rpc_server_duration_milliseconds_count{service_name=\"checkout\",rpc_method=\"PlaceOrder\"}[30m])))) / clamp_min(sum(rate(rpc_server_duration_milliseconds_count{service_name=\"checkout\",rpc_method=\"PlaceOrder\"}[30m])), 0.000001)), scalar(((sum(rate(rpc_server_duration_milliseconds_count{service_name=\"checkout\",rpc_method=\"PlaceOrder\",rpc_grpc_status_code!=\"0\"}[6h])) or on() (0 * sum(rate(rpc_server_duration_milliseconds_count{service_name=\"checkout\",rpc_method=\"PlaceOrder\"}[6h])))) / clamp_min(sum(rate(rpc_server_duration_milliseconds_count{service_name=\"checkout\",rpc_method=\"PlaceOrder\"}[6h])), 0.000001)))) / 0.01",
+    "checkout.payment_error_rate.5m": "((sum(rate(traces_span_metrics_calls_total{service_name=\"checkout\",span_name=~\".*[Pp]ayment.*\",status_code=\"STATUS_CODE_ERROR\"}[5m])) or on() (0 * sum(rate(traces_span_metrics_calls_total{service_name=\"checkout\",span_name=~\".*[Pp]ayment.*\"}[5m])))) / clamp_min(sum(rate(traces_span_metrics_calls_total{service_name=\"checkout\",span_name=~\".*[Pp]ayment.*\"}[5m])), 0.000001)) and on() (sum(rate(traces_span_metrics_calls_total{service_name=\"checkout\",span_name=~\".*[Pp]ayment.*\"}[5m])) > 0)",
+    "checkout.p95_latency.5m": "(histogram_quantile(0.95, sum(rate(traces_span_metrics_duration_milliseconds_bucket{service_name=\"checkout\"}[5m])) by (le, service_name)) / 1000) and on(service_name) (sum(rate(traces_span_metrics_duration_milliseconds_count{service_name=\"checkout\"}[5m])) by (service_name) > 0)",
+    "product-catalog.cpu_millicores": "sum(k8s_pod_cpu_usage{k8s_deployment_name=\"product-catalog\"}) * 1000"
   },
   "prometheus_services": [
     "checkout",
     "payment",
-    "frontend-proxy",
-    "frontend",
-    "product-catalog",
-    "product-reviews",
-    "recommendation",
-    "ad",
-    "currency",
     "cart",
-    "shipping",
-    "email",
-    "quote",
-    "fraud-detection"
+    "product-catalog"
+  ],
+  "prometheus_metric_templates": {
+    "p95_latency_5m": {
+      "template": "(histogram_quantile(0.95, sum(rate(traces_span_metrics_duration_milliseconds_bucket{service_name=\"$service\"}[5m])) by (le, service_name)) / 1000) and on(service_name) (sum(rate(traces_span_metrics_duration_milliseconds_count{service_name=\"$service\"}[5m])) by (service_name) > 0)",
+      "unit": "seconds",
+      "window": "5m",
+      "feature_role": "anomaly_input",
+      "required_labels": []
+    },
+    "error_rate_5m": {
+      "template": "((sum(rate(traces_span_metrics_calls_total{service_name=\"$service\",status_code=\"STATUS_CODE_ERROR\"}[5m])) or on() (0 * sum(rate(traces_span_metrics_calls_total{service_name=\"$service\"}[5m])))) / clamp_min(sum(rate(traces_span_metrics_calls_total{service_name=\"$service\"}[5m])), 0.000001)) and on() (sum(rate(traces_span_metrics_calls_total{service_name=\"$service\"}[5m])) > 0)",
+      "unit": "ratio",
+      "window": "5m",
+      "feature_role": "anomaly_input",
+      "required_labels": []
+    },
+    "request_rate_5m": {
+      "template": "sum(rate(traces_span_metrics_calls_total{service_name=\"$service\"}[5m]))",
+      "unit": "requests_per_second",
+      "window": "5m",
+      "feature_role": "anomaly_input",
+      "required_labels": []
+    },
+    "cpu_millicores": {
+      "template": "(sum(rate(container_cpu_usage_seconds_total{container=\"$service\"}[5m])) * 1000) or (sum(rate(container_cpu_usage_total{container_name=~\".*$service.*\"}[5m])) * 1000) or (sum(k8s_pod_cpu_usage{k8s_deployment_name=\"$service\"}) * 1000)",
+      "unit": "count",
+      "window": "5m",
+      "feature_role": "anomaly_input",
+      "required_labels": []
+    }
+  },
+  "prometheus_metrics": [
+    "p95_latency_5m",
+    "error_rate_5m",
+    "request_rate_5m",
+    "cpu_millicores"
   ],
   "signals": [
+    {
+      "id": "prometheus_collection_health",
+      "source": "prometheus",
+      "query_id": "prometheus.collection_health",
+      "unit": "count",
+      "window": "instant",
+      "flow": "monitoring",
+      "service": "aiops",
+      "feature_role": "diagnostic",
+      "required_labels": []
+    },
     {
       "id": "checkout_bad_ratio_24h",
       "source": "prometheus",
@@ -225,7 +265,10 @@
       "flow": "checkout",
       "service": "checkout",
       "feature_role": "official_slo",
-      "required_labels": []
+      "required_labels": [],
+      "labels": {
+        "impact": "error_budget_burn"
+      }
     },
     {
       "id": "checkout_payment_error_rate_5m",
@@ -240,6 +283,34 @@
         "service",
         "dependency"
       ]
+    },
+    {
+      "id": "checkout_burn_rate_fast",
+      "source": "prometheus",
+      "query_id": "checkout.burn_rate.fast",
+      "unit": "count",
+      "window": "5m/1h",
+      "flow": "checkout",
+      "service": "checkout",
+      "feature_role": "official_slo",
+      "required_labels": [],
+      "labels": {
+        "impact": "error_budget_burn"
+      }
+    },
+    {
+      "id": "checkout_burn_rate_slow",
+      "source": "prometheus",
+      "query_id": "checkout.burn_rate.slow",
+      "unit": "count",
+      "window": "30m/6h",
+      "flow": "checkout",
+      "service": "checkout",
+      "feature_role": "official_slo",
+      "required_labels": [],
+      "labels": {
+        "impact": "error_budget_burn"
+      }
     },
     {
       "id": "checkout_p95_latency_5m",
@@ -280,7 +351,7 @@
       "type": "no-data",
       "enabled": true,
       "signal_ids": [
-        "__all_prometheus__"
+        "prometheus_collection_health"
       ],
       "flow": "monitoring",
       "service": "aiops",
@@ -301,7 +372,7 @@
     {
       "id": "ops04_checkout_latency_p95",
       "type": "threshold",
-      "enabled": false,
+      "enabled": true,
       "signal_id": "checkout_p95_latency_5m",
       "flow": "checkout",
       "service": "checkout",
@@ -321,7 +392,7 @@
     {
       "id": "ops06_product_catalog_cpu",
       "type": "threshold",
-      "enabled": false,
+      "enabled": true,
       "signal_id": "product_catalog_cpu_millicores",
       "flow": "catalog",
       "service": "product-catalog",
@@ -331,7 +402,7 @@
     {
       "id": "auto_checkout_error_rate",
       "type": "threshold",
-      "enabled": false,
+      "enabled": true,
       "signal_id": "checkout_error_rate_5m",
       "flow": "checkout",
       "service": "checkout",
@@ -341,7 +412,7 @@
     {
       "id": "auto_payment_error_rate",
       "type": "threshold",
-      "enabled": false,
+      "enabled": true,
       "signal_id": "payment_error_rate_5m",
       "flow": "checkout",
       "service": "payment",
@@ -349,29 +420,9 @@
       "runbook_id": "RB-SERVICE-ERROR-RATE"
     },
     {
-      "id": "auto_frontend_proxy_error_rate",
-      "type": "threshold",
-      "enabled": false,
-      "signal_id": "frontend_proxy_error_rate_5m",
-      "flow": "edge",
-      "service": "frontend-proxy",
-      "severity": "SEV2",
-      "runbook_id": "RB-SERVICE-ERROR-RATE"
-    },
-    {
-      "id": "auto_frontend_error_rate",
-      "type": "threshold",
-      "enabled": false,
-      "signal_id": "frontend_error_rate_5m",
-      "flow": "web",
-      "service": "frontend",
-      "severity": "SEV2",
-      "runbook_id": "RB-SERVICE-ERROR-RATE"
-    },
-    {
       "id": "auto_product_catalog_error_rate",
       "type": "threshold",
-      "enabled": false,
+      "enabled": true,
       "signal_id": "product_catalog_error_rate_5m",
       "flow": "catalog",
       "service": "product-catalog",
@@ -379,94 +430,34 @@
       "runbook_id": "RB-SERVICE-ERROR-RATE"
     },
     {
-      "id": "auto_product_reviews_error_rate",
-      "type": "threshold",
-      "enabled": false,
-      "signal_id": "product_reviews_error_rate_5m",
-      "flow": "catalog",
-      "service": "product-reviews",
-      "severity": "SEV2",
-      "runbook_id": "RB-SERVICE-ERROR-RATE"
-    },
-    {
-      "id": "auto_recommendation_error_rate",
-      "type": "threshold",
-      "enabled": false,
-      "signal_id": "recommendation_error_rate_5m",
-      "flow": "recommendation",
-      "service": "recommendation",
-      "severity": "SEV2",
-      "runbook_id": "RB-SERVICE-ERROR-RATE"
-    },
-    {
       "id": "auto_cart_error_rate",
       "type": "threshold",
-      "enabled": false,
+      "enabled": true,
       "signal_id": "cart_error_rate_5m",
       "flow": "checkout",
       "service": "cart",
       "severity": "SEV2",
-      "runbook_id": "RB-SERVICE-ERROR-RATE"
+      "runbook_id": "RB-CART-ERROR-RATE"
     },
     {
-      "id": "auto_ad_error_rate",
+      "id": "ops07_checkout_fast_burn",
       "type": "threshold",
-      "enabled": false,
-      "signal_id": "ad_error_rate_5m",
-      "flow": "platform",
-      "service": "ad",
-      "severity": "SEV2",
-      "runbook_id": "RB-SERVICE-ERROR-RATE"
-    },
-    {
-      "id": "auto_currency_error_rate",
-      "type": "threshold",
-      "enabled": false,
-      "signal_id": "currency_error_rate_5m",
+      "enabled": true,
+      "signal_id": "checkout_burn_rate_fast",
       "flow": "checkout",
-      "service": "currency",
-      "severity": "SEV2",
-      "runbook_id": "RB-SERVICE-ERROR-RATE"
+      "service": "checkout",
+      "severity": "SEV1",
+      "runbook_id": "RB-CHECKOUT-SLO"
     },
     {
-      "id": "auto_shipping_error_rate",
+      "id": "ops08_checkout_slow_burn",
       "type": "threshold",
-      "enabled": false,
-      "signal_id": "shipping_error_rate_5m",
+      "enabled": true,
+      "signal_id": "checkout_burn_rate_slow",
       "flow": "checkout",
-      "service": "shipping",
+      "service": "checkout",
       "severity": "SEV2",
-      "runbook_id": "RB-SERVICE-ERROR-RATE"
-    },
-    {
-      "id": "auto_email_error_rate",
-      "type": "threshold",
-      "enabled": false,
-      "signal_id": "email_error_rate_5m",
-      "flow": "checkout",
-      "service": "email",
-      "severity": "SEV2",
-      "runbook_id": "RB-SERVICE-ERROR-RATE"
-    },
-    {
-      "id": "auto_quote_error_rate",
-      "type": "threshold",
-      "enabled": false,
-      "signal_id": "quote_error_rate_5m",
-      "flow": "checkout",
-      "service": "quote",
-      "severity": "SEV2",
-      "runbook_id": "RB-SERVICE-ERROR-RATE"
-    },
-    {
-      "id": "auto_fraud_detection_error_rate",
-      "type": "threshold",
-      "enabled": false,
-      "signal_id": "fraud_detection_error_rate_5m",
-      "flow": "checkout",
-      "service": "fraud-detection",
-      "severity": "SEV2",
-      "runbook_id": "RB-SERVICE-ERROR-RATE"
+      "runbook_id": "RB-CHECKOUT-SLO"
     }
   ],
   "policy": {

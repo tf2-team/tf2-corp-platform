@@ -1,0 +1,9 @@
+drain3>=0.9,<1
+fastapi>=0.110,<1
+httpx>=0.28,<1
+pydantic>=2,<3
+pydantic-settings>=2,<3
+scikit-learn>=1.4,<2
+statsmodels>=0.14,<1
+tqdm>=4.66,<5
+uvicorn>=0.30,<1

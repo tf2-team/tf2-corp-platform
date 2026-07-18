@@ -14,9 +14,9 @@ from aiops.correlation import Correlator
 from aiops.detectors import Detector, DetectorEngine
 from aiops.enrichment import Enricher
 from aiops.features import FeatureBuilder
-from aiops.anomaly import V001AnomalyEngine
+from aiops.anomaly import AdaptiveAnomalyEventBuilder, V001AnomalyEngine
 from aiops.rca import V001RcaEngine
-from aiops.schemas import MetricSeries, NotificationMessage, PipelineResult, PolicyDecision, RcaResult, RuntimeConfig
+from aiops.schemas import AnomalyFinding, MetricSeries, NotificationMessage, PipelineResult, PolicyDecision, RcaResult, RuntimeConfig
 from aiops.normalization import Normalizer
 from aiops.qualification import QualificationGate
 from aiops.remediation import (
@@ -56,6 +56,12 @@ class IncidentStore(Protocol):
     def mark_notification_sent(self, incident_id: str) -> None: ...
 
     def mark_notification_failed(self, incident_id: str, error: str) -> None: ...
+
+    def list_open_incidents(self) -> list[Incident]:
+        ...
+
+    def apply_verification(self, results: list[VerificationResult]) -> None:
+        ...
 
 
 class NotificationSender(Protocol):
@@ -100,14 +106,19 @@ class AiopsPipeline:
         self.runtime_config = runtime_config
         self.rca_hyperparameters = rca_hyperparameters or {}
         self.correlation_hyperparameters = correlation_hyperparameters or {}
+        self.adaptive_events = AdaptiveAnomalyEventBuilder(
+            runtime_config,
+            float(self.rca_hyperparameters.get("anomaly", {}).get("weighted_score_threshold", 0.4)),
+        )
         self.remediation = remediation
         self.notification_sender = notification_sender
         self.rca_history_path = rca_history_path
 
     def run_once(self, metric_series: list[MetricSeries] | None = None) -> PipelineResult:
+        metric_series = metric_series or []
         run_number = next(_RUN_COUNTER)
         logger.info("---------- AIOPS_RUN_START run=%s ----------", run_number)
-        logger.debug("AIOPS_BLOCK start metric_series=%s", len(metric_series or []))
+        logger.debug("AIOPS_BLOCK start metric_series=%s", len(metric_series))
         collected = self.collector.collect()
         logger.debug("AIOPS_BLOCK collect observations=%s", len(collected))
         observations = self.qualification.evaluate(self.normalizer.normalize(collected))
@@ -122,7 +133,9 @@ class AiopsPipeline:
             len(features),
             _counts(feature.status for feature in features),
         )
-        candidates = self.detector_engine.evaluate(features)
+        rca_result = self._run_v001_rca(metric_series, [])
+        adaptive_candidates = self.adaptive_events.build(rca_result.anomalies)
+        candidates = [*self.detector_engine.evaluate(features), *adaptive_candidates]
         (logger.info if candidates else logger.debug)("AIOPS_BLOCK detect candidates=%s ids=%s", len(candidates), [candidate.detector_id for candidate in candidates])
         correlated = self.correlator.correlate(candidates)
         logger.debug("AIOPS_BLOCK correlate candidates=%s ids=%s", len(correlated), [candidate.detector_id for candidate in correlated])
@@ -140,9 +153,25 @@ class AiopsPipeline:
         )
         logger.debug("AIOPS_BLOCK incident incidents=%s ids=%s", len(incidents), [incident.incident_id for incident in incidents])
 
-        verification_results = self.verification.verify(incidents, features)
+        open_incidents = self.store.list_open_incidents() if hasattr(self.store, "list_open_incidents") else incidents
+        verification_results = self.verification.verify(
+            open_incidents,
+            features,
+            active_incident_ids={incident.incident_id for incident in incidents},
+            available_metric_signal_ids={series.signal_id for series in metric_series if series.points},
+        )
+        if hasattr(self.store, "apply_verification"):
+            self.store.apply_verification(verification_results)
         logger.debug("AIOPS_BLOCK verify results=%s statuses=%s", len(verification_results), [result.status for result in verification_results])
-        rca_result = self._run_v001_rca(metric_series or [], incidents)
+        if metric_series and not rca_result.root_causes:
+            confirmed_findings = _confirmed_candidate_findings(candidates)
+            if confirmed_findings:
+                rca_result = self._rank_v001_rca(
+                    _unique_findings([*rca_result.anomalies, *confirmed_findings]),
+                    metric_series,
+                )
+        elif not metric_series and incidents:
+            rca_result = self._run_v001_rca([], incidents)
         logger.info(
             "AIOPS_BLOCK rca anomalies=%s root_causes=%s",
             len(rca_result.anomalies),
@@ -243,6 +272,11 @@ class AiopsPipeline:
             isolation_score_threshold=float(config["isolation_score_threshold"]),
             min_points=int(config["min_points"]),
             seasonal_period=int(config["seasonal_period"]),
+            minimum_deviation_default=float(config["anomaly"]["minimum_deviation_default"]),
+            minimum_deviation_by_signal={
+                key: float(value)
+                for key, value in config["anomaly"]["minimum_deviation_by_signal"].items()
+            },
             algorithm_weights=config["anomaly"]["algorithm_weights"],
             weighted_score_threshold=float(config["anomaly"]["weighted_score_threshold"]),
             drain3_config_path=config["anomaly"].get("drain3_config_path", "config/drain3.ini"),
@@ -252,8 +286,13 @@ class AiopsPipeline:
             log_min_nonzero_buckets=int(config["anomaly"].get("log_min_nonzero_buckets", 2)),
             log_correlation_window_seconds=int(config["anomaly"].get("log_correlation_window_seconds", 300)),
             single_algorithm_min_normalized_score=float(config["anomaly"]["single_algorithm_min_normalized_score"]),
+            confirmation_points=int(config["anomaly"].get("confirmation_points", 2)),
         )
         findings = anomaly_engine.evaluate(metric_series, logs=log_messages) if log_messages else anomaly_engine.evaluate(metric_series)
+        return self._rank_v001_rca(findings, metric_series)
+
+    def _rank_v001_rca(self, findings: list[AnomalyFinding], metric_series: list[MetricSeries]) -> RcaResult:
+        config = self.rca_hyperparameters
         rca_engine = V001RcaEngine(self.runtime_config, config["graph"], config["combined"])
         return rca_engine.rank(findings, metric_series, top_k=int(config["top_k"]))
 
@@ -443,6 +482,37 @@ def _blast_radius_services(config: RuntimeConfig, root_service: str, max_hops: i
     return seen
 
 
+def _confirmed_candidate_findings(candidates: list[CandidateEvent]) -> list[AnomalyFinding]:
+    findings = []
+    for candidate in candidates:
+        if candidate.reason not in {"threshold_breached", "dependency_signal_breached"}:
+            continue
+        if candidate.value is None or candidate.threshold is None:
+            continue
+        service = candidate.likely_dependency if candidate.likely_dependency != "unknown" else candidate.service
+        threshold = max(abs(candidate.threshold), 1e-12)
+        findings.append(
+            AnomalyFinding(
+                algorithm="confirmed_rule_breach",
+                service=service,
+                metric=candidate.labels.get("metric", candidate.signal_id),
+                signal_id=candidate.signal_id,
+                score=max(candidate.confidence, abs(candidate.value) / threshold),
+                timestamp=candidate.timestamp,
+            )
+        )
+    return findings
+
+
+def _unique_findings(findings: list[AnomalyFinding]) -> list[AnomalyFinding]:
+    return list(
+        {
+            (finding.algorithm, finding.service, finding.metric, finding.signal_id, finding.timestamp): finding
+            for finding in findings
+        }.values()
+    )
+
+
 def _rca_history_parameters(config: dict) -> dict:
     anomaly = config.get("anomaly", {})
     return {
@@ -452,9 +522,12 @@ def _rca_history_parameters(config: dict) -> dict:
         "ewma_z_threshold": config.get("ewma_z_threshold"),
         "isolation_score_threshold": config.get("isolation_score_threshold"),
         "seasonal_period": config.get("seasonal_period"),
+        "minimum_deviation_default": anomaly.get("minimum_deviation_default"),
+        "minimum_deviation_by_signal": anomaly.get("minimum_deviation_by_signal"),
         "algorithm_weights": anomaly.get("algorithm_weights"),
         "weighted_score_threshold": anomaly.get("weighted_score_threshold"),
         "single_algorithm_min_normalized_score": anomaly.get("single_algorithm_min_normalized_score"),
+        "confirmation_points": anomaly.get("confirmation_points"),
         "log_bucket_seconds": anomaly.get("log_bucket_seconds"),
         "log_history_buckets": anomaly.get("log_history_buckets"),
         "log_min_nonzero_buckets": anomaly.get("log_min_nonzero_buckets"),

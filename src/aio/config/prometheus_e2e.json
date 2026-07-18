@@ -2,26 +2,62 @@
   "schema_version": "1.0",
   "observation_queries": [
     {
+      "query_id": "prometheus.collection_health",
+      "signal_id": "prometheus_collection_health",
+      "promql": "vector(1)",
+      "unit": "count",
+      "window": "instant",
+      "labels": {
+        "service": "aiops",
+        "flow": "monitoring"
+      }
+    },
+    {
       "query_id": "checkout.bad_ratio.24h",
       "signal_id": "checkout_bad_ratio_24h",
-      "promql": "(sum(increase(rpc_server_duration_milliseconds_count{service_name=\"checkout\",rpc_method=\"PlaceOrder\",rpc_grpc_status_code!=\"0\"}[24h])) / clamp_min(sum(increase(rpc_server_duration_milliseconds_count{service_name=\"checkout\",rpc_method=\"PlaceOrder\"}[24h])), 1)) or vector(0)",
+      "promql": "((sum(increase(rpc_server_duration_milliseconds_count{service_name=\"checkout\",rpc_method=\"PlaceOrder\",rpc_grpc_status_code!=\"0\"}[24h])) or on() (0 * sum(increase(rpc_server_duration_milliseconds_count{service_name=\"checkout\",rpc_method=\"PlaceOrder\"}[24h])))) / clamp_min(sum(increase(rpc_server_duration_milliseconds_count{service_name=\"checkout\",rpc_method=\"PlaceOrder\"}[24h])), 1)) and on() (sum(increase(rpc_server_duration_milliseconds_count{service_name=\"checkout\",rpc_method=\"PlaceOrder\"}[24h])) > 0)",
       "unit": "ratio",
       "window": "24h",
       "labels": {
         "service": "checkout",
-        "flow": "checkout"
+        "flow": "checkout",
+        "impact": "error_budget_burn"
       }
     },
     {
       "query_id": "checkout.payment_error_rate.5m",
       "signal_id": "checkout_payment_error_rate_5m",
-      "promql": "(sum by (span_name) (rate(traces_span_metrics_calls_total{service_name=\"checkout\",status_code=\"STATUS_CODE_ERROR\"}[5m]))) or vector(0)",
+      "promql": "((sum(rate(traces_span_metrics_calls_total{service_name=\"checkout\",span_name=~\".*[Pp]ayment.*\",status_code=\"STATUS_CODE_ERROR\"}[5m])) or on() (0 * sum(rate(traces_span_metrics_calls_total{service_name=\"checkout\",span_name=~\".*[Pp]ayment.*\"}[5m])))) / clamp_min(sum(rate(traces_span_metrics_calls_total{service_name=\"checkout\",span_name=~\".*[Pp]ayment.*\"}[5m])), 0.000001)) and on() (sum(rate(traces_span_metrics_calls_total{service_name=\"checkout\",span_name=~\".*[Pp]ayment.*\"}[5m])) > 0)",
       "unit": "ratio",
       "window": "5m",
       "labels": {
         "service": "checkout",
         "flow": "checkout",
         "dependency": "payment"
+      }
+    },
+    {
+      "query_id": "checkout.burn_rate.fast",
+      "signal_id": "checkout_burn_rate_fast",
+      "promql": "clamp_max(((sum(rate(rpc_server_duration_milliseconds_count{service_name=\"checkout\",rpc_method=\"PlaceOrder\",rpc_grpc_status_code!=\"0\"}[5m])) or on() (0 * sum(rate(rpc_server_duration_milliseconds_count{service_name=\"checkout\",rpc_method=\"PlaceOrder\"}[5m])))) / clamp_min(sum(rate(rpc_server_duration_milliseconds_count{service_name=\"checkout\",rpc_method=\"PlaceOrder\"}[5m])), 0.000001)), scalar(((sum(rate(rpc_server_duration_milliseconds_count{service_name=\"checkout\",rpc_method=\"PlaceOrder\",rpc_grpc_status_code!=\"0\"}[1h])) or on() (0 * sum(rate(rpc_server_duration_milliseconds_count{service_name=\"checkout\",rpc_method=\"PlaceOrder\"}[1h])))) / clamp_min(sum(rate(rpc_server_duration_milliseconds_count{service_name=\"checkout\",rpc_method=\"PlaceOrder\"}[1h])), 0.000001)))) / 0.01",
+      "unit": "count",
+      "window": "5m/1h",
+      "labels": {
+        "service": "checkout",
+        "flow": "checkout",
+        "impact": "error_budget_burn"
+      }
+    },
+    {
+      "query_id": "checkout.burn_rate.slow",
+      "signal_id": "checkout_burn_rate_slow",
+      "promql": "clamp_max(((sum(rate(rpc_server_duration_milliseconds_count{service_name=\"checkout\",rpc_method=\"PlaceOrder\",rpc_grpc_status_code!=\"0\"}[30m])) or on() (0 * sum(rate(rpc_server_duration_milliseconds_count{service_name=\"checkout\",rpc_method=\"PlaceOrder\"}[30m])))) / clamp_min(sum(rate(rpc_server_duration_milliseconds_count{service_name=\"checkout\",rpc_method=\"PlaceOrder\"}[30m])), 0.000001)), scalar(((sum(rate(rpc_server_duration_milliseconds_count{service_name=\"checkout\",rpc_method=\"PlaceOrder\",rpc_grpc_status_code!=\"0\"}[6h])) or on() (0 * sum(rate(rpc_server_duration_milliseconds_count{service_name=\"checkout\",rpc_method=\"PlaceOrder\"}[6h])))) / clamp_min(sum(rate(rpc_server_duration_milliseconds_count{service_name=\"checkout\",rpc_method=\"PlaceOrder\"}[6h])), 0.000001)))) / 0.01",
+      "unit": "count",
+      "window": "30m/6h",
+      "labels": {
+        "service": "checkout",
+        "flow": "checkout",
+        "impact": "error_budget_burn"
       }
     }
   ],
@@ -40,7 +76,7 @@
       "signal_id": "cart_error_rate_5m",
       "service": "cart",
       "metric": "error_ratio_5m",
-      "promql": "((sum(rate(http_server_request_duration_seconds_count{service_name=\"cart\",http_response_status_code=~\"5..\"}[5m])) or vector(0)) / clamp_min(sum(rate(http_server_request_duration_seconds_count{service_name=\"cart\"}[5m])), 0.000000001))",
+      "promql": "((sum(rate(traces_span_metrics_calls_total{service_name=\"cart\",status_code=\"STATUS_CODE_ERROR\"}[5m])) or on() (0 * sum(rate(traces_span_metrics_calls_total{service_name=\"cart\"}[5m])))) / clamp_min(sum(rate(traces_span_metrics_calls_total{service_name=\"cart\"}[5m])), 0.000001)) and on() (sum(rate(traces_span_metrics_calls_total{service_name=\"cart\"}[5m])) > 0)",
       "lookback_seconds": 3600,
       "step_seconds": 60
     },
@@ -49,7 +85,7 @@
       "signal_id": "product_catalog_cpu_millicores",
       "service": "product-catalog",
       "metric": "cpu_millicores",
-      "promql": "sum(k8s_pod_cpu_usage{k8s_deployment_name=\"product-catalog\"})",
+      "promql": "sum(k8s_pod_cpu_usage{k8s_deployment_name=\"product-catalog\"}) * 1000",
       "lookback_seconds": 3600,
       "step_seconds": 60
     }

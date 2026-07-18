@@ -21,35 +21,58 @@ except Exception:  # pragma: no cover - drain3 is optional until the env is refr
 
 
 class EwmaStlDetector:
-    def __init__(self, alpha: float, z_threshold: float, min_points: int, seasonal_period: int):
+    def __init__(
+        self,
+        alpha: float,
+        z_threshold: float,
+        min_points: int,
+        seasonal_period: int,
+        minimum_deviation_default: float,
+        minimum_deviation_by_signal: dict[str, float],
+        confirmation_points: int = 2,
+    ):
         self.alpha = alpha
         self.z_threshold = z_threshold
         self.min_points = min_points
         self.seasonal_period = seasonal_period
+        self.minimum_deviation_default = minimum_deviation_default
+        self.minimum_deviation_by_signal = minimum_deviation_by_signal
+        self.confirmation_points = max(1, confirmation_points)
 
     def evaluate(self, series: list[MetricSeries]) -> list[AnomalyFinding]:
         findings: list[AnomalyFinding] = []
         for metric in series:
             values = [point.value for point in metric.points]
-            if len(values) < self.min_points:
+            if len(values) < self.min_points + self.confirmation_points:
                 continue
             residuals = self._residuals(values)
-            baseline = residuals[: -1]
-            score = abs(residuals[-1] - mean(baseline)) / (stdev(baseline) or 1.0)
-            if score >= self.z_threshold:
-                findings.append(self._finding(metric, "ewma_stl", score, metric.points[-1].timestamp))
+            baseline = residuals[: -self.confirmation_points]
+            center = mean(baseline)
+            minimum_deviation = self.minimum_deviation_by_signal.get(
+                metric.signal_id,
+                self.minimum_deviation_default,
+            )
+            spread = max(stdev(baseline), minimum_deviation / self.z_threshold)
+            scores = [abs(value - center) / spread for value in residuals[-self.confirmation_points :]]
+            if all(score >= self.z_threshold for score in scores):
+                findings.append(self._finding(metric, "ewma_stl", min(scores), metric.points[-1].timestamp))
         return findings
 
     def _residuals(self, values: list[float]) -> list[float]:
-        from statsmodels.tsa.api import SimpleExpSmoothing
-        from statsmodels.tsa.seasonal import STL
-
-        with warnings.catch_warnings():
-            warnings.filterwarnings("ignore", message="divide by zero encountered in log", category=RuntimeWarning)
-            smoothed = SimpleExpSmoothing(values, initialization_method="estimated").fit(smoothing_level=self.alpha, optimized=False).fittedvalues
+        level = values[0] if values else 0.0
+        smoothed: list[float] = []
+        for value in values:
+            smoothed.append(level)
+            level = self.alpha * value + (1.0 - self.alpha) * level
         if self.seasonal_period <= 1 or len(values) < self.seasonal_period * 2:
             return [value - smooth for value, smooth in zip(values, smoothed)]
-        seasonal = STL(values, period=self.seasonal_period, robust=True).fit().seasonal
+        try:
+            from statsmodels.tsa.seasonal import STL
+        except ImportError:
+            return [value - smooth for value, smooth in zip(values, smoothed)]
+        with warnings.catch_warnings():
+            warnings.filterwarnings("ignore", category=RuntimeWarning)
+            seasonal = STL(values, period=self.seasonal_period, robust=True).fit().seasonal
         return [value - smooth - season for value, smooth, season in zip(values, smoothed, seasonal)]
 
     def _finding(self, metric: MetricSeries, algorithm: str, score: float, timestamp: int) -> AnomalyFinding:
@@ -64,9 +87,10 @@ class EwmaStlDetector:
 
 
 class ServiceIsolationForestDetector:
-    def __init__(self, score_threshold: float, min_points: int):
+    def __init__(self, score_threshold: float, min_points: int, confirmation_points: int = 2):
         self.score_threshold = score_threshold
         self.min_points = min_points
+        self.confirmation_points = max(1, confirmation_points)
 
     def evaluate(self, series: list[MetricSeries]) -> list[AnomalyFinding]:
         by_service: dict[str, list[MetricSeries]] = defaultdict(list)
@@ -77,17 +101,17 @@ class ServiceIsolationForestDetector:
         for service, metrics in by_service.items():
             if len(metrics) < 2:
                 continue
-            eligible = [metric for metric in metrics if len(metric.points) >= self.min_points]
+            eligible = [metric for metric in metrics if len(metric.points) >= self.min_points + self.confirmation_points]
             if len(eligible) < 2:
                 continue
             # ponytail: preserve existing threshold scale; recalibrate config if sklearn score is used directly.
             scores = [score * 10.0 for score in self._scores(eligible)]
-            service_score = max(scores)
-            if service_score < self.score_threshold:
+            if not scores or any(score < self.score_threshold for score in scores):
                 continue
+            service_score = min(scores)
             rows = self._normalized_rows(self._rows(eligible))
             latest_values = rows[-1]
-            baseline_values = rows[-self.min_points : -1]
+            baseline_values = rows[: -self.confirmation_points]
             baseline_center = [mean([row[index] for row in baseline_values]) for index in range(len(eligible))]
             top_metric = max(eligible, key=lambda metric: abs(latest_values[eligible.index(metric)] - baseline_center[eligible.index(metric)]))
             findings.append(
@@ -106,8 +130,8 @@ class ServiceIsolationForestDetector:
         from sklearn.ensemble import IsolationForest
 
         rows = self._normalized_rows(self._rows(metrics))
-        model = IsolationForest(contamination="auto", random_state=0).fit(rows[:-1])
-        return [-score for score in model.score_samples([rows[-1]])]
+        model = IsolationForest(contamination="auto", random_state=0).fit(rows[: -self.confirmation_points])
+        return [-score for score in model.score_samples(rows[-self.confirmation_points :])]
 
     def _rows(self, metrics: list[MetricSeries]) -> list[list[float]]:
         length = min(len(metric.points) for metric in metrics)
@@ -225,6 +249,8 @@ class V001AnomalyEngine:
         isolation_score_threshold: float,
         min_points: int,
         seasonal_period: int,
+        minimum_deviation_default: float,
+        minimum_deviation_by_signal: dict[str, float],
         algorithm_weights: dict[str, float],
         weighted_score_threshold: float,
         drain3_config_path: str | Path = "config/drain3.ini",
@@ -234,6 +260,7 @@ class V001AnomalyEngine:
         log_min_nonzero_buckets: int = 2,
         log_correlation_window_seconds: int = 300,
         single_algorithm_min_normalized_score: float = 2.0,
+        confirmation_points: int = 2,
     ):
         self.algorithm_weights = algorithm_weights
         self.weighted_score_threshold = weighted_score_threshold
@@ -243,8 +270,35 @@ class V001AnomalyEngine:
             "ewma_stl": ewma_z_threshold,
             "isolation_forest": isolation_score_threshold,
         }
-        self.ewma_stl = EwmaStlDetector(ewma_alpha, ewma_z_threshold, min_points, seasonal_period)
-        self.isolation_forest = ServiceIsolationForestDetector(isolation_score_threshold, min_points)
+        self.ewma_stl = EwmaStlDetector(
+            ewma_alpha,
+            ewma_z_threshold,
+            min_points,
+            seasonal_period,
+            minimum_deviation_default,
+            minimum_deviation_by_signal,
+            confirmation_points,
+        )
+        self.isolation_forest = ServiceIsolationForestDetector(
+            isolation_score_threshold,
+            min_points,
+            confirmation_points,
+        )
+        log_min_points = max(4, min_points - confirmation_points)
+        self.log_ewma_stl = EwmaStlDetector(
+            ewma_alpha,
+            ewma_z_threshold,
+            log_min_points,
+            seasonal_period,
+            minimum_deviation_default,
+            minimum_deviation_by_signal,
+            confirmation_points=1,
+        )
+        self.log_isolation_forest = ServiceIsolationForestDetector(
+            isolation_score_threshold,
+            log_min_points,
+            confirmation_points=1,
+        )
         self.log_templates = LogTemplateMetricBuilder(
             drain3_config_path,
             log_bucket_seconds,
@@ -258,7 +312,7 @@ class V001AnomalyEngine:
         metric_findings = self._weighted_sum([*self.ewma_stl.evaluate(series), *self.isolation_forest.evaluate(series)])
         log_series = self.log_templates.build(logs or [])
         log_findings = self._correlated_log_findings(
-            self._weighted_sum([*self.ewma_stl.evaluate(log_series), *self.isolation_forest.evaluate(log_series)]),
+            self._weighted_sum([*self.log_ewma_stl.evaluate(log_series), *self.log_isolation_forest.evaluate(log_series)]),
             metric_findings,
         )
         return self._suppress_busy_cpu([*metric_findings, *log_findings], [*series, *log_series])

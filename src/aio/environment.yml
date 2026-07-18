@@ -11,3 +11,4 @@ dependencies:
       - scikit-learn>=1.4,<2
       - tqdm>=4.66,<5
       - drain3>=0.9,<1
+      - uvicorn>=0.30,<1

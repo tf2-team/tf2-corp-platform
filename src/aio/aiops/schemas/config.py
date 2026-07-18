@@ -33,6 +33,22 @@ class SignalDefinition(AiopsModel):
     service: str
     feature_role: Literal["official_slo", "diagnostic", "anomaly_input", "dependency_signal"]
     required_labels: list[str] = Field(default_factory=list)
+    labels: dict[str, str] = Field(default_factory=dict)
+
+
+class PrometheusMetricTemplate(AiopsModel):
+    template: str
+    unit: Literal["ratio", "seconds", "milliseconds", "count", "requests_per_second", "bytes", "percent", "boolean"]
+    window: str
+    feature_role: Literal["official_slo", "diagnostic", "anomaly_input", "dependency_signal"]
+    required_labels: list[str] = Field(default_factory=list)
+    labels: dict[str, str] = Field(default_factory=dict)
+
+    @model_validator(mode="after")
+    def validate_service_variable(self) -> "PrometheusMetricTemplate":
+        if "$service" not in self.template:
+            raise ValueError("Prometheus service metric template requires $service")
+        return self
 
 
 class DetectorDefinition(AiopsModel):
@@ -74,6 +90,8 @@ class RuntimeConfig(AiopsModel):
     topology: TopologyConfig
     prometheus_queries: dict[str, str] = Field(default_factory=dict)
     prometheus_services: list[str] = Field(default_factory=list)
+    prometheus_metrics: list[str] = Field(default_factory=list)
+    prometheus_metric_templates: dict[str, PrometheusMetricTemplate] = Field(default_factory=dict)
     signals: list[SignalDefinition]
     detectors: list[DetectorDefinition]
     detector_thresholds: dict[str, float] = Field(default_factory=dict)
@@ -88,6 +106,9 @@ class RuntimeConfig(AiopsModel):
         unknown_prometheus_services = set(self.prometheus_services) - service_names
         if unknown_prometheus_services:
             raise ValueError(f"unknown prometheus services: {sorted(unknown_prometheus_services)}")
+        unknown_prometheus_metrics = set(self.prometheus_metrics) - set(self.prometheus_metric_templates)
+        if unknown_prometheus_metrics:
+            raise ValueError(f"unknown prometheus metrics: {sorted(unknown_prometheus_metrics)}")
         missing_prometheus_queries = {signal.query_id for signal in self.signals if signal.source == "prometheus"} - set(self.prometheus_queries)
         if missing_prometheus_queries:
             raise ValueError(f"missing prometheus queries: {sorted(missing_prometheus_queries)}")

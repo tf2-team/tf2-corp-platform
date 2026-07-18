@@ -20,10 +20,10 @@ Use this file as the Jira copy source for the two required Mandate #7 tickets.
 | #7a analyzes at least 3 metrics | Ticket 1: Metrics Analysis | Ready |
 | Each metric has why, baseline, anomaly rule, method | Ticket 1: Metrics Analysis table | Ready |
 | #7a has signed ADR | Ticket 1: ADR | Needs owner/reviewer signature |
-| #7b shows detector firing end-to-end | Ticket 2: Required Evidence | Planned |
-| #7b includes reproduction steps | Ticket 2: Execution Plan + Evidence | Planned |
-| #7b reports precision/recall/lead-time over labeled incidents | Ticket 2: Measurement Plan | Planned |
-| Alerts are impact-based and non-spammy | Both tickets: Anti-spam controls | Ready/planned |
+| #7b shows detector firing end-to-end | Ticket 2: Required Evidence | Live Prometheus run passed; attach evidence |
+| #7b includes reproduction steps | Ticket 2: Execution Plan + Evidence | Ready |
+| #7b reports precision/recall/lead-time over labeled incidents | Ticket 2: Measurement Plan | Runner ready; reviewer labels and measurements pending |
+| Alerts are impact-based and non-spammy | Both tickets: Anti-spam controls | Ready; three checkout impact fires correlate into one notification |
 | No heavy infra, no request-path latency, no `flagd` mutation | Both tickets: Safety / Scope | Ready |
 
 ---
@@ -71,14 +71,14 @@ Implementation exists in `src/aio` and follows the v0.0.1 AIOps detection/RCA pa
 
 | Area | File | Evidence |
 |---|---|---|
-| Anomaly engine | `aiops/anomaly/v001.py` | `V001AnomalyEngine` runs EWMA/STL-style residual detection, service-level robust scoring, and BARO BOCPD correlation. |
-| Baseline/stat helpers | `aiops/anomaly/stats.py` | Mean, standard deviation, median, IQR, and `robust_score()` helpers. IQR has a non-zero fallback for flat baselines. |
+| Anomaly engine | `aiops/anomaly/v001.py` | `V001AnomalyEngine` runs EWMA/STL-style residual detection and service-level Isolation Forest scoring with two-sample confirmation. |
+| Baseline/stat helpers | `aiops/anomaly/stats.py` | Mean/stddev support EWMA residual scoring; median/IQR robust score is used by RCA ranking. Flat detector baselines use config-backed per-signal minimum deviation. |
 | SLO threshold detector | `aiops/detectors/threshold.py` | Rule-based guard for hard SLO/burn-rate style thresholds. |
 | Dependency detector | `aiops/detectors/dependency.py` | Detects dependency breach evidence and attaches likely dependency context. |
 | No-data detector | `aiops/detectors/no_data.py` | Detects missing/stale/invalid required telemetry signals. |
 | Pipeline runtime | `aiops/pipeline/runtime.py` | Orchestrates collect -> qualify -> normalize -> feature build -> detect -> correlate -> enrich -> incident -> notify -> policy -> verify -> RCA/remediation. |
 | RCA engine | `aiops/rca/engine.py` | Ranks root-cause candidates from topology and metric evidence. |
-| Runtime config | `config/runtime.json` | Owns topology, signals, detector definitions, thresholds, policy, and RCA enablement. |
+| Runtime config | `config/runtime.json` | Owns topology, PromQL templates, selected services/metrics, signals, detector definitions, impact metadata, policy, and RCA enablement. Numeric tuning is in `config/hyperparameters.json`. |
 | Regression tests | `tests/test_v001_anomaly_rca.py`, `tests/test_runtime_pipeline.py` | Exercise anomaly/RCA behavior and pipeline path. |
 | Evaluation runner | `evaluate/e2e_pipeline.py` | Computes incident/RCA evaluation metrics on labeled datasets. |
 
@@ -91,11 +91,10 @@ The architecture follows `docs/pipelines/v0.0.1.md`: score metric anomalies, the
 ```mermaid
 graph LR
     A["Service metric series"] --> B["Univariate EWMA/STL"]
-    A --> C["Service-level robust score"]
-    A --> D["Global BARO BOCPD correlation"]
+    A --> C["Service-level Isolation Forest"]
+    D["Confirmed SLO/dependency breach"] --> E
     B --> E["Anomaly findings"]
     C --> E
-    D --> E
     E --> F["Graph + metric RCA ranking"]
     F --> G["Top-k suspected services and root-cause metrics"]
 ```
@@ -109,8 +108,8 @@ The #7a analysis selects three metrics across latency, error rate, and saturatio
 | Metric | Service | Signal type | Why selected | Normal baseline | Anomaly rule | Detection method |
 |---|---|---|---|---|---|---|
 | p95 latency | `checkout` | Latency | Checkout is the revenue path and aggregates dependency slowness across cart, product-catalog, currency, shipping, payment, email, accounting, and fraud-detection. It maps to prior incident history where checkout p95 rose before full failure. | Normal load p95 around 62-87 ms; idle around 4.5-5 ms. Measured with `rpc_server_duration_milliseconds_bucket` because checkout uses gRPC. | Warning: > 200 ms for 3 cycles. Critical: > 500 ms for 2 cycles. Statistical anomaly: EWMA residual z-score >= 3.0. | EWMA/STL-style residual scoring plus hard latency guard. |
-| HTTP 5xx error rate | `cart` | Error rate | Cart is required before checkout. Its SLO is >= 99.5%, so the error budget is only 0.5%. Cart also depends on `valkey-cart`, a known risk from incident history. | Normal baseline around 0.0% 5xx under current load. Short deploy/restart spikes up to about 1.0% are expected noise. | Warning: > 0.5% for 2 cycles. Critical: > 2.0% for 2 cycles. Statistical anomaly: robust score >= 4.0 vs recent baseline. Only evaluate when traffic is present. | Median/IQR robust score plus SLO threshold. |
-| CPU usage | `product-catalog` | Saturation | Product-catalog is a critical shared read path used by frontend, recommendation, product-reviews, and checkout. CPU saturation can precede latency and error symptoms. | Normal usage around 2-4 millicores per pod; total around 6 millicores for 2 pods. No CPU limit is configured, so absolute millicores are used instead of percent utilization. | Warning: > 20 millicores for 3 cycles. Critical: > 50 millicores for 2 cycles. Statistical anomaly: EWMA z-score >= 3.0. Correlate with QPS to avoid alerting on normal load growth. | EWMA z-score, with BARO BOCPD as corroborating cross-service signal. |
+| Error rate | `cart` | Error rate | Cart is required before checkout. Its SLO is >= 99.5%, so the error budget is only 0.5%. Cart also depends on `valkey-cart`, a known risk from incident history. | Normal baseline around 0.0% under current load; no traffic remains missing rather than being coerced to zero. | Enabled warning guard > 0.5%. Adaptive anomaly requires two EWMA residual z-scores >= 3.0 with a config-backed 0.5% minimum deviation. The duplicate 2% critical guard remains disabled. | EWMA/STL residual scoring plus threshold guard; Isolation Forest corroborates when multiple cart metrics have sufficient history. |
+| CPU usage | `product-catalog` | Saturation | Product-catalog is a critical shared read path used by frontend, recommendation, product-reviews, and checkout. CPU saturation can precede latency and error symptoms. | Normal usage around 2-4 millicores per pod; total around 6 millicores for 2 pods. No CPU limit is configured, so absolute millicores are used instead of percent utilization. | Warning: > 20 millicores for 3 cycles. Critical: > 50 millicores for 2 cycles. Statistical anomaly: EWMA z-score >= 3.0. Correlate with QPS to avoid alerting on normal load growth. | EWMA residual scoring corroborated by the service-level Isolation Forest. |
 
 Full supporting analysis: `docs/mandates/7a/MANDATE-07a-detection-analysis.md`.
 
@@ -119,7 +118,8 @@ Full supporting analysis: `docs/mandates/7a/MANDATE-07a-detection-analysis.md`.
 - Warm-up suppression through `min_points` before scoring.
 - Consecutive-cycle requirements so a single spike does not page.
 - Hard SLO guards only for meaningful thresholds.
-- Robust median/IQR scoring to avoid baselines being pulled by old spikes.
+- Config-backed minimum deviations keep flat baselines detectable without embedding metric scales in Python.
+- Same-impact SLO and multi-window burn detectors correlate into one incident/notification while retaining contributing signals.
 - Correlation/RCA ranking so alerts include likely affected service and root-cause metric, not just "metric high".
 - #7b will measure false positives over a labeled incident set rather than isolated anecdotes.
 
@@ -156,13 +156,13 @@ Run evaluation on a labeled dataset when available:
 
 ```bash
 cd tf2-corp-platform/src/aio
-conda run -n capstone python -B evaluate/e2e_pipeline.py --limit 10 --out evaluate/report.json
+conda run -n capstone python -B evaluate/e2e_pipeline.py --labels path/to/reviewer-labels.json --out evaluate/report.json
 ```
 
 ## Evidence To Attach Before Submit
 
 - PR/commit link: `TODO`
-- Test output: `TODO`
+- Test output: `122 tests passed` with `python -B -m unittest discover -s tests` on 2026-07-18.
 - Signed ADR confirmation: `TODO`
 - Analysis doc: `docs/mandates/7a/MANDATE-07a-detection-analysis.md`
 - ADR: `docs/mandates/7a/ADR-DETECT-001.md`
@@ -298,15 +298,15 @@ Also report:
 
 ## Evidence To Attach In Jira
 
-- Alert screenshot or detector log: `TODO`
-- Reproduction command/runbook: `TODO`
+- Alert screenshot or detector log: `evidence/e2e/aio-e2e-20260718T130011Z-fed6e469.json` plus `AIOPS_NOTIFY_SENT incident=inc-5f29f7eb7852` terminal log.
+- Reproduction command/runbook: keep `scripts/port_forward.ps1` running, then run `python -B scripts/run_prometheus_e2e.py`; see `README.md`.
 - Labeled incident set or replay source: `TODO`
 - Normal-period no-alert evidence: `TODO`
 - Precision: `TODO`
 - Recall: `TODO`
 - Lead-time: `TODO`
-- False-positive / spam-control notes: `TODO`
-- RCA top-k result: `TODO`
+- False-positive / spam-control notes: checkout SLO + fast burn + slow burn were consolidated from three detector fires to one fresh incident/notification; labeled normal-period result is still required.
+- RCA top-k result: live run ranked `checkout` first with bad-ratio, fast/slow burn, and p95 evidence; labeled aggregate result remains required.
 
 ## Scope Notes
 

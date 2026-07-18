@@ -583,9 +583,9 @@ Rules:
 
 - `ewma_stl`: univariate EWMA with optional seasonal residual.
 - `isolation_forest`: per-service multivariate isolation-style score using robust metric deviations.
-- `baro_bocpd`: calls BARO `baro.anomaly_detection.bocpd` on a DataFrame shaped like `time, <service>_<metric>, ...`.
+- `confirmed_rule_breach`: uses a verified SLO/dependency rule breach as an RCA seed when adaptive scoring finds no current deviation; it does not create a duplicate adaptive incident.
 - `graph_traversal_rca`: propagates service anomaly scores through `config/runtime.json` topology.
-- `robust_score_rca`: calls BARO `baro.root_cause_analysis.robust_scorer`; ranks are mapped back from `<service>_<metric>` into `RootCauseCandidate`.
+- `robust_score_rca`: uses the repository median/IQR scorer and maps `<service>:<metric>` ranks into `RootCauseCandidate`.
 
 Endpoints:
 

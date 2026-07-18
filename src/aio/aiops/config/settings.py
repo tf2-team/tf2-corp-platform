@@ -7,8 +7,10 @@ from typing import Literal
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
-def _env_files() -> str | tuple[str, str]:
+def _env_files() -> str | tuple[str, str] | None:
     override = os.getenv("AIOPS_ENV_FILE", "").strip()
+    if override.lower() in {"none", "off", "disabled"}:
+        return None
     return (".env", override) if override and override != ".env" else ".env"
 
 

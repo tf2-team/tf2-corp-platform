@@ -1,0 +1,13 @@
+{
+  "cases": {
+    "incident/payment_failure_01": {
+      "expected_incident": true,
+      "expected_root_service": "payment",
+      "expected_root_metric": "error_rate",
+      "incident_start_timestamp": 1784203200
+    },
+    "normal/steady_traffic_01": {
+      "expected_incident": false
+    }
+  }
+}

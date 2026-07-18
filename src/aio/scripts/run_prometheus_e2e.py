@@ -4,6 +4,7 @@ import argparse
 import json
 import os
 import sys
+from datetime import datetime
 from pathlib import Path
 
 
@@ -19,6 +20,9 @@ def main() -> int:
     parser.add_argument("--env-file", type=Path, default=ROOT / ".env.live")
     parser.add_argument("--plan", type=Path, default=ROOT / "config" / "prometheus_e2e.json")
     parser.add_argument("--out-dir", type=Path, default=None)
+    parser.add_argument("--scenario-id", default=None)
+    parser.add_argument("--incident-started-at", type=datetime.fromisoformat, default=None)
+    parser.add_argument("--require-labeled-scenario", action="store_true")
     args = parser.parse_args()
 
     os.environ["AIOPS_ENV_FILE"] = str(args.env_file.resolve())
@@ -30,7 +34,14 @@ def main() -> int:
     configure_logging()
     settings = Settings()
     report_dir = args.out_dir or settings.evidence_dir / "e2e"
-    report = execute_prometheus_e2e(settings, args.plan, report_dir)
+    report = execute_prometheus_e2e(
+        settings,
+        args.plan,
+        report_dir,
+        scenario_id=args.scenario_id,
+        incident_started_at=args.incident_started_at,
+        require_labeled_scenario=args.require_labeled_scenario,
+    )
     summary = {
         "run_id": report["run_id"],
         "status": report["status"],

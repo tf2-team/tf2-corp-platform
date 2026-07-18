@@ -37,6 +37,8 @@ def anomaly_engine(**overrides) -> V001AnomalyEngine:
         isolation_score_threshold=config["isolation_score_threshold"],
         min_points=config["min_points"],
         seasonal_period=config["seasonal_period"],
+        minimum_deviation_default=config["anomaly"]["minimum_deviation_default"],
+        minimum_deviation_by_signal=config["anomaly"]["minimum_deviation_by_signal"],
         algorithm_weights=config["anomaly"]["algorithm_weights"],
         weighted_score_threshold=config["anomaly"]["weighted_score_threshold"],
         log_history_buckets=8,
@@ -56,7 +58,15 @@ def graph_rca(config: RuntimeConfig) -> GraphTraversalRca:
 
 class V001AnomalyRcaTest(unittest.TestCase):
     def test_ewma_formula_does_not_emit_statsmodels_zero_sse_warning(self):
-        detector = EwmaStlDetector(alpha=0.3, z_threshold=3.0, min_points=8, seasonal_period=1)
+        config = rca_hyperparameters()["anomaly"]
+        detector = EwmaStlDetector(
+            alpha=0.3,
+            z_threshold=3.0,
+            min_points=8,
+            seasonal_period=1,
+            minimum_deviation_default=config["minimum_deviation_default"],
+            minimum_deviation_by_signal=config["minimum_deviation_by_signal"],
+        )
 
         with warnings.catch_warnings():
             warnings.simplefilter("error", RuntimeWarning)
@@ -90,6 +100,24 @@ class V001AnomalyRcaTest(unittest.TestCase):
         )
 
         self.assertEqual(findings, [])
+
+    def test_v001_requires_two_consecutive_abnormal_samples(self):
+        one_spike = anomaly_engine().evaluate(
+            [metric("payment", "error_ratio_5m", [0.0] * 10 + [0.0, 10.0])]
+        )
+        two_spikes = anomaly_engine().evaluate(
+            [metric("payment", "error_ratio_5m", [0.0] * 10 + [10.0, 10.0])]
+        )
+
+        self.assertEqual(one_spike, [])
+        self.assertEqual([finding.service for finding in two_spikes], ["payment"])
+
+    def test_flat_cart_ratio_baseline_uses_configured_minimum_deviation(self):
+        findings = anomaly_engine().evaluate(
+            [metric("cart", "error_ratio_5m", [0.0] * 30 + [0.02, 0.02])]
+        )
+
+        self.assertEqual([finding.signal_id for finding in findings], ["cart_error_ratio_5m"])
 
     def test_isolation_forest_normalizes_rows_before_scoring(self):
         detector = ServiceIsolationForestDetector(score_threshold=4.0, min_points=8)
@@ -231,7 +259,7 @@ class V001AnomalyRcaTest(unittest.TestCase):
     def test_v001_engine_keeps_log_metrics_near_metric_anomaly(self):
         logs = [("checkout", 7, "payment failed order=123 status=500")] * 8
 
-        findings = anomaly_engine().evaluate([metric("checkout", "error_rate_5m", [0, 0, 0, 0, 0, 0, 0, 10])], logs=logs)
+        findings = anomaly_engine().evaluate([metric("checkout", "error_rate_5m", [0, 0, 0, 0, 0, 0, 0, 0, 10, 10])], logs=logs)
 
         self.assertIn("error_rate_5m", [finding.metric for finding in findings])
         self.assertTrue(any(finding.metric.startswith("log_template_count_") for finding in findings))
@@ -360,9 +388,9 @@ class V001AnomalyRcaTest(unittest.TestCase):
 
     def test_pipeline_api_accepts_metric_series_and_returns_rca_result(self):
         series = [
-            metric("checkout", "latency", [1] * 59 + [2]),
-            metric("payment", "latency", [1] * 59 + [20]),
-            metric("payment", "error", [0] * 59 + [20]),
+            metric("checkout", "latency", [1] * 58 + [2, 2]),
+            metric("payment", "latency", [1] * 58 + [20, 20]),
+            metric("payment", "error", [0] * 58 + [20, 20]),
         ]
         with TemporaryDirectory() as tmp:
             settings = Settings().model_copy(update={"state_store_path": Path(tmp) / "aiops.sqlite3"})

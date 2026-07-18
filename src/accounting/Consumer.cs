@@ -306,6 +306,24 @@ internal class Consumer : IDisposable
             conf.SecurityProtocol = SecurityProtocol.Ssl;
         }
 
+        var saslUsername = Environment.GetEnvironmentVariable("KAFKA_SASL_USERNAME");
+        var saslPassword = Environment.GetEnvironmentVariable("KAFKA_SASL_PASSWORD");
+        if (!string.IsNullOrEmpty(saslUsername) || !string.IsNullOrEmpty(saslPassword))
+        {
+            if (string.IsNullOrEmpty(saslUsername) || string.IsNullOrEmpty(saslPassword))
+                throw new InvalidOperationException("Both Kafka SCRAM credentials are required.");
+
+            conf.SecurityProtocol = SecurityProtocol.SaslSsl;
+            conf.SaslMechanism = SaslMechanism.ScramSha512;
+            conf.SaslUsername = saslUsername;
+            conf.SaslPassword = saslPassword;
+            // Allow librdkafka to discover system CA bundle in the container image.
+            // MSK brokers present certs signed by Amazon Root CA which is trusted by
+            // the .NET base image but librdkafka won't find it automatically on Linux
+            // unless SslCaLocation is set to "probe".
+            conf.SslCaLocation = "probe";
+        }
+
         return new ConsumerBuilder<string, byte[]>(conf)
             .Build();
     }

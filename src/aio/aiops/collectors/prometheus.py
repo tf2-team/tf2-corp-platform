@@ -93,6 +93,15 @@ class PrometheusCollector(Collector):
             )
         if not result:
             return Observation(signal_id=query.signal_id, value=None, unit=query.unit, window=query.window, quality=SignalQuality.MISSING, labels=labels)
+        if len(result) != 1:
+            return Observation(
+                signal_id=query.signal_id,
+                value=None,
+                unit=query.unit,
+                window=query.window,
+                quality=SignalQuality.INVALID,
+                labels={**labels, "series_count": str(len(result))},
+            )
         sample = result[0].get("value", [self.captured_at.timestamp(), None])
         if sample and sample[0]:
             labels["sample_timestamp"] = str(sample[0])
@@ -107,7 +116,7 @@ class PrometheusCollector(Collector):
             end=str(end.timestamp()),
             step=str(query.step_seconds),
         ).get("data", {}).get("result", [])
-        values = result[0].get("values", []) if result else []
+        values = result[0].get("values", []) if len(result) == 1 else []
         return MetricSeries(
             service=query.service,
             metric=query.metric,
@@ -128,7 +137,7 @@ class PrometheusCollector(Collector):
             ).get("data", {}).get("result", [])
         except Exception:
             result = []
-        values = result[0].get("values", []) if result else []
+        values = result[0].get("values", []) if len(result) == 1 else []
         return MetricSeries(
             service=signal.service,
             metric=self._metric_name(signal.service, signal.id),
@@ -146,6 +155,7 @@ class PrometheusCollector(Collector):
             "service": signal.service,
             "flow": signal.flow,
             "sample_timestamp": str(time.time()),
+            **signal.labels,
         }
         dependency = self._dependencies.get(signal.id)
         if dependency:
@@ -158,6 +168,15 @@ class PrometheusCollector(Collector):
             return Observation(signal_id=signal.id, value=None, unit=signal.unit, window=signal.window, quality=SignalQuality.MISSING, labels=labels)
         if not result:
             return Observation(signal_id=signal.id, value=None, unit=signal.unit, window=signal.window, quality=SignalQuality.MISSING, labels=labels)
+        if len(result) != 1:
+            return Observation(
+                signal_id=signal.id,
+                value=None,
+                unit=signal.unit,
+                window=signal.window,
+                quality=SignalQuality.INVALID,
+                labels={**labels, "series_count": str(len(result))},
+            )
         sample = result[0]
         metric = sample.get("metric", {})
         value = sample.get("value", [labels["sample_timestamp"], None])
