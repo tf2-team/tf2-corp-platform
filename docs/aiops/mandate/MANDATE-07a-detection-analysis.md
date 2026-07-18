@@ -66,8 +66,9 @@ Ba metrics bao phủ 3 loại tín hiệu khác nhau trong mô hình USE/RED: **
 ```
 tf2-corp-platform/src/aio/
 ├── aiops/
-│   ├── anomaly/          ← V001 anomaly engine (EWMA+STL, IsolationForest, BARO BOCPD)
-│   │   ├── v001.py       ← 3 detection algorithms
+│   ├── anomaly/          ← V001 anomaly engine (EWMA+STL, IsolationForest)
+│   │   ├── v001.py       ← confirmed statistical detection algorithms
+│   │   ├── events.py     ← converts confirmed findings into incident candidates
 │   │   └── stats.py      ← Statistical utilities (mean, stdev, median, IQR, robust_score)
 │   ├── detectors/        ← Rule-based detectors (threshold, dependency, no-data)
 │   │   ├── threshold.py  ← Hard threshold SLO detector
@@ -76,9 +77,9 @@ tf2-corp-platform/src/aio/
 │   ├── pipeline/         ← Full detection → incident → remediation pipeline
 │   │   └── runtime.py    ← Orchestrates: collect → qualify → detect → correlate → incident → notify → verify
 │   ├── rca/              ← Root Cause Analysis (graph + robust scorer)
-│   │   ├── engine.py     ← V001RcaEngine (combines graph traversal + BARO robust score)
+│   │   ├── engine.py     ← V001RcaEngine (graph traversal + repo-native robust score)
 │   │   ├── graph.py      ← Topology-based graph traversal RCA
-│   │   └── robust_score.py ← BARO robust scorer for statistical ranking
+│   │   └── robust_score.py ← median/IQR robust scorer for statistical ranking
 │   ├── correlation/      ← Event correlation (group by flow/service)
 │   ├── enrichment/       ← Evidence enrichment
 │   ├── verification/     ← Post-remediation verification via telemetry
@@ -100,7 +101,7 @@ tf2-corp-platform/src/aio/
 |---|---|---|
 | EWMA+STL detector | `src/aio/aiops/anomaly/v001.py` (class `EwmaStlDetector`) | ~45 lines |
 | IsolationForest detector | `src/aio/aiops/anomaly/v001.py` (class `ServiceIsolationForestDetector`) | ~35 lines |
-| BARO BOCPD detector | `src/aio/aiops/anomaly/v001.py` (class `BaroBocpdDetector`) | ~40 lines |
+| Adaptive event builder | `src/aio/aiops/anomaly/events.py` (class `AdaptiveAnomalyEventBuilder`) | Converts findings into incidents/alerts |
 | V001 Anomaly Engine (orchestrator) | `src/aio/aiops/anomaly/v001.py` (class `V001AnomalyEngine`) | ~20 lines |
 | Statistical utils | `src/aio/aiops/anomaly/stats.py` | ~50 lines |
 | Threshold detector | `src/aio/aiops/detectors/threshold.py` | ~30 lines |
@@ -114,7 +115,7 @@ tf2-corp-platform/src/aio/
 | Pipeline tests | `src/aio/tests/test_runtime_pipeline.py` | ~249 lines |
 | Anomaly/RCA tests | `src/aio/tests/test_v001_anomaly_rca.py` | ~69 lines |
 
-> **Tất cả code là code thật**, không dùng `unittest.mock` trong core pipeline, không hardcode giá trị trong logic. Mọi config đều externalized qua `.env` + `runtime.json` + Pydantic Settings.
+> Core pipeline không phụ thuộc test mock. Numeric detector parameters live in tracked JSON configuration; deterministic severity/runbook routing is implemented in `anomaly/events.py`.
 
 ---
 
@@ -172,15 +173,14 @@ histogram_quantile(0.95,
 
 | Mức | Điều kiện trigger | Severity | Hành động |
 |---|---|---|---|
-| **Warning** | p95 > **200 ms** (~2.5× baseline 80ms) liên tục ≥ 3 chu kỳ (3 × 30s = 90s) | SEV3 | Log warning, bắt đầu theo dõi correlation |
-| **Critical** | p95 > **500 ms** liên tục ≥ 2 chu kỳ (60s) | SEV1 | Mở incident, gửi alert, kích hoạt RCA tự động |
-| **Statistical anomaly** | Giá trị hiện tại > **2× EWMA baseline** (z-score ≥ 3.0 trên residual) | SEV2 | Spike bất thường → correlation check với metrics khác |
+| **Statistical anomaly** | Hai mẫu gần nhất đều có EWMA residual z-score ≥ 3.0 | SEV2 | Mở incident, gắn runbook, gửi notification và chạy RCA |
 
 **Thiết kế chống false-alarm:**
 
-- Yêu cầu **consecutive cycles** (liên tục 2-3 chu kỳ), không kêu khi chỉ có 1 spike đơn lẻ
-- Loại bỏ giai đoạn warm-up (< `min_points` = 8 samples) để tránh kêu nhầm khi mới khởi động
-- Kết hợp cả hard threshold (1000ms = SLO boundary) VÀ statistical anomaly (z-score) để bắt cả spike bất thường lẫn drift chậm
+- Yêu cầu `confirmation_points=2`; một spike đơn lẻ không tạo adaptive incident
+- Loại bỏ giai đoạn warm-up cho tới khi có `min_points=30` mẫu baseline cộng hai mẫu xác nhận
+- Giữ hard threshold cho official SLO và statistical anomaly cho deviation theo baseline
+- Nếu official SLO/dependency rule đã xác nhận incident nhưng range data hiện tại ổn định, rule breach được dùng làm RCA seed; hệ thống không tạo adaptive incident giả.
 - p95 latency là **diagnostic**, không tạo official SLO incident — chỉ tạo early warning
 
 #### Phương pháp phát hiện
@@ -192,8 +192,9 @@ histogram_quantile(0.95,
 1. Tính EWMA smoothing (α = 0.3) trên chuỗi latency → tạo trend line
 2. Trừ seasonal component nếu đủ dữ liệu (≥ 2 periods) bằng STL decomposition
 3. Tính residual = actual − (trend + seasonal)
-4. Tính z-score của residual cuối cùng so với baseline residuals
-5. Nếu |z-score| ≥ threshold → đánh dấu bất thường
+4. Tính z-score của hai residual cuối cùng so với baseline residuals trước cửa xác nhận
+5. Chỉ khi cả hai z-score ≥ threshold mới tạo `AnomalyFinding`
+6. `AdaptiveAnomalyEventBuilder` chuyển finding thành incident candidate và notification bình thường
 
 **Ưu điểm:**
 
@@ -208,7 +209,8 @@ histogram_quantile(0.95,
 |---|---|---|
 | `ewma_alpha` | 0.3 | Cân bằng giữa phản ứng nhanh (α cao) và ổn định (α thấp). α=0.3 → ~70% trọng số 6 điểm gần nhất |
 | `ewma_z_threshold` | 3.0 | 3-sigma rule → ~0.27% false-positive rate trong phân phối chuẩn |
-| `min_points` | 8 | Cần tối thiểu 8 samples (= 4 phút ở chu kỳ 30s) để baseline ổn |
+| `min_points` | 30 | Cần 30 mẫu lịch sử trước cửa xác nhận |
+| `confirmation_points` | 2 | Chặn spike đơn lẻ; cả hai mẫu gần nhất phải bất thường |
 | `seasonal_period` | 1 | Không giả định seasonal trước khi có dữ liệu thật; điều chỉnh sau khi quan sát pattern |
 
 **Implementation:** Class `EwmaStlDetector` trong `src/aio/aiops/anomaly/v001.py`
@@ -252,48 +254,49 @@ sum(rate(http_server_request_duration_seconds_count{
 }[5m]))
 ```
 
-> **Xác nhận:** Cart dùng HTTP metric (`http_server_request_duration_seconds_count`) — đúng. Query trả về empty khi không có 5xx (= 0% error rate).
+> **Xác nhận:** Runtime dùng span-metric `traces_span_metrics_calls_total`. Query chỉ tổng hợp error ratio khi có request thật; không có traffic trả về missing, còn có traffic và không có lỗi trả về 0%.
 
 #### Ngưỡng bất thường
 
 | Mức | Điều kiện trigger | Severity | Hành động |
 |---|---|---|---|
-| **Warning** | Error rate > **0.5%** (= SLO boundary) liên tục ≥ 2 chu kỳ (60s) | SEV2 | Ghi nhận, theo dõi error budget burn rate |
-| **Critical** | Error rate > **2.0%** liên tục ≥ 2 chu kỳ (60s) | SEV1 | Mở incident, gửi alert, kiểm tra valkey-cart health |
-| **Statistical anomaly** | Robust Score (IQR-based) ≥ **4.0** so với baseline 20 phút gần nhất | SEV2 | Spike bất thường → correlation check với checkout + valkey |
+| **Warning** | Error rate > **0.5%** | SEV2 | Mở incident, gắn cart runbook và gửi notification |
+| **Critical guard (reserved)** | Error rate > **2.0%** | SEV1 | Detector được cấu hình nhưng chưa bật để tránh hai rule tạo hai incident cho cùng triệu chứng |
+| **Statistical anomaly** | Hai EWMA residual liên tiếp có z-score ≥ **3.0**; minimum deviation riêng cho signal = **0.5%** | SEV2 | Spike bất thường → correlation/RCA với các metric cùng service và topology |
 
 **Thiết kế chống false-alarm:**
 
-- Error rate = 0 khi QPS = 0 (không có traffic) → cần check `QPS > min_qps_threshold` trước khi đánh giá. Division by zero trả về 0 chứ không phải anomaly.
+- Không có traffic → query trả về missing và detector business không fire; chỉ signal collection-health chuyên biệt được phép tạo monitoring-loss incident.
 - Deploy/restart gây spike ngắn (INC-3) → yêu cầu ≥ 2 chu kỳ liên tục
-- Kết hợp SLO hard threshold (0.5%) + statistical anomaly (Robust Score) để bắt cả vi phạm SLO lẫn spike bất thường
+- Kết hợp hard threshold (0.5%) + adaptive EWMA/STL để bắt cả vi phạm SLO lẫn deviation so với baseline.
 
 #### Phương pháp phát hiện
 
-**Robust Score (Median + IQR) — outlier detection robust với extreme values**
+**EWMA + STL — baseline thích nghi trên error ratio**
 
 **Cách hoạt động:**
 
-1. Lấy baseline window (N samples gần nhất, vd 20 phút = 40 samples ở chu kỳ 30s)
-2. Tính Median và IQR (Q3 − Q1) của baseline
-3. Score = |giá trị hiện tại − Median| / IQR
-4. Nếu score ≥ threshold → đánh dấu bất thường
+1. Lấy tối thiểu 30 mẫu lịch sử trước hai mẫu xác nhận.
+2. Tính EWMA trend và trừ seasonal component khi cấu hình seasonal period cho phép.
+3. Tính residual z-score với spread từ lịch sử; dùng minimum deviation theo signal khi baseline phẳng.
+4. Chỉ fire khi cả hai residual cuối cùng vượt ngưỡng cấu hình.
 
 **Ưu điểm:**
 
-- **Robust với outlier** — Median + IQR không bị "kéo lệch" bởi 1-2 spike cũ (không như Mean + StdDev)
-- **Phù hợp cho error rate** — error rate có phân phối lệch phải (right-skewed): phần lớn thời gian gần 0, spike lên cao → Median bền vững hơn Mean
-- **Không cần giả định phân phối** — IQR hoạt động trên mọi phân phối
+- **Thích nghi với drift** — EWMA cập nhật baseline theo tải gần đây.
+- **Xử lý baseline phẳng** — minimum deviation `0.005` cho cart ratio tránh cả chia cho 0 lẫn bỏ sót mức lỗi nhỏ có ý nghĩa.
+- **Chống spike đơn** — hai mẫu xác nhận liên tiếp mới tạo finding.
 
 **Tham số cấu hình:**
 
 | Parameter | Giá trị | Lý do |
 |---|---|---|
-| `isolation_score_threshold` | 4.0 | Score ≥ 4 IQR từ median = rất bất thường (tương đương ~6-sigma nếu phân phối chuẩn) |
-| `min_points` | 8 | Cần ≥ 8 samples để IQR có ý nghĩa thống kê |
-| Zero-IQR fallback | `spread = 1.0` | Khi baseline quá ổn định (IQR=0), dùng spread mặc định để tránh chia cho 0 |
+| `ewma_z_threshold` | 3.0 | Ngưỡng residual chuẩn hóa của detector univariate |
+| `min_points` | 30 | Cần ≥ 30 mẫu lịch sử trước cửa xác nhận |
+| `minimum_deviation_by_signal.cart_error_rate_5m` | 0.005 | Scale tối thiểu cấu hình cho baseline cart phẳng |
+| `confirmation_points` | 2 | Cả hai mẫu mới nhất phải bất thường |
 
-**Implementation:** Class `ServiceIsolationForestDetector` trong `src/aio/aiops/anomaly/v001.py`, sử dụng function `robust_score()` từ `src/aio/aiops/anomaly/stats.py`.
+**Implementation:** Class `EwmaStlDetector` trong `src/aio/aiops/anomaly/v001.py`. `ServiceIsolationForestDetector` là corroboration multivariate khi một service có ít nhất hai metric đủ lịch sử; robust score chỉ dùng trong RCA ranking và CPU busy-load suppression.
 
 **Secondary:** Hard Threshold Detector (`ThresholdDetector` trong `src/aio/aiops/detectors/threshold.py`) — fire khi error rate vượt SLO boundary.
 
@@ -360,7 +363,7 @@ sum(k8s_pod_cpu_usage{k8s_deployment_name="product-catalog"})
 
 **Thiết kế chống false-alarm:**
 
-- CPU spike ngắn (< 30s) do GC hoặc batch job là bình thường → yêu cầu consecutive cycles
+- CPU spike một mẫu do GC hoặc batch job không mở incident → yêu cầu hai mẫu liên tiếp
 - Nếu QPS tăng tương ứng (load tăng tự nhiên), CPU cao là **mong đợi** → cần kiểm tra CPU/QPS ratio, không chỉ CPU tuyệt đối
 - Chỉ kêu khi CPU cao **bất thường so với trend** (z-score) HOẶC **vượt hard threshold** (85%)
 
@@ -376,11 +379,11 @@ sum(k8s_pod_cpu_usage{k8s_deployment_name="product-catalog"})
 - Chỉ kêu khi deviation **bất thường so với trend hiện tại** chứ không phải threshold cứng
 - CPU utilization thường có trend rõ ràng → EWMA bắt drift tốt hơn static threshold
 
-**Tham số cấu hình:** Giống EWMA chung: `α=0.3`, `z_threshold=3.0`, `min_points=8`.
+**Tham số cấu hình:** Giống EWMA chung: `α=0.3`, `z_threshold=3.0`, `min_points=30`, `confirmation_points=2`.
 
 **Implementation:** Class `EwmaStlDetector` trong `src/aio/aiops/anomaly/v001.py` (cùng class dùng cho Metric 1, chạy trên time series khác).
 
-**Secondary (bonus):** Multivariate correlation qua BARO BOCPD — khi CPU product-catalog spike đồng thời với checkout latency tăng → tăng confidence rằng đây là sự cố thật (corroborating signal). Implementation: Class `BaroBocpdDetector` trong `src/aio/aiops/anomaly/v001.py`.
+**Secondary:** `ServiceIsolationForestDetector` scores multiple aligned metrics inside one service. Cross-service RCA uses the checked topology and robust metric ranking; the repository does not claim a BARO/BOCPD detector.
 
 ---
 
@@ -411,13 +414,12 @@ Telemetry Sources          Detection Layer                    Output
                      │  └──────────────────────┘   │           │
                      │                             │           ▼
                      │  ┌──────────────────────┐   │   ┌────────────────────┐
-                     │  │ 3. BaroBocpdDetector │   │   │ AiopsPipeline      │
-                     │  │    (multivariate)    │   │   │ detect → correlate │
-                     │  │    • ALL signals     │   │   │ → incident         │
-                     │  │    • changepoint     │   │   │ → notify           │
-                     │  └──────────────────────┘   │   │ → policy (dry-run) │
-                     │                             │   │ → verify           │
-                     └─────────────────────────────┘   └────────────────────┘
+                     │  │ Confirmation gate    │   │   │ AiopsPipeline      │
+                     │  │ • 2 abnormal samples │   │   │ detect → correlate │
+                     │  │ • finding → event    │───┼──▶│ → incident         │
+                     │  │ • runbook routing    │   │   │ → notify → verify  │
+                     │  └──────────────────────┘   │   └────────────────────┘
+                     └─────────────────────────────┘
 ```
 
 ### Ma trận phương pháp × metric
@@ -425,19 +427,19 @@ Telemetry Sources          Detection Layer                    Output
 | Phương pháp | Loại | Áp dụng cho Metric | Ưu điểm chính |
 |---|---|---|---|
 | **EWMA + STL** | Univariate, time-series | 1 (checkout latency), 3 (catalog CPU) | Thích nghi trend, seasonal aware, explainable |
-| **Robust Score (IQR)** | Univariate, statistical | 2 (cart error rate) | Robust với outlier, không giả định phân phối |
-| **BARO BOCPD** | Multivariate, changepoint | Tất cả 3 metrics đồng thời (bonus) | Phát hiện correlation cross-service |
+| **EWMA + STL** | Univariate, time-series | 1 (checkout latency), 2 (cart error rate), 3 (catalog CPU) | Baseline riêng cho từng service × signal, chống spike đơn |
+| **Isolation Forest** | Multivariate trong một service | Các metric đã align của cùng service | Corroboration giữa nhiều metric |
 | **Hard Threshold** | Rule-based | SLO boundaries (backup) | Đảm bảo không bỏ sót vi phạm SLO |
 
 ### Vì sao chọn kết hợp nhiều phương pháp?
 
-1. **Không có silver bullet** — EWMA bắt drift tốt nhưng chậm phản ứng với spike đơn lẻ. IQR bắt spike tốt nhưng không hiểu trend. Hard threshold đơn giản nhưng không thích nghi. Kết hợp = bao phủ tốt hơn.
+1. **Không có silver bullet** — EWMA/STL bắt deviation theo baseline; Isolation Forest corroborate nhiều metric; hard threshold bảo vệ SLO/error-budget. Kết hợp giúp bao phủ cả adaptive và policy guard.
 
 2. **Giảm false alarm** — khi nhiều detector đồng ý (corroboration), confidence tăng. Correlator trong pipeline group events cùng (flow, service) và chọn candidate có confidence cao nhất.
 
-3. **Explainable** — mỗi detector output reason + score cụ thể ("z-score = 4.2 on checkout p95", "robust_score = 5.1 on cart error rate"). Mentor/oncall biết vì sao hệ thống kêu.
+3. **Explainable** — mỗi finding chứa signal, service, timestamp và score; incident notification thêm value, unit, window, threshold, contributing signals và error-budget impact.
 
-4. **Multivariate là bonus** — BARO BOCPD chạy trên tất cả series đồng thời để phát hiện changepoint ảnh hưởng nhiều service cùng lúc (vd: DB connection pool cạn → cả checkout lẫn product-catalog spike cùng lúc).
+4. **Phạm vi multivariate hiện tại** — Isolation Forest chỉ kết hợp metric trong cùng service. Correlation/RCA cross-service dựa trên topology; BARO/BOCPD không được triển khai hoặc tuyên bố.
 
 ---
 
@@ -449,10 +451,10 @@ ADR file: `docs/aiops/adr/ADR-DETECT-001.md`
 
 | Hạng mục | Quyết định |
 |---|---|
-| **Anomaly detection approach** | Kết hợp 3 phương pháp: EWMA+STL (univariate trend), Robust Score/IQR (univariate spike), BARO BOCPD (multivariate changepoint) |
+| **Anomaly detection approach** | EWMA+STL (univariate) + Isolation Forest (multivariate trong service) + robust-score RCA |
 | **Baseline strategy** | Per-service × per-metric. EWMA rolling baseline thích nghi, không dùng static threshold cho detection (chỉ dùng static cho SLO guard) |
 | **Metrics selection** | 3 metrics × 3 services × 3 signal types: checkout p95 (latency), cart 5xx (error), catalog CPU (saturation) |
-| **Anti-spam** | Consecutive cycle requirement (2-3 cycles), warm-up suppression (min_points), corroboration scoring |
+| **Anti-spam** | Hai mẫu bất thường liên tiếp, warm-up `min_points=30`, incident fingerprint deduplication |
 | **Mode mặc định** | dry-run — detector chạy + ghi log + gửi alert nhưng không tự động remediate |
 | **Trade-off** | Ưu tiên recall (bắt được sự cố) hơn precision (ít false alarm). Lý do: miss sự cố = mất doanh thu, false alarm = oncall kiểm tra 1 lần |
 
@@ -483,14 +485,14 @@ conda run -n capstone python -m pytest tests/test_v001_anomaly_rca.py -v
 ```
 
 Test `test_v001_pipeline_ranks_top_root_cause_service_and_metrics` chạy end-to-end:
-1. Tạo 3 metric series (checkout latency, payment latency, payment error) với spike ở payment
-2. Chạy V001AnomalyEngine → verify 3 algorithms đều chạy (ewma_stl, isolation_forest, baro_bocpd)
+1. Tạo 3 metric series (checkout latency, payment latency, payment error) với hai điểm bất thường liên tiếp ở payment
+2. Chạy V001AnomalyEngine → verify `ewma_stl` và `isolation_forest` tạo finding đã xác nhận
 3. Chạy V001RcaEngine → verify RCA rank payment là root cause #1
 
 ### Chạy evaluation (trên dataset có nhãn)
 
 ```bash
-conda run -n capstone python -B evaluate/e2e_pipeline.py --limit 10 --out evaluate/report.json
+conda run -n capstone python -B evaluate/e2e_pipeline.py --labels path/to/reviewer-labels.json --out evaluate/report.json
 ```
 
 Output: JSON report với precision/recall/F1 cho incident detection + RCA top-K.
@@ -521,14 +523,14 @@ curl -X POST http://localhost:8090/api/v1/pipeline/run \
 
 | # | Task | Trạng thái |
 |---|---|---|
-| 1 | Kết nối live Prometheus — thay placeholder URL trong `.env` bằng endpoint thật TF2 | TODO |
-| 2 | Thêm 3 signals mới (checkout_p95, cart_error_rate, catalog_cpu) vào `runtime.json` | TODO |
-| 3 | Build `PrometheusCollector` — pull metrics tự động từ Prometheus | TODO |
-| 4 | Thêm scheduler — chạy pipeline liên tục mỗi 30s | TODO |
+| 1 | Kết nối live Prometheus qua port-forward, endpoint lấy từ process environment | DONE |
+| 2 | Thêm 3 signals mới (checkout_p95, cart_error_rate, catalog_cpu) vào `runtime.json` | DONE |
+| 3 | Build `PrometheusCollector` — pull metrics tự động từ Prometheus | DONE |
+| 4 | Scheduler source có sẵn; production enablement thuộc quyết định deployment | PARTIAL |
 | 5 | Chạy e2e với incident thật — bơm sự cố qua flagd → chụp screenshot alert | TODO |
 | 6 | Đo precision/recall/lead-time trên bộ sự cố có nhãn từ mentor | TODO |
-| 7 | Thêm burn-rate alerting — tính error budget consumption rate cho SLO | TODO |
-| 8 | Mở rộng thêm service (shipping, payment, currency...) | TODO |
+| 7 | Thêm multi-window burn-rate alerting cho checkout (5m/1h và 30m/6h) | DONE |
+| 8 | Mở rộng adaptive signal/detector tới checkout, payment, cart và product-catalog trong query budget giới hạn | DONE |
 
 ---
 

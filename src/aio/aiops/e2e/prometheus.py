@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 from datetime import UTC, datetime
 from pathlib import Path
+from tempfile import TemporaryDirectory
 from typing import Any
 from urllib.parse import urlsplit, urlunsplit
 from uuid import uuid4
@@ -25,6 +26,9 @@ def execute_prometheus_e2e(
     *,
     client: PrometheusClient | None = None,
     captured_at: datetime | None = None,
+    scenario_id: str | None = None,
+    incident_started_at: datetime | None = None,
+    require_labeled_scenario: bool = False,
 ) -> dict[str, Any]:
     started_at = (captured_at or datetime.now(UTC)).astimezone(UTC)
     run_id = f"aio-e2e-{started_at:%Y%m%dT%H%M%SZ}-{uuid4().hex[:8]}"
@@ -42,6 +46,11 @@ def execute_prometheus_e2e(
             "collection_plan_path": str(plan_path),
         },
         "artifact": {"path": str(report_path), "format": "json", "written": True},
+        "scenario": {
+            "id": scenario_id,
+            "incident_started_at": incident_started_at.astimezone(UTC).isoformat() if incident_started_at else None,
+            "label_required": require_labeled_scenario,
+        },
     }
 
     try:
@@ -53,12 +62,34 @@ def execute_prometheus_e2e(
         collector = PrometheusCollector(client or PrometheusClient(settings), plan, captured_at=started_at)
         observations = collector.collect()
         metric_series = collector.collect_metric_series()
-        result = run_static_pipeline(
-            PipelineRunRequest(observations=observations, metric_series=metric_series),
-            settings=settings,
-        )
+        with TemporaryDirectory(prefix="aiops-e2e-") as state_dir:
+            isolated = Path(state_dir)
+            run_settings = settings.model_copy(
+                update={
+                    "state_store_path": isolated / "aiops.sqlite3",
+                    "remediation_audit_path": isolated / "remediation_audit.jsonl",
+                    "rca_history_path": isolated / "rca_history.jsonl",
+                }
+            )
+            result = run_static_pipeline(
+                PipelineRunRequest(observations=observations, metric_series=metric_series),
+                settings=run_settings,
+            )
 
-        acceptance = build_acceptance_result(result, observations, metric_series)
+        acceptance = build_acceptance_result(
+            result,
+            observations,
+            metric_series,
+            scenario_id=scenario_id,
+            incident_started_at=incident_started_at,
+            require_labeled_scenario=require_labeled_scenario,
+        )
+        fire_timestamps = [
+            event.timestamp
+            for incident in result.incidents
+            for event in incident.events
+            if event.timestamp
+        ]
         report.update(
             {
                 "status": "passed" if all(item["passed"] for item in acceptance.values()) else "failed",
@@ -73,6 +104,14 @@ def execute_prometheus_e2e(
                 },
                 "pipeline_result": result.model_dump(mode="json"),
                 "acceptance_criteria": acceptance,
+                "measurement": {
+                    "detector_fire_at": datetime.fromtimestamp(min(fire_timestamps), UTC).isoformat() if fire_timestamps else None,
+                    "lead_time_seconds": (
+                        min(fire_timestamps) - int(incident_started_at.timestamp())
+                        if fire_timestamps and incident_started_at
+                        else None
+                    ),
+                },
                 "safety": {
                     "live_execution_enabled": False,
                     "live_executor_called": False,
@@ -114,6 +153,13 @@ def validate_collection_plan(
         missing_labels = set(signal.required_labels) - set(query.labels)
         if missing_labels:
             raise ValueError(f"missing required labels for {signal_id}: {sorted(missing_labels)}")
+        metadata_mismatch = {
+            key: (value, query.labels.get(key))
+            for key, value in signal.labels.items()
+            if query.labels.get(key) != value
+        }
+        if metadata_mismatch:
+            raise ValueError(f"configured label mismatch for {signal_id}: {metadata_mismatch}")
 
     for query in plan.metric_series_queries:
         theoretical_points = query.lookback_seconds // query.step_seconds + 1
@@ -124,14 +170,27 @@ def validate_collection_plan(
             )
 
 
-def build_acceptance_result(result: PipelineResult, observations: list, metric_series: list) -> dict[str, dict[str, Any]]:
+def build_acceptance_result(
+    result: PipelineResult,
+    observations: list,
+    metric_series: list,
+    *,
+    scenario_id: str | None = None,
+    incident_started_at: datetime | None = None,
+    require_labeled_scenario: bool = False,
+) -> dict[str, dict[str, Any]]:
     verified_signal_ids = {
         observation.signal_id for observation in observations if observation.quality == SignalQuality.VERIFIED
     }
     real_metric_incidents = [
         incident
         for incident in result.incidents
-        if any(event.signal_id in verified_signal_ids for event in incident.events)
+        if incident.occurrence_count == 1
+        and any(event.signal_id in verified_signal_ids for event in incident.events)
+    ]
+    visible_incident_ids = {message.incident_id for message in result.notifications}
+    visibly_alerted_incidents = [
+        incident for incident in real_metric_incidents if incident.incident_id in visible_incident_ids
     ]
     range_sample_count = sum(len(series.points) for series in metric_series)
     policy_is_safe = all(
@@ -143,12 +202,13 @@ def build_acceptance_result(result: PipelineResult, observations: list, metric_s
         for decision in result.remediation_decisions
     )
 
-    return {
+    acceptance = {
         "incident_from_real_metrics": {
-            "passed": bool(real_metric_incidents),
+            "passed": bool(visibly_alerted_incidents),
             "details": {
                 "verified_signal_ids": sorted(verified_signal_ids),
-                "incident_ids": [incident.incident_id for incident in real_metric_incidents],
+                "fresh_incident_ids": [incident.incident_id for incident in real_metric_incidents],
+                "visibly_alerted_incident_ids": [incident.incident_id for incident in visibly_alerted_incidents],
             },
         },
         "rca_returns_root_cause_candidates": {
@@ -172,6 +232,15 @@ def build_acceptance_result(result: PipelineResult, observations: list, metric_s
             "details": {"contains_run_id": True, "contains_timestamps": True, "contains_pipeline_result": True},
         },
     }
+    if require_labeled_scenario:
+        acceptance["labeled_scenario_has_timing"] = {
+            "passed": bool(scenario_id and incident_started_at),
+            "details": {
+                "scenario_id": scenario_id,
+                "incident_started_at": incident_started_at.astimezone(UTC).isoformat() if incident_started_at else None,
+            },
+        }
+    return acceptance
 
 
 def error_acceptance_result() -> dict[str, dict[str, Any]]:

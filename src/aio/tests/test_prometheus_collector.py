@@ -41,10 +41,11 @@ class PrometheusCollectorTest(unittest.TestCase):
         self.assertEqual(client.queries, [config.prometheus_queries[signal.query_id] for signal in prometheus_signals])
         self.assertEqual(services_with_metrics, set(config.prometheus_services))
         self.assertEqual(len(observations), len(signal_query_ids))
-        self.assertEqual(observations[0].value, 0.2)
-        self.assertEqual(observations[0].labels["query_id"], "checkout.bad_ratio.24h")
-        self.assertEqual(observations[1].labels["dependency"], "payment")
-        self.assertEqual(observations[0].quality, SignalQuality.UNQUALIFIED)
+        by_signal = {observation.signal_id: observation for observation in observations}
+        self.assertEqual(by_signal["checkout_bad_ratio_24h"].value, 0.2)
+        self.assertEqual(by_signal["checkout_bad_ratio_24h"].labels["query_id"], "checkout.bad_ratio.24h")
+        self.assertEqual(by_signal["checkout_payment_error_rate_5m"].labels["dependency"], "payment")
+        self.assertEqual(by_signal["checkout_bad_ratio_24h"].quality, SignalQuality.UNQUALIFIED)
 
     def test_collects_runtime_anomaly_inputs_as_metric_series(self):
         config = load_runtime_config(Path("config/runtime.json"))

@@ -80,25 +80,28 @@ The detector should not depend on live production-only objects. It can run again
 
 ### 2. Baseline Calculation
 
-For each metric series, the detector compares the latest/current value against historical values.
+For each metric series, the detector reserves the last two values as a confirmation window and compares both against the earlier historical baseline.
 
 Baseline policy:
 
 ```text
-historical_values = all points before the latest/current point
-center = median(historical_values)
-spread = IQR(historical_values)
-score = abs(current_value - center) / spread
+confirmation_values = last 2 points
+historical_values = all earlier points (minimum 30)
+residuals = observed - EWMA trend - optional seasonal component
+center = mean(historical_residuals)
+spread = max(stddev(historical_residuals), configured_minimum_deviation / z_threshold)
+scores = [abs(value - center) / spread for value in confirmation_residuals]
+fire = every score exceeds its configured threshold
 ```
 
-If the spread is zero, the implementation uses a non-zero fallback so the score does not divide by zero.
+The minimum deviation is configured per signal, so flat ratio baselines remain detectable without embedding metric scale in Python.
 
-Why median/IQR:
+Why EWMA/STL residual scoring:
 
-- More robust than mean/stddev when there are spikes.
-- Cheap to compute.
-- Works without training a model.
-- Fits the requirement to avoid new infrastructure.
+- Maintains a per-service, per-signal adaptive baseline.
+- Requires two consecutive abnormal samples to suppress one-point spikes.
+- Uses configuration-backed minimum deviations for flat baselines.
+- Remains lightweight and does not need a separate model-serving cluster.
 
 ### 3. Anomaly Scoring
 
@@ -107,23 +110,28 @@ The selected detector path uses lightweight statistical scoring:
 
 | Method                | Purpose                                                    | Current evidence                 |
 | --------------------- | ---------------------------------------------------------- | -------------------------------- |
-| Robust score baseline | Compare latest metric value against historical median/IQR. | `src/aio/aiops/anomaly/stats.py` |
 | EWMA residual scoring | Detect drift/spike in one time series after smoothing.     | `src/aio/aiops/anomaly/v001.py`  |
 | Service-level scoring | Combine multiple metric deviations inside one service.     | `src/aio/aiops/anomaly/v001.py`  |
-| BARO/BOCPD changepoint scoring | Optional multivariate changepoint signal for cross-service corroboration. | `src/aio/aiops/anomaly/v001.py` |
+| Isolation Forest scoring | Corroborate multiple aligned metrics inside one service. | `src/aio/aiops/anomaly/v001.py` |
+| Adaptive event conversion | Convert confirmed findings into normal incidents, notifications, and runbook routes. | `src/aio/aiops/anomaly/events.py` |
 
 
-The BARO/BOCPD path is treated as a corroborating multivariate signal in Mandate 7a, not as a production auto-remediation trigger. The core approval remains the lightweight in-repository detector architecture and its documented baseline/scoring behavior.
+Cross-service ranking uses the checked service topology and repo-native median/IQR robust scores. The current implementation does not contain or claim a BARO/BOCPD detector.
 
 ### 4. Runtime Signals And Thresholds
 
-Current configured runtime signals in `src/aio/config/runtime.json` include:
+Current enabled configured runtime detectors include:
 
 
 | Detector                            | Signal                           | Service                     | Threshold | Purpose                                               |
 | ----------------------------------- | -------------------------------- | --------------------------- | --------- | ----------------------------------------------------- |
 | `ops01_checkout_slo`                | `checkout_bad_ratio_24h`         | checkout                    | `0.01`    | Detect checkout SLO breach.                           |
 | `ops03_checkout_payment_dependency` | `checkout_payment_error_rate_5m` | checkout/payment dependency | `0.05`    | Detect checkout failure caused by payment dependency. |
+| `ops04_checkout_latency_p95` | `checkout_p95_latency_5m` | checkout | `0.5s` | Detect user-visible checkout latency. |
+| `ops06_product_catalog_cpu` | `product_catalog_cpu_millicores` | product-catalog | `50` | Detect catalog saturation. |
+| `auto_*_error_rate` | service error ratios | checkout/payment/cart/product-catalog | config-backed | Expand error detection while keeping bounded query scope. |
+| `ops07_checkout_fast_burn` | `checkout_burn_rate_fast` | checkout | `14.4` | Fast 5m/1h error-budget burn. |
+| `ops08_checkout_slow_burn` | `checkout_burn_rate_slow` | checkout | `6.0` | Slow 30m/6h error-budget burn. |
 
 
 These thresholds are prototype/evaluation thresholds. They should be reviewed after real incident replay or reviewer feedback.
@@ -135,6 +143,7 @@ After anomaly scoring, RCA ranking combines:
 - Graph/topology evidence from runtime config.
 - Metric deviation evidence from scored metric series.
 - Service dependency information, for example checkout depending on payment.
+- Confirmed SLO/dependency rule evidence when adaptive scoring correctly finds no current deviation; this seeds RCA without creating a second adaptive incident.
 
 The expected output shape follows `src/aio/evaluate/e2e_pipeline.py`:
 
@@ -226,7 +235,7 @@ Suggested local evaluation command, when dependencies are available:
 
 ```bash
 cd src/aio
-python -B evaluate/e2e_pipeline.py --limit 10 --out evaluate/report.json
+python -B evaluate/e2e_pipeline.py --labels path/to/reviewer-labels.json --out evaluate/report.json
 ```
 
 If the team uses the `capstone` conda environment, run the same command through `conda run -n capstone`.

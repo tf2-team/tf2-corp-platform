@@ -178,13 +178,13 @@ class DetectorEngineTest(unittest.TestCase):
 
     def test_no_data_detector_opens_monitoring_loss_candidate(self):
         features = FeatureBuilder().build(
-            [Observation(signal_id="checkout_bad_ratio_24h", value=None, unit="ratio", window="24h", quality=SignalQuality.STALE)]
+            [Observation(signal_id="prometheus_collection_health", value=None, unit="count", window="instant", quality=SignalQuality.STALE)]
         )
         candidates = DetectorEngine([no_data_detector()]).evaluate(features)
 
         self.assertEqual(candidates[0].detector_id, "ops02_monitoring_loss")
-        self.assertEqual(candidates[0].unit, "ratio")
-        self.assertEqual(candidates[0].window, "24h")
+        self.assertEqual(candidates[0].unit, "count")
+        self.assertEqual(candidates[0].window, "instant")
         self.assertEqual(candidates[0].flow, "monitoring")
 
     def test_correlator_ranks_dependency_with_transparent_components(self):
@@ -276,6 +276,78 @@ class DetectorEngineTest(unittest.TestCase):
         candidates = Correlator(load_runtime_config(Path("config/runtime.json"))).correlate([slo, latency])
 
         self.assertEqual([candidate.signal_id for candidate in candidates], ["checkout_bad_ratio_24h", "checkout_p95_latency_5m"])
+
+    def test_correlator_merges_same_impact_thresholds(self):
+        base = CandidateEvent(
+            environment="tf2",
+            timestamp=100,
+            detector_id="ops01_checkout_slo",
+            flow="checkout",
+            service="checkout",
+            severity="SEV1",
+            signal_id="checkout_bad_ratio_24h",
+            value=0.02,
+            unit="ratio",
+            window="24h",
+            threshold=0.01,
+            quality=SignalQuality.VERIFIED,
+            reason="threshold_breached",
+            runbook_id="RB-CHECKOUT-SLO",
+            confidence=1.0,
+            contributing_signals=("checkout_bad_ratio_24h",),
+            labels={"impact": "error_budget_burn"},
+        )
+        burn = base.model_copy(
+            update={
+                "detector_id": "ops07_checkout_fast_burn",
+                "signal_id": "checkout_burn_rate_fast",
+                "window": "5m/1h",
+                "threshold": 14.4,
+                "contributing_signals": ("checkout_burn_rate_fast",),
+            }
+        )
+
+        candidates = Correlator(load_runtime_config(Path("config/runtime.json"))).correlate([base, burn])
+
+        self.assertEqual(len(candidates), 1)
+        self.assertEqual(candidates[0].detector_id, "ops01_checkout_slo")
+        self.assertEqual(candidates[0].contributing_signals, ("checkout_bad_ratio_24h", "checkout_burn_rate_fast"))
+        self.assertEqual(candidates[0].labels["impact"], "error_budget_burn")
+
+    def test_correlator_merges_multiple_adaptive_signals_for_one_service(self):
+        base = CandidateEvent(
+            environment="tf2",
+            timestamp=100,
+            detector_id="adaptive_payment_latency",
+            flow="checkout",
+            service="payment",
+            severity="SEV2",
+            signal_id="payment_latency",
+            value=0.8,
+            unit="anomaly_score",
+            window="5m",
+            threshold=0.4,
+            quality=SignalQuality.VERIFIED,
+            reason="adaptive_baseline_deviation",
+            runbook_id="RB-SERVICE-ERROR-RATE",
+            confidence=0.8,
+            contributing_signals=("payment_latency",),
+            labels={"metric": "latency"},
+        )
+        error = base.model_copy(
+            update={
+                "detector_id": "adaptive_payment_error",
+                "signal_id": "payment_error",
+                "contributing_signals": ("payment_error",),
+                "labels": {"metric": "error"},
+            }
+        )
+
+        candidates = Correlator(load_runtime_config(Path("config/runtime.json"))).correlate([base, error])
+
+        self.assertEqual(len(candidates), 1)
+        self.assertEqual(candidates[0].detector_id, "adaptive_payment_correlated")
+        self.assertEqual(set(candidates[0].contributing_signals), {"payment_latency", "payment_error"})
 
 
 class IncidentManagerTest(unittest.TestCase):

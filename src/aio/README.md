@@ -81,40 +81,51 @@ runs the complete incident, RCA, and remediation pipeline locally. It refuses
 to start unless `AIOPS_POLICY_MODE=dry-run`; it never constructs or calls the
 live executor.
 
-Keep `scripts/port_forward.ps1` running, then execute from `src/aio`:
+Keep `scripts/port_forward.ps1` running, then execute from `src/aio`. The
+runner loads `.env.live` by default; `--env-file` can select another
+operator-managed settings file:
 
 ```powershell
-conda run -n capstone python -B scripts/run_prometheus_e2e.py --env-file .env.live
+python -B scripts/run_prometheus_e2e.py
 ```
 
-Each invocation writes `evidence/e2e/<run_id>.json`. The report contains the
+Each invocation uses isolated temporary SQLite/audit/RCA state and writes
+`evidence/e2e/<run_id>.json`. The report contains the
 capture time, Prometheus endpoint, query IDs and PromQL, converted observations,
 range samples used by RCA, incidents, RCA candidates, policy/remediation
 decisions, and a pass/fail result for every acceptance criterion. Secrets and
 authorization headers are not written.
 
-The command exits `0` only when all four criteria pass. A healthy cluster can
+Acceptance requires a fresh occurrence-count-one incident from verified real
+metrics and a visible notification; persistent incidents from older runs cannot
+satisfy it. The command exits `0` only when all criteria pass. A healthy cluster can
 legitimately produce a `failed` report because no incident was opened. For the
 acceptance run, activate an approved existing failure scenario such as
 `paymentFailure`, wait for the five-minute query window to contain failures,
 run the command, and then turn the scenario off. The AIOps runner itself does
 not activate faults or execute remediation.
 
-To change metric names for another cluster, edit the tracked collection plan;
+For a labeled injection, pass `--scenario-id`, `--incident-started-at`, and
+`--require-labeled-scenario`; the evidence records detector fire time and lead
+time. To change metric names for another cluster, edit the tracked collection plan;
 keep each query aggregated to exactly one Prometheus series. Observation signal
 IDs, query IDs, units, windows, and required labels are validated against
 `config/runtime.json` before any query runs.
 
 ## Configuration
 
-Runtime secrets, URLs, paths, and all numeric hyperparameters are loaded from `.env` through `aiops.config.Settings`.
+Runtime secrets, URLs, and paths are loaded through `aiops.config.Settings`.
 Set `AIOPS_ENV_FILE=.env.live` to select the ignored live file without copying
 secrets into the tracked template.
-Infrastructure topology, signal IDs, detector definitions, and policy lists are loaded from `config/runtime.json`.
-Detector thresholds and detector confidences are intentionally kept in `config/runtime.json` beside detector IDs.
-RCA, remediation, no-data, and correlation hyperparameters are loaded from `config/hyperparameters.json`.
+Set `AIOPS_ENV_FILE=disabled` in CI or isolated tests to prevent any dotenv file
+from being read; required settings must then be supplied through process environment variables.
+Infrastructure topology, PromQL templates, selected services/metrics, signal
+IDs, detector definitions, impact metadata, and policy lists are loaded from
+`config/runtime.json`.
+Detector thresholds/confidences, anomaly scale floors, RCA, remediation,
+no-data, and correlation parameters are loaded from `config/hyperparameters.json`.
 
-- Hyperparameters: RCA, remediation, no-data, correlation.
+- Hyperparameters: detector thresholds, anomaly, RCA, remediation, no-data, correlation.
 - Runtime paths: API paths, evidence dir, state store path.
 - Operational IDs: detector IDs, signal IDs, runbook IDs, severity, environment.
 - Safety policy values: protected targets, stateful kinds, non-actionable flows.
@@ -134,8 +145,45 @@ This baseline includes FastAPI routes, SQLite incident persistence, config-drive
 - univariate EWMA plus seasonal residual scoring
 - per-service multivariate isolation-style scoring
 - graph traversal RCA plus repo-native robust score ranking
+- confirmed adaptive findings converted into normal incident, notification, and runbook events
+- two-sample confirmation before an adaptive incident is opened
+- confirmed SLO/dependency breaches seed RCA when current range data is stable, without being relabeled as adaptive incidents
+- persisted recovery and clean incident reopening on recurrence
 
 It still does not perform Kubernetes mutation directly.
+
+Prometheus queries preserve missing/no-traffic results as missing instead of
+coercing absent series to zero. Error ratios synthesize a zero numerator only
+when a real non-zero request denominator exists.
+
+The bounded configured scope performs 21 instant and 16 range queries per
+autonomous cycle (37 Prometheus requests total), covering checkout, payment,
+cart, and product-catalog. Same-impact checkout SLO/burn fires are correlated
+into one incident and notification with all contributing signals retained.
+
+## Autonomous Container Runtime
+
+The FastAPI lifespan starts periodic live collection when
+`AIOPS_AUTO_RUN_ENABLED=true`; its interval is configured through
+`AIOPS_AUTO_RUN_INTERVAL_SECONDS`. The container entry point requires
+`AIOPS_API_BIND_HOST` and `AIOPS_API_BIND_PORT` at runtime, so it embeds no
+operational endpoint or fixed listening port:
+
+```powershell
+docker build -t aio4-aiops:local .
+docker run --rm --env-file path/to/operator-managed-settings aio4-aiops:local
+```
+
+The image excludes `.env*`, local state, and evidence. Helm/EKS wiring remains
+gated on the real CDO-owned chart revision and owner; this repository does not
+guess those deployment facts.
+
+## Labeled Mandate 7b Evaluation
+
+`evaluate/e2e_pipeline.py` requires explicit reviewer labels and reports
+TP/FP/TN/FN, precision, recall, lead time, and RCA top-K. It rejects missing
+case labels and marks evidence invalid when incident/normal coverage or timing
+labels are absent. See `evaluate/README.md` and `evaluate/labels.example.json`.
 
 ## Integrations
 

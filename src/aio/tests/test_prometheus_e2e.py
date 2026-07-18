@@ -105,9 +105,9 @@ class PrometheusCollectorTest(unittest.TestCase):
         observations = collector.collect()
         series = collector.collect_metric_series()
 
-        self.assertEqual(len(observations), 2)
+        self.assertEqual(len(observations), 5)
         self.assertTrue(all(item.quality == SignalQuality.VERIFIED for item in observations))
-        self.assertEqual(observations[1].labels["dependency"], "payment")
+        self.assertEqual(observations[2].labels["dependency"], "payment")
         self.assertEqual(len(series), 3)
         self.assertTrue(all(len(item.points) == 8 for item in series))
         instant_requests = [request for request in requests if request.url.path.endswith("/query")]
@@ -141,12 +141,34 @@ class PrometheusE2ETest(unittest.TestCase):
         self.assertEqual(stored["run_id"], report["run_id"])
         self.assertEqual(stored["source"]["type"], "prometheus")
         self.assertTrue(stored["pipeline_result"]["incidents"])
+        self.assertEqual(stored["pipeline_result"]["incidents"][0]["occurrence_count"], 1)
+        self.assertTrue(stored["acceptance_criteria"]["incident_from_real_metrics"]["details"]["visibly_alerted_incident_ids"])
         self.assertEqual(stored["pipeline_result"]["rca_result"]["root_causes"][0]["service"], "payment")
         self.assertIn(
             stored["pipeline_result"]["remediation_decisions"][0]["decision"],
             {"dry-run-recorded", "fallback-page-oncall"},
         )
         self.assertFalse(stored["safety"]["live_executor_called"])
+
+    def test_labeled_run_requires_scenario_id_and_start_time(self):
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            settings = _settings_for_test(root)
+            client = PrometheusClient(settings, transport=prometheus_transport([]))
+            with patch("aiops.pipeline.runtime.V001AnomalyEngine", FakeAnomalyEngine), patch(
+                "aiops.pipeline.runtime.V001RcaEngine", FakeRcaEngine
+            ):
+                report = execute_prometheus_e2e(
+                    settings,
+                    ROOT / "config" / "prometheus_e2e.json",
+                    root / "evidence" / "e2e",
+                    client=client,
+                    captured_at=CAPTURED_AT,
+                    require_labeled_scenario=True,
+                )
+
+        self.assertEqual(report["status"], "failed")
+        self.assertFalse(report["acceptance_criteria"]["labeled_scenario_has_timing"]["passed"])
 
     def test_non_dry_run_mode_is_blocked_before_prometheus_call_and_reported(self):
         with TemporaryDirectory() as tmp:

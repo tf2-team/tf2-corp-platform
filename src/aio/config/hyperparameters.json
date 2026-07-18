@@ -14,6 +14,16 @@
       },
       "weighted_score_threshold": 0.4,
       "single_algorithm_min_normalized_score": 2.0,
+      "minimum_deviation_default": 0.000001,
+      "minimum_deviation_by_signal": {
+        "cart_error_ratio_5m": 0.005,
+        "cart_error_rate_5m": 0.005,
+        "checkout_error_rate_5m": 0.01,
+        "checkout_p95_latency_5m": 0.05,
+        "payment_error_rate_5m": 0.01,
+        "product_catalog_cpu_millicores": 10.0
+      },
+      "confirmation_points": 2,
       "drain3_config_path": "config/drain3.ini",
       "log_bucket_seconds": 60,
       "log_correlation_window_seconds": 300,
@@ -74,7 +84,9 @@
       "auto_fraud_detection_error_rate": 0.05,
       "ops04_checkout_latency_p95": 0.5,
       "ops05_cart_error_rate": 0.02,
-      "ops06_product_catalog_cpu": 50.0
+      "ops06_product_catalog_cpu": 50.0,
+      "ops07_checkout_fast_burn": 14.4,
+      "ops08_checkout_slow_burn": 6.0
     },
     "confidences": {
       "ops03_checkout_payment_dependency": 0.8

@@ -43,7 +43,7 @@ class Correlator:
                 components,
             )
             if dependency is None:
-                correlated.extend(group)
+                correlated.extend(self._merge_same_impact(group))
                 continue
             primary = dependency or primary_signal
             contributing = tuple(dict.fromkeys(signal for item in group for signal in item.contributing_signals))
@@ -61,8 +61,52 @@ class Correlator:
                     }
                 )
             )
-            correlated.extend(item for item in group if item.likely_dependency == "unknown" and item is not primary_signal)
         return correlated
+
+    def _merge_same_impact(self, group: list[CandidateEvent]) -> list[CandidateEvent]:
+        adaptive = [item for item in group if item.reason == "adaptive_baseline_deviation"]
+        remaining = [item for item in group if item.reason != "adaptive_baseline_deviation"]
+        merged: list[CandidateEvent] = []
+        if adaptive:
+            merged.append(self._merge_adaptive_group(adaptive) if len(adaptive) > 1 else adaptive[0])
+
+        impact_groups: dict[str, list[CandidateEvent]] = {}
+        for item in remaining:
+            impact = item.labels.get("impact", "")
+            if impact:
+                impact_groups.setdefault(impact, []).append(item)
+            else:
+                merged.append(item)
+        for items in impact_groups.values():
+            merged.append(self._merge_impact_group(items) if len(items) > 1 else items[0])
+        return merged
+
+    def _merge_impact_group(self, group: list[CandidateEvent]) -> CandidateEvent:
+        primary = min(group, key=lambda item: (item.severity, -item.confidence, item.detector_id))
+        contributing = tuple(dict.fromkeys(signal for item in group for signal in item.contributing_signals))
+        detector_ids = sorted({item.detector_id for item in group})
+        return primary.model_copy(
+            update={
+                "confidence": max(item.confidence for item in group),
+                "contributing_signals": contributing,
+                "severity": min(item.severity for item in group),
+                "labels": {**primary.labels, "correlated_detectors": ",".join(detector_ids)},
+            }
+        )
+
+    def _merge_adaptive_group(self, group: list[CandidateEvent]) -> CandidateEvent:
+        primary = min(group, key=lambda item: (item.severity, -item.confidence, item.detector_id))
+        contributing = tuple(dict.fromkeys(signal for item in group for signal in item.contributing_signals))
+        metrics = sorted({item.labels.get("metric", item.signal_id) for item in group})
+        return primary.model_copy(
+            update={
+                "detector_id": f"adaptive_{primary.service.replace('-', '_')}_correlated",
+                "confidence": max(item.confidence for item in group),
+                "contributing_signals": contributing,
+                "severity": min(item.severity for item in group),
+                "labels": {**primary.labels, "correlated_metrics": ",".join(metrics)},
+            }
+        )
 
     def _rank_dependency(self, group: list[CandidateEvent], primary: CandidateEvent) -> tuple[CandidateEvent | None, dict[str, float]]:
         ranked = [

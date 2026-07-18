@@ -372,10 +372,10 @@ class RuntimePipelineTest(unittest.TestCase):
                 collector=StaticCollector(
                     [
                         Observation(
-                            signal_id="checkout_bad_ratio_24h",
+                            signal_id="prometheus_collection_health",
                             value=None,
-                            unit="ratio",
-                            window="24h",
+                            unit="count",
+                            window="instant",
                             quality=SignalQuality.STALE,
                         )
                     ]
@@ -399,10 +399,10 @@ class RuntimePipelineTest(unittest.TestCase):
                 collector=StaticCollector(
                     [
                         Observation(
-                            signal_id="checkout_bad_ratio_24h",
-                            value=0.02,
-                            unit="ratio",
-                            window="24h",
+                            signal_id="prometheus_collection_health",
+                            value=1.0,
+                            unit="count",
+                            window="instant",
                             quality=SignalQuality.UNQUALIFIED,
                         )
                     ]
@@ -505,16 +505,7 @@ class RuntimePipelineTest(unittest.TestCase):
                 **runtime_kwargs(settings),
             )
             pipeline._run_v001_rca = lambda metric_series, incidents: RcaResult(
-                anomalies=[
-                    AnomalyFinding(
-                        algorithm="weighted_sum",
-                        service="checkout",
-                        metric="error_rate_5m",
-                        signal_id="checkout_error_rate_5m",
-                        score=1.7,
-                        timestamp=59,
-                    )
-                ],
+                anomalies=[],
                 root_causes=[
                     RootCauseCandidate(
                         service="checkout",

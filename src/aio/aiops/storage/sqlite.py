@@ -7,7 +7,7 @@ from pathlib import Path
 
 from aiops.incidents import incident_fingerprint
 from aiops.notifications import NotificationBuilder
-from aiops.schemas import CandidateEvent, Incident, NotificationMessage
+from aiops.schemas import CandidateEvent, Incident, NotificationMessage, VerificationResult
 
 logger = logging.getLogger(__name__)
 
@@ -82,6 +82,7 @@ class SQLiteIncidentStore:
         ).fetchone()
 
         is_new = row is None
+        is_reopened = False
         if is_new:
             digest = fingerprint.removeprefix("sha256:")
             incident = Incident(
@@ -97,12 +98,17 @@ class SQLiteIncidentStore:
             )
         else:
             incident = Incident.model_validate_json(row[0])
+            is_reopened = incident.state != "open"
             incident.occurrence_count += 1
             incident.events.append(candidate)
             incident.last_seen = seen_at
             incident.severity = min(incident.severity, candidate.severity)
+            if is_reopened:
+                incident.state = "open"
+                incident.recovered_at = None
+                incident.cooldown_until = None
 
-        notification = NotificationBuilder().build([incident])[0] if is_new else None
+        notification = NotificationBuilder().build([incident])[0] if is_new or is_reopened else None
         with self._connection:
             self._connection.execute(
                 """
@@ -122,17 +128,24 @@ class SQLiteIncidentStore:
             if notification is not None:
                 self._connection.execute(
                     """
-                    INSERT OR IGNORE INTO notification_outbox (
+                    INSERT INTO notification_outbox (
                         incident_id, fingerprint, notification_json, status, next_attempt_at
                     )
                     VALUES (?, ?, ?, 'pending', ?)
+                    ON CONFLICT(incident_id) DO UPDATE SET
+                        notification_json = excluded.notification_json,
+                        status = 'pending',
+                        attempt_count = 0,
+                        next_attempt_at = excluded.next_attempt_at,
+                        last_error = NULL,
+                        updated_at = CURRENT_TIMESTAMP
                     """,
                     (incident.incident_id, fingerprint, notification.model_dump_json(), _now()),
                 )
                 self._last_enqueued_incident_ids.add(incident.incident_id)
-        (logger.info if is_new else logger.debug)(
+        (logger.info if is_new or is_reopened else logger.debug)(
             "AIOPS_INCIDENT_UPSERT action=%s incident=%s fingerprint=%s service=%s detector=%s occurrence=%s notification_enqueued=%s",
-            "created" if is_new else "deduped",
+            "created" if is_new else "reopened" if is_reopened else "deduped",
             incident.incident_id,
             fingerprint,
             incident.service,
@@ -146,6 +159,36 @@ class SQLiteIncidentStore:
         rows = self._connection.execute("SELECT incident_json FROM incidents ORDER BY fingerprint").fetchall()
         return [Incident.model_validate_json(row[0]) for row in rows]
 
+    def list_open_incidents(self) -> list[Incident]:
+        return [incident for incident in self.list_incidents() if incident.state == "open"]
+
+    def apply_verification(self, results: list[VerificationResult]) -> None:
+        recovered_ids = {result.incident_id for result in results if result.status == "recovered"}
+        if not recovered_ids:
+            return
+        recovered_at = _now()
+        rows = self._connection.execute("SELECT fingerprint, incident_json FROM incidents").fetchall()
+        with self._connection:
+            for fingerprint, payload in rows:
+                incident = Incident.model_validate_json(payload)
+                if incident.incident_id not in recovered_ids or incident.state != "open":
+                    continue
+                incident.state = "recovered"
+                incident.recovered_at = recovered_at
+                self._connection.execute(
+                    "UPDATE incidents SET incident_json = ? WHERE fingerprint = ?",
+                    (incident.model_dump_json(), fingerprint),
+                )
+                self._connection.execute(
+                    """
+                    UPDATE incident_events
+                    SET state = 'recovered', recovered_at = ?
+                    WHERE fingerprint = ? AND state = 'open'
+                    """,
+                    (recovered_at, fingerprint),
+                )
+                logger.info("AIOPS_INCIDENT_TRANSITION incident=%s state=recovered", incident.incident_id)
+
     def pending_notifications_for(self, incidents: list[Incident]) -> list[NotificationMessage]:
         incident_ids = [incident.incident_id for incident in incidents if incident.incident_id in self._last_enqueued_incident_ids]
         if not incident_ids:
@@ -155,6 +198,7 @@ class SQLiteIncidentStore:
             f"SELECT notification_json FROM notification_outbox WHERE status = 'pending' AND incident_id IN ({placeholders}) ORDER BY created_at",
             incident_ids,
         ).fetchall()
+        self._last_enqueued_incident_ids.difference_update(incident_ids)
         return [NotificationMessage.model_validate_json(row[0]) for row in rows]
 
     def due_notifications(self, limit: int = 100) -> list[NotificationMessage]:

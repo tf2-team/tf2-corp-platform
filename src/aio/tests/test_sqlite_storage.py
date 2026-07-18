@@ -5,7 +5,7 @@ from pathlib import Path
 from aiops.config import load_runtime_config
 from aiops.detectors import ThresholdDetector
 from aiops.features import FeatureBuilder
-from aiops.schemas import Observation, SignalQuality
+from aiops.schemas import Observation, SignalQuality, VerificationResult
 from aiops.storage import SQLiteIncidentStore
 
 
@@ -83,6 +83,27 @@ class SQLiteIncidentStoreTest(unittest.TestCase):
 
         self.assertEqual(retry_row, ("retry", 1, "receiver down"))
         self.assertEqual(sent_row, ("sent",))
+
+    def test_recovered_incident_reopens_and_enqueues_a_new_notification(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            store = SQLiteIncidentStore(Path(tmp) / "aiops.sqlite3", environment="tf2")
+            first = store.upsert(candidate(0.02, timestamp=100))
+            store.pending_notifications_for([first])
+            store.apply_verification(
+                [VerificationResult(incident_id=first.incident_id, status="recovered", reason="detector_no_longer_firing")]
+            )
+
+            recovered = store.list_incidents()[0]
+            reopened = store.upsert(candidate(0.03, timestamp=300))
+            notifications = store.pending_notifications_for([reopened])
+            store.close()
+
+        self.assertEqual(recovered.state, "recovered")
+        self.assertIsNotNone(recovered.recovered_at)
+        self.assertEqual(reopened.state, "open")
+        self.assertIsNone(reopened.recovered_at)
+        self.assertEqual(reopened.occurrence_count, 2)
+        self.assertEqual([message.incident_id for message in notifications], [reopened.incident_id])
 
     def test_missing_canonical_runbook_is_rejected_before_incident_commit(self):
         with tempfile.TemporaryDirectory() as tmp:

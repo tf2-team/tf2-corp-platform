@@ -289,7 +289,7 @@ class E2EPipelineRegressionTest(unittest.TestCase):
             root = Path(tmp)
             write_actions(root / "actions.json")
             write_history(root / "history.json")
-            result = run_pipeline(root, [observation("checkout_bad_ratio_24h", None, SignalQuality.STALE)])
+            result = run_pipeline(root, [observation("prometheus_collection_health", None, SignalQuality.STALE)])
 
         self.assertEqual(len(result.incidents), 1)
         self.assertEqual(result.candidates[0].detector_id, "ops02_monitoring_loss")
@@ -297,18 +297,15 @@ class E2EPipelineRegressionTest(unittest.TestCase):
         self.assertEqual(result.incidents[0].flow, "monitoring")
         self.assertEqual(result.policy_decisions, [])
 
-    def test_missing_payment_signal_opens_monitoring_incident(self):
+    def test_missing_business_signal_does_not_open_monitoring_incident(self):
         with temp_workspace() as tmp:
             root = Path(tmp)
             write_actions(root / "actions.json")
             write_history(root / "history.json")
             result = run_pipeline(root, [observation("payment_error_rate_5m", None, SignalQuality.MISSING)])
 
-        self.assertEqual(len(result.incidents), 1)
-        self.assertEqual(result.candidates[0].detector_id, "ops02_monitoring_loss")
-        self.assertEqual(result.candidates[0].signal_id, "payment_error_rate_5m")
-        self.assertEqual(result.candidates[0].reason, "signal_missing")
-        self.assertEqual(result.incidents[0].flow, "monitoring")
+        self.assertEqual(result.incidents, [])
+        self.assertEqual(result.candidates, [])
         self.assertEqual(result.policy_decisions, [])
 
     def test_pipeline_returns_rca_result_for_metric_series(self):
@@ -332,6 +329,25 @@ class E2EPipelineRegressionTest(unittest.TestCase):
         self.assertEqual(result.rca_result.anomalies[0].service, "payment")
         self.assertEqual(result.rca_result.root_causes[0].service, "payment")
         self.assertIn("latency", result.rca_result.root_causes[0].root_cause_metrics)
+        self.assertIn("adaptive_payment_latency", [candidate.detector_id for candidate in result.candidates])
+        self.assertIn("adaptive_baseline_deviation", [candidate.reason for candidate in result.candidates])
+
+    def test_confirmed_threshold_breach_seeds_rca_when_series_is_stable(self):
+        with temp_workspace() as tmp:
+            root = Path(tmp)
+            write_actions(root / "actions.json")
+            write_history(root / "history.json")
+            result = run_pipeline(
+                root,
+                [observation("checkout_bad_ratio_24h", 0.02)],
+                metric_series=[metric("checkout", "p95_latency_ms", [4.75] * 40)],
+                rca_enabled=True,
+            )
+
+        self.assertEqual(result.rca_result.root_causes[0].service, "checkout")
+        self.assertEqual(result.rca_result.anomalies[0].algorithm, "confirmed_rule_breach")
+        self.assertEqual(result.rca_result.anomalies[0].signal_id, "checkout_bad_ratio_24h")
+        self.assertNotIn("adaptive_checkout_checkout_bad_ratio_24h", [item.detector_id for item in result.candidates])
 
     def test_remediation_decision_uses_matching_history(self):
         with temp_workspace() as tmp:
