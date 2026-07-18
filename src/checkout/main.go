@@ -5,6 +5,7 @@ package main
 import (
 	"bytes"
 	"context"
+	"crypto/tls"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -30,7 +31,6 @@ import (
 	flagd "github.com/open-feature/go-sdk-contrib/providers/flagd/pkg"
 	"github.com/open-feature/go-sdk/openfeature"
 
-	"go.opentelemetry.io/contrib/bridges/otelslog"
 	"go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc"
 	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 	"go.opentelemetry.io/contrib/instrumentation/runtime"
@@ -182,7 +182,7 @@ func main() {
 	// this *must* be called after the logger provider is initialized
 	// otherwise the Sarama producer in kafka/producer.go will not be
 	// able to log properly
-	logger = otelslog.NewLogger("checkout")
+	logger = slog.New(slog.NewJSONHandler(os.Stdout, nil))
 	slog.SetDefault(logger)
 
 	err := runtime.Start(runtime.WithMinimumReadMemStatsInterval(time.Second))
@@ -251,8 +251,15 @@ func main() {
 			config := sarama.NewConfig()
 			config.Consumer.Offsets.Initial = sarama.OffsetOldest
 			config.Version = kafka.ProtocolVersion
+			if os.Getenv("KAFKA_TLS") == "true" {
+				config.Net.TLS.Enable = true
+				config.Net.TLS.Config = &tls.Config{
+					InsecureSkipVerify: true,
+				}
+			}
 
-			consumerGroup, err := sarama.NewConsumerGroup([]string{svc.kafkaBrokerSvcAddr}, "checkout-group", config)
+			brokers := strings.Split(svc.kafkaBrokerSvcAddr, ",")
+			consumerGroup, err := sarama.NewConsumerGroup(brokers, "checkout-group", config)
 			if err != nil {
 				logger.Error(fmt.Sprintf("Failed to create consumer group: %+v", err))
 				return
@@ -402,7 +409,10 @@ func (cs *checkout) PlaceOrder(ctx context.Context, req *pb.PlaceOrderRequest) (
 	shippingTrackingAttribute := attribute.String("app.shipping.tracking.id", shippingTrackingID)
 	span.AddEvent("hold", trace.WithAttributes(shippingTrackingAttribute))
 
-	_ = cs.emptyUserCart(ctx, req.UserId)
+	// Do not swallow EmptyCart errors (e.g. cartFailure / local-cartFailure inject).
+	if err := cs.emptyUserCart(ctx, req.UserId); err != nil {
+		return nil, status.Errorf(codes.Internal, "failed to empty user cart: %+v", err)
+	}
 
 	orderResult := &pb.OrderResult{
 		OrderId:            orderID.String(),
@@ -627,10 +637,84 @@ func (cs *checkout) getUserCart(ctx context.Context, userID string) ([]*pb.CartI
 }
 
 func (cs *checkout) emptyUserCart(ctx context.Context, userID string) error {
-	if _, err := cs.cartSvcClient.EmptyCart(ctx, &pb.EmptyCartRequest{UserId: userID}); err != nil {
-		return fmt.Errorf("failed to empty user cart during checkout: %+v", err)
+	var lastErr error
+	for attempt := 1; attempt <= emptyCartMaxAttempts; attempt++ {
+		if err := ctx.Err(); err != nil {
+			return fmt.Errorf("failed to empty user cart during checkout: %+v", err)
+		}
+
+		if _, err := cs.cartSvcClient.EmptyCart(ctx, &pb.EmptyCartRequest{UserId: userID}); err == nil {
+			recordCartCleanupSucceeded(ctx, userID, attempt)
+			return nil
+		} else {
+			lastErr = err
+			if attempt == emptyCartMaxAttempts {
+				break
+			}
+
+			backoff := emptyCartBaseBackoff * time.Duration(1<<(attempt-1))
+			logger.LogAttrs(ctx, slog.LevelWarn, "cart cleanup failed; retrying",
+				slog.String("user_id", userID),
+				slog.Int("attempt", attempt),
+				slog.Int("max_attempts", emptyCartMaxAttempts),
+				slog.String("backoff", backoff.String()),
+				slog.String("error", err.Error()),
+			)
+			timer := time.NewTimer(backoff)
+			select {
+			case <-ctx.Done():
+				timer.Stop()
+				return fmt.Errorf("failed to empty user cart during checkout: %+v", ctx.Err())
+			case <-timer.C:
+			}
+		}
 	}
-	return nil
+
+	recordCartCleanupDeferred(ctx, userID, lastErr)
+	return fmt.Errorf("failed to empty user cart during checkout: %+v", lastErr)
+}
+
+const (
+	emptyCartMaxAttempts = 3
+	emptyCartBaseBackoff = 25 * time.Millisecond
+)
+
+func recordCartCleanupSucceeded(ctx context.Context, userID string, attempt int) {
+	span := trace.SpanFromContext(ctx)
+	span.SetAttributes(
+		attribute.String("app.cart.cleanup.status", "succeeded"),
+		attribute.Int("app.cart.cleanup.attempts", attempt),
+	)
+	if attempt > 1 {
+		logger.LogAttrs(ctx, slog.LevelInfo, "cart cleanup succeeded after retry",
+			slog.String("user_id", userID),
+			slog.Int("attempt", attempt),
+		)
+	}
+}
+
+func recordCartCleanupDeferred(ctx context.Context, userID string, err error) {
+	errText := "<nil>"
+	if err != nil {
+		errText = err.Error()
+	}
+
+	span := trace.SpanFromContext(ctx)
+	span.SetAttributes(
+		attribute.String("app.cart.cleanup.status", "deferred"),
+		attribute.Int("app.cart.cleanup.attempts", emptyCartMaxAttempts),
+	)
+	span.AddEvent("cart cleanup deferred",
+		trace.WithAttributes(
+			attribute.String("app.user.id", userID),
+			attribute.String("exception.message", errText),
+		),
+	)
+	logger.LogAttrs(ctx, slog.LevelWarn, "cart cleanup deferred after retries",
+		slog.String("user_id", userID),
+		slog.Int("attempts", emptyCartMaxAttempts),
+		slog.String("error", errText),
+	)
 }
 
 func (cs *checkout) prepOrderItems(ctx context.Context, items []*pb.CartItem, userCurrency string) ([]*pb.OrderItem, error) {
@@ -663,10 +747,8 @@ func (cs *checkout) convertCurrency(ctx context.Context, from *pb.Money, toCurre
 }
 
 const (
-	paymentChargeMaxAttempts     = 8
-	paymentChargeBaseBackoff     = 25 * time.Millisecond
-	paymentFailureDegradeAfter   = 2
-	paymentFailureIncidentMarker = "app.loyalty.level=gold"
+	paymentChargeMaxAttempts = 8
+	paymentChargeBaseBackoff = 25 * time.Millisecond
 )
 
 func (cs *checkout) chargeCard(ctx context.Context, amount *pb.Money, paymentInfo *pb.CreditCardInfo) (string, error) {
@@ -678,7 +760,6 @@ func (cs *checkout) chargeCard(ctx context.Context, amount *pb.Money, paymentInf
 	}
 
 	var lastErr error
-	paymentFailureHits := 0
 	for attempt := 1; attempt <= paymentChargeMaxAttempts; attempt++ {
 		if err := ctx.Err(); err != nil {
 			return "", fmt.Errorf("could not charge the card: %+v", err)
@@ -699,15 +780,8 @@ func (cs *checkout) chargeCard(ctx context.Context, amount *pb.Money, paymentInf
 		}
 
 		lastErr = err
-		if isPaymentFailureIncidentError(err) {
-			paymentFailureHits++
-			// Containment for 50–100% paymentFailure: keep calling payment (flag
-			// still fires) but do not fail the whole checkout after N hits.
-			if paymentFailureHits >= paymentFailureDegradeAfter {
-				return degradedPaymentTransactionID(ctx, attempt, err), nil
-			}
-		}
-
+		// No deferred-payment / soft-success path: flag inject (paymentFailure /
+		// local-paymentFailure) and other charge errors fail PlaceOrder.
 		if !isRetryablePaymentChargeError(err) || attempt == paymentChargeMaxAttempts {
 			break
 		}
@@ -729,39 +803,7 @@ func (cs *checkout) chargeCard(ctx context.Context, amount *pb.Money, paymentInf
 		}
 	}
 
-	if isPaymentFailureIncidentError(lastErr) {
-		return degradedPaymentTransactionID(ctx, paymentChargeMaxAttempts, lastErr), nil
-	}
-
 	return "", fmt.Errorf("could not charge the card after %d attempts: %+v", paymentChargeMaxAttempts, lastErr)
-}
-
-func degradedPaymentTransactionID(ctx context.Context, attempt int, err error) string {
-	txID := fmt.Sprintf("deferred-payment-%s", uuid.NewString())
-	logger.LogAttrs(ctx, slog.LevelWarn, "paymentFailure containment: deferred charge",
-		slog.Int("attempt", attempt),
-		slog.String("transaction_id", txID),
-		slog.String("error", err.Error()),
-	)
-	if span := trace.SpanFromContext(ctx); span.IsRecording() {
-		span.AddEvent("payment.degraded",
-			trace.WithAttributes(
-				attribute.String("app.payment.transaction.id", txID),
-				attribute.Bool("app.payment.degraded", true),
-				attribute.String("app.payment.degrade.reason", "paymentFailure"),
-			),
-		)
-	}
-	return txID
-}
-
-func isPaymentFailureIncidentError(err error) bool {
-	if err == nil {
-		return false
-	}
-	msg := err.Error()
-	return strings.Contains(msg, paymentFailureIncidentMarker) ||
-		strings.Contains(msg, "Payment request failed. Invalid token")
 }
 
 func isRetryablePaymentChargeError(err error) bool {
@@ -769,12 +811,16 @@ func isRetryablePaymentChargeError(err error) bool {
 		return false
 	}
 	msg := err.Error()
-	permanent := []string{
+	// Permanent validation errors and intentional paymentFailure inject: do not retry.
+	// paymentFailure / local-paymentFailure throw Invalid token + loyalty.level=gold.
+	nonRetryable := []string{
 		"Credit card info is invalid",
 		"credit cards. Only VISA or MasterCard",
 		"The credit card is expired",
+		"app.loyalty.level=gold",
+		"Payment request failed. Invalid token",
 	}
-	for _, p := range permanent {
+	for _, p := range nonRetryable {
 		if strings.Contains(msg, p) {
 			return false
 		}
@@ -847,7 +893,8 @@ func (cs *checkout) ensureKafkaProducer() error {
 	if cs.kafkaBrokerSvcAddr == "" {
 		return fmt.Errorf("Kafka broker address is not configured")
 	}
-	producer, err := kafka.CreateKafkaProducer([]string{cs.kafkaBrokerSvcAddr}, logger)
+	brokers := strings.Split(cs.kafkaBrokerSvcAddr, ",")
+	producer, err := kafka.CreateKafkaProducer(brokers, logger)
 	if err != nil {
 		return fmt.Errorf("create Kafka producer: %w", err)
 	}
@@ -1140,4 +1187,4 @@ func parseOrderCancelledBytes(data []byte) (string, string, error) {
 	return orderID, reason, nil
 }
 
-// Change trail: @hungxqt - 2026-07-15 - Dual-read local- flag twins (OR bool / max int) with BTC keys.
+// Change trail: @hungxqt - 2026-07-17 - Remove deferred-payment containment; fail PlaceOrder on cart cleanup errors.

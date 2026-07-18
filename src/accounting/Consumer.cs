@@ -301,6 +301,11 @@ internal class Consumer : IDisposable
             EnableAutoCommit = true
         };
 
+        if (Environment.GetEnvironmentVariable("KAFKA_TLS") == "true")
+        {
+            conf.SecurityProtocol = SecurityProtocol.Ssl;
+        }
+
         return new ConsumerBuilder<string, byte[]>(conf)
             .Build();
     }

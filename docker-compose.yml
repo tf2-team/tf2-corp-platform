@@ -499,7 +499,7 @@ services:
     deploy:
       resources:
         limits:
-          memory: 100M
+          memory: 2G
     restart: unless-stopped
     ports:
       - "${PRODUCT_REVIEWS_PORT}"
@@ -510,8 +510,10 @@ services:
       - OTEL_EXPORTER_OTLP_METRICS_TEMPORALITY_PREFERENCE
       - OTEL_RESOURCE_ATTRIBUTES
       - OTEL_SERVICE_NAME=product-reviews
-      - OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT=false
+      - OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT=true
       - PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION=python
+      - HF_HOME=/home/appuser/.cache/huggingface
+      - AI_GUARDRAIL_REQUIRE_MODEL=${AI_GUARDRAIL_REQUIRE_MODEL:-false}
       - DB_CONNECTION_STRING=host=${POSTGRES_HOST} user=otelu password=otelp dbname=${POSTGRES_DB}
       - LLM_BASE_URL
       - OPENAI_API_KEY
@@ -530,6 +532,8 @@ services:
         condition: service_started
       otel-collector:
         condition: service_started
+    volumes:
+      - product-reviews-hf-cache:/home/appuser/.cache/huggingface
     logging: *logging
 
   # Quote service
@@ -948,3 +952,4 @@ volumes:
   valkey-cart-data:
   postgresql-data:
   kafka-data:
+  product-reviews-hf-cache:
