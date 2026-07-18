@@ -1,1 +1,0 @@
-"""Minimal AIOps core package."""
