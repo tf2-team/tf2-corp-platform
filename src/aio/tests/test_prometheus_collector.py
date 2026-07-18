@@ -40,7 +40,7 @@ class PrometheusCollectorTest(unittest.TestCase):
         self.assertTrue(signal_query_ids.issubset(config.prometheus_queries))
         self.assertEqual(client.queries, [config.prometheus_queries[signal.query_id] for signal in prometheus_signals])
         self.assertEqual(services_with_metrics, set(config.prometheus_services))
-        self.assertEqual(len(observations), len(signal_query_ids))
+        self.assertEqual(len(observations), len(prometheus_signals))
         by_signal = {observation.signal_id: observation for observation in observations}
         self.assertEqual(by_signal["checkout_bad_ratio_24h"].value, 0.2)
         self.assertEqual(by_signal["checkout_bad_ratio_24h"].labels["query_id"], "checkout.bad_ratio.24h")

@@ -21,7 +21,7 @@ class RuntimeConfigTest(unittest.TestCase):
         signals = {signal.id: signal for signal in config.signals}
         self.assertEqual(signals["checkout_bad_ratio_24h"].feature_role, "official_slo")
         self.assertEqual(signals["prometheus_collection_health"].feature_role, "diagnostic")
-        self.assertEqual(len(detectors), 11)
+        self.assertEqual(len(detectors), 21)
         self.assertEqual(
             [detector.detector_id for detector in detectors],
             [
@@ -32,8 +32,18 @@ class RuntimeConfigTest(unittest.TestCase):
                 "ops06_product_catalog_cpu",
                 "auto_checkout_error_rate",
                 "auto_payment_error_rate",
+                "auto_frontend_proxy_error_rate",
+                "auto_frontend_error_rate",
                 "auto_product_catalog_error_rate",
+                "auto_product_reviews_error_rate",
+                "auto_recommendation_error_rate",
                 "auto_cart_error_rate",
+                "auto_ad_error_rate",
+                "auto_currency_error_rate",
+                "auto_shipping_error_rate",
+                "auto_email_error_rate",
+                "auto_quote_error_rate",
+                "auto_fraud_detection_error_rate",
                 "ops07_checkout_fast_burn",
                 "ops08_checkout_slow_burn",
             ],
@@ -58,10 +68,10 @@ class RuntimeConfigTest(unittest.TestCase):
         self.assertIn("payment.error_rate_5m", config.prometheus_queries)
         self.assertIn("payment.request_rate_5m", config.prometheus_queries)
         self.assertIn("payment.cpu_millicores", config.prometheus_queries)
-        self.assertNotIn("payment.memory_usage_bytes", config.prometheus_queries)
-        self.assertNotIn("payment.disk_io_bytes_per_second", config.prometheus_queries)
-        self.assertNotIn("payment.socket_io_bytes_per_second", config.prometheus_queries)
-        self.assertNotIn("payment.workload_ready_pods", config.prometheus_queries)
+        self.assertIn("payment.memory_usage_bytes", config.prometheus_queries)
+        self.assertIn("payment.disk_io_bytes_per_second", config.prometheus_queries)
+        self.assertIn("payment.socket_io_bytes_per_second", config.prometheus_queries)
+        self.assertIn("payment.workload_ready_pods", config.prometheus_queries)
         self.assertIn('service_name="payment"', config.prometheus_queries["payment.error_rate_5m"])
         self.assertIn('service_name="payment"', config.prometheus_queries["payment.p95_latency_5m"])
         self.assertIn("traces_span_metrics_duration_milliseconds_bucket", config.prometheus_queries["payment.p95_latency_5m"])
@@ -72,15 +82,34 @@ class RuntimeConfigTest(unittest.TestCase):
         self.assertNotIn("traces_span_metrics_calls_total", config.prometheus_queries["payment.p95_latency_5m"])
         self.assertIn("traces_span_metrics_calls_total", config.prometheus_queries["cart.error_rate_5m"])
         self.assertIn("* 1000", config.prometheus_queries["product-catalog.cpu_millicores"])
+        self.assertIn('container=~"payment|.*payment.*"', config.prometheus_queries["payment.cpu_millicores"])
+        self.assertIn('container_name=~"payment|.*payment.*"', config.prometheus_queries["payment.memory_usage_bytes"])
+        self.assertIn('pod=~"payment|.*payment.*"', config.prometheus_queries["payment.socket_io_bytes_per_second"])
         self.assertTrue(
             {
                 "payment_p95_latency_5m",
                 "payment_error_rate_5m",
                 "payment_request_rate_5m",
                 "payment_cpu_millicores",
+                "payment_memory_usage_bytes",
+                "payment_disk_io_bytes_per_second",
+                "payment_socket_io_bytes_per_second",
+                "payment_workload_ready_pods",
             }.issubset({signal.id for signal in config.signals})
         )
         self.assertEqual([signal.id for signal in config.signals].count("product_catalog_cpu_millicores"), 1)
+        self.assertEqual(len([signal for signal in config.signals if signal.source == "prometheus" and signal.feature_role == "anomaly_input"]), 114)
+
+    def test_topology_matches_cdo_runtime_dependencies(self):
+        config = load_runtime_config(Path("config/runtime.json"))
+        services = {service.name: set(service.dependencies) for service in config.topology.services}
+
+        self.assertTrue({"cart", "currency", "product-catalog", "shipping", "payment", "email", "flagd", "kafka"}.issubset(services["checkout"]))
+        self.assertTrue({"product-catalog", "postgresql", "llm", "flagd"}.issubset(services["product-reviews"]))
+        self.assertTrue({"product-reviews", "checkout", "cart", "currency", "shipping", "ad"}.issubset(services["frontend"]))
+        self.assertTrue({"image-provider", "flagd", "flagd-ui", "jaeger"}.issubset(services["frontend-proxy"]))
+        self.assertEqual(services["accounting"], {"kafka", "postgresql"})
+        self.assertEqual(services["fraud-detection"], {"kafka", "flagd"})
 
     def test_no_data_detector_uses_dedicated_collection_health_signal(self):
         config = load_runtime_config(Path("config/runtime.json"))
@@ -102,8 +131,8 @@ class RuntimeConfigTest(unittest.TestCase):
             [signal for signal in config.signals if signal.source == "prometheus" and signal.feature_role == "anomaly_input"]
         )
 
-        self.assertEqual(instant_queries, 21)
-        self.assertEqual(range_queries, 16)
+        self.assertEqual(instant_queries, 119)
+        self.assertEqual(range_queries, 114)
 
     def test_service_promql_templates_are_loaded_from_runtime_config(self):
         raw = json.loads(Path("config/runtime.json").read_text(encoding="utf-8"))

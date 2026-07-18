@@ -15,7 +15,9 @@
           "product-catalog",
           "shipping",
           "payment",
-          "email"
+          "email",
+          "flagd",
+          "kafka"
         ]
       },
       {
@@ -34,6 +36,9 @@
         "flow": "edge",
         "dependencies": [
           "frontend",
+          "image-provider",
+          "flagd",
+          "flagd-ui",
           "jaeger"
         ]
       },
@@ -49,6 +54,8 @@
           "recommendation",
           "checkout",
           "cart",
+          "currency",
+          "shipping",
           "ad"
         ]
       },
@@ -69,6 +76,9 @@
         "owner": "catalog-oncall",
         "flow": "catalog",
         "dependencies": [
+          "product-catalog",
+          "postgresql",
+          "llm",
           "flagd"
         ]
       },
@@ -139,6 +149,17 @@
         "dependencies": []
       },
       {
+        "name": "accounting",
+        "namespace": "techx-corp-prod",
+        "kind": "Deployment",
+        "owner": "checkout-oncall",
+        "flow": "checkout",
+        "dependencies": [
+          "kafka",
+          "postgresql"
+        ]
+      },
+      {
         "name": "flagd",
         "namespace": "techx-corp-prod",
         "kind": "Deployment",
@@ -153,6 +174,7 @@
         "owner": "checkout-oncall",
         "flow": "checkout",
         "dependencies": [
+          "kafka",
           "flagd"
         ]
       },
@@ -190,6 +212,42 @@
         "owner": "checkout-oncall",
         "flow": "checkout",
         "dependencies": []
+      },
+      {
+        "name": "kafka",
+        "namespace": "techx-corp-prod",
+        "kind": "Deployment",
+        "owner": "platform-oncall",
+        "flow": "platform",
+        "dependencies": []
+      },
+      {
+        "name": "llm",
+        "namespace": "techx-corp-prod",
+        "kind": "Deployment",
+        "owner": "platform-oncall",
+        "flow": "platform",
+        "dependencies": [
+          "flagd"
+        ]
+      },
+      {
+        "name": "image-provider",
+        "namespace": "techx-corp-prod",
+        "kind": "Deployment",
+        "owner": "platform-oncall",
+        "flow": "platform",
+        "dependencies": []
+      },
+      {
+        "name": "flagd-ui",
+        "namespace": "techx-corp-prod",
+        "kind": "Deployment",
+        "owner": "platform-oncall",
+        "flow": "platform",
+        "dependencies": [
+          "flagd"
+        ]
       }
     ]
   },
@@ -205,8 +263,18 @@
   "prometheus_services": [
     "checkout",
     "payment",
+    "frontend-proxy",
+    "frontend",
+    "product-catalog",
+    "product-reviews",
+    "recommendation",
+    "ad",
+    "currency",
     "cart",
-    "product-catalog"
+    "shipping",
+    "email",
+    "quote",
+    "fraud-detection"
   ],
   "prometheus_metric_templates": {
     "p95_latency_5m": {
@@ -231,7 +299,35 @@
       "required_labels": []
     },
     "cpu_millicores": {
-      "template": "(sum(rate(container_cpu_usage_seconds_total{container=\"$service\"}[5m])) * 1000) or (sum(rate(container_cpu_usage_total{container_name=~\".*$service.*\"}[5m])) * 1000) or (sum(k8s_pod_cpu_usage{k8s_deployment_name=\"$service\"}) * 1000)",
+      "template": "(sum(rate(container_cpu_usage_seconds_total{container=~\"$service|.*$service.*\"}[5m])) * 1000) or (sum(rate(container_cpu_usage_seconds_total{container_name=~\"$service|.*$service.*\"}[5m])) * 1000) or (sum(rate(container_cpu_usage_total{container_name=~\"$service|.*$service.*\"}[5m])) * 1000) or (sum(k8s_pod_cpu_usage{k8s_deployment_name=\"$service\"}) * 1000)",
+      "unit": "count",
+      "window": "5m",
+      "feature_role": "anomaly_input",
+      "required_labels": []
+    },
+    "memory_usage_bytes": {
+      "template": "sum(container_memory_working_set_bytes{container=~\"$service|.*$service.*\"}) or sum(container_memory_working_set_bytes{container_name=~\"$service|.*$service.*\"}) or sum(container_memory_usage_bytes{container_name=~\"$service|.*$service.*\"}) or sum(k8s_pod_memory_usage{k8s_deployment_name=\"$service\"})",
+      "unit": "bytes",
+      "window": "5m",
+      "feature_role": "anomaly_input",
+      "required_labels": []
+    },
+    "disk_io_bytes_per_second": {
+      "template": "sum(rate(container_fs_reads_bytes_total{container=~\"$service|.*$service.*\"}[5m]) + rate(container_fs_writes_bytes_total{container=~\"$service|.*$service.*\"}[5m])) or sum(rate(container_fs_reads_bytes_total{container_name=~\"$service|.*$service.*\"}[5m]) + rate(container_fs_writes_bytes_total{container_name=~\"$service|.*$service.*\"}[5m])) or sum(rate(container_blkio_io_service_bytes_recursive{container_name=~\"$service|.*$service.*\"}[5m]))",
+      "unit": "bytes",
+      "window": "5m",
+      "feature_role": "anomaly_input",
+      "required_labels": []
+    },
+    "socket_io_bytes_per_second": {
+      "template": "sum(rate(container_network_receive_bytes_total{pod=~\"$service|.*$service.*\"}[5m]) + rate(container_network_transmit_bytes_total{pod=~\"$service|.*$service.*\"}[5m])) or sum(rate(container_network_receive_bytes_total{container_name=~\"$service|.*$service.*\"}[5m]) + rate(container_network_transmit_bytes_total{container_name=~\"$service|.*$service.*\"}[5m]))",
+      "unit": "bytes",
+      "window": "5m",
+      "feature_role": "anomaly_input",
+      "required_labels": []
+    },
+    "workload_ready_pods": {
+      "template": "sum(kube_pod_status_ready{condition=\"true\",pod=~\"$service|.*$service.*\"}) or sum(k8s_pod_ready{k8s_deployment_name=\"$service\"}) or sum(up{job=\"$service\"})",
       "unit": "count",
       "window": "5m",
       "feature_role": "anomaly_input",
@@ -242,7 +338,11 @@
     "p95_latency_5m",
     "error_rate_5m",
     "request_rate_5m",
-    "cpu_millicores"
+    "cpu_millicores",
+    "memory_usage_bytes",
+    "disk_io_bytes_per_second",
+    "socket_io_bytes_per_second",
+    "workload_ready_pods"
   ],
   "signals": [
     {
@@ -285,6 +385,20 @@
       ]
     },
     {
+      "id": "checkout_payment_dependency_error_rate_5m",
+      "source": "prometheus",
+      "query_id": "checkout.payment_error_rate.5m",
+      "unit": "ratio",
+      "window": "5m",
+      "flow": "checkout",
+      "service": "checkout",
+      "feature_role": "anomaly_input",
+      "required_labels": [
+        "service",
+        "dependency"
+      ]
+    },
+    {
       "id": "checkout_burn_rate_fast",
       "source": "prometheus",
       "query_id": "checkout.burn_rate.fast",
@@ -293,6 +407,20 @@
       "flow": "checkout",
       "service": "checkout",
       "feature_role": "official_slo",
+      "required_labels": [],
+      "labels": {
+        "impact": "error_budget_burn"
+      }
+    },
+    {
+      "id": "checkout_fast_burn_rate_anomaly",
+      "source": "prometheus",
+      "query_id": "checkout.burn_rate.fast",
+      "unit": "count",
+      "window": "5m/1h",
+      "flow": "checkout",
+      "service": "checkout",
+      "feature_role": "anomaly_input",
       "required_labels": [],
       "labels": {
         "impact": "error_budget_burn"
@@ -420,12 +548,52 @@
       "runbook_id": "RB-SERVICE-ERROR-RATE"
     },
     {
+      "id": "auto_frontend_proxy_error_rate",
+      "type": "threshold",
+      "enabled": true,
+      "signal_id": "frontend_proxy_error_rate_5m",
+      "flow": "edge",
+      "service": "frontend-proxy",
+      "severity": "SEV2",
+      "runbook_id": "RB-SERVICE-ERROR-RATE"
+    },
+    {
+      "id": "auto_frontend_error_rate",
+      "type": "threshold",
+      "enabled": true,
+      "signal_id": "frontend_error_rate_5m",
+      "flow": "web",
+      "service": "frontend",
+      "severity": "SEV2",
+      "runbook_id": "RB-SERVICE-ERROR-RATE"
+    },
+    {
       "id": "auto_product_catalog_error_rate",
       "type": "threshold",
       "enabled": true,
       "signal_id": "product_catalog_error_rate_5m",
       "flow": "catalog",
       "service": "product-catalog",
+      "severity": "SEV2",
+      "runbook_id": "RB-SERVICE-ERROR-RATE"
+    },
+    {
+      "id": "auto_product_reviews_error_rate",
+      "type": "threshold",
+      "enabled": true,
+      "signal_id": "product_reviews_error_rate_5m",
+      "flow": "catalog",
+      "service": "product-reviews",
+      "severity": "SEV2",
+      "runbook_id": "RB-SERVICE-ERROR-RATE"
+    },
+    {
+      "id": "auto_recommendation_error_rate",
+      "type": "threshold",
+      "enabled": true,
+      "signal_id": "recommendation_error_rate_5m",
+      "flow": "recommendation",
+      "service": "recommendation",
       "severity": "SEV2",
       "runbook_id": "RB-SERVICE-ERROR-RATE"
     },
@@ -438,6 +606,66 @@
       "service": "cart",
       "severity": "SEV2",
       "runbook_id": "RB-CART-ERROR-RATE"
+    },
+    {
+      "id": "auto_ad_error_rate",
+      "type": "threshold",
+      "enabled": true,
+      "signal_id": "ad_error_rate_5m",
+      "flow": "platform",
+      "service": "ad",
+      "severity": "SEV2",
+      "runbook_id": "RB-SERVICE-ERROR-RATE"
+    },
+    {
+      "id": "auto_currency_error_rate",
+      "type": "threshold",
+      "enabled": true,
+      "signal_id": "currency_error_rate_5m",
+      "flow": "checkout",
+      "service": "currency",
+      "severity": "SEV2",
+      "runbook_id": "RB-SERVICE-ERROR-RATE"
+    },
+    {
+      "id": "auto_shipping_error_rate",
+      "type": "threshold",
+      "enabled": true,
+      "signal_id": "shipping_error_rate_5m",
+      "flow": "checkout",
+      "service": "shipping",
+      "severity": "SEV2",
+      "runbook_id": "RB-SERVICE-ERROR-RATE"
+    },
+    {
+      "id": "auto_email_error_rate",
+      "type": "threshold",
+      "enabled": true,
+      "signal_id": "email_error_rate_5m",
+      "flow": "checkout",
+      "service": "email",
+      "severity": "SEV2",
+      "runbook_id": "RB-SERVICE-ERROR-RATE"
+    },
+    {
+      "id": "auto_quote_error_rate",
+      "type": "threshold",
+      "enabled": true,
+      "signal_id": "quote_error_rate_5m",
+      "flow": "checkout",
+      "service": "quote",
+      "severity": "SEV2",
+      "runbook_id": "RB-SERVICE-ERROR-RATE"
+    },
+    {
+      "id": "auto_fraud_detection_error_rate",
+      "type": "threshold",
+      "enabled": true,
+      "signal_id": "fraud_detection_error_rate_5m",
+      "flow": "checkout",
+      "service": "fraud-detection",
+      "severity": "SEV2",
+      "runbook_id": "RB-SERVICE-ERROR-RATE"
     },
     {
       "id": "ops07_checkout_fast_burn",
