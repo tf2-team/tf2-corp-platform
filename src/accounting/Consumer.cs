@@ -317,6 +317,11 @@ internal class Consumer : IDisposable
             conf.SaslMechanism = SaslMechanism.ScramSha512;
             conf.SaslUsername = saslUsername;
             conf.SaslPassword = saslPassword;
+            // Allow librdkafka to discover system CA bundle in the container image.
+            // MSK brokers present certs signed by Amazon Root CA which is trusted by
+            // the .NET base image but librdkafka won't find it automatically on Linux
+            // unless SslCaLocation is set to "probe".
+            conf.SslCaLocation = "probe";
         }
 
         return new ConsumerBuilder<string, byte[]>(conf)
