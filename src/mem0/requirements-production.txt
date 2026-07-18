@@ -14,7 +14,8 @@ openai==1.90.0
 passlib==1.7.4
 posthog==7.14.0
 protobuf==5.29.6
-psycopg==3.2.8
+# [binary] ships psycopg_binary + bundled libpq; required on python:slim (no system libpq).
+psycopg[binary]==3.2.8
 psycopg-pool==3.2.6
 pydantic==2.10.4
 python-dotenv==1.2.2
@@ -24,3 +25,4 @@ qdrant-client==1.13.2
 slowapi==0.1.9
 sqlalchemy==2.0.38
 uvicorn==0.34.0
+# Change trail: @hungxqt - 2026-07-18 - Pin psycopg[binary] so slim image has libpq without apt.
