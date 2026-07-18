@@ -174,6 +174,37 @@ class IntegrationClientTest(unittest.TestCase):
 
         self.assertEqual(response, {"status_code": 204})
 
+    def test_notification_client_grafana_provider_uses_json_webhook(self):
+        seen: list[httpx.Request] = []
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            seen.append(request)
+            return httpx.Response(202, json={"routed": True})
+
+        cfg = fixed_settings(
+            notification_provider="grafana",
+            notification_webhook_url="https://grafana.example/api/plugins/grafana-oncall-app/resources/integrations/v1/example/",
+            notification_token="grafana-token",
+            notification_account="tf2",
+        )
+        message = NotificationMessage(
+            incident_id="inc-grafana-1",
+            severity="SEV1",
+            state="open",
+            title="checkout",
+            summary="summary",
+            flow="checkout",
+            service="checkout",
+            likely_dependency="unknown",
+            runbook_id="RB-CHECKOUT-SLO",
+        )
+
+        response = NotificationClient(cfg, transport=httpx.MockTransport(handler)).send(message)
+
+        self.assertEqual(response, {"routed": True})
+        self.assertEqual(seen[0].headers["authorization"], "Bearer grafana-token")
+        self.assertEqual(json.loads(seen[0].content)["incident_id"], "inc-grafana-1")
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -83,6 +83,18 @@ class RecoveredDependencyDetector(Detector):
         ]
 
 
+class FakeNotificationSender:
+    def __init__(self, fail: bool = False):
+        self.fail = fail
+        self.sent = []
+
+    def send(self, message):
+        if self.fail:
+            raise RuntimeError("grafana webhook down")
+        self.sent.append(message)
+        return {"accepted": True}
+
+
 class RuntimePipelineTest(unittest.TestCase):
     def test_pipeline_runs_detect_to_incident_notify_and_dry_run(self):
         settings = Settings()
@@ -144,6 +156,102 @@ class RuntimePipelineTest(unittest.TestCase):
         self.assertEqual(result.notifications[0].runbook_id, "RB-CHECKOUT-DEPENDENCY")
         self.assertEqual(result.policy_decisions[0].result, "dry-run-recorded")
         self.assertEqual(result.verification_results[0].status, "not_recovered")
+
+    def test_pipeline_flushes_notification_outbox_to_sender(self):
+        settings = Settings()
+        sender = FakeNotificationSender()
+        with TemporaryDirectory() as tmp:
+            store = SQLiteIncidentStore(Path(tmp) / "aiops.sqlite3", environment=settings.environment)
+            pipeline = AiopsPipeline(
+                collector=StaticCollector(
+                    [
+                        Observation(
+                            signal_id="checkout_bad_ratio_24h",
+                            value=0.02,
+                            unit="ratio",
+                            window="24h",
+                            quality=SignalQuality.VERIFIED,
+                        )
+                    ]
+                ),
+                detectors=[
+                    ThresholdDetector(
+                        detector_id="ops01_checkout_slo",
+                        signal_id="checkout_bad_ratio_24h",
+                        threshold=0.01,
+                        flow="checkout",
+                        service="checkout",
+                        severity="SEV1",
+                        runbook_id="RB-CHECKOUT-SLO",
+                    )
+                ],
+                store=store,
+                policy=policy(settings),
+                notification_sender=sender,
+                **runtime_kwargs(settings),
+            )
+
+            result = pipeline.run_once()
+            outbox_row = store._connection.execute(
+                "SELECT status, attempt_count FROM notification_outbox WHERE incident_id = ?",
+                (result.incidents[0].incident_id,),
+            ).fetchone()
+            attempt_row = store._connection.execute(
+                "SELECT status, attempt_number FROM notification_attempts WHERE incident_id = ?",
+                (result.incidents[0].incident_id,),
+            ).fetchone()
+            store.close()
+
+        self.assertEqual([message.incident_id for message in sender.sent], [result.incidents[0].incident_id])
+        self.assertEqual(outbox_row, ("sent", 1))
+        self.assertEqual(attempt_row, ("sent", 1))
+
+    def test_pipeline_marks_notification_failure_for_retry(self):
+        settings = Settings()
+        with TemporaryDirectory() as tmp:
+            store = SQLiteIncidentStore(Path(tmp) / "aiops.sqlite3", environment=settings.environment)
+            pipeline = AiopsPipeline(
+                collector=StaticCollector(
+                    [
+                        Observation(
+                            signal_id="checkout_bad_ratio_24h",
+                            value=0.02,
+                            unit="ratio",
+                            window="24h",
+                            quality=SignalQuality.VERIFIED,
+                        )
+                    ]
+                ),
+                detectors=[
+                    ThresholdDetector(
+                        detector_id="ops01_checkout_slo",
+                        signal_id="checkout_bad_ratio_24h",
+                        threshold=0.01,
+                        flow="checkout",
+                        service="checkout",
+                        severity="SEV1",
+                        runbook_id="RB-CHECKOUT-SLO",
+                    )
+                ],
+                store=store,
+                policy=policy(settings),
+                notification_sender=FakeNotificationSender(fail=True),
+                **runtime_kwargs(settings),
+            )
+
+            result = pipeline.run_once()
+            outbox_row = store._connection.execute(
+                "SELECT status, attempt_count, last_error FROM notification_outbox WHERE incident_id = ?",
+                (result.incidents[0].incident_id,),
+            ).fetchone()
+            attempt_row = store._connection.execute(
+                "SELECT status, attempt_number, error FROM notification_attempts WHERE incident_id = ?",
+                (result.incidents[0].incident_id,),
+            ).fetchone()
+            store.close()
+
+        self.assertEqual(outbox_row, ("retry", 1, "grafana webhook down"))
+        self.assertEqual(attempt_row, ("failed", 1, "grafana webhook down"))
 
     def test_pipeline_accepts_current_cdo_signal_shape_before_detection(self):
         settings = Settings()

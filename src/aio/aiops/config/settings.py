@@ -87,7 +87,7 @@ class Settings(BaseSettings):
     notification_webhook_url: str
     notification_token: str
     notification_account: str
-    notification_provider: Literal["auto", "generic", "discord"] = "auto"
+    notification_provider: Literal["auto", "generic", "grafana", "discord"] = "auto"
 
     aie_status_url: str
     aie_token: str

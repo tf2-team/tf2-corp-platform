@@ -55,6 +55,18 @@ class SQLiteIncidentStore:
             )
             """
         )
+        self._connection.execute(
+            """
+            CREATE TABLE IF NOT EXISTS notification_attempts (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                incident_id TEXT NOT NULL,
+                status TEXT NOT NULL,
+                attempt_number INTEGER NOT NULL,
+                error TEXT,
+                created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+            )
+            """
+        )
         self._ensure_event_columns()
 
     def upsert(self, candidate: CandidateEvent) -> Incident:
@@ -112,7 +124,7 @@ class SQLiteIncidentStore:
                     )
                     VALUES (?, ?, ?, 'pending', ?)
                     """,
-                    (incident.incident_id, fingerprint, notification.model_dump_json(), seen_at),
+                    (incident.incident_id, fingerprint, notification.model_dump_json(), _now()),
                 )
                 self._last_enqueued_incident_ids.add(incident.incident_id)
         return incident
@@ -146,11 +158,28 @@ class SQLiteIncidentStore:
         return [NotificationMessage.model_validate_json(row[0]) for row in rows]
 
     def mark_notification_sent(self, incident_id: str) -> None:
+        row = self._connection.execute(
+            "SELECT attempt_count FROM notification_outbox WHERE incident_id = ?",
+            (incident_id,),
+        ).fetchone()
+        if row is None:
+            return
+        attempt_count = int(row[0]) + 1
         with self._connection:
             self._connection.execute(
-                "UPDATE notification_outbox SET status = 'sent', updated_at = ? WHERE incident_id = ?",
-                (_now(), incident_id),
+                "UPDATE notification_outbox SET status = 'sent', attempt_count = ?, updated_at = ? WHERE incident_id = ?",
+                (attempt_count, _now(), incident_id),
             )
+            self._record_notification_attempt(incident_id, "sent", attempt_count)
+
+    def _record_notification_attempt(self, incident_id: str, status: str, attempt_number: int, error: str | None = None) -> None:
+        self._connection.execute(
+            """
+            INSERT INTO notification_attempts (incident_id, status, attempt_number, error)
+            VALUES (?, ?, ?, ?)
+            """,
+            (incident_id, status, attempt_number, error[:512] if error else None),
+        )
 
     def mark_notification_failed(self, incident_id: str, error: str) -> None:
         row = self._connection.execute(
@@ -170,6 +199,7 @@ class SQLiteIncidentStore:
                 """,
                 (attempt_count, retry_at.isoformat(), error[:512], _now(), incident_id),
             )
+            self._record_notification_attempt(incident_id, "failed", attempt_count, error)
 
     def close(self) -> None:
         self._connection.close()

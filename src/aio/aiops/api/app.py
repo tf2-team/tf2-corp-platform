@@ -11,7 +11,7 @@ from fastapi import FastAPI, Header, HTTPException
 from aiops.collectors import PrometheusCollector, StaticCollector
 from aiops.config import Settings, build_detectors, load_hyperparameters, load_runtime_config
 from aiops.enrichment import Enricher
-from aiops.integrations import JaegerClient, KubernetesClient, OpenSearchClient, PrometheusClient
+from aiops.integrations import JaegerClient, KubernetesClient, NotificationClient, OpenSearchClient, PrometheusClient
 from aiops.normalization import load_normalization_schema
 from aiops.pipeline import AiopsPipeline
 from aiops.qualification import load_qualification_schema
@@ -96,6 +96,7 @@ def run_pipeline_with_collector(collector, settings: Settings, runtime_config, m
             IncidentHistoryStore(settings.incidents_history_path),
             RemediationAuditLog(settings.remediation_audit_path),
         ),
+        notification_sender=NotificationClient(settings) if _configured_url(settings.notification_webhook_url) else None,
     )
     try:
         result = pipeline.run_once(metric_series=metric_series or [])

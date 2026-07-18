@@ -45,6 +45,20 @@ class IncidentStore(Protocol):
     def pending_notifications_for(self, incidents: list[Incident]) -> list[NotificationMessage]:
         ...
 
+    def due_notifications(self, limit: int = 100) -> list[NotificationMessage]:
+        ...
+
+    def mark_notification_sent(self, incident_id: str) -> None:
+        ...
+
+    def mark_notification_failed(self, incident_id: str, error: str) -> None:
+        ...
+
+
+class NotificationSender(Protocol):
+    def send(self, message: NotificationMessage) -> dict:
+        ...
+
 
 class AiopsPipeline:
     def __init__(
@@ -62,6 +76,7 @@ class AiopsPipeline:
         correlation_hyperparameters: dict | None = None,
         remediation: RemediationComponents | None = None,
         enricher: Enricher | None = None,
+        notification_sender: NotificationSender | None = None,
     ):
         self.collector = collector
         self.qualification = QualificationGate(
@@ -81,6 +96,7 @@ class AiopsPipeline:
         self.runtime_config = runtime_config
         self.rca_hyperparameters = rca_hyperparameters or {}
         self.remediation = remediation
+        self.notification_sender = notification_sender
 
     def run_once(self, metric_series: list[MetricSeries] | None = None) -> PipelineResult:
         logger.info("AIOPS_BLOCK start metric_series=%s", len(metric_series or []))
@@ -106,7 +122,7 @@ class AiopsPipeline:
         logger.info("AIOPS_BLOCK enrich candidates=%s evidence=%s", len(enriched), [len(candidate.evidence) for candidate in enriched])
         incidents = [self.store.upsert(candidate) for candidate in enriched]
         logger.info("AIOPS_BLOCK incident incidents=%s ids=%s", len(incidents), [incident.incident_id for incident in incidents])
-        notifications = self.store.pending_notifications_for(incidents)
+        notifications = self._flush_notifications(incidents)
         logger.info("AIOPS_BLOCK notify notifications=%s", len(notifications))
 
         decisions: list[PolicyDecision] = []
@@ -142,6 +158,21 @@ class AiopsPipeline:
             verification_results=verification_results,
             rca_result=rca_result,
         )
+
+    def _flush_notifications(self, incidents: list[Incident]) -> list[NotificationMessage]:
+        if self.notification_sender is None:
+            return self.store.pending_notifications_for(incidents)
+
+        notifications = self.store.due_notifications()
+        for message in notifications:
+            try:
+                self.notification_sender.send(message)
+            except Exception as exc:
+                logger.warning("AIOPS_BLOCK notify_failed incident=%s error=%s", message.incident_id, exc)
+                self.store.mark_notification_failed(message.incident_id, str(exc))
+            else:
+                self.store.mark_notification_sent(message.incident_id)
+        return notifications
 
     def _run_v001_rca(self, metric_series: list[MetricSeries]) -> RcaResult:
         if self.runtime_config is None or not self.rca_hyperparameters.get("enabled", self.runtime_config.rca.enabled) or not metric_series:
