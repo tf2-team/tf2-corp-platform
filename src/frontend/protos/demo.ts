@@ -81,11 +81,58 @@ export interface GetProductRequest {
 
 export interface SearchProductsRequest {
   query: string;
+  maxPriceUnits?: number;
+  maxPriceNanos?: number;
+  category?: string;
 }
 
 export interface SearchProductsResponse {
   results: Product[];
 }
+
+export interface CopilotSearchRequest {
+  userMessage: string;
+}
+
+export interface CopilotProduct {
+  productId: string;
+  name: string;
+  priceUnits: number;
+  priceNanos: number;
+  currencyCode: string;
+}
+
+export interface CopilotClaim {
+  text: string;
+  sourceIds: string[];
+}
+
+export interface CopilotSource {
+  sourceId: string;
+  sourceType: string;
+  productId: string;
+}
+
+export interface CopilotSearchResponse {
+  status: string;
+  interpretedCriteria: string;
+  products: CopilotProduct[];
+  claims: CopilotClaim[];
+  sources: CopilotSource[];
+  reason: string;
+  pendingActionToken: string;
+}
+
+export interface ConfirmCartActionRequest {
+  pendingActionToken: string;
+  userId: string;
+}
+
+export interface ConfirmCartActionResponse {
+  success: boolean;
+  reason: string;
+}
+
 
 export interface ProductReview {
   username: string;
@@ -1197,6 +1244,540 @@ export const SearchProductsResponse: MessageFns<SearchProductsResponse> = {
   fromPartial<I extends Exact<DeepPartial<SearchProductsResponse>, I>>(object: I): SearchProductsResponse {
     const message = createBaseSearchProductsResponse();
     message.results = object.results?.map((e) => Product.fromPartial(e)) || [];
+    return message;
+  },
+};
+
+function createBaseCopilotSearchRequest(): CopilotSearchRequest {
+  return { userMessage: "" };
+}
+
+export const CopilotSearchRequest: MessageFns<CopilotSearchRequest> = {
+  encode(message: CopilotSearchRequest, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.userMessage !== "") {
+      writer.uint32(10).string(message.userMessage);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): CopilotSearchRequest {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseCopilotSearchRequest();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) break;
+          message.userMessage = reader.string();
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) break;
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): CopilotSearchRequest {
+    return { userMessage: isSet(object.userMessage) ? globalThis.String(object.userMessage) : "" };
+  },
+
+  toJSON(message: CopilotSearchRequest): unknown {
+    const obj: any = {};
+    if (message.userMessage !== "") obj.userMessage = message.userMessage;
+    return obj;
+  },
+
+  create<I extends Exact<DeepPartial<CopilotSearchRequest>, I>>(base?: I): CopilotSearchRequest {
+    return CopilotSearchRequest.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<CopilotSearchRequest>, I>>(object: I): CopilotSearchRequest {
+    const message = createBaseCopilotSearchRequest();
+    message.userMessage = object.userMessage ?? "";
+    return message;
+  },
+};
+
+function createBaseCopilotProduct(): CopilotProduct {
+  return { productId: "", name: "", priceUnits: 0, priceNanos: 0, currencyCode: "" };
+}
+
+export const CopilotProduct: MessageFns<CopilotProduct> = {
+  encode(message: CopilotProduct, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.productId !== "") {
+      writer.uint32(10).string(message.productId);
+    }
+    if (message.name !== "") {
+      writer.uint32(18).string(message.name);
+    }
+    if (message.priceUnits !== 0) {
+      writer.uint32(24).int64(message.priceUnits);
+    }
+    if (message.priceNanos !== 0) {
+      writer.uint32(32).int32(message.priceNanos);
+    }
+    if (message.currencyCode !== "") {
+      writer.uint32(42).string(message.currencyCode);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): CopilotProduct {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseCopilotProduct();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) break;
+          message.productId = reader.string();
+          continue;
+        }
+        case 2: {
+          if (tag !== 18) break;
+          message.name = reader.string();
+          continue;
+        }
+        case 3: {
+          if (tag !== 24) break;
+          message.priceUnits = longToNumber(reader.int64());
+          continue;
+        }
+        case 4: {
+          if (tag !== 32) break;
+          message.priceNanos = reader.int32();
+          continue;
+        }
+        case 5: {
+          if (tag !== 42) break;
+          message.currencyCode = reader.string();
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) break;
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): CopilotProduct {
+    return {
+      productId: isSet(object.productId) ? globalThis.String(object.productId) : "",
+      name: isSet(object.name) ? globalThis.String(object.name) : "",
+      priceUnits: isSet(object.priceUnits) ? globalThis.Number(object.priceUnits) : 0,
+      priceNanos: isSet(object.priceNanos) ? globalThis.Number(object.priceNanos) : 0,
+      currencyCode: isSet(object.currencyCode) ? globalThis.String(object.currencyCode) : "",
+    };
+  },
+
+  toJSON(message: CopilotProduct): unknown {
+    const obj: any = {};
+    if (message.productId !== "") obj.productId = message.productId;
+    if (message.name !== "") obj.name = message.name;
+    if (message.priceUnits !== 0) obj.priceUnits = Math.round(message.priceUnits);
+    if (message.priceNanos !== 0) obj.priceNanos = Math.round(message.priceNanos);
+    if (message.currencyCode !== "") obj.currencyCode = message.currencyCode;
+    return obj;
+  },
+
+  create<I extends Exact<DeepPartial<CopilotProduct>, I>>(base?: I): CopilotProduct {
+    return CopilotProduct.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<CopilotProduct>, I>>(object: I): CopilotProduct {
+    const message = createBaseCopilotProduct();
+    message.productId = object.productId ?? "";
+    message.name = object.name ?? "";
+    message.priceUnits = object.priceUnits ?? 0;
+    message.priceNanos = object.priceNanos ?? 0;
+    message.currencyCode = object.currencyCode ?? "";
+    return message;
+  },
+};
+
+function createBaseCopilotClaim(): CopilotClaim {
+  return { text: "", sourceIds: [] };
+}
+
+export const CopilotClaim: MessageFns<CopilotClaim> = {
+  encode(message: CopilotClaim, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.text !== "") {
+      writer.uint32(10).string(message.text);
+    }
+    for (const v of message.sourceIds) {
+      writer.uint32(18).string(v!);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): CopilotClaim {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseCopilotClaim();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) break;
+          message.text = reader.string();
+          continue;
+        }
+        case 2: {
+          if (tag !== 18) break;
+          message.sourceIds.push(reader.string());
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) break;
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): CopilotClaim {
+    return {
+      text: isSet(object.text) ? globalThis.String(object.text) : "",
+      sourceIds: globalThis.Array.isArray(object?.sourceIds) ? object.sourceIds.map((e: any) => globalThis.String(e)) : [],
+    };
+  },
+
+  toJSON(message: CopilotClaim): unknown {
+    const obj: any = {};
+    if (message.text !== "") obj.text = message.text;
+    if (message.sourceIds?.length) obj.sourceIds = message.sourceIds;
+    return obj;
+  },
+
+  create<I extends Exact<DeepPartial<CopilotClaim>, I>>(base?: I): CopilotClaim {
+    return CopilotClaim.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<CopilotClaim>, I>>(object: I): CopilotClaim {
+    const message = createBaseCopilotClaim();
+    message.text = object.text ?? "";
+    message.sourceIds = object.sourceIds?.map((e) => e) || [];
+    return message;
+  },
+};
+
+function createBaseCopilotSource(): CopilotSource {
+  return { sourceId: "", sourceType: "", productId: "" };
+}
+
+export const CopilotSource: MessageFns<CopilotSource> = {
+  encode(message: CopilotSource, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.sourceId !== "") {
+      writer.uint32(10).string(message.sourceId);
+    }
+    if (message.sourceType !== "") {
+      writer.uint32(18).string(message.sourceType);
+    }
+    if (message.productId !== "") {
+      writer.uint32(26).string(message.productId);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): CopilotSource {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseCopilotSource();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) break;
+          message.sourceId = reader.string();
+          continue;
+        }
+        case 2: {
+          if (tag !== 18) break;
+          message.sourceType = reader.string();
+          continue;
+        }
+        case 3: {
+          if (tag !== 26) break;
+          message.productId = reader.string();
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) break;
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): CopilotSource {
+    return {
+      sourceId: isSet(object.sourceId) ? globalThis.String(object.sourceId) : "",
+      sourceType: isSet(object.sourceType) ? globalThis.String(object.sourceType) : "",
+      productId: isSet(object.productId) ? globalThis.String(object.productId) : "",
+    };
+  },
+
+  toJSON(message: CopilotSource): unknown {
+    const obj: any = {};
+    if (message.sourceId !== "") obj.sourceId = message.sourceId;
+    if (message.sourceType !== "") obj.sourceType = message.sourceType;
+    if (message.productId !== "") obj.productId = message.productId;
+    return obj;
+  },
+
+  create<I extends Exact<DeepPartial<CopilotSource>, I>>(base?: I): CopilotSource {
+    return CopilotSource.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<CopilotSource>, I>>(object: I): CopilotSource {
+    const message = createBaseCopilotSource();
+    message.sourceId = object.sourceId ?? "";
+    message.sourceType = object.sourceType ?? "";
+    message.productId = object.productId ?? "";
+    return message;
+  },
+};
+
+function createBaseCopilotSearchResponse(): CopilotSearchResponse {
+  return { status: "", interpretedCriteria: "", products: [], claims: [], sources: [], reason: "", pendingActionToken: "" };
+}
+
+export const CopilotSearchResponse: MessageFns<CopilotSearchResponse> = {
+  encode(message: CopilotSearchResponse, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.status !== "") {
+      writer.uint32(10).string(message.status);
+    }
+    if (message.interpretedCriteria !== "") {
+      writer.uint32(18).string(message.interpretedCriteria);
+    }
+    for (const v of message.products) {
+      CopilotProduct.encode(v!, writer.uint32(26).fork()).join();
+    }
+    for (const v of message.claims) {
+      CopilotClaim.encode(v!, writer.uint32(34).fork()).join();
+    }
+    for (const v of message.sources) {
+      CopilotSource.encode(v!, writer.uint32(42).fork()).join();
+    }
+    if (message.reason !== "") {
+      writer.uint32(50).string(message.reason);
+    }
+    if (message.pendingActionToken !== "") {
+      writer.uint32(58).string(message.pendingActionToken);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): CopilotSearchResponse {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseCopilotSearchResponse();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) break;
+          message.status = reader.string();
+          continue;
+        }
+        case 2: {
+          if (tag !== 18) break;
+          message.interpretedCriteria = reader.string();
+          continue;
+        }
+        case 3: {
+          if (tag !== 26) break;
+          message.products.push(CopilotProduct.decode(reader, reader.uint32()));
+          continue;
+        }
+        case 4: {
+          if (tag !== 34) break;
+          message.claims.push(CopilotClaim.decode(reader, reader.uint32()));
+          continue;
+        }
+        case 5: {
+          if (tag !== 42) break;
+          message.sources.push(CopilotSource.decode(reader, reader.uint32()));
+          continue;
+        }
+        case 6: {
+          if (tag !== 50) break;
+          message.reason = reader.string();
+          continue;
+        }
+        case 7: {
+          if (tag !== 58) break;
+          message.pendingActionToken = reader.string();
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) break;
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): CopilotSearchResponse {
+    return {
+      status: isSet(object.status) ? globalThis.String(object.status) : "",
+      interpretedCriteria: isSet(object.interpretedCriteria) ? globalThis.String(object.interpretedCriteria) : "",
+      products: globalThis.Array.isArray(object?.products) ? object.products.map((e: any) => CopilotProduct.fromJSON(e)) : [],
+      claims: globalThis.Array.isArray(object?.claims) ? object.claims.map((e: any) => CopilotClaim.fromJSON(e)) : [],
+      sources: globalThis.Array.isArray(object?.sources) ? object.sources.map((e: any) => CopilotSource.fromJSON(e)) : [],
+      reason: isSet(object.reason) ? globalThis.String(object.reason) : "",
+      pendingActionToken: isSet(object.pendingActionToken) ? globalThis.String(object.pendingActionToken) : "",
+    };
+  },
+
+  toJSON(message: CopilotSearchResponse): unknown {
+    const obj: any = {};
+    if (message.status !== "") obj.status = message.status;
+    if (message.interpretedCriteria !== "") obj.interpretedCriteria = message.interpretedCriteria;
+    if (message.products?.length) obj.products = message.products.map((e) => CopilotProduct.toJSON(e));
+    if (message.claims?.length) obj.claims = message.claims.map((e) => CopilotClaim.toJSON(e));
+    if (message.sources?.length) obj.sources = message.sources.map((e) => CopilotSource.toJSON(e));
+    if (message.reason !== "") obj.reason = message.reason;
+    if (message.pendingActionToken !== "") obj.pendingActionToken = message.pendingActionToken;
+    return obj;
+  },
+
+  create<I extends Exact<DeepPartial<CopilotSearchResponse>, I>>(base?: I): CopilotSearchResponse {
+    return CopilotSearchResponse.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<CopilotSearchResponse>, I>>(object: I): CopilotSearchResponse {
+    const message = createBaseCopilotSearchResponse();
+    message.status = object.status ?? "";
+    message.interpretedCriteria = object.interpretedCriteria ?? "";
+    message.products = object.products?.map((e) => CopilotProduct.fromPartial(e)) || [];
+    message.claims = object.claims?.map((e) => CopilotClaim.fromPartial(e)) || [];
+    message.sources = object.sources?.map((e) => CopilotSource.fromPartial(e)) || [];
+    message.reason = object.reason ?? "";
+    message.pendingActionToken = object.pendingActionToken ?? "";
+    return message;
+  },
+};
+
+function createBaseConfirmCartActionRequest(): ConfirmCartActionRequest {
+  return { pendingActionToken: "", userId: "" };
+}
+
+export const ConfirmCartActionRequest: MessageFns<ConfirmCartActionRequest> = {
+  encode(message: ConfirmCartActionRequest, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.pendingActionToken !== "") {
+      writer.uint32(10).string(message.pendingActionToken);
+    }
+    if (message.userId !== "") {
+      writer.uint32(18).string(message.userId);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): ConfirmCartActionRequest {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseConfirmCartActionRequest();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) break;
+          message.pendingActionToken = reader.string();
+          continue;
+        }
+        case 2: {
+          if (tag !== 18) break;
+          message.userId = reader.string();
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) break;
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): ConfirmCartActionRequest {
+    return {
+      pendingActionToken: isSet(object.pendingActionToken) ? globalThis.String(object.pendingActionToken) : "",
+      userId: isSet(object.userId) ? globalThis.String(object.userId) : "",
+    };
+  },
+
+  toJSON(message: ConfirmCartActionRequest): unknown {
+    const obj: any = {};
+    if (message.pendingActionToken !== "") obj.pendingActionToken = message.pendingActionToken;
+    if (message.userId !== "") obj.userId = message.userId;
+    return obj;
+  },
+
+  create<I extends Exact<DeepPartial<ConfirmCartActionRequest>, I>>(base?: I): ConfirmCartActionRequest {
+    return ConfirmCartActionRequest.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<ConfirmCartActionRequest>, I>>(object: I): ConfirmCartActionRequest {
+    const message = createBaseConfirmCartActionRequest();
+    message.pendingActionToken = object.pendingActionToken ?? "";
+    message.userId = object.userId ?? "";
+    return message;
+  },
+};
+
+function createBaseConfirmCartActionResponse(): ConfirmCartActionResponse {
+  return { success: false, reason: "" };
+}
+
+export const ConfirmCartActionResponse: MessageFns<ConfirmCartActionResponse> = {
+  encode(message: ConfirmCartActionResponse, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.success !== false) {
+      writer.uint32(8).bool(message.success);
+    }
+    if (message.reason !== "") {
+      writer.uint32(18).string(message.reason);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): ConfirmCartActionResponse {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseConfirmCartActionResponse();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 8) break;
+          message.success = reader.bool();
+          continue;
+        }
+        case 2: {
+          if (tag !== 18) break;
+          message.reason = reader.string();
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) break;
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): ConfirmCartActionResponse {
+    return {
+      success: isSet(object.success) ? globalThis.Boolean(object.success) : false,
+      reason: isSet(object.reason) ? globalThis.String(object.reason) : "",
+    };
+  },
+
+  toJSON(message: ConfirmCartActionResponse): unknown {
+    const obj: any = {};
+    if (message.success !== false) obj.success = message.success;
+    if (message.reason !== "") obj.reason = message.reason;
+    return obj;
+  },
+
+  create<I extends Exact<DeepPartial<ConfirmCartActionResponse>, I>>(base?: I): ConfirmCartActionResponse {
+    return ConfirmCartActionResponse.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<ConfirmCartActionResponse>, I>>(object: I): ConfirmCartActionResponse {
+    const message = createBaseConfirmCartActionResponse();
+    message.success = object.success ?? false;
+    message.reason = object.reason ?? "";
     return message;
   },
 };
@@ -4379,6 +4960,52 @@ export const ProductReviewServiceClient = makeGenericClientConstructor(
   service: typeof ProductReviewServiceService;
   serviceName: string;
 };
+
+export const ShoppingCopilotServiceService = {
+  search: {
+    path: "/oteldemo.ShoppingCopilotService/Search",
+    requestStream: false,
+    responseStream: false,
+    requestSerialize: (value: CopilotSearchRequest): Buffer =>
+      Buffer.from(CopilotSearchRequest.encode(value).finish()),
+    requestDeserialize: (value: Buffer): CopilotSearchRequest => CopilotSearchRequest.decode(value),
+    responseSerialize: (value: CopilotSearchResponse): Buffer =>
+      Buffer.from(CopilotSearchResponse.encode(value).finish()),
+    responseDeserialize: (value: Buffer): CopilotSearchResponse => CopilotSearchResponse.decode(value),
+  },
+  confirmCartAction: {
+    path: "/oteldemo.ShoppingCopilotService/ConfirmCartAction",
+    requestStream: false,
+    responseStream: false,
+    requestSerialize: (value: ConfirmCartActionRequest): Buffer =>
+      Buffer.from(ConfirmCartActionRequest.encode(value).finish()),
+    requestDeserialize: (value: Buffer): ConfirmCartActionRequest => ConfirmCartActionRequest.decode(value),
+    responseSerialize: (value: ConfirmCartActionResponse): Buffer =>
+      Buffer.from(ConfirmCartActionResponse.encode(value).finish()),
+    responseDeserialize: (value: Buffer): ConfirmCartActionResponse => ConfirmCartActionResponse.decode(value),
+  },
+} as const;
+
+export interface ShoppingCopilotServiceClient extends Client {
+  search(
+    request: CopilotSearchRequest,
+    callback: (error: ServiceError | null, response: CopilotSearchResponse) => void,
+  ): ClientUnaryCall;
+  confirmCartAction(
+    request: ConfirmCartActionRequest,
+    callback: (error: ServiceError | null, response: ConfirmCartActionResponse) => void,
+  ): ClientUnaryCall;
+}
+
+export const ShoppingCopilotServiceClient = makeGenericClientConstructor(
+  ShoppingCopilotServiceService,
+  "oteldemo.ShoppingCopilotService",
+) as unknown as {
+  new (address: string, credentials: ChannelCredentials, options?: Partial<ClientOptions>): ShoppingCopilotServiceClient;
+  service: typeof ShoppingCopilotServiceService;
+  serviceName: string;
+};
+
 
 export type ShippingServiceService = typeof ShippingServiceService;
 export const ShippingServiceService = {

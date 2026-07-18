@@ -298,20 +298,46 @@ func loadProductsFromDB(ctx context.Context) ([]*pb.Product, error) {
 	return products, nil
 }
 
-func searchProductsFromDB(ctx context.Context, query string) ([]*pb.Product, error) {
+func searchProductsFromDB(ctx context.Context, query string, maxPriceUnits *int64, category *string) ([]*pb.Product, error) {
 	if db == nil {
 		return nil, fmt.Errorf("database connection not initialized")
 	}
 
-	// Query products matching search query in name or description
+	// Build dynamic WHERE clause. Start with the text search condition.
+	// Additional filter clauses and args are appended below based on intent.
 	searchPattern := "%" + strings.ToLower(query) + "%"
-	rows, err := db.QueryContext(ctx, `
-		SELECT p.id, p.name, p.description, p.picture, 
+	whereClauses := []string{"(LOWER(p.name) LIKE $1 OR LOWER(p.description) LIKE $1)"}
+	args := []interface{}{searchPattern}
+	argIdx := 2 // next placeholder index
+
+	if maxPriceUnits != nil {
+		// Filter: price_units must be <= max_price_units.
+		// Nanos are not compared here for simplicity; the Python secondary filter
+		// (catalog_tool.py) provides the exact cent-level check.
+		whereClauses = append(whereClauses, fmt.Sprintf("p.price_units <= $%d", argIdx))
+		args = append(args, *maxPriceUnits)
+		argIdx++
+	}
+
+	if category != nil && *category != "" {
+		// Filter: categories column is a comma-separated string stored in the DB.
+		// We use ILIKE '%,category,%' with boundary guards to avoid partial matches.
+		// Wrapping both sides with commas handles start/end of string edge cases.
+		whereClauses = append(whereClauses, fmt.Sprintf(
+			"(',' || LOWER(p.categories) || ',') LIKE $%d", argIdx,
+		))
+		args = append(args, "%,"+strings.ToLower(*category)+",%")
+		argIdx++
+	}
+
+	baseQuery := `
+		SELECT p.id, p.name, p.description, p.picture,
 		       p.price_currency_code, p.price_units, p.price_nanos, p.categories
 		FROM catalog.products p
-		WHERE LOWER(p.name) LIKE $1 OR LOWER(p.description) LIKE $1
-		ORDER BY p.id
-	`, searchPattern)
+		WHERE ` + strings.Join(whereClauses, " AND ") + `
+		ORDER BY p.id`
+
+	rows, err := db.QueryContext(ctx, baseQuery, args...)
 	if err != nil {
 		return nil, fmt.Errorf("failed to query products: %w", err)
 	}
@@ -324,6 +350,7 @@ func searchProductsFromDB(ctx context.Context, query string) ([]*pb.Product, err
 
 	return products, nil
 }
+
 
 func getProductFromDB(ctx context.Context, productID string) (*pb.Product, error) {
 	if db == nil {
@@ -478,7 +505,24 @@ func (p *productCatalog) GetProduct(ctx context.Context, req *pb.GetProductReque
 func (p *productCatalog) SearchProducts(ctx context.Context, req *pb.SearchProductsRequest) (*pb.SearchProductsResponse, error) {
 	span := trace.SpanFromContext(ctx)
 
-	result, err := searchProductsFromDB(ctx, req.Query)
+	// Read optional filter fields. Proto3 optional fields are generated as pointers in Go.
+	var maxPriceUnits *int64
+	if req.MaxPriceUnits != nil {
+		maxPriceUnits = req.MaxPriceUnits
+	}
+
+	var category *string
+	if req.Category != nil && *req.Category != "" {
+		category = req.Category
+	}
+
+	span.SetAttributes(
+		attribute.String("app.search.query", req.Query),
+		attribute.Bool("app.search.has_price_filter", maxPriceUnits != nil),
+		attribute.Bool("app.search.has_category_filter", category != nil),
+	)
+
+	result, err := searchProductsFromDB(ctx, req.Query, maxPriceUnits, category)
 	if err != nil {
 		span.SetStatus(otelcodes.Error, err.Error())
 		return nil, status.Errorf(codes.Internal, "failed to search products: %v", err)
@@ -489,6 +533,8 @@ func (p *productCatalog) SearchProducts(ctx context.Context, req *pb.SearchProdu
 	)
 	return &pb.SearchProductsResponse{Results: result}, nil
 }
+
+
 
 func (p *productCatalog) checkProductFailure(ctx context.Context, id string) bool {
 	if id != "OLJCESPC7Z" {

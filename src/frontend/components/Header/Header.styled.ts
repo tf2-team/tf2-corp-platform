@@ -54,5 +54,27 @@ export const BrandImg = styled.img.attrs({
 
 export const Controls = styled.div`
   display: flex;
+  align-items: center;
+  gap: 16px;
   height: 60px;
 `;
+
+export const CopilotNavBtn = styled(Link)`
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px;
+  background-color: ${({ theme }) => theme.colors.otelBlue};
+  color: ${({ theme }) => theme.colors.white};
+  font-weight: 600;
+  font-size: 14px;
+  border-radius: 6px;
+  text-decoration: none;
+  transition: opacity 0.2s;
+
+  &:hover {
+    opacity: 0.9;
+    color: ${({ theme }) => theme.colors.white};
+  }
+`;
+
