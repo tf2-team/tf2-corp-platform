@@ -5,7 +5,7 @@ from pathlib import Path
 from aiops.config import load_runtime_config
 from aiops.detectors import ThresholdDetector
 from aiops.features import FeatureBuilder
-from aiops.schemas import Observation, SignalQuality
+from aiops.schemas import CandidateEvent, Observation, SignalQuality
 from aiops.storage import SQLiteIncidentStore
 
 
@@ -23,6 +23,24 @@ def candidate(value: float, timestamp: int = 0):
         [Observation(signal_id="checkout_bad_ratio_24h", value=value, unit="ratio", window="24h", quality=SignalQuality.VERIFIED)]
     )
     return detector.evaluate(features)[0].model_copy(update={"timestamp": timestamp})
+
+
+def service_candidate(service: str, detector_id: str) -> CandidateEvent:
+    return CandidateEvent(
+        detector_id=detector_id,
+        timestamp=100,
+        flow="checkout",
+        service=service,
+        severity="SEV2",
+        signal_id=f"{service.replace('-', '_')}_error_rate_5m",
+        value=0.2,
+        unit="ratio",
+        window="5m",
+        threshold=0.05,
+        quality=SignalQuality.VERIFIED,
+        reason="threshold_breached",
+        runbook_id="RB-CHECKOUT-SLO",
+    )
 
 
 class SQLiteIncidentStoreTest(unittest.TestCase):
@@ -95,6 +113,18 @@ class SQLiteIncidentStoreTest(unittest.TestCase):
             store.close()
 
         self.assertEqual(count, 0)
+
+    def test_active_root_cause_suppresses_child_notification(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            store = SQLiteIncidentStore(Path(tmp) / "aiops.sqlite3", environment="tf2")
+            store.register_active_root_cause("checkout", {"checkout", "cart"}, suppress_seconds=900)
+            incident = store.upsert(service_candidate("cart", "auto_cart_error_rate"))
+            notifications = store.pending_notifications_for([incident])
+            status = store._connection.execute("SELECT status FROM notification_outbox WHERE incident_id = ?", (incident.incident_id,)).fetchone()
+            store.close()
+
+        self.assertEqual(notifications, [])
+        self.assertIsNone(status)
 
 
 if __name__ == "__main__":

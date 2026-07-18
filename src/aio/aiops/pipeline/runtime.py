@@ -5,6 +5,7 @@ import json
 import logging
 import re
 from datetime import UTC, datetime
+from itertools import count
 from pathlib import Path
 from typing import Protocol
 
@@ -32,6 +33,7 @@ from aiops.verification import VerificationEngine
 
 
 logger = logging.getLogger(__name__)
+_RUN_COUNTER = count(1)
 
 RemediationComponents = tuple[
     RemediationFeatureExtractor,
@@ -47,17 +49,13 @@ class IncidentStore(Protocol):
     def upsert(self, candidate: CandidateEvent) -> Incident:
         ...
 
-    def pending_notifications_for(self, incidents: list[Incident]) -> list[NotificationMessage]:
-        ...
+    def pending_notifications_for(self, incidents: list[Incident]) -> list[NotificationMessage]: ...
 
-    def due_notifications(self, limit: int = 100) -> list[NotificationMessage]:
-        ...
+    def due_notifications(self, limit: int = 100) -> list[NotificationMessage]: ...
 
-    def mark_notification_sent(self, incident_id: str) -> None:
-        ...
+    def mark_notification_sent(self, incident_id: str) -> None: ...
 
-    def mark_notification_failed(self, incident_id: str, error: str) -> None:
-        ...
+    def mark_notification_failed(self, incident_id: str, error: str) -> None: ...
 
 
 class NotificationSender(Protocol):
@@ -106,6 +104,8 @@ class AiopsPipeline:
         self.rca_history_path = rca_history_path
 
     def run_once(self, metric_series: list[MetricSeries] | None = None) -> PipelineResult:
+        run_number = next(_RUN_COUNTER)
+        logger.info("---------- AIOPS_RUN_START run=%s ----------", run_number)
         logger.debug("AIOPS_BLOCK start metric_series=%s", len(metric_series or []))
         collected = self.collector.collect()
         logger.debug("AIOPS_BLOCK collect observations=%s", len(collected))
@@ -138,8 +138,6 @@ class AiopsPipeline:
             [incident.occurrence_count for incident in deduped_incidents],
         )
         logger.debug("AIOPS_BLOCK incident incidents=%s ids=%s", len(incidents), [incident.incident_id for incident in incidents])
-        notifications = self._flush_notifications(incidents)
-        logger.debug("AIOPS_BLOCK notify notifications=%s", len(notifications))
 
         decisions: list[PolicyDecision] = []
         for incident in incidents:
@@ -155,7 +153,11 @@ class AiopsPipeline:
             len(rca_result.anomalies),
             [root.service for root in rca_result.root_causes],
         )
+        self._log_failure_conclusion(rca_result, deduped_incidents)
+        self._suppress_related_notifications(deduped_incidents, rca_result)
         self._record_rca_history(rca_result, incidents, enriched, metric_series or [])
+        notifications = self._flush_notifications(incidents)
+        logger.debug("AIOPS_BLOCK notify notifications=%s", len(notifications))
         remediation_decisions = self._run_remediation_strategy(incidents, rca_result)
         logger.debug(
             "AIOPS_BLOCK remediation decisions=%s selected=%s",
@@ -164,7 +166,7 @@ class AiopsPipeline:
         )
         self._record_verified_history(incidents, verification_results, remediation_decisions, rca_result)
 
-        return PipelineResult(
+        result = PipelineResult(
             observations=observations,
             features=features,
             candidates=enriched,
@@ -175,6 +177,14 @@ class AiopsPipeline:
             verification_results=verification_results,
             rca_result=rca_result,
         )
+        logger.info(
+            "---------- AIOPS_RUN_END run=%s candidates=%s incidents=%s root_causes=%s ----------",
+            run_number,
+            len(enriched),
+            len(deduped_incidents),
+            len(rca_result.root_causes),
+        )
+        return result
 
     def _flush_notifications(self, incidents: list[Incident]) -> list[NotificationMessage]:
         if self.notification_sender is None:
@@ -289,6 +299,22 @@ class AiopsPipeline:
             len(rca_result.anomalies),
         )
 
+    def _log_failure_conclusion(self, rca_result: RcaResult, incidents: list[Incident]) -> None:
+        if rca_result.root_causes:
+            root = rca_result.root_causes[0]
+            logger.info(
+                "AIOPS_CONCLUSION source=rca failed_service=%s score=%.3f metrics=%s",
+                root.service,
+                root.score,
+                ",".join(root.root_cause_metrics),
+            )
+            return
+        if incidents:
+            logger.info(
+                "AIOPS_CONCLUSION source=incident failed_service=%s score=none metrics=none",
+                ",".join(dict.fromkeys(incident.service for incident in incidents)),
+            )
+
     def _log_messages(self, incidents: list[Incident]) -> list[tuple[str, int, str]]:
         messages = []
         max_events = int(self.rca_hyperparameters.get("anomaly", {}).get("log_max_events_per_evidence", 100))
@@ -324,6 +350,18 @@ class AiopsPipeline:
             audit.append(decision)
             decisions.append(decision)
         return decisions
+
+    def _suppress_related_notifications(self, incidents: list[Incident], rca_result: RcaResult) -> None:
+        if self.runtime_config is None or not rca_result.root_causes:
+            return
+        root_service = rca_result.root_causes[0].service
+        affected_services = _blast_radius_services(self.runtime_config, root_service)
+        register = getattr(self.store, "register_active_root_cause", None)
+        suppress = getattr(self.store, "suppress_related_notifications", None)
+        if register is not None:
+            register(root_service, affected_services)
+        if suppress is not None:
+            suppress(incidents, root_service, affected_services)
 
     def _record_verified_history(
         self,
@@ -375,6 +413,14 @@ def _log_count(summary: str) -> int:
 
 def _unique_incidents(incidents: list[Incident]) -> list[Incident]:
     return list({incident.incident_id: incident for incident in incidents}.values())
+
+
+def _blast_radius_services(config: RuntimeConfig, root_service: str) -> set[str]:
+    services = {service.name: service for service in config.topology.services}
+    if root_service not in services:
+        return {root_service}
+    dependents = {service.name for service in services.values() if root_service in service.dependencies}
+    return {root_service, *services[root_service].dependencies, *dependents}
 
 
 def _rca_history_parameters(config: dict) -> dict:

@@ -311,6 +311,21 @@ class V001AnomalyRcaTest(unittest.TestCase):
 
         self.assertEqual([candidate.service for candidate in result.root_causes], ["product-catalog"])
 
+    def test_rca_prefers_dependency_that_drifted_before_checkout(self):
+        runtime_config = load_runtime_config(Path("config/runtime.json"))
+        findings = [
+            AnomalyFinding(algorithm="weighted_sum", service="cart", metric="error_rate_5m", signal_id="cart_error_rate_5m", score=0.8, timestamp=4),
+            AnomalyFinding(algorithm="weighted_sum", service="checkout", metric="error_rate_5m", signal_id="checkout_error_rate_5m", score=0.8, timestamp=6),
+        ]
+        series = [
+            metric("cart", "error_rate_5m", [0, 0, 0, 0, 10, 10, 10, 10]),
+            metric("checkout", "error_rate_5m", [0, 0, 0, 0, 0, 0, 10, 10]),
+        ]
+
+        result = rca_engine(runtime_config).rank(findings, series, top_k=5)
+
+        self.assertEqual([candidate.service for candidate in result.root_causes], ["cart"])
+
     def test_graph_traversal_uses_pagerank_and_timestamp_scoring(self):
         runtime_config = load_runtime_config(Path("config/runtime.json"))
         scores = graph_rca(runtime_config).rank_services(

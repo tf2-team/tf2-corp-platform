@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import json
 import sqlite3
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
@@ -70,6 +71,16 @@ class SQLiteIncidentStore:
             )
             """
         )
+        self._connection.execute(
+            """
+            CREATE TABLE IF NOT EXISTS active_root_causes (
+                root_service TEXT PRIMARY KEY,
+                affected_services_json TEXT NOT NULL,
+                expires_at TEXT NOT NULL,
+                created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+            )
+            """
+        )
         self._ensure_event_columns()
 
     def upsert(self, candidate: CandidateEvent) -> Incident:
@@ -102,7 +113,8 @@ class SQLiteIncidentStore:
             incident.last_seen = seen_at
             incident.severity = min(incident.severity, candidate.severity)
 
-        notification = NotificationBuilder().build([incident])[0] if is_new else None
+        suppressed_by = self._suppression_parent(candidate.service) if is_new else None
+        notification = NotificationBuilder().build([incident])[0] if is_new and suppressed_by is None else None
         with self._connection:
             self._connection.execute(
                 """
@@ -130,6 +142,13 @@ class SQLiteIncidentStore:
                     (incident.incident_id, fingerprint, notification.model_dump_json(), _now()),
                 )
                 self._last_enqueued_incident_ids.add(incident.incident_id)
+            elif suppressed_by is not None:
+                logger.info(
+                    "AIOPS_NOTIFY_SUPPRESSED incident=%s service=%s parent_root_cause=%s reason=active_root_cause",
+                    incident.incident_id,
+                    incident.service,
+                    suppressed_by,
+                )
         (logger.info if is_new else logger.debug)(
             "AIOPS_INCIDENT_UPSERT action=%s incident=%s fingerprint=%s service=%s detector=%s occurrence=%s notification_enqueued=%s",
             "created" if is_new else "deduped",
@@ -141,6 +160,38 @@ class SQLiteIncidentStore:
             notification is not None,
         )
         return incident
+
+    def register_active_root_cause(self, root_service: str, affected_services: set[str], suppress_seconds: int = 900) -> None:
+        expires_at = (datetime.now(UTC) + timedelta(seconds=suppress_seconds)).isoformat()
+        with self._connection:
+            self._connection.execute(
+                """
+                INSERT INTO active_root_causes (root_service, affected_services_json, expires_at)
+                VALUES (?, ?, ?)
+                ON CONFLICT(root_service) DO UPDATE SET
+                    affected_services_json = excluded.affected_services_json,
+                    expires_at = excluded.expires_at
+                """,
+                (root_service, json.dumps(sorted(affected_services)), expires_at),
+            )
+
+    def suppress_related_notifications(self, incidents: list[Incident], root_service: str, affected_services: set[str]) -> None:
+        suppressed = [incident for incident in incidents if incident.service in affected_services and incident.service != root_service]
+        if not suppressed:
+            return
+        with self._connection:
+            for incident in suppressed:
+                self._connection.execute(
+                    "UPDATE notification_outbox SET status = 'suppressed', updated_at = ? WHERE incident_id = ? AND status = 'pending'",
+                    (_now(), incident.incident_id),
+                )
+                self._last_enqueued_incident_ids.discard(incident.incident_id)
+                logger.info(
+                    "AIOPS_NOTIFY_SUPPRESSED incident=%s service=%s parent_root_cause=%s reason=same_blast_radius",
+                    incident.incident_id,
+                    incident.service,
+                    root_service,
+                )
 
     def list_incidents(self) -> list[Incident]:
         rows = self._connection.execute("SELECT incident_json FROM incidents ORDER BY fingerprint").fetchall()
@@ -156,6 +207,16 @@ class SQLiteIncidentStore:
             incident_ids,
         ).fetchall()
         return [NotificationMessage.model_validate_json(row[0]) for row in rows]
+
+    def _suppression_parent(self, service: str) -> str | None:
+        rows = self._connection.execute(
+            "SELECT root_service, affected_services_json FROM active_root_causes WHERE expires_at > ?",
+            (_now(),),
+        ).fetchall()
+        for root_service, affected_json in rows:
+            if service != root_service and service in set(json.loads(affected_json)):
+                return root_service
+        return None
 
     def due_notifications(self, limit: int = 100) -> list[NotificationMessage]:
         rows = self._connection.execute(

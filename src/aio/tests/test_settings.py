@@ -76,8 +76,8 @@ class SettingsTest(unittest.TestCase):
         self.assertEqual(
             config["rca"]["combined"],
             {
-                "rrf_k": 60,
-                "ranker_weights": {"graph": 0.5, "robust": 0.3, "earliest_drift": 0.1, "correlation": 0.1},
+                "rrf_k": 20,
+                "ranker_weights": {"graph": 0.3, "robust": 0.1, "earliest_drift": 0.4, "correlation": 0.2},
             },
         )
         self.assertEqual(config["remediation"]["similarity_weights"]["service"], 0.35)
