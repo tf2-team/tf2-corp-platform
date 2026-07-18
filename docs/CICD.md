@@ -118,7 +118,14 @@ Non-release paths under `src/` (e.g. `src/flagd`, Grafana config) do not force a
 | **Retag** | Copy S3 objects `…/${PREV_TAG}/` → `…/${NEW_TAG}/` (no Hugging Face download) |
 | **URI unset** | Job succeeds with a warning skip so image promote is not blocked |
 
-Set GitHub Environment variable `MEM0_FASTEMBED_ARTIFACT_S3_URI` (e.g. `s3://<bucket>/mem0/fastembed`) on `development` / `production` to enable publish.
+Set GitHub Environment variable `MEM0_FASTEMBED_ARTIFACT_S3_URI` on `development` / `production` to enable publish. **Must match chart `mem0.modelDelivery.s3Prefix` and the IRSA-allowed prefix** (not a free-form path):
+
+```text
+# production example (IRSA: fastembed/paraphrase-multilingual-MiniLM-L12-v2/*)
+s3://techx-prod-tf2-ai-models-<ACCOUNT_ID>/fastembed/paraphrase-multilingual-MiniLM-L12-v2
+```
+
+CI uploads to `${MEM0_FASTEMBED_ARTIFACT_S3_URI}/${VERSION}/`. The chart composes the same layout: `${s3Prefix}/${imageTag}/${archiveName}`. A wrong prefix (e.g. `…/mem0/fastembed`) makes objects unreadable by the Mem0 SA and `fetch-mem0-fastembed` fails with S3 403.
 
 | Ref | Purpose |
 |---|---|
@@ -638,4 +645,4 @@ See chart runbook: `techx-corp-chart/docs/operations/gitops-argocd.md`.
 - Native multi-arch runners, image security gates, SBOM/provenance, Cosign
 - Full e2e / tracetest in PR CI
 
-<!-- Change trail: @hungxqt - 2026-07-17 - Document mem0 matrix build/retag and selective FastEmbed artifact. -->
+<!-- Change trail: @hungxqt - 2026-07-19 - Align MEM0_FASTEMBED_ARTIFACT_S3_URI docs with IRSA/chart prefix. -->
