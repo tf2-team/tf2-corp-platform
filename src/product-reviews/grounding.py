@@ -6,7 +6,7 @@
 """Grounding pipeline for AI-generated product review summaries (A1.1).
 
 Public API (per Day 2/3 implementation brief):
-    generate_grounded_summary(safe_reviews) -> GroundedDraft
+    generate_grounded_summary(safe_reviews, question="") -> GroundedDraft
     validate_grounded_summary(draft, safe_reviews) -> GroundedResponse
 
 This module assumes safe_reviews.reviews is non-empty. The caller
@@ -41,13 +41,15 @@ logger = logging.getLogger("grounding")
 ABSTAIN_MESSAGE = "The current reviews do not provide enough information."
 
 _SYSTEM_PROMPT = (
-    "You are a product review summarizer. You will be given a list of "
-    "reviews, each tagged with a source_id. Summarize what the reviews "
-    "say in English and, for every claim you make, cite the source_id(s) that "
-    "support it. Do not include any claim that is not directly "
-    "supported by at least one review. Do not invent numbers, "
-    "durations, proper names, or comparisons that are not stated in "
-    "the reviews. The summary and all claims must be written in English. "
+    "You are a product review assistant. You will be given a user question "
+    "and a list of reviews, each tagged with a source_id. Answer the user's "
+    "question in English using only those reviews. Focus on what the question "
+    "asks (for example, negative feedback when asked about negative reviews). "
+    "For every claim you make, cite the source_id(s) that support it. "
+    "Do not include any claim that is not directly supported by at least one "
+    "review. Do not invent numbers, durations, proper names, or comparisons "
+    "that are not stated in the reviews. Prefer short claim sentences that "
+    "read naturally when joined into one paragraph. "
     "Return the response in JSON format."
 )
 
@@ -59,9 +61,13 @@ _GENERIC_WORDS = {
 _NUMBER_PATTERN = re.compile(r"\d+")
 
 
-def _build_review_prompt(safe_review_set: SafeReviewSet) -> str:
+def _build_review_prompt(safe_review_set: SafeReviewSet, question: str = "") -> str:
     lines = [f"[{review.source_id}] {review.text}" for review in safe_review_set.reviews]
-    return "Reviews:\n" + "\n".join(lines)
+    reviews_block = "Reviews:\n" + "\n".join(lines)
+    q = (question or "").strip()
+    if q:
+        return f"User question: {q}\n\n{reviews_block}\n\nAnswer the user question using only the reviews above."
+    return reviews_block
 
 
 def _get_client_and_model() -> tuple[OpenAI, str]:
@@ -73,16 +79,20 @@ def _get_client_and_model() -> tuple[OpenAI, str]:
     client = OpenAI(
         base_url=os.environ["LLM_BASE_URL"],
         api_key=os.environ["OPENAI_API_KEY"],
+        timeout=15.0,
     )
     model = os.environ["LLM_MODEL"]
     return client, model
 
 
-def generate_grounded_summary(safe_reviews: SafeReviewSet) -> GroundedDraft:
+def generate_grounded_summary(safe_reviews: SafeReviewSet, question: str = "") -> GroundedDraft:
     """Calls the LLM through Instructor, which enforces the GroundedDraft
     schema on the model's response and retries automatically on a schema
     mismatch. Client/model come from _get_client_and_model, not from
     parameters, to match the public signature in the Day 2/3 brief.
+
+    question is optional input context only — the GroundedDraft / claims
+    output contract is unchanged.
     """
     client, model = _get_client_and_model()
     instructor_client = instructor.from_openai(client, mode=instructor.Mode.JSON)
@@ -91,7 +101,7 @@ def generate_grounded_summary(safe_reviews: SafeReviewSet) -> GroundedDraft:
         response_model=GroundedDraft,
         messages=[
             {"role": "system", "content": _SYSTEM_PROMPT},
-            {"role": "user", "content": _build_review_prompt(safe_reviews)},
+            {"role": "user", "content": _build_review_prompt(safe_reviews, question)},
         ],
     )
 

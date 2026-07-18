@@ -248,8 +248,210 @@ export const AskAIButton = styled.button`
   }
 `;
 
-export const AIMessage = styled.p`
+export const AIMessage = styled.div`
   margin: 0;
   line-height: 1.5;
   color: ${({ theme }) => theme.colors.otelGray};
+`;
+
+export const AiResponseContainer = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+`;
+
+export const AiStatusBadge = styled.span<{ $status: string }>`
+  align-self: flex-start;
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  color: ${({ theme }) => theme.colors.white};
+  background-color: ${({ $status, theme }) => 
+    $status === 'GROUNDED' ? '#28a745' :
+    $status === 'ABSTAINED' ? theme.colors.otelYellow :
+    $status === 'BLOCKED' ? theme.colors.otelRed : 
+    theme.colors.otelGray};
+`;
+
+export const AiParagraph = styled.p`
+  margin: 0;
+  line-height: 1.7;
+  color: ${({ theme }) => theme.colors.textGray};
+  font-size: 15px;
+  white-space: normal;
+`;
+
+export const InlineCitation = styled.button`
+  position: relative;
+  display: inline;
+  margin: 0 1px;
+  padding: 0 3px;
+  border: none;
+  border-radius: 3px;
+  background: ${({ theme }) => theme.colors.backgroundGray};
+  color: ${({ theme }) => theme.colors.otelBlue};
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1;
+  vertical-align: super;
+  cursor: pointer;
+
+  &:hover {
+    background: ${({ theme }) => theme.colors.otelBlue};
+    color: ${({ theme }) => theme.colors.white};
+  }
+
+  &:hover > span,
+  &:focus-visible > span {
+    opacity: 1;
+    visibility: visible;
+    transform: translate(-50%, -8px);
+  }
+`;
+
+export const CitationTooltip = styled.span`
+  position: absolute;
+  left: 50%;
+  bottom: 100%;
+  z-index: 20;
+  width: min(280px, 70vw);
+  padding: 10px 12px;
+  border: 1px solid ${({ theme }) => theme.colors.borderGray};
+  border-radius: 8px;
+  background: ${({ theme }) => theme.colors.white};
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+  color: ${({ theme }) => theme.colors.textGray};
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 1.4;
+  text-align: left;
+  white-space: normal;
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transform: translate(-50%, -4px);
+  transition: opacity 0.12s ease, transform 0.12s ease, visibility 0.12s ease;
+`;
+
+export const CitationTooltipHeader = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+  font-weight: 600;
+`;
+
+export const CitationTooltipBody = styled.div`
+  color: ${({ theme }) => theme.colors.otelGray};
+  display: -webkit-box;
+  -webkit-line-clamp: 4;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+`;
+
+export const SourcesDropdown = styled.details`
+  margin-top: 4px;
+  border: 1px solid ${({ theme }) => theme.colors.borderGray};
+  border-radius: 8px;
+  background: ${({ theme }) => theme.colors.white};
+  overflow: hidden;
+
+  &[open] summary {
+    border-bottom: 1px solid ${({ theme }) => theme.colors.borderGray};
+  }
+`;
+
+export const SourcesSummary = styled.summary`
+  list-style: none;
+  cursor: pointer;
+  padding: 10px 12px;
+  font-size: 13px;
+  font-weight: 600;
+  color: ${({ theme }) => theme.colors.otelBlue};
+  user-select: none;
+
+  &::-webkit-details-marker {
+    display: none;
+  }
+
+  &::before {
+    content: '▶';
+    display: inline-block;
+    margin-right: 8px;
+    font-size: 10px;
+    transition: transform 0.12s ease;
+  }
+
+  details[open] > &::before {
+    transform: rotate(90deg);
+  }
+`;
+
+export const SourcesList = styled.ul`
+  list-style: none;
+  margin: 0;
+  padding: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+`;
+
+export const SourceItem = styled.li`
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 10px;
+  padding: 8px 10px;
+  border-radius: 6px;
+  cursor: pointer;
+
+  &:hover {
+    background: ${({ theme }) => theme.colors.backgroundGray};
+  }
+`;
+
+export const SourceBadge = styled.span`
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 22px;
+  height: 22px;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: ${({ theme }) => theme.colors.otelBlue};
+  color: ${({ theme }) => theme.colors.white};
+  font-size: 11px;
+  font-weight: 700;
+`;
+
+export const SourceContent = styled.div`
+  min-width: 0;
+`;
+
+export const SourceMeta = styled.div`
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 4px;
+  font-size: 13px;
+  font-weight: 600;
+  color: ${({ theme }) => theme.colors.textGray};
+`;
+
+export const SourceSnippet = styled.div`
+  color: ${({ theme }) => theme.colors.otelGray};
+  font-size: 12px;
+  line-height: 1.4;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+`;
+
+export const AiReasonBlock = styled.p`
+  margin: 0;
+  color: ${({ theme }) => theme.colors.otelGray};
+  font-style: italic;
 `;

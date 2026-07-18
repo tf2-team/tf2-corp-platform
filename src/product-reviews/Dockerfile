@@ -15,15 +15,13 @@ RUN apt-get update && \
 
 COPY ./src/product-reviews/requirements.txt requirements.txt
 
-RUN --mount=type=cache,id=techx-pip-cache,target=/root/.cache/pip,sharing=locked \
-    python -m venv venv && \
-    venv/bin/pip install -r requirements.txt
+RUN python -m venv venv && \
+    venv/bin/pip install --no-cache-dir -r requirements.txt
 
 RUN venv/bin/python -c "import spacy; spacy.load('en_core_web_lg')"
 
 RUN --mount=type=cache,id=techx-pip-cache,target=/root/.cache/pip,sharing=locked \
     venv/bin/opentelemetry-bootstrap -a install
-
 FROM docker.io/library/python:3.12-slim-bookworm
 
 RUN apt-get update && \

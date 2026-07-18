@@ -133,7 +133,8 @@ def get_product_reviews(request_product_id):
             product_reviews.product_reviews.add(
                     username=row[0],
                     description=row[1],
-                    score=str(row[2])
+                    score=str(row[2]),
+                    id=str(row[3])
             )
 
         span.set_attribute("app.product_reviews.count", len(product_reviews.product_reviews))
@@ -158,12 +159,41 @@ def get_average_product_review_score(request_product_id):
         return product_review_score
 
 
+FALLBACK_MESSAGE = "AI summary is temporarily unavailable."
+ABSTAIN_MESSAGE = "The current reviews do not provide enough information."
+
+
+def _build_structured_response(status: str, answer: str = "", reason: str = "", claims: list = None) -> str:
+    payload = {
+        "status": status,
+        "answer": answer,
+        "reason": reason,
+        "claims": claims or [],
+    }
+    return json.dumps(payload)
+
+
 def _blocked_response(reason: str):
-    """gRPC response for a request/tool-call/output blocked by guardrails.
-    Only reason goes to telemetry — never raw question/review content."""
     ai_assistant_response = demo_pb2.AskProductAIAssistantResponse()
-    ai_assistant_response.response = "Sorry, I cannot process this request."
+    ai_assistant_response.response = _build_structured_response(
+        status="BLOCKED",
+        answer="Sorry, I cannot process this request.",
+        reason=reason,
+    )
     logger.info(f"Request blocked by guardrails. reason={reason}")
+    return ai_assistant_response
+
+
+def _fallback_response(error_class: str = ""):
+    """gRPC response when the LLM or a dependency fails.
+    Logs the error class but never raw prompts, PII, or secrets."""
+    ai_assistant_response = demo_pb2.AskProductAIAssistantResponse()
+    ai_assistant_response.response = _build_structured_response(
+        status="FALLBACK",
+        answer=FALLBACK_MESSAGE,
+        reason=f"LLM or dependency error: {error_class}" if error_class else "LLM error",
+    )
+    logger.warning(f"Returning fallback response. error_class={error_class}")
     return ai_assistant_response
 
 
@@ -275,17 +305,24 @@ def get_ai_assistant_response(request_product_id, question):
         ]
 
         # use the LLM to decide which tool(s) it needs
-        initial_response = client.chat.completions.create(
-            model=llm_model,
-            messages=messages,
-            tools=tools,
-            tool_choice="auto"
-        )
-
-        response_message = initial_response.choices[0].message
-        tool_calls = response_message.tool_calls
-
-        logger.info("Received initial AI assistant response")
+        try:
+            initial_response = client.chat.completions.create(
+                model=llm_model,
+                messages=messages,
+                tools=tools,
+                tool_choice="auto",
+                timeout=20.0,
+            )
+            response_message = initial_response.choices[0].message
+            tool_calls = response_message.tool_calls
+            logger.info("Received initial AI assistant response")
+        except Exception as e:
+            # Includes APITimeoutError / connection failures — never let them
+            # surface as an unhandled 500 or hang until the gateway 504s.
+            logger.error(f"LLM tool-selection call failed: {type(e).__name__}")
+            span.record_exception(e)
+            span.set_status(Status(StatusCode.ERROR, description=type(e).__name__))
+            return _fallback_response(type(e).__name__)
 
         # safe_reviews is only populated if the model calls
         # fetch_product_reviews. It feeds the grounding step below.
@@ -360,6 +397,9 @@ def get_ai_assistant_response(request_product_id, question):
         llm_inaccurate_response = check_feature_flag("llmInaccurateResponse")
         logger.info(f"llmInaccurateResponse feature flag: {llm_inaccurate_response}")
 
+        # structured_response holds the full JSON payload; candidate_text
+        # is kept as a plain-text fallback for the output guardrail scan.
+        structured_response = None
         candidate_text = ""
 
         # Enforce grounding pipeline for all review-related queries
@@ -369,18 +409,40 @@ def get_ai_assistant_response(request_product_id, question):
                     span.set_attribute("app.flagd.llm_inaccurate_response", True)
                     logger.info(f"llmInaccurateResponse is on for product_id: {request_product_id}; grounding must still filter any fabricated claim")
 
-                draft = generate_grounded_summary(safe_reviews)
-                grounded = validate_grounded_summary(draft, safe_reviews)
+                try:
+                    draft = generate_grounded_summary(safe_reviews, question=question)
+                    grounded = validate_grounded_summary(draft, safe_reviews)
+                except Exception as e:
+                    logger.error(f"Grounding pipeline failed: {type(e).__name__}")
+                    span.record_exception(e)
+                    span.set_status(Status(StatusCode.ERROR, description=type(e).__name__))
+                    return _fallback_response(type(e).__name__)
+
                 span.set_attribute("app.grounding.status", grounded.status.value)
 
                 if grounded.status == ResponseStatus.GROUNDED:
                     span.set_attribute("app.grounding.claim_count", len(grounded.claims))
                     candidate_text = grounded.answer
+                    structured_response = _build_structured_response(
+                        status="GROUNDED",
+                        answer=grounded.answer,
+                        claims=[{"text": c.text, "source_ids": c.sources} for c in grounded.claims],
+                    )
                 else:
                     candidate_text = grounded.reason
+                    structured_response = _build_structured_response(
+                        status="ABSTAINED",
+                        answer=grounded.reason or ABSTAIN_MESSAGE,
+                        reason=grounded.reason or ABSTAIN_MESSAGE,
+                    )
             else:
                 # No reviews or all blocked
-                candidate_text = "The current reviews do not provide enough information."
+                candidate_text = ABSTAIN_MESSAGE
+                structured_response = _build_structured_response(
+                    status="ABSTAINED",
+                    answer=ABSTAIN_MESSAGE,
+                    reason=ABSTAIN_MESSAGE,
+                )
                 span.set_attribute("app.grounding.status", "ABSTAINED")
         else:
             # Non-review queries
@@ -403,13 +465,24 @@ def get_ai_assistant_response(request_product_id, question):
 
                 logger.info(f"Invoking the LLM with {len(messages)} messages")
 
-                final_response = client.chat.completions.create(
-                    model=llm_model,
-                    messages=messages
-                )
-                candidate_text = final_response.choices[0].message.content
+                try:
+                    final_response = client.chat.completions.create(
+                        model=llm_model,
+                        messages=messages,
+                        timeout=20.0,
+                    )
+                    candidate_text = final_response.choices[0].message.content
+                except Exception as e:
+                    logger.error(f"LLM final-answer call failed: {type(e).__name__}")
+                    span.record_exception(e)
+                    span.set_status(Status(StatusCode.ERROR, description=type(e).__name__))
+                    return _fallback_response(type(e).__name__)
             else:
-                candidate_text = response_message.content
+                # Model answered without tools; still surface empty content as fallback
+                # rather than a blank or hanging client response.
+                candidate_text = response_message.content or ""
+                if not candidate_text.strip():
+                    return _fallback_response("EmptyLLMResponse")
 
         # --- A1.2, step 3: scan whatever text we're about to return -
         output_guard = guardrails.scan_output(candidate_text)
@@ -419,7 +492,15 @@ def get_ai_assistant_response(request_product_id, question):
         if output_guard.action == GuardrailAction.SANITIZED and output_guard.sanitized_text:
             candidate_text = output_guard.sanitized_text
 
-        ai_assistant_response.response = candidate_text
+        # Use structured JSON if grounding produced one; otherwise wrap
+        # the plain candidate_text as a GROUNDED response without claims.
+        if structured_response:
+            ai_assistant_response.response = structured_response
+        else:
+            ai_assistant_response.response = _build_structured_response(
+                status="GROUNDED",
+                answer=candidate_text or "",
+            )
         logger.info(f"Returning an AI assistant response with length: {len(candidate_text or '')}")
 
         # Collect metrics for this service

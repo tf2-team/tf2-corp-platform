@@ -114,6 +114,7 @@ message ProductReview {
     string username = 1;
     string description = 2;
     string score = 3;
+    string id = 4;
 }
 
 message GetProductReviewsRequest {
@@ -137,8 +138,16 @@ message AskProductAIAssistantRequest {
     string question = 2;
 }
 
+message GroundedClaim {
+    string text = 1;
+    repeated string source_ids = 2;
+}
+
 message AskProductAIAssistantResponse {
     string response = 1;
+    string status = 2;
+    string reason = 3;
+    repeated GroundedClaim claims = 4;
 }
 
 // ---------------Shipping Service----------

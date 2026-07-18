@@ -91,6 +91,7 @@ export interface ProductReview {
   username: string;
   description: string;
   score: string;
+  id: string;
 }
 
 export interface GetProductReviewsRequest {
@@ -114,8 +115,16 @@ export interface AskProductAIAssistantRequest {
   question: string;
 }
 
+export interface GroundedClaim {
+  text: string;
+  sourceIds: string[];
+}
+
 export interface AskProductAIAssistantResponse {
   response: string;
+  status: string;
+  reason: string;
+  claims: GroundedClaim[];
 }
 
 export interface GetQuoteRequest {
@@ -1193,7 +1202,7 @@ export const SearchProductsResponse: MessageFns<SearchProductsResponse> = {
 };
 
 function createBaseProductReview(): ProductReview {
-  return { username: "", description: "", score: "" };
+  return { username: "", description: "", score: "", id: "" };
 }
 
 export const ProductReview: MessageFns<ProductReview> = {
@@ -1206,6 +1215,9 @@ export const ProductReview: MessageFns<ProductReview> = {
     }
     if (message.score !== "") {
       writer.uint32(26).string(message.score);
+    }
+    if (message.id !== "") {
+      writer.uint32(34).string(message.id);
     }
     return writer;
   },
@@ -1241,6 +1253,14 @@ export const ProductReview: MessageFns<ProductReview> = {
           message.score = reader.string();
           continue;
         }
+        case 4: {
+          if (tag !== 34) {
+            break;
+          }
+
+          message.id = reader.string();
+          continue;
+        }
       }
       if ((tag & 7) === 4 || tag === 0) {
         break;
@@ -1255,6 +1275,7 @@ export const ProductReview: MessageFns<ProductReview> = {
       username: isSet(object.username) ? globalThis.String(object.username) : "",
       description: isSet(object.description) ? globalThis.String(object.description) : "",
       score: isSet(object.score) ? globalThis.String(object.score) : "",
+      id: isSet(object.id) ? globalThis.String(object.id) : "",
     };
   },
 
@@ -1269,6 +1290,9 @@ export const ProductReview: MessageFns<ProductReview> = {
     if (message.score !== "") {
       obj.score = message.score;
     }
+    if (message.id !== "") {
+      obj.id = message.id;
+    }
     return obj;
   },
 
@@ -1280,6 +1304,7 @@ export const ProductReview: MessageFns<ProductReview> = {
     message.username = object.username ?? "";
     message.description = object.description ?? "";
     message.score = object.score ?? "";
+    message.id = object.id ?? "";
     return message;
   },
 };
@@ -1604,14 +1629,103 @@ export const AskProductAIAssistantRequest: MessageFns<AskProductAIAssistantReque
   },
 };
 
+function createBaseGroundedClaim(): GroundedClaim {
+  return { text: "", sourceIds: [] };
+}
+
+export const GroundedClaim: MessageFns<GroundedClaim> = {
+  encode(message: GroundedClaim, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.text !== "") {
+      writer.uint32(10).string(message.text);
+    }
+    for (const v of message.sourceIds) {
+      writer.uint32(18).string(v!);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): GroundedClaim {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseGroundedClaim();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.text = reader.string();
+          continue;
+        }
+        case 2: {
+          if (tag !== 18) {
+            break;
+          }
+
+          message.sourceIds.push(reader.string());
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): GroundedClaim {
+    return {
+      text: isSet(object.text) ? globalThis.String(object.text) : "",
+      sourceIds: globalThis.Array.isArray(object?.sourceIds)
+        ? object.sourceIds.map((e: any) => globalThis.String(e))
+        : globalThis.Array.isArray(object?.source_ids)
+        ? object.source_ids.map((e: any) => globalThis.String(e))
+        : [],
+    };
+  },
+
+  toJSON(message: GroundedClaim): unknown {
+    const obj: any = {};
+    if (message.text !== "") {
+      obj.text = message.text;
+    }
+    if (message.sourceIds?.length) {
+      obj.sourceIds = message.sourceIds;
+    }
+    return obj;
+  },
+
+  create<I extends Exact<DeepPartial<GroundedClaim>, I>>(base?: I): GroundedClaim {
+    return GroundedClaim.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<GroundedClaim>, I>>(object: I): GroundedClaim {
+    const message = createBaseGroundedClaim();
+    message.text = object.text ?? "";
+    message.sourceIds = object.sourceIds?.map((e) => e) || [];
+    return message;
+  },
+};
+
 function createBaseAskProductAIAssistantResponse(): AskProductAIAssistantResponse {
-  return { response: "" };
+  return { response: "", status: "", reason: "", claims: [] };
 }
 
 export const AskProductAIAssistantResponse: MessageFns<AskProductAIAssistantResponse> = {
   encode(message: AskProductAIAssistantResponse, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
     if (message.response !== "") {
       writer.uint32(10).string(message.response);
+    }
+    if (message.status !== "") {
+      writer.uint32(18).string(message.status);
+    }
+    if (message.reason !== "") {
+      writer.uint32(26).string(message.reason);
+    }
+    for (const v of message.claims) {
+      GroundedClaim.encode(v!, writer.uint32(34).fork()).join();
     }
     return writer;
   },
@@ -1631,6 +1745,30 @@ export const AskProductAIAssistantResponse: MessageFns<AskProductAIAssistantResp
           message.response = reader.string();
           continue;
         }
+        case 2: {
+          if (tag !== 18) {
+            break;
+          }
+
+          message.status = reader.string();
+          continue;
+        }
+        case 3: {
+          if (tag !== 26) {
+            break;
+          }
+
+          message.reason = reader.string();
+          continue;
+        }
+        case 4: {
+          if (tag !== 34) {
+            break;
+          }
+
+          message.claims.push(GroundedClaim.decode(reader, reader.uint32()));
+          continue;
+        }
       }
       if ((tag & 7) === 4 || tag === 0) {
         break;
@@ -1641,13 +1779,27 @@ export const AskProductAIAssistantResponse: MessageFns<AskProductAIAssistantResp
   },
 
   fromJSON(object: any): AskProductAIAssistantResponse {
-    return { response: isSet(object.response) ? globalThis.String(object.response) : "" };
+    return {
+      response: isSet(object.response) ? globalThis.String(object.response) : "",
+      status: isSet(object.status) ? globalThis.String(object.status) : "",
+      reason: isSet(object.reason) ? globalThis.String(object.reason) : "",
+      claims: globalThis.Array.isArray(object?.claims) ? object.claims.map((e: any) => GroundedClaim.fromJSON(e)) : [],
+    };
   },
 
   toJSON(message: AskProductAIAssistantResponse): unknown {
     const obj: any = {};
     if (message.response !== "") {
       obj.response = message.response;
+    }
+    if (message.status !== "") {
+      obj.status = message.status;
+    }
+    if (message.reason !== "") {
+      obj.reason = message.reason;
+    }
+    if (message.claims?.length) {
+      obj.claims = message.claims.map((e) => GroundedClaim.toJSON(e));
     }
     return obj;
   },
@@ -1660,6 +1812,9 @@ export const AskProductAIAssistantResponse: MessageFns<AskProductAIAssistantResp
   ): AskProductAIAssistantResponse {
     const message = createBaseAskProductAIAssistantResponse();
     message.response = object.response ?? "";
+    message.status = object.status ?? "";
+    message.reason = object.reason ?? "";
+    message.claims = object.claims?.map((e) => GroundedClaim.fromPartial(e)) || [];
     return message;
   },
 };
