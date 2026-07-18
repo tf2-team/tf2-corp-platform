@@ -266,6 +266,21 @@ class V001AnomalyRcaTest(unittest.TestCase):
 
         self.assertEqual(result.root_causes, [])
 
+    def test_rca_uses_bocpd_as_graph_seed_when_weighted_anomaly_is_empty(self):
+        runtime_config = load_runtime_config(Path("config/runtime.json"))
+        series = [
+            metric("payment", "latency", [1, 1, 1, 1, 1, 1, 1, 20]),
+            metric("checkout", "latency", [1, 1, 1, 1, 1, 1, 1, 2]),
+        ]
+        bocpd_findings = [
+            AnomalyFinding(algorithm="baro_bocpd", service="payment", metric="latency", signal_id="payment_latency", score=5.0, timestamp=7)
+        ]
+
+        result = rca_engine(runtime_config).rank([], series, top_k=3, bocpd_findings=bocpd_findings)
+
+        self.assertEqual(result.root_causes[0].service, "payment")
+        self.assertTrue(any(item.startswith("graph_score=") and not item.endswith("0.000") for item in result.root_causes[0].evidence))
+
     def test_rca_outputs_only_services_with_metric_evidence(self):
         runtime_config = load_runtime_config(Path("config/runtime.json"))
         findings = [

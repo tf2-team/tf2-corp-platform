@@ -24,7 +24,7 @@ class V001RcaEngine:
         root_findings = [finding for finding in findings if finding.service == "global" or not self._excluded_root_cause(finding.service)]
         bocpd_root_findings = [finding for finding in (bocpd_findings or []) if finding.service == "global" or not self._excluded_root_cause(finding.service)]
         bocpd_timestamp = min((finding.timestamp for finding in bocpd_root_findings), default=None)
-        graph_scores = self.graph.rank_services(root_findings)
+        graph_scores = self.graph.rank_services(root_findings or bocpd_root_findings)
         robust_scores = self._robust_service_scores(series, bocpd_timestamp)
         service_scores = self._combine_scores(graph_scores, robust_scores)
 

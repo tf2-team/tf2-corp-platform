@@ -36,9 +36,10 @@
     "blast_radius_limit": 3,
     "confidence_threshold": 0.7,
     "similarity_weights": {
-      "service": 0.4,
-      "log": 0.3,
-      "metric": 0.3
+      "service": 0.35,
+      "log": 0.25,
+      "trace": 0.2,
+      "metric": 0.2
     }
   },
   "no_data": {

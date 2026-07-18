@@ -8,8 +8,8 @@ from aiops.correlation import Correlator
 from aiops.deduplication import IncidentManager
 from aiops.detectors import DependencyDetector, DetectorEngine, NoDataDetector, ThresholdDetector
 from aiops.features import FeatureBuilder
-from aiops.schemas import ActionProposal, CandidateEvent, EvidenceItem, Feature, Observation, SignalQuality
-from aiops.remediation import PolicyEngine
+from aiops.schemas import ActionCatalogItem, ActionProposal, CandidateEvent, EvidenceItem, Feature, HistoryAction, IncidentFeatures, IncidentHistoryRecord, Observation, SignalQuality
+from aiops.remediation import HistoryRetriever, PolicyEngine, RemediationDecisionEngine
 
 
 def policy(settings: Settings | None = None, mode: str | None = None) -> PolicyEngine:
@@ -356,6 +356,80 @@ class PolicyEngineTest(unittest.TestCase):
 
         self.assertTrue(decision.allowed)
         self.assertEqual(decision.result, "allowed")
+
+
+class RemediationEngineTest(unittest.TestCase):
+    def test_deadlock_guard_matches_substring_log_signature(self):
+        decision = RemediationDecisionEngine(ood_threshold=0.1, cost_page=20.0, blast_radius_limit=3, confidence_threshold=0.7).decide(
+            "inc-1",
+            IncidentFeatures(affected_services={"postgresql"}, log_signatures={"database deadlock detected"}),
+            [
+                (
+                    IncidentHistoryRecord(
+                        incident_id="hist-1",
+                        affected_services={"postgresql"},
+                        log_signatures={"database deadlock detected"},
+                        actions_taken=[HistoryAction(action_id="increase_pool_postgresql", target="postgresql", outcome="success")],
+                    ),
+                    1.0,
+                )
+            ],
+            {
+                "increase_pool_postgresql": ActionCatalogItem(
+                    action_id="increase_pool_postgresql",
+                    action_type="increase_pool_size",
+                    target="postgresql",
+                    target_kind="Deployment",
+                    cost_min=1.0,
+                    downtime_min=0.0,
+                )
+            },
+        )
+
+        self.assertEqual(decision.selected_action, "page_oncall")
+        self.assertIn("deadlock_pool_size_forbidden", decision.reasons)
+
+    def test_retrieval_scores_trace_signatures(self):
+        retriever = HistoryRetriever({"service": 0.0, "log": 0.0, "trace": 1.0, "metric": 0.0}, top_k=1)
+
+        matches = retriever.top_matches(
+            IncidentFeatures(trace_signatures={"checkout->payment:5xx"}),
+            [
+                IncidentHistoryRecord(incident_id="hist-trace", trace_signatures={"checkout->payment:5xx"}),
+                IncidentHistoryRecord(incident_id="hist-other", trace_signatures={"checkout->cart:5xx"}),
+            ],
+        )
+
+        self.assertEqual(matches[0][0].incident_id, "hist-trace")
+
+    def test_translates_historical_action_to_current_affected_target(self):
+        decision = RemediationDecisionEngine(ood_threshold=0.1, cost_page=20.0, blast_radius_limit=3, confidence_threshold=0.7).decide(
+            "inc-1",
+            IncidentFeatures(affected_services={"payment-v2"}),
+            [
+                (
+                    IncidentHistoryRecord(
+                        incident_id="hist-1",
+                        affected_services={"payment"},
+                        actions_taken=[HistoryAction(action_id="restart_payment", target="payment", outcome="success")],
+                    ),
+                    1.0,
+                )
+            ],
+            {
+                "restart_payment_v2": ActionCatalogItem(
+                    action_id="restart_payment_v2",
+                    action_type="restart",
+                    target="payment-v2",
+                    target_kind="Deployment",
+                    cost_min=1.0,
+                    downtime_min=0.0,
+                )
+            },
+        )
+
+        self.assertEqual(decision.selected_action, "restart_payment_v2")
+        self.assertFalse(decision.fallback)
 
 
 if __name__ == "__main__":

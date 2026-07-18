@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from collections import defaultdict
 
-from aiops.schemas import ActionCatalogItem, IncidentFeatures, IncidentHistoryRecord, RemediationDecision
+from aiops.schemas import ActionCatalogItem, HistoryAction, IncidentFeatures, IncidentHistoryRecord, RemediationDecision
 
 
 class RemediationDecisionEngine:
@@ -33,17 +33,17 @@ class RemediationDecisionEngine:
         matched_ids: list[str] = []
         for record, similarity in matches:
             matched_ids.append(record.incident_id)
-            for action in record.actions_taken:
-                votes[action.action_id] += similarity * self._outcome_weight(action.outcome)
+            for history_action in record.actions_taken:
+                action = self._translate_action(history_action, features, catalog)
+                if action is not None:
+                    votes[action.action_id] += similarity * self._outcome_weight(history_action.outcome)
 
         if not votes:
             return self._page(incident_id, ["no_action_votes"])
 
         total = sum(votes.values()) or 1.0
         action_id, vote = max(votes.items(), key=lambda item: item[1])
-        action = catalog.get(action_id)
-        if action is None:
-            return self._page(incident_id, ["action_not_in_catalog"])
+        action = catalog[action_id]
 
         confidence = (vote / total) * max_similarity
         reasons = self._guardrail_reasons(action, features, confidence)
@@ -67,13 +67,41 @@ class RemediationDecisionEngine:
 
     def _guardrail_reasons(self, action: ActionCatalogItem, features: IncidentFeatures, confidence: float) -> list[str]:
         reasons: list[str] = []
-        if action.action_type == "increase_pool_size" and {"deadlock", "lock"} & features.log_signatures:
+        if action.action_type == "increase_pool_size" and self._has_lock_signature(features):
             reasons.append("deadlock_pool_size_forbidden")
         if action.action_type in {"restart", "rollback", "increase_pool_size"} and action.target not in features.affected_services:
             reasons.append("target_not_affected")
         if len(action.blast_radius_services) >= self.blast_radius_limit and confidence < self.confidence_threshold:
             reasons.append("blast_radius_too_large_for_confidence")
         return reasons
+
+    def _translate_action(
+        self,
+        history_action: HistoryAction,
+        features: IncidentFeatures,
+        catalog: dict[str, ActionCatalogItem],
+    ) -> ActionCatalogItem | None:
+        action = catalog.get(history_action.action_id)
+        if action is not None:
+            return action
+
+        action_type = self._history_action_type(history_action.action_id)
+        for candidate in catalog.values():
+            if candidate.action_type == action_type and candidate.target in features.affected_services:
+                return candidate
+        return None
+
+    def _history_action_type(self, action_id: str) -> str:
+        if action_id.startswith("increase_pool_"):
+            return "increase_pool_size"
+        if action_id.startswith("restart_"):
+            return "restart"
+        if action_id.startswith("rollback_"):
+            return "rollback"
+        return action_id.split("_", 1)[0]
+
+    def _has_lock_signature(self, features: IncidentFeatures) -> bool:
+        return any("deadlock" in item.lower() or "lock" in item.lower() for item in features.log_signatures)
 
     def _page(self, incident_id: str, reasons: list[str], matched_ids: list[str] | None = None) -> RemediationDecision:
         return RemediationDecision(

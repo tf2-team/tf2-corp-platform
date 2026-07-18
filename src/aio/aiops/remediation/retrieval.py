@@ -16,6 +16,7 @@ class HistoryRetriever:
         parts = {
             "service": self._jaccard(current.affected_services, record.affected_services),
             "log": self._jaccard(current.log_signatures, record.log_signatures),
+            "trace": self._jaccard(current.trace_signatures, record.trace_signatures),
             "metric": self._metric_similarity(current.metric_ratios, record.metric_ratios),
         }
         total_weight = sum(self.weights.values()) or 1.0
