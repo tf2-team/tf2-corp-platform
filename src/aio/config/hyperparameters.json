@@ -2,22 +2,25 @@
   "rca": {
     "enabled": true,
     "top_k": 5,
-    "min_points": 8,
+    "min_points": 30,
     "ewma_alpha": 0.3,
     "ewma_z_threshold": 3.0,
     "seasonal_period": 1,
     "isolation_score_threshold": 4.0,
     "anomaly": {
       "algorithm_weights": {
-        "ewma_stl": 0.4,
-        "isolation_forest": 0.25
+        "ewma_stl": 0.8,
+        "isolation_forest": 0.2
       },
       "weighted_score_threshold": 0.4,
-      "bocpd_min_changed_metrics": 2,
-      "bocpd_hazard_lambda": 50,
-      "bocpd_max_metrics": 8,
-      "bocpd_max_points": 120,
-      "single_algorithm_min_normalized_score": 2.0
+      "single_algorithm_min_normalized_score": 2.0,
+      "drain3_config_path": "config/drain3.ini",
+      "log_bucket_seconds": 60,
+      "log_correlation_window_seconds": 300,
+      "log_history_buckets": 60,
+      "log_min_nonzero_buckets": 2,
+      "log_max_templates_per_service": 20,
+      "log_max_events_per_evidence": 100
     },
     "graph": {
       "damping": 0.85,
@@ -25,8 +28,13 @@
       "timestamp_weight": 0.3
     },
     "combined": {
-      "graph_weight": 0.5,
-      "robust_weight": 0.5
+      "rrf_k": 60,
+      "ranker_weights": {
+        "graph": 0.5,
+        "robust": 0.3,
+        "earliest_drift": 0.1,
+        "correlation": 0.1
+      }
     }
   },
   "remediation": {
@@ -64,7 +72,7 @@
       "auto_email_error_rate": 0.05,
       "auto_quote_error_rate": 0.05,
       "auto_fraud_detection_error_rate": 0.05,
-      "ops04_checkout_latency_p95": 500.0,
+      "ops04_checkout_latency_p95": 0.5,
       "ops05_cart_error_rate": 0.02,
       "ops06_product_catalog_cpu": 50.0
     },
@@ -74,8 +82,8 @@
   },
   "prometheus": {
     "metric_series": {
-      "lookback_seconds": 3600,
-      "step_seconds": 1
+      "lookback_seconds": 6200,
+      "step_seconds": 60
     }
   },
   "correlation": {

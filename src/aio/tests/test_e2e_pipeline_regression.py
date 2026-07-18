@@ -355,6 +355,7 @@ class E2EPipelineRegressionTest(unittest.TestCase):
             write_history(history_path, metric_ratio=0.4)
             settings = settings_for(root)
             hyperparameters = load_hyperparameters(settings.hyperparameters_path)
+            runtime_config = load_runtime_config(settings.runtime_config_path)
             store = SQLiteIncidentStore(root / "aiops.sqlite3", environment=settings.environment)
             pipeline = AiopsPipeline(
                 collector=StaticCollector([observation("checkout_payment_error_rate_5m", 0.2)]),
@@ -362,9 +363,9 @@ class E2EPipelineRegressionTest(unittest.TestCase):
                 store=store,
                 policy=PolicyEngine(
                     mode=settings.policy_mode,
-                    protected_targets=settings.protected_targets,
-                    stateful_kinds=settings.stateful_kinds,
-                    non_actionable_flows=settings.non_actionable_flows,
+                    protected_targets=runtime_config.policy.protected_targets,
+                    stateful_kinds=runtime_config.policy.stateful_kinds,
+                    non_actionable_flows=runtime_config.policy.non_actionable_flows,
                     action_type=settings.action_type_restart,
                     target_kind=settings.action_target_kind_deployment,
                     default_replicas=settings.default_action_replicas,

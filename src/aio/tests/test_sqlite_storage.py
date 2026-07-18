@@ -29,22 +29,27 @@ class SQLiteIncidentStoreTest(unittest.TestCase):
     def test_persists_and_deduplicates_incidents(self):
         with tempfile.TemporaryDirectory() as tmp:
             db_path = Path(tmp) / "aiops.sqlite3"
-            first_store = SQLiteIncidentStore(db_path, environment="tf2")
-            incident = first_store.upsert(candidate(0.02, timestamp=100))
-            notifications = first_store.pending_notifications_for([incident])
-            first_store.close()
+            with self.assertLogs("aiops.storage.sqlite", level="DEBUG") as logs:
+                first_store = SQLiteIncidentStore(db_path, environment="tf2")
+                incident = first_store.upsert(candidate(0.02, timestamp=100))
+                notifications = first_store.pending_notifications_for([incident])
+                first_store.close()
 
-            second_store = SQLiteIncidentStore(db_path, environment="tf2")
-            same_incident = second_store.upsert(candidate(0.03, timestamp=200))
-            duplicate_notifications = second_store.pending_notifications_for([same_incident])
-            event_row = second_store._connection.execute(
-                "SELECT state, last_seen, recovered_at, cooldown_until FROM incident_events ORDER BY id DESC LIMIT 1"
-            ).fetchone()
-            outbox_count = second_store._connection.execute("SELECT COUNT(*) FROM notification_outbox").fetchone()[0]
-            incidents = second_store.list_incidents()
-            second_store.close()
+                second_store = SQLiteIncidentStore(db_path, environment="tf2")
+                same_incident = second_store.upsert(candidate(0.03, timestamp=200))
+                duplicate_notifications = second_store.pending_notifications_for([same_incident])
+                event_row = second_store._connection.execute(
+                    "SELECT state, last_seen, recovered_at, cooldown_until FROM incident_events ORDER BY id DESC LIMIT 1"
+                ).fetchone()
+                outbox_count = second_store._connection.execute("SELECT COUNT(*) FROM notification_outbox").fetchone()[0]
+                incidents = second_store.list_incidents()
+                second_store.close()
 
         self.assertEqual(incident.incident_id, same_incident.incident_id)
+        text = "\n".join(logs.output)
+        self.assertIn("AIOPS_INCIDENT_UPSERT action=created", text)
+        self.assertIn("AIOPS_INCIDENT_UPSERT action=deduped", text)
+        self.assertIn("notification_enqueued=False", text)
         self.assertEqual(notifications[0].incident_id, incident.incident_id)
         self.assertEqual(notifications[0].runbook_id, "RB-CHECKOUT-SLO")
         self.assertEqual(duplicate_notifications, [])

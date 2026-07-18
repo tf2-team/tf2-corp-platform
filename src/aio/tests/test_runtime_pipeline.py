@@ -8,7 +8,19 @@ from aiops.config import Settings, load_hyperparameters, load_runtime_config
 from aiops.detectors import DependencyDetector, Detector, NoDataDetector, ThresholdDetector
 from aiops.normalization import load_normalization_schema
 from aiops.qualification import load_qualification_schema
-from aiops.schemas import CandidateEvent, Feature, Observation, SignalQuality
+from aiops.schemas import (
+    AnomalyFinding,
+    CandidateEvent,
+    EvidenceItem,
+    Feature,
+    Incident,
+    MetricPoint,
+    MetricSeries,
+    Observation,
+    RcaResult,
+    RootCauseCandidate,
+    SignalQuality,
+)
 from aiops.pipeline import AiopsPipeline
 from aiops.remediation import (
     ActionCatalog,
@@ -23,11 +35,12 @@ from aiops.storage import SQLiteIncidentStore
 
 
 def policy(settings: Settings) -> PolicyEngine:
+    runtime_config = load_runtime_config(settings.runtime_config_path)
     return PolicyEngine(
         mode=settings.policy_mode,
-        protected_targets=settings.protected_targets,
-        stateful_kinds=settings.stateful_kinds,
-        non_actionable_flows=settings.non_actionable_flows,
+        protected_targets=runtime_config.policy.protected_targets,
+        stateful_kinds=runtime_config.policy.stateful_kinds,
+        non_actionable_flows=runtime_config.policy.non_actionable_flows,
         action_type=settings.action_type_restart,
         target_kind=settings.action_target_kind_deployment,
         default_replicas=settings.default_action_replicas,
@@ -36,13 +49,15 @@ def policy(settings: Settings) -> PolicyEngine:
 
 def no_data_detector(settings: Settings) -> NoDataDetector:
     no_data = load_hyperparameters(settings.hyperparameters_path)["no_data"]
+    runtime_config = load_runtime_config(settings.runtime_config_path)
+    detector = next(item for item in runtime_config.detectors if item.type == "no-data")
     return NoDataDetector(
-        settings.no_data_required_signal_ids,
-        detector_id=settings.no_data_detector_id,
-        flow=settings.no_data_flow,
-        service=settings.no_data_service,
-        severity=settings.no_data_severity,
-        runbook_id=settings.no_data_runbook_id,
+        detector.signal_ids,
+        detector_id=detector.id,
+        flow=detector.flow,
+        service=detector.service,
+        severity=detector.severity,
+        runbook_id=detector.runbook_id,
         missing_confidence=no_data["missing_confidence"],
         unknown_confidence=no_data["unknown_confidence"],
     )
@@ -59,6 +74,15 @@ def runtime_kwargs(settings: Settings) -> dict:
         "qualification_max_sample_age_seconds": settings.qualification_max_sample_age_seconds,
         "correlation_hyperparameters": hyperparameters["correlation"],
     }
+
+
+def metric(service: str, name: str, values: list[float]) -> MetricSeries:
+    return MetricSeries(
+        service=service,
+        metric=name,
+        signal_id=f"{service}_{name}",
+        points=[MetricPoint(timestamp=index, value=value) for index, value in enumerate(values)],
+    )
 
 
 class RecoveredDependencyDetector(Detector):
@@ -138,7 +162,7 @@ class RuntimePipelineTest(unittest.TestCase):
                         service="checkout",
                         dependency="payment",
                         runbook_id="RB-CHECKOUT-DEPENDENCY",
-                        severity=settings.dependency_default_severity,
+                        severity="SEV1",
                         confidence=0.8,
                     ),
                 ],
@@ -205,6 +229,47 @@ class RuntimePipelineTest(unittest.TestCase):
         self.assertEqual([message.incident_id for message in sender.sent], [result.incidents[0].incident_id])
         self.assertEqual(outbox_row, ("sent", 1))
         self.assertEqual(attempt_row, ("sent", 1))
+
+    def test_pipeline_logs_notification_ready_after_dedup(self):
+        settings = Settings()
+        with TemporaryDirectory() as tmp, self.assertLogs("aiops.pipeline.runtime", level="INFO") as logs:
+            store = SQLiteIncidentStore(Path(tmp) / "aiops.sqlite3", environment=settings.environment)
+            pipeline = AiopsPipeline(
+                collector=StaticCollector(
+                    [
+                        Observation(
+                            signal_id="checkout_bad_ratio_24h",
+                            value=0.02,
+                            unit="ratio",
+                            window="24h",
+                            quality=SignalQuality.VERIFIED,
+                        )
+                    ]
+                ),
+                detectors=[
+                    ThresholdDetector(
+                        detector_id="ops01_checkout_slo",
+                        signal_id="checkout_bad_ratio_24h",
+                        threshold=0.01,
+                        flow="checkout",
+                        service="checkout",
+                        severity="SEV1",
+                        runbook_id="RB-CHECKOUT-SLO",
+                    )
+                ],
+                store=store,
+                policy=policy(settings),
+                **runtime_kwargs(settings),
+            )
+
+            pipeline.run_once()
+            store.close()
+
+        text = "\n".join(logs.output)
+        self.assertIn("AIOPS_DEDUP_RESULT", text)
+        self.assertIn("input_candidates=1 incidents=1", text)
+        self.assertIn("AIOPS_NOTIFY_READY", text)
+        self.assertIn("status=pending", text)
 
     def test_pipeline_marks_notification_failure_for_retry(self):
         settings = Settings()
@@ -352,6 +417,129 @@ class RuntimePipelineTest(unittest.TestCase):
 
         self.assertEqual(result.incidents[0].flow, "monitoring")
         self.assertEqual(result.incidents[0].events[0].reason, "signal_unqualified")
+
+    def test_pipeline_extracts_log_evidence_for_v001_rca(self):
+        settings = Settings()
+        with TemporaryDirectory() as tmp:
+            hyperparameters = load_hyperparameters(settings.hyperparameters_path)["rca"]
+            hyperparameters = {
+                **hyperparameters,
+                "min_points": 8,
+                "anomaly": {**hyperparameters["anomaly"], "log_history_buckets": 8, "log_min_nonzero_buckets": 1},
+            }
+            pipeline = AiopsPipeline(
+                collector=StaticCollector([]),
+                detectors=[],
+                store=SQLiteIncidentStore(Path(tmp) / "aiops.sqlite3", environment=settings.environment),
+                policy=policy(settings),
+                rca_hyperparameters=hyperparameters,
+                runtime_config=load_runtime_config(settings.runtime_config_path),
+            )
+            incident = Incident(
+                incident_id="inc-test",
+                fingerprint="sha256:test",
+                state="open",
+                severity="SEV1",
+                flow="checkout",
+                service="checkout",
+                likely_dependency="payment",
+                events=[
+                    CandidateEvent(
+                        timestamp=10,
+                        detector_id="test",
+                        flow="checkout",
+                        service="checkout",
+                        severity="SEV1",
+                        signal_id="checkout_error_rate_5m",
+                        value=1.0,
+                        unit="ratio",
+                        window="5m",
+                        threshold=0.1,
+                        quality=SignalQuality.VERIFIED,
+                        reason="test",
+                        runbook_id="RB-CHECKOUT-SLO",
+                        evidence=(EvidenceItem(source="log", reference="opensearch", summary="count=8 excerpts=['payment failed order=123 status=500']"),),
+                    )
+                ],
+            )
+
+            result = pipeline._run_v001_rca([], [incident])
+            pipeline.store.close()
+
+        self.assertEqual(result.root_causes, [])
+        self.assertEqual(result.anomalies, [])
+
+    def test_pipeline_records_rca_history_jsonl(self):
+        settings = Settings()
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            hyperparameters = load_hyperparameters(settings.hyperparameters_path)["rca"]
+            store = SQLiteIncidentStore(root / "aiops.sqlite3", environment=settings.environment)
+            pipeline = AiopsPipeline(
+                collector=StaticCollector(
+                    [
+                        Observation(
+                            signal_id="checkout_bad_ratio_24h",
+                            value=0.02,
+                            unit="ratio",
+                            window="24h",
+                            quality=SignalQuality.VERIFIED,
+                        )
+                    ]
+                ),
+                detectors=[
+                    ThresholdDetector(
+                        detector_id="ops01_checkout_slo",
+                        signal_id="checkout_bad_ratio_24h",
+                        threshold=0.01,
+                        flow="checkout",
+                        service="checkout",
+                        severity="SEV1",
+                        runbook_id="RB-CHECKOUT-SLO",
+                    )
+                ],
+                store=store,
+                policy=policy(settings),
+                rca_hyperparameters=hyperparameters,
+                rca_history_path=root / "state" / "rca_history.jsonl",
+                **runtime_kwargs(settings),
+            )
+            pipeline._run_v001_rca = lambda metric_series, incidents: RcaResult(
+                anomalies=[
+                    AnomalyFinding(
+                        algorithm="weighted_sum",
+                        service="checkout",
+                        metric="error_rate_5m",
+                        signal_id="checkout_error_rate_5m",
+                        score=1.7,
+                        timestamp=59,
+                    )
+                ],
+                root_causes=[
+                    RootCauseCandidate(
+                        service="checkout",
+                        score=1.7,
+                        root_cause_metrics=["error_rate_5m"],
+                        evidence=["test"],
+                    )
+                ],
+            )
+
+            result = pipeline.run_once(
+                metric_series=[
+                    metric("checkout", "error_rate_5m", [0.0] * 40 + [0.4] * 20),
+                    metric("checkout", "p95_latency_5m", [0.1] * 40 + [1.5] * 20),
+                ]
+            )
+            store.close()
+            rows = [json.loads(line) for line in (root / "state" / "rca_history.jsonl").read_text(encoding="utf-8").splitlines()]
+
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0]["incidents"][0]["service"], "checkout")
+        self.assertEqual(rows[0]["incidents"][0]["detectors"], ["ops01_checkout_slo"])
+        self.assertEqual(rows[0]["parameters"]["min_points"], hyperparameters["min_points"])
+        self.assertEqual(rows[0]["series_point_count"]["max"], 60)
+        self.assertEqual(rows[0]["root_causes"][0]["service"], result.rca_result.root_causes[0].service)
 
     def test_verified_remediation_is_added_to_incident_history(self):
         settings = Settings()

@@ -11,35 +11,35 @@ from aiops.schemas import RuntimeConfig
 
 PROMETHEUS_SERVICE_METRICS = {
     "p95_latency_5m": {
-        "template": 'histogram_quantile(0.95, sum(rate(traces_span_metrics_duration_milliseconds_bucket{service_name="$service"}[5m])) by (le))',
-        "unit": "milliseconds",
+        "template": '((histogram_quantile(0.95, sum(rate(traces_span_metrics_duration_milliseconds_bucket{service_name="$service"}[5m])) by (le, service_name)) / 1000) and on(service_name) (sum(rate(traces_span_metrics_duration_milliseconds_count{service_name="$service"}[5m])) by (service_name) > 0)) or on() vector(0)',
+        "unit": "seconds",
     },
     "error_rate_5m": {
-        "template": '(((sum(rate(traces_span_metrics_calls_total{service_name="$service",status_code="STATUS_CODE_ERROR"}[5m])) or vector(0)) / clamp_min(sum(rate(traces_span_metrics_calls_total{service_name="$service"}[5m])), 0.000001)) and on() (sum(rate(traces_span_metrics_calls_total{service_name="$service"}[5m])) > 0))',
+        "template": '((((sum(rate(traces_span_metrics_calls_total{service_name="$service",status_code="STATUS_CODE_ERROR"}[5m])) or vector(0)) / clamp_min(sum(rate(traces_span_metrics_calls_total{service_name="$service"}[5m])), 0.000001)) and on() (sum(rate(traces_span_metrics_calls_total{service_name="$service"}[5m])) > 0)) or on() vector(0))',
         "unit": "ratio",
     },
     "request_rate_5m": {
-        "template": 'sum(rate(traces_span_metrics_calls_total{service_name="$service"}[5m]))',
+        "template": 'sum(rate(traces_span_metrics_calls_total{service_name="$service"}[5m])) or on() vector(0)',
         "unit": "requests_per_second",
     },
     "cpu_millicores": {
-        "template": '(sum(rate(container_cpu_usage_seconds_total{container="$service"}[5m])) * 1000) or (sum(rate(container_cpu_usage_total{container_name=~".*$service.*"}[5m])) * 1000) or sum(k8s_pod_cpu_usage{k8s_deployment_name="$service"})',
+        "template": '((sum(rate(container_cpu_usage_seconds_total{container="$service"}[5m])) * 1000) or (sum(rate(container_cpu_usage_total{container_name=~".*$service.*"}[5m])) * 1000) or sum(k8s_pod_cpu_usage{k8s_deployment_name="$service"})) or on() vector(0)',
         "unit": "count",
     },
     "memory_usage_bytes": {
-        "template": 'sum(container_memory_usage_bytes{container="$service"}) or sum(container_memory_usage_bytes{container_name=~".*$service.*"}) or sum(k8s_pod_memory_usage{k8s_deployment_name="$service"})',
+        "template": '(sum(container_memory_usage_bytes{container="$service"}) or sum(container_memory_usage_bytes{container_name=~".*$service.*"}) or sum(k8s_pod_memory_usage{k8s_deployment_name="$service"})) or on() vector(0)',
         "unit": "bytes",
     },
     "disk_io_bytes_per_second": {
-        "template": 'sum(rate(container_fs_reads_bytes_total{container="$service"}[5m])) + sum(rate(container_fs_writes_bytes_total{container="$service"}[5m])) or sum(rate(container_blockio_io_service_bytes_recursive{container_name=~".*$service.*"}[5m]))',
+        "template": '((sum(rate(container_fs_reads_bytes_total{container="$service"}[5m])) + sum(rate(container_fs_writes_bytes_total{container="$service"}[5m]))) or sum(rate(container_blockio_io_service_bytes_recursive{container_name=~".*$service.*"}[5m]))) or on() vector(0)',
         "unit": "bytes",
     },
     "socket_io_bytes_per_second": {
-        "template": 'sum(rate(container_network_receive_bytes_total{pod=~"$service.*"}[5m])) + sum(rate(container_network_transmit_bytes_total{pod=~"$service.*"}[5m])) or sum(rate(container_network_io_usage_rx_bytes{container_name=~".*$service.*"}[5m])) + sum(rate(container_network_io_usage_tx_bytes{container_name=~".*$service.*"}[5m]))',
+        "template": '((sum(rate(container_network_receive_bytes_total{pod=~"$service.*"}[5m])) + sum(rate(container_network_transmit_bytes_total{pod=~"$service.*"}[5m]))) or (sum(rate(container_network_io_usage_rx_bytes{container_name=~".*$service.*"}[5m])) + sum(rate(container_network_io_usage_tx_bytes{container_name=~".*$service.*"}[5m])))) or on() vector(0)',
         "unit": "bytes",
     },
     "workload_ready_pods": {
-        "template": 'sum(k8s_pod_ready{k8s_deployment_name="$service"}) or sum(kube_pod_status_ready{pod=~"$service.*",condition="true"})',
+        "template": '(sum(k8s_pod_ready{k8s_deployment_name="$service"}) or sum(kube_pod_status_ready{pod=~"$service.*",condition="true"})) or on() vector(0)',
         "unit": "count",
     },
 }

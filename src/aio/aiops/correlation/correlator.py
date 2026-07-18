@@ -33,7 +33,7 @@ class Correlator:
         for group in grouped.values():
             primary_signal = next((item for item in group if item.likely_dependency == "unknown"), group[0])
             dependency, components = self._rank_dependency(group, primary_signal)
-            logger.info(
+            logger.debug(
                 "AIOPS_BLOCK correlate_group service=%s flow=%s candidates=%s primary=%s dependency=%s components=%s",
                 primary_signal.service,
                 primary_signal.flow,

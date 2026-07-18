@@ -1,9 +1,12 @@
 from __future__ import annotations
 
+import logging
 from datetime import UTC, datetime
 
 from aiops.incidents.fingerprint import incident_fingerprint
 from aiops.schemas import CandidateEvent, Incident
+
+logger = logging.getLogger(__name__)
 
 
 class IncidentManager:
@@ -28,12 +31,28 @@ class IncidentManager:
                 events=[candidate],
             )
             self._incidents_by_fingerprint[fingerprint] = incident
+            logger.info(
+                "AIOPS_INCIDENT_UPSERT action=created incident=%s fingerprint=%s service=%s detector=%s occurrence=%s",
+                incident.incident_id,
+                fingerprint,
+                incident.service,
+                candidate.detector_id,
+                incident.occurrence_count,
+            )
             return incident
 
         incident.occurrence_count += 1
         incident.events.append(candidate)
         incident.last_seen = _seen_at(candidate)
         incident.severity = min(incident.severity, candidate.severity)
+        logger.info(
+            "AIOPS_INCIDENT_UPSERT action=deduped incident=%s fingerprint=%s service=%s detector=%s occurrence=%s",
+            incident.incident_id,
+            fingerprint,
+            incident.service,
+            candidate.detector_id,
+            incident.occurrence_count,
+        )
         return incident
 
     def fingerprint(self, candidate: CandidateEvent) -> str:

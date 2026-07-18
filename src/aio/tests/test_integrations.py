@@ -109,7 +109,12 @@ class IntegrationClientTest(unittest.TestCase):
             likely_dependency="unknown",
             runbook_id="RB-CHECKOUT-SLO",
         )
-        response = NotificationClient(settings(), transport=httpx.MockTransport(handler)).send(message)
+        cfg = fixed_settings(
+            notification_webhook_url="https://notification.example",
+            notification_token="CHANGE_ME_NOTIFICATION_TOKEN",
+            notification_account="CHANGE_ME_NOTIFICATION_ACCOUNT",
+        )
+        response = NotificationClient(cfg, transport=httpx.MockTransport(handler)).send(message)
 
         self.assertEqual(response["accepted"], True)
         self.assertEqual(str(seen[0].url), "https://notification.example")

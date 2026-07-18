@@ -4,6 +4,7 @@ from tempfile import TemporaryDirectory
 from pathlib import Path
 
 from aiops.config import load_runtime_config
+from aiops.normalization import Normalizer, load_normalization_schema
 from aiops.qualification import QualificationGate, load_qualification_schema
 from aiops.schemas import Observation, SignalQuality
 
@@ -32,6 +33,22 @@ class QualificationGateTest(unittest.TestCase):
             )
         )
 
+        self.assertEqual(result.quality, SignalQuality.VERIFIED)
+
+    def test_latency_normalizes_to_registered_seconds_unit(self):
+        observation = Observation(
+            signal_id="checkout_p95_latency_5m",
+            value=250.0,
+            unit="milliseconds",
+            window="5m",
+            quality=SignalQuality.UNQUALIFIED,
+            labels={"service_name": "checkout"},
+        )
+        normalized = Normalizer(load_normalization_schema(Path("config/signal_normalization_schema.json"))).normalize([observation])[0]
+        result = self.qualify(normalized)
+
+        self.assertEqual(result.value, 0.25)
+        self.assertEqual(result.unit, "seconds")
         self.assertEqual(result.quality, SignalQuality.VERIFIED)
 
     def test_marks_bad_signal_shapes_invalid(self):

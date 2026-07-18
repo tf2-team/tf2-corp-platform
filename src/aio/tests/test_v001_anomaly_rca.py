@@ -6,7 +6,7 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 
 from aiops.anomaly import V001AnomalyEngine
-from aiops.anomaly.v001 import BaroBocpdDetector, EwmaStlDetector, ServiceIsolationForestDetector
+from aiops.anomaly.v001 import AnomalyMergeQueue, EwmaStlDetector, LogTemplateAnomalyDetector, ServiceIsolationForestDetector
 from aiops.api.app import run_static_pipeline
 from aiops.config import Settings, load_hyperparameters, load_runtime_config
 from aiops.rca.graph import GraphTraversalRca
@@ -29,7 +29,8 @@ def rca_hyperparameters(**overrides):
 
 
 def anomaly_engine(**overrides) -> V001AnomalyEngine:
-    config = rca_hyperparameters(**overrides)
+    config = rca_hyperparameters()
+    config = {**config, "min_points": overrides.pop("min_points", 8), **overrides}
     return V001AnomalyEngine(
         ewma_alpha=config["ewma_alpha"],
         ewma_z_threshold=config["ewma_z_threshold"],
@@ -38,10 +39,8 @@ def anomaly_engine(**overrides) -> V001AnomalyEngine:
         seasonal_period=config["seasonal_period"],
         algorithm_weights=config["anomaly"]["algorithm_weights"],
         weighted_score_threshold=config["anomaly"]["weighted_score_threshold"],
-        bocpd_min_changed_metrics=config["anomaly"]["bocpd_min_changed_metrics"],
-        bocpd_hazard_lambda=config["anomaly"]["bocpd_hazard_lambda"],
-        bocpd_max_metrics=config["anomaly"]["bocpd_max_metrics"],
-        bocpd_max_points=config["anomaly"]["bocpd_max_points"],
+        log_history_buckets=8,
+        log_min_nonzero_buckets=1,
         single_algorithm_min_normalized_score=config["anomaly"]["single_algorithm_min_normalized_score"],
     )
 
@@ -92,45 +91,6 @@ class V001AnomalyRcaTest(unittest.TestCase):
 
         self.assertEqual(findings, [])
 
-    def test_baro_bocpd_requires_correlated_metric_change(self):
-        config = rca_hyperparameters()
-        detector = BaroBocpdDetector(
-            score_threshold=config["isolation_score_threshold"],
-            min_points=config["min_points"],
-            min_changed_metrics=config["anomaly"]["bocpd_min_changed_metrics"],
-            hazard_lambda=config["anomaly"]["bocpd_hazard_lambda"],
-            max_metrics=config["anomaly"]["bocpd_max_metrics"],
-        )
-
-        findings = detector.evaluate(
-            [
-                metric("checkout", "latency", [1, 1, 1, 1, 1, 1, 1, 20]),
-                metric("payment", "error_rate_5m", [0, 0, 0, 0, 0, 0, 0, 0]),
-            ]
-        )
-
-        self.assertEqual(findings, [])
-
-    def test_baro_bocpd_detects_correlated_metric_change(self):
-        config = rca_hyperparameters()
-        detector = BaroBocpdDetector(
-            score_threshold=config["isolation_score_threshold"],
-            min_points=config["min_points"],
-            min_changed_metrics=config["anomaly"]["bocpd_min_changed_metrics"],
-            hazard_lambda=config["anomaly"]["bocpd_hazard_lambda"],
-            max_metrics=config["anomaly"]["bocpd_max_metrics"],
-        )
-
-        findings = detector.evaluate(
-            [
-                metric("checkout", "latency", [1, 1, 1, 1, 1, 1, 1, 20]),
-                metric("payment", "error_rate_5m", [0, 0, 0, 0, 0, 0, 0, 10]),
-            ]
-        )
-
-        self.assertEqual({finding.algorithm for finding in findings}, {"baro_bocpd"})
-        self.assertEqual({finding.service for finding in findings}, {"checkout", "payment"})
-
     def test_isolation_forest_normalizes_rows_before_scoring(self):
         detector = ServiceIsolationForestDetector(score_threshold=4.0, min_points=8)
         rows = detector._rows(
@@ -142,54 +102,6 @@ class V001AnomalyRcaTest(unittest.TestCase):
 
         self.assertEqual(rows[-1], [20.0, 20000.0])
         self.assertEqual(detector._normalized_rows(rows)[-1], [1.0, 1.0])
-
-    def test_baro_bocpd_prefilters_and_normalizes_before_baro_core(self):
-        config = rca_hyperparameters()
-        detector = BaroBocpdDetector(
-            score_threshold=config["isolation_score_threshold"],
-            min_points=config["min_points"],
-            min_changed_metrics=2,
-            hazard_lambda=config["anomaly"]["bocpd_hazard_lambda"],
-            max_metrics=2,
-        )
-        captured: dict[str, list[list[float]]] = {}
-
-        def fake_bocpd(rows: list[list[float]]) -> list[int]:
-            captured["rows"] = rows
-            return [7]
-
-        findings = detector.evaluate(
-            [
-                metric("checkout", "latency", [1, 1, 1, 1, 1, 1, 1, 20]),
-                metric("payment", "error_rate_5m", [0, 0, 0, 0, 0, 0, 0, 10]),
-                metric("quote", "cpu", [100, 100, 100, 100, 100, 100, 100, 10000]),
-            ],
-            bocpd=fake_bocpd,
-        )
-
-        self.assertEqual(len(captured["rows"][0]), 2)
-        self.assertEqual(captured["rows"][-1], [1.0, 1.0])
-        self.assertEqual({finding.service for finding in findings}, {"checkout", "payment"})
-
-    def test_baro_bocpd_caps_points_before_baro_core(self):
-        detector = BaroBocpdDetector(score_threshold=4.0, min_points=8, min_changed_metrics=2, max_points=32)
-        values = [1.0] * 500
-        values[-1] = 100.0
-        captured: dict[str, list[list[float]]] = {}
-
-        def fake_bocpd(rows: list[list[float]]) -> list[int]:
-            captured["rows"] = rows
-            return [31]
-
-        detector.evaluate(
-            [
-                metric("checkout", "latency", values),
-                metric("payment", "error_rate_5m", values),
-            ],
-            bocpd=fake_bocpd,
-        )
-
-        self.assertEqual(len(captured["rows"]), 32)
 
     def test_weighted_sum_ignores_weak_single_algorithm_without_corroboration(self):
         engine = anomaly_engine()
@@ -222,6 +134,88 @@ class V001AnomalyRcaTest(unittest.TestCase):
         weights = rca_hyperparameters()["anomaly"]["algorithm_weights"]
         self.assertEqual([(finding.algorithm, finding.score) for finding in findings], [("weighted_sum", weights["isolation_forest"] + weights["ewma_stl"])])
 
+    def test_busy_cpu_without_failure_signal_is_suppressed(self):
+        engine = anomaly_engine()
+        findings = [
+            AnomalyFinding(algorithm="weighted_sum", service="checkout", metric="cpu_millicores", signal_id="checkout_cpu_millicores", score=0.5, timestamp=7)
+        ]
+        series = [
+            metric("checkout", "request_rate_5m", [10, 10, 10, 10, 10, 10, 10, 100]),
+            metric("checkout", "p95_latency_5m", [1, 1, 1, 1, 1, 1, 1, 1]),
+            metric("checkout", "error_rate_5m", [0, 0, 0, 0, 0, 0, 0, 0]),
+        ]
+
+        self.assertEqual(engine._suppress_busy_cpu(findings, series), [])
+
+    def test_memory_growth_is_kept_as_early_oom_signal(self):
+        engine = anomaly_engine()
+        findings = [
+            AnomalyFinding(
+                algorithm="weighted_sum",
+                service="checkout",
+                metric="memory_usage_bytes",
+                signal_id="checkout_memory_usage_bytes",
+                score=0.5,
+                timestamp=7,
+            )
+        ]
+        series = [
+            metric("checkout", "request_rate_5m", [10, 10, 10, 10, 10, 10, 10, 100]),
+            metric("checkout", "p95_latency_5m", [1, 1, 1, 1, 1, 1, 1, 1]),
+            metric("checkout", "error_rate_5m", [0, 0, 0, 0, 0, 0, 0, 0]),
+        ]
+
+        self.assertEqual(engine._suppress_busy_cpu(findings, series), findings)
+
+    def test_anomaly_merge_queue_drains_detector_findings_fifo(self):
+        queue = AnomalyMergeQueue()
+        ewma = AnomalyFinding(algorithm="ewma_stl", service="checkout", metric="latency", signal_id="checkout_latency", score=4.0, timestamp=1)
+        isolation = AnomalyFinding(
+            algorithm="isolation_forest",
+            service="checkout",
+            metric="latency",
+            signal_id="checkout_latency",
+            score=8.0,
+            timestamp=1,
+        )
+
+        queue.push_many([ewma])
+        queue.push_many([isolation])
+
+        self.assertEqual([finding.algorithm for finding in queue.drain()], ["ewma_stl", "isolation_forest"])
+        self.assertEqual(queue.drain(), [])
+
+    def test_log_template_builder_groups_variable_log_lines_as_metric_series(self):
+        builder = LogTemplateAnomalyDetector(min_nonzero_buckets=1)
+        builder.template_miner = None
+
+        series = builder.build(
+            [
+                ("checkout", 10, "payment failed order=123 status=500"),
+                ("checkout", 11, "payment failed order=456 status=500"),
+            ]
+        )
+
+        self.assertEqual(len(series), 1)
+        self.assertEqual(series[0].service, "checkout")
+        self.assertTrue(series[0].metric.startswith("log_template_count_"))
+        self.assertEqual(series[0].points[-1].value, 2.0)
+
+    def test_v001_engine_drops_log_metrics_without_metric_anomaly(self):
+        logs = [("checkout", 10, "payment failed order=123 status=500")] * 8
+
+        findings = anomaly_engine().evaluate([], logs=logs)
+
+        self.assertEqual(findings, [])
+
+    def test_v001_engine_keeps_log_metrics_near_metric_anomaly(self):
+        logs = [("checkout", 7, "payment failed order=123 status=500")] * 8
+
+        findings = anomaly_engine().evaluate([metric("checkout", "error_rate_5m", [0, 0, 0, 0, 0, 0, 0, 10])], logs=logs)
+
+        self.assertIn("error_rate_5m", [finding.metric for finding in findings])
+        self.assertTrue(any(finding.metric.startswith("log_template_count_") for finding in findings))
+
     def test_v001_pipeline_ranks_top_root_cause_service_and_metrics(self):
         series = [
             metric("checkout", "latency", [1.0, 1.1, 1.0, 1.1, 1.0, 1.1, 1.0, 2.0, 2.1, 2.0]),
@@ -230,7 +224,7 @@ class V001AnomalyRcaTest(unittest.TestCase):
         ]
         runtime_config = load_runtime_config(Path("config/runtime.json"))
         findings = anomaly_engine(ewma_z_threshold=0.5).evaluate(series)
-        result = rca_engine(runtime_config).rank(findings, series, top_k=3, bocpd_findings=anomaly_engine(ewma_z_threshold=0.5).evaluate_bocpd(series))
+        result = rca_engine(runtime_config).rank(findings, series, top_k=3)
 
         self.assertEqual({finding.algorithm for finding in findings}, {"weighted_sum"})
         result_anomalies = [(finding.algorithm, finding.service, finding.metric) for finding in result.anomalies]
@@ -238,6 +232,7 @@ class V001AnomalyRcaTest(unittest.TestCase):
         self.assertEqual(result.root_causes[0].service, "payment")
         self.assertIn("latency", result.root_causes[0].root_cause_metrics)
         self.assertTrue(any("robust_score=" in item for item in result.root_causes[0].evidence))
+        self.assertTrue(any("weighted_rrf_score=" in item for item in result.root_causes[0].evidence))
 
     def test_rca_excludes_observability_testing_and_protected_flagd_roots(self):
         runtime_config = load_runtime_config(Path("config/runtime.json"))
@@ -266,20 +261,16 @@ class V001AnomalyRcaTest(unittest.TestCase):
 
         self.assertEqual(result.root_causes, [])
 
-    def test_rca_uses_bocpd_as_graph_seed_when_weighted_anomaly_is_empty(self):
+    def test_rca_requires_weighted_anomaly_gate_before_rankers(self):
         runtime_config = load_runtime_config(Path("config/runtime.json"))
         series = [
             metric("payment", "latency", [1, 1, 1, 1, 1, 1, 1, 20]),
             metric("checkout", "latency", [1, 1, 1, 1, 1, 1, 1, 2]),
         ]
-        bocpd_findings = [
-            AnomalyFinding(algorithm="baro_bocpd", service="payment", metric="latency", signal_id="payment_latency", score=5.0, timestamp=7)
-        ]
 
-        result = rca_engine(runtime_config).rank([], series, top_k=3, bocpd_findings=bocpd_findings)
+        result = rca_engine(runtime_config).rank([], series, top_k=3)
 
-        self.assertEqual(result.root_causes[0].service, "payment")
-        self.assertTrue(any(item.startswith("graph_score=") and not item.endswith("0.000") for item in result.root_causes[0].evidence))
+        self.assertEqual(result.root_causes, [])
 
     def test_rca_outputs_only_services_with_metric_evidence(self):
         runtime_config = load_runtime_config(Path("config/runtime.json"))
@@ -291,6 +282,34 @@ class V001AnomalyRcaTest(unittest.TestCase):
 
         self.assertEqual([candidate.service for candidate in result.root_causes], ["checkout"])
         self.assertTrue(all(candidate.root_cause_metrics for candidate in result.root_causes))
+
+    def test_rca_does_not_use_log_template_as_root_cause_metric(self):
+        runtime_config = load_runtime_config(Path("config/runtime.json"))
+        findings = [
+            AnomalyFinding(
+                algorithm="weighted_sum",
+                service="checkout",
+                metric="log_template_count_ae9e5cabb7",
+                signal_id="checkout_log_template_count_ae9e5cabb7",
+                score=1.0,
+                timestamp=100,
+            )
+        ]
+
+        result = rca_engine(runtime_config).rank(findings, [], top_k=5)
+
+        self.assertEqual(result.root_causes, [])
+
+    def test_rca_returns_only_top_root_cause(self):
+        runtime_config = load_runtime_config(Path("config/runtime.json"))
+        findings = [
+            AnomalyFinding(algorithm="weighted_sum", service="product-catalog", metric="request_rate_5m", signal_id="product_catalog_request_rate_5m", score=0.65, timestamp=1),
+            AnomalyFinding(algorithm="weighted_sum", service="product-reviews", metric="request_rate_5m", signal_id="product_reviews_request_rate_5m", score=0.64, timestamp=1),
+        ]
+
+        result = rca_engine(runtime_config).rank(findings, [], top_k=5)
+
+        self.assertEqual([candidate.service for candidate in result.root_causes], ["product-catalog"])
 
     def test_graph_traversal_uses_pagerank_and_timestamp_scoring(self):
         runtime_config = load_runtime_config(Path("config/runtime.json"))
@@ -306,9 +325,9 @@ class V001AnomalyRcaTest(unittest.TestCase):
 
     def test_pipeline_api_accepts_metric_series_and_returns_rca_result(self):
         series = [
-            metric("checkout", "latency", [1.0, 1.1, 1.0, 1.1, 1.0, 1.1, 1.0, 2.0, 2.1, 2.0]),
-            metric("payment", "latency", [1.0, 1.1, 1.0, 1.1, 1.0, 1.1, 1.0, 20.0, 21.0, 22.0]),
-            metric("payment", "error", [0.0, 0.1, 0.0, 0.1, 0.0, 0.1, 0.0, 9.0, 10.0, 11.0]),
+            metric("checkout", "latency", [1] * 59 + [2]),
+            metric("payment", "latency", [1] * 59 + [20]),
+            metric("payment", "error", [0] * 59 + [20]),
         ]
         with TemporaryDirectory() as tmp:
             settings = Settings().model_copy(update={"state_store_path": Path(tmp) / "aiops.sqlite3"})
