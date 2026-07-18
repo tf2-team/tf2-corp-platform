@@ -34,15 +34,17 @@ class EmbeddingArtifactTest(unittest.TestCase):
     def test_build_is_reproducible_and_validates_without_runtime(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
-            first_archive, first_checksum = builder.build_artifact(
+            first_archive, first_checksum, first_manifest = builder.build_artifact(
                 root / "first", snapshot_downloader=self.fake_snapshot_downloader
             )
-            second_archive, _ = builder.build_artifact(
+            second_archive, _, _ = builder.build_artifact(
                 root / "second", snapshot_downloader=self.fake_snapshot_downloader
             )
 
             self.assertEqual(builder.sha256_file(first_archive), builder.sha256_file(second_archive))
             manifest = validator.validate_artifact(first_archive, first_checksum, run_runtime=False)
+            self.assertTrue(first_manifest.is_file())
+            self.assertEqual(json.loads(first_manifest.read_text(encoding="utf-8")), manifest)
             self.assertEqual(manifest["model"]["embedding_dimension"], 384)
             self.assertEqual(manifest["source"]["revision"], builder.SOURCE_REVISION)
             extract = root / "inspect"
@@ -53,7 +55,7 @@ class EmbeddingArtifactTest(unittest.TestCase):
 
     def test_checksum_tampering_is_rejected(self):
         with tempfile.TemporaryDirectory() as temporary:
-            archive, checksum = builder.build_artifact(
+            archive, checksum, _ = builder.build_artifact(
                 Path(temporary), snapshot_downloader=self.fake_snapshot_downloader
             )
             checksum.write_text(f"{'0' * 64}  {archive.name}\n", encoding="utf-8")
@@ -73,7 +75,7 @@ class EmbeddingArtifactTest(unittest.TestCase):
 
     def test_ready_marker_binds_manifest(self):
         with tempfile.TemporaryDirectory() as temporary:
-            archive, checksum = builder.build_artifact(
+            archive, checksum, _ = builder.build_artifact(
                 Path(temporary), snapshot_downloader=self.fake_snapshot_downloader
             )
             validator.verify_checksum(archive, checksum)
