@@ -3,17 +3,15 @@
 package kafka
 
 import (
-	"crypto/tls"
 	"fmt"
 	"log/slog"
-	"os"
 
 	"github.com/IBM/sarama"
 )
 
 var (
 	Topic           = "orders"
-	ProtocolVersion = sarama.V3_0_0_0
+	ProtocolVersion = sarama.V3_6_0_0
 )
 
 type saramaLogger struct {
@@ -44,14 +42,14 @@ func CreateKafkaProducer(brokers []string, logger *slog.Logger) (sarama.AsyncPro
 
 	saramaConfig.Version = ProtocolVersion
 
+	// SASL requires serialized handshake — only 1 in-flight request during auth.
+	saramaConfig.Net.MaxOpenRequests = 1
+
 	// So we can know the partition and offset of messages.
 	saramaConfig.Producer.Return.Successes = true
 
-	if os.Getenv("KAFKA_TLS") == "true" {
-		saramaConfig.Net.TLS.Enable = true
-		saramaConfig.Net.TLS.Config = &tls.Config{
-			InsecureSkipVerify: true,
-		}
+	if err := ConfigureSaramaSecurity(saramaConfig); err != nil {
+		return nil, err
 	}
 
 	producer, err := sarama.NewAsyncProducer(brokers, saramaConfig)
