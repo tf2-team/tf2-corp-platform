@@ -65,6 +65,12 @@ class SettingsTest(unittest.TestCase):
         config = load_hyperparameters(Path("config/hyperparameters.json"))
 
         self.assertEqual(config["rca"]["top_k"], 5)
+        self.assertEqual(config["rca"]["anomaly"]["algorithm_weights"]["ewma_stl"], 0.4)
+        self.assertEqual(config["rca"]["anomaly"]["weighted_score_threshold"], 0.4)
+        self.assertEqual(config["rca"]["anomaly"]["bocpd_min_changed_metrics"], 2)
+        self.assertEqual(config["rca"]["graph"]["damping"], 0.85)
+        self.assertEqual(config["rca"]["graph"]["pagerank_weight"], 0.7)
+        self.assertEqual(config["rca"]["graph"]["timestamp_weight"], 0.3)
         self.assertEqual(config["remediation"]["similarity_weights"]["service"], 0.4)
         self.assertEqual(config["no_data"]["missing_confidence"], 1.0)
         self.assertEqual(config["detectors"]["thresholds"]["ops01_checkout_slo"], 0.01)

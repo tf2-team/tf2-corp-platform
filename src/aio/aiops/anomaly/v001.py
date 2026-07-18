@@ -10,14 +10,6 @@ from aiops.schemas import AnomalyFinding, MetricSeries
 os.environ.setdefault("MPLCONFIGDIR", "/tmp")
 
 
-ALGORITHM_WEIGHTS = {
-    "ewma_stl": 0.4,
-    "isolation_forest": 0.25,
-    "baro_bocpd": 0.35,
-}
-WEIGHTED_SCORE_THRESHOLD = 0.4
-
-
 class EwmaStlDetector:
     def __init__(self, alpha: float, z_threshold: float, min_points: int, seasonal_period: int):
         self.alpha = alpha
@@ -147,7 +139,12 @@ class V001AnomalyEngine:
         isolation_score_threshold: float,
         min_points: int,
         seasonal_period: int,
+        algorithm_weights: dict[str, float],
+        weighted_score_threshold: float,
+        bocpd_min_changed_metrics: int,
     ):
+        self.algorithm_weights = algorithm_weights
+        self.weighted_score_threshold = weighted_score_threshold
         self.thresholds = {
             "ewma_stl": ewma_z_threshold,
             "isolation_forest": isolation_score_threshold,
@@ -155,7 +152,7 @@ class V001AnomalyEngine:
         }
         self.ewma_stl = EwmaStlDetector(ewma_alpha, ewma_z_threshold, min_points, seasonal_period)
         self.isolation_forest = ServiceIsolationForestDetector(isolation_score_threshold, min_points)
-        self.baro_bocpd = BaroBocpdDetector(isolation_score_threshold, min_points)
+        self.baro_bocpd = BaroBocpdDetector(isolation_score_threshold, min_points, bocpd_min_changed_metrics)
 
     def evaluate(self, series: list[MetricSeries]) -> list[AnomalyFinding]:
         return self._weighted_sum(
@@ -173,8 +170,8 @@ class V001AnomalyEngine:
 
         combined: list[AnomalyFinding] = []
         for (_, _, _), items in grouped.items():
-            score = sum(ALGORITHM_WEIGHTS[item.algorithm] * min(item.score / self.thresholds[item.algorithm], 1.0) for item in items)
-            if score < WEIGHTED_SCORE_THRESHOLD:
+            score = sum(self.algorithm_weights[item.algorithm] * min(item.score / self.thresholds[item.algorithm], 1.0) for item in items)
+            if score < self.weighted_score_threshold:
                 continue
             top = max(items, key=lambda item: item.score)
             combined.append(

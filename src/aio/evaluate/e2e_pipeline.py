@@ -11,7 +11,7 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from aiops.anomaly.stats import robust_score
-from aiops.config import Settings, load_runtime_config
+from aiops.config import Settings, load_hyperparameters, load_runtime_config
 from aiops.rca import V001RcaEngine
 from aiops.schemas import MetricPoint, MetricSeries
 
@@ -32,7 +32,8 @@ def main() -> None:
     if args.limit:
         case_dirs = case_dirs[: args.limit]
 
-    rca = V001RcaEngine(load_runtime_config(settings.runtime_config_path), settings.rca_fallback_split_ratio)
+    hyperparameters = load_hyperparameters(settings.hyperparameters_path)
+    rca = V001RcaEngine(load_runtime_config(settings.runtime_config_path), hyperparameters["rca"]["graph"])
     cases = [evaluate_case(path, rca, top_k, args.max_metrics, args.incident_threshold) for path in case_dirs]
     report = {
         "metrics": score_report(cases),

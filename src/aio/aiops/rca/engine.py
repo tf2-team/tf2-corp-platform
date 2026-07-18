@@ -8,9 +8,14 @@ from aiops.schemas import AnomalyFinding, MetricSeries, RcaResult, RootCauseCand
 
 
 class V001RcaEngine:
-    def __init__(self, config: RuntimeConfig):
+    def __init__(self, config: RuntimeConfig, graph_hyperparameters: dict[str, float]):
         self.config = config
-        self.graph = GraphTraversalRca(config)
+        self.graph = GraphTraversalRca(
+            config,
+            damping=graph_hyperparameters["damping"],
+            pagerank_weight=graph_hyperparameters["pagerank_weight"],
+            timestamp_weight=graph_hyperparameters["timestamp_weight"],
+        )
         self.robust_score = RobustScoreRca()
 
     def rank(self, findings: list[AnomalyFinding], series: list[MetricSeries], top_k: int) -> RcaResult:

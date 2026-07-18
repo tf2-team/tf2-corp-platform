@@ -154,8 +154,11 @@ class AiopsPipeline:
             isolation_score_threshold=float(config["isolation_score_threshold"]),
             min_points=int(config["min_points"]),
             seasonal_period=int(config["seasonal_period"]),
+            algorithm_weights=config["anomaly"]["algorithm_weights"],
+            weighted_score_threshold=float(config["anomaly"]["weighted_score_threshold"]),
+            bocpd_min_changed_metrics=int(config["anomaly"]["bocpd_min_changed_metrics"]),
         ).evaluate(metric_series)
-        return V001RcaEngine(self.runtime_config).rank(findings, metric_series, top_k=int(config["top_k"]))
+        return V001RcaEngine(self.runtime_config, config["graph"]).rank(findings, metric_series, top_k=int(config["top_k"]))
 
     def _run_remediation_strategy(self, incidents: list[Incident], rca_result: RcaResult) -> list[RemediationDecision]:
         if self.remediation is None:

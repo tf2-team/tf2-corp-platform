@@ -6,7 +6,21 @@
     "ewma_alpha": 0.3,
     "ewma_z_threshold": 3.0,
     "seasonal_period": 1,
-    "isolation_score_threshold": 4.0
+    "isolation_score_threshold": 4.0,
+    "anomaly": {
+      "algorithm_weights": {
+        "ewma_stl": 0.4,
+        "isolation_forest": 0.25,
+        "baro_bocpd": 0.35
+      },
+      "weighted_score_threshold": 0.4,
+      "bocpd_min_changed_metrics": 2
+    },
+    "graph": {
+      "damping": 0.85,
+      "pagerank_weight": 0.7,
+      "timestamp_weight": 0.3
+    }
   },
   "remediation": {
     "history_top_k": 3,

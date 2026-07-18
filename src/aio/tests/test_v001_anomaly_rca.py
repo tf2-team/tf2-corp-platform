@@ -8,7 +8,8 @@ from tempfile import TemporaryDirectory
 from aiops.anomaly import V001AnomalyEngine
 from aiops.anomaly.v001 import BaroBocpdDetector, EwmaStlDetector
 from aiops.api.app import run_static_pipeline
-from aiops.config import Settings, load_runtime_config
+from aiops.config import Settings, load_hyperparameters, load_runtime_config
+from aiops.rca.graph import GraphTraversalRca
 from aiops.rca import V001RcaEngine
 from aiops.schemas import AnomalyFinding, MetricPoint, MetricSeries, PipelineRunRequest, RuntimeConfig
 
@@ -22,6 +23,33 @@ def metric(service: str, name: str, values: list[float]) -> MetricSeries:
     )
 
 
+def rca_hyperparameters(**overrides):
+    config = load_hyperparameters(Path("config/hyperparameters.json"))["rca"]
+    return {**config, **overrides}
+
+
+def anomaly_engine(**overrides) -> V001AnomalyEngine:
+    config = rca_hyperparameters(**overrides)
+    return V001AnomalyEngine(
+        ewma_alpha=config["ewma_alpha"],
+        ewma_z_threshold=config["ewma_z_threshold"],
+        isolation_score_threshold=config["isolation_score_threshold"],
+        min_points=config["min_points"],
+        seasonal_period=config["seasonal_period"],
+        algorithm_weights=config["anomaly"]["algorithm_weights"],
+        weighted_score_threshold=config["anomaly"]["weighted_score_threshold"],
+        bocpd_min_changed_metrics=config["anomaly"]["bocpd_min_changed_metrics"],
+    )
+
+
+def rca_engine(config: RuntimeConfig) -> V001RcaEngine:
+    return V001RcaEngine(config, rca_hyperparameters()["graph"])
+
+
+def graph_rca(config: RuntimeConfig) -> GraphTraversalRca:
+    return GraphTraversalRca(config, **rca_hyperparameters()["graph"])
+
+
 class V001AnomalyRcaTest(unittest.TestCase):
     def test_ewma_formula_does_not_emit_statsmodels_zero_sse_warning(self):
         detector = EwmaStlDetector(alpha=0.3, z_threshold=3.0, min_points=8, seasonal_period=1)
@@ -33,13 +61,7 @@ class V001AnomalyRcaTest(unittest.TestCase):
         self.assertEqual(len(residuals), 8)
 
     def test_v001_detects_hidden_error_signal_that_ramps_up_slowly(self):
-        findings = V001AnomalyEngine(
-            ewma_alpha=0.3,
-            ewma_z_threshold=3.0,
-            isolation_score_threshold=4.0,
-            min_points=8,
-            seasonal_period=1,
-        ).evaluate(
+        findings = anomaly_engine().evaluate(
             [
                 metric(
                     "payment",
@@ -50,16 +72,10 @@ class V001AnomalyRcaTest(unittest.TestCase):
         )
 
         self.assertEqual([(finding.algorithm, finding.service, finding.metric) for finding in findings], [("weighted_sum", "payment", "error_ratio_5m")])
-        self.assertGreaterEqual(findings[0].score, 0.4)
+        self.assertGreaterEqual(findings[0].score, rca_hyperparameters()["anomaly"]["weighted_score_threshold"])
 
     def test_v001_does_not_flag_low_noise_as_hidden_error_signal(self):
-        findings = V001AnomalyEngine(
-            ewma_alpha=0.3,
-            ewma_z_threshold=3.0,
-            isolation_score_threshold=4.0,
-            min_points=8,
-            seasonal_period=1,
-        ).evaluate(
+        findings = anomaly_engine().evaluate(
             [
                 metric(
                     "payment",
@@ -72,7 +88,12 @@ class V001AnomalyRcaTest(unittest.TestCase):
         self.assertEqual(findings, [])
 
     def test_baro_bocpd_requires_correlated_metric_change(self):
-        detector = BaroBocpdDetector(score_threshold=4.0, min_points=8)
+        config = rca_hyperparameters()
+        detector = BaroBocpdDetector(
+            score_threshold=config["isolation_score_threshold"],
+            min_points=config["min_points"],
+            min_changed_metrics=config["anomaly"]["bocpd_min_changed_metrics"],
+        )
 
         findings = detector.evaluate(
             [
@@ -84,7 +105,12 @@ class V001AnomalyRcaTest(unittest.TestCase):
         self.assertEqual(findings, [])
 
     def test_baro_bocpd_detects_correlated_metric_change(self):
-        detector = BaroBocpdDetector(score_threshold=4.0, min_points=8)
+        config = rca_hyperparameters()
+        detector = BaroBocpdDetector(
+            score_threshold=config["isolation_score_threshold"],
+            min_points=config["min_points"],
+            min_changed_metrics=config["anomaly"]["bocpd_min_changed_metrics"],
+        )
 
         findings = detector.evaluate(
             [
@@ -97,13 +123,7 @@ class V001AnomalyRcaTest(unittest.TestCase):
         self.assertEqual({finding.service for finding in findings}, {"checkout", "payment"})
 
     def test_weighted_sum_ignores_isolation_forest_without_corroboration(self):
-        engine = V001AnomalyEngine(
-            ewma_alpha=0.3,
-            ewma_z_threshold=3.0,
-            isolation_score_threshold=4.0,
-            min_points=8,
-            seasonal_period=1,
-        )
+        engine = anomaly_engine()
 
         findings = engine._weighted_sum(
             [AnomalyFinding(algorithm="isolation_forest", service="checkout", metric="cpu", signal_id="checkout_cpu", score=99.0, timestamp=1)]
@@ -112,13 +132,7 @@ class V001AnomalyRcaTest(unittest.TestCase):
         self.assertEqual(findings, [])
 
     def test_weighted_sum_combines_normalized_algorithm_scores(self):
-        engine = V001AnomalyEngine(
-            ewma_alpha=0.3,
-            ewma_z_threshold=3.0,
-            isolation_score_threshold=4.0,
-            min_points=8,
-            seasonal_period=1,
-        )
+        engine = anomaly_engine()
 
         findings = engine._weighted_sum(
             [
@@ -127,7 +141,8 @@ class V001AnomalyRcaTest(unittest.TestCase):
             ]
         )
 
-        self.assertEqual([(finding.algorithm, finding.score) for finding in findings], [("weighted_sum", 0.6)])
+        weights = rca_hyperparameters()["anomaly"]["algorithm_weights"]
+        self.assertEqual([(finding.algorithm, finding.score) for finding in findings], [("weighted_sum", weights["isolation_forest"] + weights["baro_bocpd"])])
 
     def test_v001_pipeline_ranks_top_root_cause_service_and_metrics(self):
         series = [
@@ -136,23 +151,8 @@ class V001AnomalyRcaTest(unittest.TestCase):
             metric("payment", "error", [0.0, 0.1, 0.0, 0.1, 0.0, 0.1, 0.0, 9.0, 10.0, 11.0]),
         ]
         runtime_config = load_runtime_config(Path("config/runtime.json"))
-        rca_hyperparameters = {
-            "top_k": 3,
-            "min_points": 8,
-            "ewma_alpha": 0.3,
-            "ewma_z_threshold": 0.5,
-            "seasonal_period": 1,
-            "isolation_score_threshold": 4.0,
-        }
-
-        findings = V001AnomalyEngine(
-            ewma_alpha=rca_hyperparameters["ewma_alpha"],
-            ewma_z_threshold=rca_hyperparameters["ewma_z_threshold"],
-            isolation_score_threshold=rca_hyperparameters["isolation_score_threshold"],
-            min_points=rca_hyperparameters["min_points"],
-            seasonal_period=rca_hyperparameters["seasonal_period"],
-        ).evaluate(series)
-        result = V001RcaEngine(runtime_config).rank(findings, series, top_k=3)
+        findings = anomaly_engine(ewma_z_threshold=0.5).evaluate(series)
+        result = rca_engine(runtime_config).rank(findings, series, top_k=3)
 
         self.assertEqual({finding.algorithm for finding in findings}, {"weighted_sum"})
         self.assertEqual(result.anomalies, findings)
@@ -170,7 +170,7 @@ class V001AnomalyRcaTest(unittest.TestCase):
             AnomalyFinding(algorithm="test", service="checkout", metric="cpu", signal_id="checkout_cpu", score=7.0, timestamp=1),
         ]
 
-        result = V001RcaEngine(runtime_config).rank(findings, [], top_k=5)
+        result = rca_engine(runtime_config).rank(findings, [], top_k=5)
 
         root_services = [candidate.service for candidate in result.root_causes]
         self.assertEqual(root_services[0], "checkout")
@@ -183,9 +183,21 @@ class V001AnomalyRcaTest(unittest.TestCase):
             metric("shipping", "cpu_millicores", [1, 1, 1, 1, 1, 1, 1, 90]),
         ]
 
-        result = V001RcaEngine(runtime_config).rank([], series, top_k=5)
+        result = rca_engine(runtime_config).rank([], series, top_k=5)
 
         self.assertEqual(result.root_causes, [])
+
+    def test_graph_traversal_uses_pagerank_and_timestamp_scoring(self):
+        runtime_config = load_runtime_config(Path("config/runtime.json"))
+        scores = graph_rca(runtime_config).rank_services(
+            [
+                AnomalyFinding(algorithm="weighted_sum", service="checkout", metric="latency", signal_id="checkout_latency", score=1.0, timestamp=100),
+                AnomalyFinding(algorithm="weighted_sum", service="frontend", metric="latency", signal_id="frontend_latency", score=1.0, timestamp=90),
+            ]
+        )
+
+        self.assertIn("product-catalog", scores)
+        self.assertGreater(scores["checkout"], scores["frontend"])
 
     def test_pipeline_api_accepts_metric_series_and_returns_rca_result(self):
         series = [
