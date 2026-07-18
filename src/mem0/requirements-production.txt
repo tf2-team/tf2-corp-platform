@@ -1,8 +1,12 @@
 # Direct production dependencies are pinned so rebuilding the same submodule
 # revision does not silently select a different application dependency set.
+# mem0 is installed with --no-deps, so anything the runtime needs (including
+# optional RDS IAM helpers) must be listed here explicitly.
 alembic==1.14.1
 anthropic==0.49.0
 bcrypt==4.0.1
+# Required by mem0.utils.aws_rds_iam when MEM0_RDS_IAM_AUTH=true (alembic + API).
+boto3==1.38.46
 cryptography==46.0.5
 email-validator==2.2.0
 fastapi==0.115.8
@@ -25,4 +29,4 @@ qdrant-client==1.13.2
 slowapi==0.1.9
 sqlalchemy==2.0.38
 uvicorn==0.34.0
-# Change trail: @hungxqt - 2026-07-18 - Pin psycopg[binary] so slim image has libpq without apt.
+# Change trail: @hungxqt - 2026-07-19 - Add boto3 for Mem0 RDS IAM token generation.
