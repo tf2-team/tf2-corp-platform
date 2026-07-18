@@ -180,4 +180,3 @@ class TestOutOfScopeRejection:
         state = run_copilot("Solve 2 + 2 for me", deps)
         assert state["status"] == CopilotStatus.BLOCKED
         assert "shopping assistant" in state["reason"]
-

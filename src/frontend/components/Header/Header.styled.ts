@@ -8,7 +8,6 @@ export const Header = styled.header`
   background-color: #853b5c;
   color: white;
 `;
-
 export const NavBar = styled.nav`
   height: 80px;
   background-color: white;
@@ -22,7 +21,6 @@ export const NavBar = styled.nav`
     height: 100px;
   }
 `;
-
 export const Container = styled.div`
   display: flex;
   justify-content: space-between;
