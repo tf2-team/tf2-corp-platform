@@ -46,7 +46,7 @@ class RuntimeConfigTest(unittest.TestCase):
         self.assertIn('service_name="payment"', config.prometheus_queries["payment.error_rate.5m"])
         self.assertIn('service_name="payment"', config.prometheus_queries["payment.memory_usage_bytes"])
         self.assertNotIn("target_info", config.prometheus_queries["payment.memory_usage_bytes"])
-        self.assertIn("http_server_request_duration_seconds_count", config.prometheus_queries["cart.error_rate.5m"])
+        self.assertIn("traces_span_metrics_calls_total", config.prometheus_queries["cart.error_rate.5m"])
         self.assertTrue(
             {
                 "payment_error_rate_5m",

@@ -11,8 +11,8 @@ from aiops.schemas import RuntimeConfig
 
 PROMETHEUS_SERVICE_METRICS = {
     "error_rate.5m": {
-        "template": '((sum(rate(http_server_duration_milliseconds_count{service_name="$service",http_response_status_code=~"5.."}[5m])) or sum(rate(http_server_request_duration_seconds_count{service_name="$service",http_response_status_code=~"5.."}[5m])) or vector(0)) / clamp_min((sum(rate(http_server_duration_milliseconds_count{service_name="$service"}[5m])) or sum(rate(http_server_request_duration_seconds_count{service_name="$service"}[5m]))), 0.000000001))',
-        "unit": "ratio",
+        "template": '(100 * ((sum(rate(traces_span_metrics_calls_total{service_name="$service",status_code="STATUS_CODE_ERROR"}[5m])) or vector(0)) / clamp_min(sum(rate(traces_span_metrics_calls_total{service_name="$service"}[5m])), 0.000001))) and on() (sum(rate(traces_span_metrics_calls_total{service_name="$service"}[5m])) > 0)',
+        "unit": "percent",
     },
     "cpu_millicores": {
         "template": 'sum(k8s_pod_cpu_usage{k8s_deployment_name="$service"})',
