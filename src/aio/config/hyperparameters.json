@@ -88,6 +88,8 @@
   },
   "correlation": {
     "window_seconds": 300,
+    "suppress_window_seconds": 900,
+    "topology_max_hops": 1,
     "confidence_threshold": 0.5,
     "weights": {
       "verified_primary_signal": 0.25,

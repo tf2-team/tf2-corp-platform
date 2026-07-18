@@ -147,6 +147,26 @@ class V001AnomalyRcaTest(unittest.TestCase):
 
         self.assertEqual(engine._suppress_busy_cpu(findings, series), [])
 
+    def test_log_metric_does_not_keep_busy_cpu_anomaly(self):
+        engine = anomaly_engine()
+        findings = [
+            AnomalyFinding(algorithm="weighted_sum", service="checkout", metric="cpu_millicores", signal_id="checkout_cpu_millicores", score=0.5, timestamp=7),
+            AnomalyFinding(
+                algorithm="weighted_sum",
+                service="checkout",
+                metric="log_template_count_abc",
+                signal_id="checkout_log_template_count_abc",
+                score=0.5,
+                timestamp=7,
+            ),
+        ]
+        series = [
+            metric("checkout", "request_rate_5m", [10, 10, 10, 10, 10, 10, 10, 100]),
+            metric("checkout", "log_template_count_abc", [0, 0, 0, 0, 0, 0, 0, 10]),
+        ]
+
+        self.assertEqual([finding.metric for finding in engine._suppress_busy_cpu(findings, series)], ["log_template_count_abc"])
+
     def test_memory_growth_is_kept_as_early_oom_signal(self):
         engine = anomaly_engine()
         findings = [

@@ -140,6 +140,21 @@ class MultiServiceDetector(Detector):
                 reason="threshold_breached",
                 runbook_id="RB-CHECKOUT-SLO",
             ),
+            CandidateEvent(
+                detector_id="auto_valkey_cart_error_rate",
+                timestamp=10,
+                flow="checkout",
+                service="valkey-cart",
+                severity="SEV2",
+                signal_id="valkey_cart_error_rate_5m",
+                value=0.2,
+                unit="ratio",
+                window="5m",
+                threshold=0.05,
+                quality=SignalQuality.VERIFIED,
+                reason="threshold_breached",
+                runbook_id="RB-CHECKOUT-SLO",
+            ),
         ]
 
 
@@ -601,7 +616,9 @@ class RuntimePipelineTest(unittest.TestCase):
             store.close()
 
         self.assertEqual([message.service for message in result.notifications], ["checkout"])
-        self.assertEqual([status for _, status in outbox_rows], ["pending", "suppressed"])
+        self.assertEqual({status: [row_status for _, row_status in outbox_rows].count(status) for status in {"pending", "suppressed"}}, {"pending": 1, "suppressed": 2})
+        self.assertEqual(len(result.policy_decisions), 1)
+        self.assertEqual(result.policy_decisions[0].result, "dry-run-recorded")
 
     def test_verified_remediation_is_added_to_incident_history(self):
         settings = Settings()

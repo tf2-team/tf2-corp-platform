@@ -175,10 +175,11 @@ class SQLiteIncidentStore:
                 (root_service, json.dumps(sorted(affected_services)), expires_at),
             )
 
-    def suppress_related_notifications(self, incidents: list[Incident], root_service: str, affected_services: set[str]) -> None:
+    def suppress_related_notifications(self, incidents: list[Incident], root_service: str, affected_services: set[str]) -> set[str]:
         suppressed = [incident for incident in incidents if incident.service in affected_services and incident.service != root_service]
         if not suppressed:
-            return
+            return set()
+        suppressed_ids = {incident.incident_id for incident in suppressed}
         with self._connection:
             for incident in suppressed:
                 self._connection.execute(
@@ -192,6 +193,7 @@ class SQLiteIncidentStore:
                     incident.service,
                     root_service,
                 )
+        return suppressed_ids
 
     def list_incidents(self) -> list[Incident]:
         rows = self._connection.execute("SELECT incident_json FROM incidents ORDER BY fingerprint").fetchall()
@@ -207,6 +209,9 @@ class SQLiteIncidentStore:
             incident_ids,
         ).fetchall()
         return [NotificationMessage.model_validate_json(row[0]) for row in rows]
+
+    def suppressed_incident_ids(self, incidents: list[Incident]) -> set[str]:
+        return {incident.incident_id for incident in incidents if self._suppression_parent(incident.service) is not None}
 
     def _suppression_parent(self, service: str) -> str | None:
         rows = self._connection.execute(

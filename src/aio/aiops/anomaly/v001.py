@@ -329,7 +329,7 @@ def _is_memory_metric(metric: str) -> bool:
 
 
 def _is_failure_metric(metric: str) -> bool:
-    return "latency" in metric or "error_rate" in metric or metric.startswith("log_template_count_") or "ready_pods" in metric
+    return "latency" in metric or "error_rate" in metric or "ready_pods" in metric
 
 
 def _request_rate_increased(series: list[MetricSeries]) -> bool:

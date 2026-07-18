@@ -99,6 +99,7 @@ class AiopsPipeline:
         self.verification = VerificationEngine()
         self.runtime_config = runtime_config
         self.rca_hyperparameters = rca_hyperparameters or {}
+        self.correlation_hyperparameters = correlation_hyperparameters or {}
         self.remediation = remediation
         self.notification_sender = notification_sender
         self.rca_history_path = rca_history_path
@@ -139,12 +140,6 @@ class AiopsPipeline:
         )
         logger.debug("AIOPS_BLOCK incident incidents=%s ids=%s", len(incidents), [incident.incident_id for incident in incidents])
 
-        decisions: list[PolicyDecision] = []
-        for incident in incidents:
-            proposal = self.policy.proposal_for(incident)
-            if proposal is not None:
-                decisions.append(self.policy.evaluate(proposal))
-        logger.debug("AIOPS_BLOCK policy decisions=%s results=%s", len(decisions), [decision.result for decision in decisions])
         verification_results = self.verification.verify(incidents, features)
         logger.debug("AIOPS_BLOCK verify results=%s statuses=%s", len(verification_results), [result.status for result in verification_results])
         rca_result = self._run_v001_rca(metric_series or [], incidents)
@@ -154,11 +149,18 @@ class AiopsPipeline:
             [root.service for root in rca_result.root_causes],
         )
         self._log_failure_conclusion(rca_result, deduped_incidents)
-        self._suppress_related_notifications(deduped_incidents, rca_result)
+        suppressed_incident_ids = self._suppress_related_notifications(deduped_incidents, rca_result)
+        actionable_incidents = [incident for incident in incidents if incident.incident_id not in suppressed_incident_ids]
         self._record_rca_history(rca_result, incidents, enriched, metric_series or [])
         notifications = self._flush_notifications(incidents)
         logger.debug("AIOPS_BLOCK notify notifications=%s", len(notifications))
-        remediation_decisions = self._run_remediation_strategy(incidents, rca_result)
+        decisions: list[PolicyDecision] = []
+        for incident in actionable_incidents:
+            proposal = self.policy.proposal_for(incident)
+            if proposal is not None:
+                decisions.append(self.policy.evaluate(proposal))
+        logger.debug("AIOPS_BLOCK policy decisions=%s results=%s suppressed=%s", len(decisions), [decision.result for decision in decisions], len(suppressed_incident_ids))
+        remediation_decisions = self._run_remediation_strategy(actionable_incidents, rca_result)
         logger.debug(
             "AIOPS_BLOCK remediation decisions=%s selected=%s",
             len(remediation_decisions),
@@ -351,17 +353,25 @@ class AiopsPipeline:
             decisions.append(decision)
         return decisions
 
-    def _suppress_related_notifications(self, incidents: list[Incident], rca_result: RcaResult) -> None:
-        if self.runtime_config is None or not rca_result.root_causes:
-            return
-        root_service = rca_result.root_causes[0].service
-        affected_services = _blast_radius_services(self.runtime_config, root_service)
-        register = getattr(self.store, "register_active_root_cause", None)
-        suppress = getattr(self.store, "suppress_related_notifications", None)
-        if register is not None:
-            register(root_service, affected_services)
-        if suppress is not None:
-            suppress(incidents, root_service, affected_services)
+    def _suppress_related_notifications(self, incidents: list[Incident], rca_result: RcaResult) -> set[str]:
+        suppressed = set()
+        if self.runtime_config is not None and rca_result.root_causes:
+            root_service = rca_result.root_causes[0].service
+            affected_services = _blast_radius_services(
+                self.runtime_config,
+                root_service,
+                int(self.correlation_hyperparameters.get("topology_max_hops", 2)),
+            )
+            register = getattr(self.store, "register_active_root_cause", None)
+            suppress = getattr(self.store, "suppress_related_notifications", None)
+            if register is not None:
+                register(root_service, affected_services, int(self.correlation_hyperparameters.get("suppress_window_seconds", 900)))
+            if suppress is not None:
+                suppressed.update(suppress(incidents, root_service, affected_services) or set())
+        active_suppressed = getattr(self.store, "suppressed_incident_ids", None)
+        if active_suppressed is not None:
+            suppressed.update(active_suppressed(incidents))
+        return suppressed
 
     def _record_verified_history(
         self,
@@ -415,12 +425,22 @@ def _unique_incidents(incidents: list[Incident]) -> list[Incident]:
     return list({incident.incident_id: incident for incident in incidents}.values())
 
 
-def _blast_radius_services(config: RuntimeConfig, root_service: str) -> set[str]:
+def _blast_radius_services(config: RuntimeConfig, root_service: str, max_hops: int = 2) -> set[str]:
     services = {service.name: service for service in config.topology.services}
     if root_service not in services:
         return {root_service}
-    dependents = {service.name for service in services.values() if root_service in service.dependencies}
-    return {root_service, *services[root_service].dependencies, *dependents}
+    graph = {name: set(service.dependencies) for name, service in services.items()}
+    for service in services.values():
+        for dependency in service.dependencies:
+            graph.setdefault(dependency, set()).add(service.name)
+    seen = {root_service}
+    frontier = {root_service}
+    for _ in range(max_hops):
+        frontier = {neighbor for service in frontier for neighbor in graph.get(service, set()) if neighbor not in seen}
+        seen.update(frontier)
+        if not frontier:
+            break
+    return seen
 
 
 def _rca_history_parameters(config: dict) -> dict:
