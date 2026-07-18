@@ -11,7 +11,7 @@ import (
 
 var (
 	Topic           = "orders"
-	ProtocolVersion = sarama.V3_0_0_0
+	ProtocolVersion = sarama.V3_6_0_0
 )
 
 type saramaLogger struct {
@@ -41,6 +41,9 @@ func CreateKafkaProducer(brokers []string, logger *slog.Logger) (sarama.AsyncPro
 	saramaConfig.Producer.RequiredAcks = sarama.NoResponse
 
 	saramaConfig.Version = ProtocolVersion
+
+	// SASL requires serialized handshake — only 1 in-flight request during auth.
+	saramaConfig.Net.MaxOpenRequests = 1
 
 	// So we can know the partition and offset of messages.
 	saramaConfig.Producer.Return.Successes = true

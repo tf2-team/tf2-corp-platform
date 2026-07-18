@@ -250,6 +250,7 @@ func main() {
 			config := sarama.NewConfig()
 			config.Consumer.Offsets.Initial = sarama.OffsetOldest
 			config.Version = kafka.ProtocolVersion
+			config.Net.MaxOpenRequests = 1 // SASL requires serialized handshake
 			if err := kafka.ConfigureSaramaSecurity(config); err != nil {
 				logger.Error(fmt.Sprintf("Invalid Kafka security configuration: %+v", err))
 				return

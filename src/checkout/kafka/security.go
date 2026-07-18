@@ -49,6 +49,8 @@ func ConfigureSaramaSecurity(config *sarama.Config) error {
 	}
 
 	config.Net.SASL.Enable = true
+	config.Net.SASL.Handshake = true
+	config.Net.SASL.Version = sarama.SASLHandshakeV1
 	config.Net.SASL.User = username
 	config.Net.SASL.Password = password
 	config.Net.SASL.Mechanism = sarama.SASLTypeSCRAMSHA512
