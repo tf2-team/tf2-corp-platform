@@ -1,6 +1,7 @@
 import json
 import tempfile
 import unittest
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 from aiops.config import load_runtime_config
@@ -86,8 +87,42 @@ class SQLiteIncidentStoreTest(unittest.TestCase):
         self.assertEqual(same_incident.state, "open")
         self.assertEqual(same_incident.last_seen, "1970-01-01T00:03:20+00:00")
         self.assertIsNone(same_incident.recovered_at)
-        self.assertIsNone(same_incident.cooldown_until)
-        self.assertEqual(event_row, ("open", "1970-01-01T00:03:20+00:00", None, None))
+        self.assertIsNotNone(same_incident.cooldown_until)
+        self.assertEqual(event_row[:3], ("open", "1970-01-01T00:03:20+00:00", None))
+        self.assertIsNotNone(event_row[3])
+
+    def test_deduped_incident_requeues_notification_after_cooldown(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            store = SQLiteIncidentStore(Path(tmp) / "aiops.sqlite3", environment="tf2", notification_cooldown_seconds=0)
+            incident = store.upsert(candidate(0.02, timestamp=100))
+            store.mark_notification_sent(incident.incident_id)
+
+            repeated = store.upsert(candidate(0.03, timestamp=200))
+            notifications = store.pending_notifications_for([repeated])
+            outbox_row = store._connection.execute(
+                "SELECT status FROM notification_outbox WHERE incident_id = ?",
+                (incident.incident_id,),
+            ).fetchone()
+            history_rows = [json.loads(line) for line in (Path(tmp) / "notification_history.jsonl").read_text(encoding="utf-8").splitlines()]
+            store.close()
+
+        self.assertEqual(incident.incident_id, repeated.incident_id)
+        self.assertEqual([message.incident_id for message in notifications], [incident.incident_id])
+        self.assertEqual(outbox_row, ("pending",))
+        self.assertEqual([row["status"] for row in history_rows], ["ready", "ready"])
+
+    def test_repeated_incident_does_not_reset_notification_cooldown(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            store = SQLiteIncidentStore(Path(tmp) / "aiops.sqlite3", environment="tf2", notification_cooldown_seconds=900)
+            incident = store.upsert(candidate(0.02, timestamp=100))
+            first_cooldown = incident.cooldown_until
+
+            repeated = store.upsert(candidate(0.03, timestamp=200))
+            history_rows = [json.loads(line) for line in (Path(tmp) / "notification_history.jsonl").read_text(encoding="utf-8").splitlines()]
+            store.close()
+
+        self.assertEqual(repeated.cooldown_until, first_cooldown)
+        self.assertEqual([row["status"] for row in history_rows], ["ready"])
 
     def test_notification_outbox_retry_and_sent_status(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -133,6 +168,26 @@ class SQLiteIncidentStoreTest(unittest.TestCase):
 
         self.assertEqual(notifications, [])
         self.assertIsNone(status)
+
+    def test_repeated_active_root_cause_does_not_extend_suppression_ttl(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            store = SQLiteIncidentStore(Path(tmp) / "aiops.sqlite3", environment="tf2")
+            store.register_active_root_cause("checkout", {"checkout", "cart"}, suppress_seconds=900)
+            fixed_expiry = (datetime.now(UTC) + timedelta(seconds=300)).isoformat()
+            store._connection.execute(
+                "UPDATE active_root_causes SET expires_at = ? WHERE root_service = ?",
+                (fixed_expiry, "checkout"),
+            )
+
+            store.register_active_root_cause("checkout", {"checkout", "cart", "payment"}, suppress_seconds=900)
+            row = store._connection.execute(
+                "SELECT affected_services_json, expires_at FROM active_root_causes WHERE root_service = ?",
+                ("checkout",),
+            ).fetchone()
+            store.close()
+
+        self.assertEqual(set(json.loads(row[0])), {"checkout", "cart", "payment"})
+        self.assertEqual(row[1], fixed_expiry)
 
 
 if __name__ == "__main__":

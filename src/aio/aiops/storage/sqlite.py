@@ -14,10 +14,11 @@ logger = logging.getLogger(__name__)
 
 
 class SQLiteIncidentStore:
-    def __init__(self, path: Path, environment: str, runbooks_dir: Path | None = None):
+    def __init__(self, path: Path, environment: str, runbooks_dir: Path | None = None, notification_cooldown_seconds: int = 900):
         self.path = path
         self.environment = environment
         self.runbooks_dir = runbooks_dir or _default_runbooks_dir()
+        self.notification_cooldown_seconds = notification_cooldown_seconds
         self._last_enqueued_incident_ids: set[str] = set()
         self.path.parent.mkdir(parents=True, exist_ok=True)
         self._connection = sqlite3.connect(self.path)
@@ -113,8 +114,17 @@ class SQLiteIncidentStore:
             incident.last_seen = seen_at
             incident.severity = min(incident.severity, candidate.severity)
 
-        suppressed_by = self._suppression_parent(candidate.service) if is_new and candidate.severity != "SEV1" else None
-        notification = NotificationBuilder().build([incident])[0] if is_new and suppressed_by is None else None
+        now = datetime.now(UTC)
+        suppressed_by = self._suppression_parent(candidate.service) if candidate.severity != "SEV1" else None
+        notification_due = self._notification_due(incident, is_new, now)
+        notification = (
+            NotificationBuilder().build([incident])[0]
+            if notification_due and suppressed_by is None and self._can_enqueue_notification(incident.incident_id)
+            else None
+        )
+        if notification is not None:
+            incident.cooldown_until = (now + timedelta(seconds=self.notification_cooldown_seconds)).isoformat()
+        notification_enqueued = False
         with self._connection:
             self._connection.execute(
                 """
@@ -132,24 +142,32 @@ class SQLiteIncidentStore:
                 (fingerprint, candidate.model_dump_json(), incident.state, incident.last_seen, incident.recovered_at, incident.cooldown_until),
             )
             if notification is not None:
-                self._connection.execute(
+                cursor = self._connection.execute(
                     """
-                    INSERT OR IGNORE INTO notification_outbox (
+                    INSERT INTO notification_outbox (
                         incident_id, fingerprint, notification_json, status, next_attempt_at
                     )
                     VALUES (?, ?, ?, 'pending', ?)
+                    ON CONFLICT(incident_id) DO UPDATE SET
+                        notification_json = excluded.notification_json,
+                        status = 'pending',
+                        next_attempt_at = excluded.next_attempt_at,
+                        updated_at = excluded.next_attempt_at
+                    WHERE notification_outbox.status IN ('sent', 'suppressed')
                     """,
                     (incident.incident_id, fingerprint, notification.model_dump_json(), _now()),
                 )
-                self._last_enqueued_incident_ids.add(incident.incident_id)
-                self._append_notification_history(incident, notification, "ready")
-                logger.info(
-                    "AIOPS_NOTIFY_ENQUEUED_READY incident=%s service=%s severity=%s runbook=%s status=pending",
-                    incident.incident_id,
-                    incident.service,
-                    incident.severity,
-                    notification.runbook_id,
-                )
+                notification_enqueued = cursor.rowcount > 0
+                if notification_enqueued:
+                    self._last_enqueued_incident_ids.add(incident.incident_id)
+                    self._append_notification_history(incident, notification, "ready")
+                    logger.info(
+                        "AIOPS_NOTIFY_ENQUEUED_READY incident=%s service=%s severity=%s runbook=%s status=pending",
+                        incident.incident_id,
+                        incident.service,
+                        incident.severity,
+                        notification.runbook_id,
+                    )
             elif suppressed_by is not None:
                 logger.info(
                     "AIOPS_NOTIFY_SUPPRESSED incident=%s service=%s parent_root_cause=%s reason=active_root_cause",
@@ -165,9 +183,21 @@ class SQLiteIncidentStore:
             incident.service,
             candidate.detector_id,
             incident.occurrence_count,
-            notification is not None,
+            notification_enqueued,
         )
         return incident
+
+    def _notification_due(self, incident: Incident, is_new: bool, now: datetime) -> bool:
+        if is_new or not incident.cooldown_until:
+            return True
+        return datetime.fromisoformat(incident.cooldown_until) <= now
+
+    def _can_enqueue_notification(self, incident_id: str) -> bool:
+        row = self._connection.execute(
+            "SELECT status FROM notification_outbox WHERE incident_id = ?",
+            (incident_id,),
+        ).fetchone()
+        return row is None or row[0] in {"sent", "suppressed"}
 
     def _append_notification_history(self, incident: Incident, notification: NotificationMessage, status: str) -> None:
         path = self.path.parent / "notification_history.jsonl"
@@ -186,7 +216,14 @@ class SQLiteIncidentStore:
             handle.write(json.dumps(payload, ensure_ascii=False, sort_keys=True) + "\n")
 
     def register_active_root_cause(self, root_service: str, affected_services: set[str], suppress_seconds: int = 900) -> None:
-        expires_at = (datetime.now(UTC) + timedelta(seconds=suppress_seconds)).isoformat()
+        now = datetime.now(UTC)
+        row = self._connection.execute(
+            "SELECT expires_at FROM active_root_causes WHERE root_service = ?",
+            (root_service,),
+        ).fetchone()
+        expires_at = (now + timedelta(seconds=suppress_seconds)).isoformat()
+        if row is not None and datetime.fromisoformat(row[0]) > now:
+            expires_at = row[0]
         with self._connection:
             self._connection.execute(
                 """

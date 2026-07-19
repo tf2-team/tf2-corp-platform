@@ -68,7 +68,11 @@ def run_live_pipeline(settings: Settings | None = None) -> PipelineResult:
 
 def run_pipeline_with_collector(collector, settings: Settings, runtime_config, metric_series=None) -> PipelineResult:
     hyperparameters = load_hyperparameters(settings.hyperparameters_path)
-    store = SQLiteIncidentStore(path=settings.state_store_path, environment=settings.environment)
+    store = SQLiteIncidentStore(
+        path=settings.state_store_path,
+        environment=settings.environment,
+        notification_cooldown_seconds=int(hyperparameters["correlation"]["suppress_window_seconds"]),
+    )
     pipeline = AiopsPipeline(
         collector=collector,
         detectors=build_detectors(runtime_config, settings, hyperparameters["no_data"], hyperparameters["detectors"]),
