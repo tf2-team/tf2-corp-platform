@@ -42,6 +42,9 @@ RUN groupadd --gid "${APP_GID}" mem0 \
 COPY --from=builder /install /usr/local
 COPY --from=builder /build/mem0/server /app/server
 
+# Fail the image build when Psycopg cannot load a PostgreSQL backend.
+RUN python -c "import psycopg; import psycopg.pq"
+
 WORKDIR /app/server
 USER ${APP_UID}:${APP_GID}
 

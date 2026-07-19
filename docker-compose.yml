@@ -425,6 +425,64 @@ services:
         condition: service_started
     logging: *logging
 
+  # Local equivalent of the production model-delivery init containers. It is
+  # the only service with write access to the FastEmbed cache volume.
+  mem0-model-init:
+    image: ${IMAGE_NAME}/mem0:${DEMO_VERSION}
+    build:
+      context: ./
+      dockerfile: ./src/mem0/Dockerfile
+    user: "0:0"
+    restart: "no"
+    command: ["python", "/model-scripts/seed_embedding_model_cache.py", "--cache-dir", "/models/fastembed"]
+    volumes:
+      - ./src/mem0/scripts:/model-scripts:ro
+      - mem0-fastembed-cache:/models/fastembed
+    logging: *logging
+
+  # Local equivalent of the dedicated production RDS instance. It is separate
+  # from the demo PostgreSQL service because Mem0 requires the pgvector
+  # extension and owns its schema.
+  mem0-postgres:
+    image: pgvector/pgvector:pg17
+    container_name: mem0-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: mem0
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: mem0
+    volumes:
+      - mem0-postgresql-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U mem0 -d mem0"]
+      start_period: 10s
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    logging: *logging
+
+  # Keep schema migration outside API startup, as in the Kubernetes Job.
+  mem0-migrate:
+    image: ${IMAGE_NAME}/mem0:${DEMO_VERSION}
+    build:
+      context: ./
+      dockerfile: ./src/mem0/Dockerfile
+    restart: "no"
+    command: ["alembic", "upgrade", "head"]
+    environment:
+      POSTGRES_HOST: mem0-postgres
+      POSTGRES_PORT: "5432"
+      POSTGRES_DB: mem0
+      POSTGRES_USER: mem0
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      APP_DB_NAME: mem0
+      POSTGRES_SSLMODE: disable
+      MEM0_RDS_IAM_AUTH: "false"
+    depends_on:
+      mem0-postgres:
+        condition: service_healthy
+    logging: *logging
+
   # Mem0 self-hosted memory service
   mem0:
     image: ${IMAGE_NAME}/mem0:${DEMO_VERSION}
@@ -447,12 +505,27 @@ services:
       - FASTEMBED_CACHE_PATH=/models/fastembed
       - FASTEMBED_LOCAL_FILES_ONLY=true
       - MEM0_TELEMETRY=false
+      - POSTGRES_HOST=mem0-postgres
+      - POSTGRES_PORT=5432
+      - POSTGRES_DB=mem0
+      - POSTGRES_USER=mem0
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - APP_DB_NAME=mem0
+      - POSTGRES_SSLMODE=disable
+      - MEM0_RDS_IAM_AUTH=false
+      - JWT_SECRET
+      - ADMIN_API_KEY
+      - GROQ_API_KEY=${OPENAI_API_KEY}
     volumes:
       - mem0-history:/app/history
       - mem0-fastembed-cache:/models/fastembed:ro
     depends_on:
       otel-collector:
         condition: service_started
+      mem0-model-init:
+        condition: service_completed_successfully
+      mem0-migrate:
+        condition: service_completed_successfully
     logging: *logging
 
   # Payment service

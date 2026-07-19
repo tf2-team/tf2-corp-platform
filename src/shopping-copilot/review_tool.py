@@ -5,9 +5,8 @@
 
 """Review-grounded Q&A tool for Shopping Copilot (A2.2).
 
-Reuses the grounding pipeline (generate_grounded_summary +
-validate_grounded_summary) and guardrails (sanitize_reviews) from
-product-reviews via symlink. Product ID is validated against the
+Reuses the shared grounding pipeline (generate_grounded_summary +
+validate_grounded_summary) and guardrails (sanitize_reviews). Product ID is validated against the
 allowed_product_ids set from the catalog search result before any
 review fetch, preventing cross-product contamination.
 
@@ -17,25 +16,13 @@ Public API:
 """
 
 import logging
-import os
-import sys
 
-_PRODUCT_REVIEWS_DIR = os.path.abspath(
-    os.path.join(os.path.dirname(__file__), "../product-reviews")
-)
-if _PRODUCT_REVIEWS_DIR not in sys.path:
-    sys.path.insert(0, _PRODUCT_REVIEWS_DIR)
-
-
-import demo_pb2
-import demo_pb2_grpc
-
-# Imported via symlink → src/product-reviews/
-from grounding import generate_grounded_summary, validate_grounded_summary
-from guardrails import sanitize_reviews
-from ai_contracts import GroundedResponse, ResponseStatus
 from bedrock_grounding import generate_grounded_summary as generate_bedrock_grounded_summary
 from bedrock_runtime import is_bedrock_provider
+from techx_ai_common.contracts import GroundedResponse, ResponseStatus
+from techx_ai_common.grounding import generate_grounded_summary, validate_grounded_summary
+from techx_ai_common.guardrails import sanitize_reviews
+from techx_ai_common.proto import demo_pb2, demo_pb2_grpc
 
 logger = logging.getLogger("review_tool")
 
@@ -96,7 +83,7 @@ def answer_with_reviews(
     draft = (
         generate_bedrock_grounded_summary(safe_reviews, question)
         if is_bedrock_provider()
-        else generate_grounded_summary(safe_reviews, question)
+        else generate_grounded_summary(safe_reviews)
     )
     grounded = validate_grounded_summary(draft, safe_reviews)
 

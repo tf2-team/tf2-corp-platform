@@ -19,6 +19,10 @@ class ProductionImageContractTest(unittest.TestCase):
         self.assertIn("--no-deps /build/mem0", DOCKERFILE)
         self.assertNotRegex(REQUIREMENTS, r"(?m)^mem0ai(?:[<>=]|$)")
 
+    def test_includes_a_postgresql_driver_backend(self):
+        self.assertIn("psycopg[binary]==3.2.8", REQUIREMENTS)
+        self.assertIn('RUN python -c "import psycopg; import psycopg.pq"', DOCKERFILE)
+
     def test_uvicorn_is_production_mode(self):
         command = next(line for line in DOCKERFILE.splitlines() if line.startswith("CMD "))
         self.assertIn('"uvicorn"', command)
