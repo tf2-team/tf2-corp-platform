@@ -253,7 +253,7 @@ Runbook: `techx-corp-chart/docs/operations/external-secrets.md` · infra: `techx
 > [!TIP]
 > **Khuyến nghị — GitHub Actions** (`.github/workflows/build-and-push.yml`):
 >
-> **Job graph:** `CI → prepare → AWS/ECR preflight → build matrix (21) → verify ECR → release-ready → update-chart-dev (dev) | create-chart-prod-pr (prod)`
+> **Job graph:** `CI → prepare → AWS/ECR preflight → build matrix (23) → verify ECR → release-ready → update-chart-dev (dev) | create-chart-prod-pr (prod)`
 >
 > | Trigger | GitHub Environment | ECR PROJECT |
 > |---|---|---|
@@ -263,7 +263,7 @@ Runbook: `techx-corp-chart/docs/operations/external-secrets.md` · infra: `techx
 > | `workflow_dispatch` | chọn thủ công | theo environment (republish khi chỉ sửa bake/compose/CI) |
 >
 > Tag CI: `sha-<7-char>` trên branch; tên tag git (ví dụ `v1.2.3`) khi push tag.  
-> Catalog: 22 release images trong `docker-bake.hcl` (gồm customized `opensearch`); BuildKit cache là GHA `type=gha` (không push tag `:buildcache` lên ECR).  
+> Catalog: 23 release images trong `docker-bake.hcl` (gồm customized `opensearch` và `shopping-copilot`); BuildKit cache là GHA `type=gha` (không push tag `:buildcache` lên ECR).  
 > Sau **release-ready** xanh: **dev** auto direct-push `values-dev.yaml` tag; **prod** auto-open PR `values-prod.yaml` (human merge). Secret `CHART_REPO_TOKEN` cho cả hai.  
 > Chi tiết OIDC / Environments / chart token: **[CICD.md](./CICD.md)**.
 
@@ -288,14 +288,14 @@ Runbook: `techx-corp-chart/docs/operations/external-secrets.md` · infra: `techx
    Prod chart tag is automated as a **PR** (not direct push to `main`); merge remains a human gate.
 
 3. Push `techx-dev-corp` (dev) trước; promote production chỉ sau khi development pass.
-4. Xác minh workflow: 21 job build riêng; job **Verify ECR** + **Release ready** xanh; dev có **Update chart values-dev tag**; prod có **Create chart values-prod PR**.
+4. Xác minh workflow: matrix build/retag cho 23 service; job **Verify ECR** + **Release ready** xanh; dev có **Update chart values-dev tag**; prod có **Create chart values-prod PR**.
 5. Xác minh tag runtime (không cần `:buildcache` — cache nằm trên GitHub Actions):
 
    ```bash
    aws ecr describe-images --repository-name techx-corp/ad \
      --image-ids imageTag=sha-<7char> --region us-east-1
    # dev: techx-dev-corp/ad
-   # lặp cho đủ 22 service trong catalog release (gồm opensearch)
+   # lặp cho đủ 23 service trong catalog release (gồm opensearch, shopping-copilot)
    # dev: chart values-dev.yaml default.image.tag được bot push sau release-ready
    # prod: chart PR values-prod.yaml default.image.tag; merge PR để Argo sync
    ```
@@ -331,7 +331,7 @@ DEMO_VERSION=sha-manual
 
 ```bash
 make create-multiplatform-builder
-make build-multiplatform-and-push   # bake group "release" (22 services); clears GHA cache flags
+make build-multiplatform-and-push   # bake group "release" (23 services); clears GHA cache flags
 ```
 
 ---
@@ -465,4 +465,4 @@ aws s3api list-object-versions --bucket techx-tf-state-493499579600-us-east-1 \
 - `techx-corp-infra` — Terraform `bootstrap/` (OIDC + GHA ECR roles), modules `ecr`, `github-actions-ecr`  
 - `techx-corp-chart` — Helm values + smoke test  
 
-<!-- Change trail: @hungxqt - 2026-07-19 - Manual bake clears GHA cache; no ECR :buildcache tag. -->
+<!-- Change trail: @hungxqt - 2026-07-19 - Release catalog is 23 services including shopping-copilot. -->

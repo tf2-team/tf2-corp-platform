@@ -19,7 +19,7 @@ variable "DEMO_VERSION" {
   default = "dev"
 }
 
-# Exactly the 22 deployable services pushed to ECR by CI (includes customized OpenSearch).
+# Exactly the 23 deployable services pushed to ECR by CI (includes customized OpenSearch).
 group "release" {
   targets = [
     "accounting",
@@ -44,6 +44,7 @@ group "release" {
     "quote",
     "recommendation",
     "shipping",
+    "shopping-copilot",
   ]
 }
 
@@ -198,6 +199,13 @@ target "shipping" {
   cache-to   = ["type=gha,mode=max,scope=shipping"]
 }
 
+target "shopping-copilot" {
+  inherits   = ["_release-common"]
+  tags       = ["${IMAGE_NAME}/shopping-copilot:${DEMO_VERSION}"]
+  cache-from = ["type=gha,scope=shopping-copilot"]
+  cache-to   = ["type=gha,mode=max,scope=shopping-copilot"]
+}
+
 # Customized OpenSearch (plugins stripped in src/opensearch/Dockerfile); used by Compose and Helm.
 target "opensearch" {
   inherits   = ["_release-common"]
@@ -205,4 +213,4 @@ target "opensearch" {
   cache-from = ["type=gha,scope=opensearch"]
   cache-to   = ["type=gha,mode=max,scope=opensearch"]
 }
-# Change trail: @hungxqt - 2026-07-19 - Move BuildKit cache from ECR :buildcache to GHA type=gha for IMMUTABLE ECR.
+# Change trail: @hungxqt - 2026-07-19 - Add shopping-copilot to release bake catalog (23 services).
