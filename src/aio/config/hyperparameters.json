@@ -32,8 +32,8 @@
       "ranker_weights": {
         "graph": 0.3,
         "robust": 0.1,
-        "earliest_drift": 0.4,
-        "correlation": 0.2
+        "earliest_drift": 0.5,
+        "correlation": 0.1
       }
     }
   },

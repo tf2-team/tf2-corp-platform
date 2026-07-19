@@ -253,14 +253,18 @@ class V001AnomalyEngine:
             log_min_nonzero_buckets,
         )
         self.merge_queue = AnomalyMergeQueue()
+        self.last_algorithm_findings: list[AnomalyFinding] = []
 
     def evaluate(self, series: list[MetricSeries], logs: list[tuple[str, int, str]] | None = None) -> list[AnomalyFinding]:
-        metric_findings = self._weighted_sum([*self.ewma_stl.evaluate(series), *self.isolation_forest.evaluate(series)])
+        raw_metric_findings = [*self.ewma_stl.evaluate(series), *self.isolation_forest.evaluate(series)]
+        metric_findings = self._weighted_sum(raw_metric_findings)
         log_series = self.log_templates.build(logs or [])
+        raw_log_findings = [*self.ewma_stl.evaluate(log_series), *self.isolation_forest.evaluate(log_series)]
         log_findings = self._correlated_log_findings(
-            self._weighted_sum([*self.ewma_stl.evaluate(log_series), *self.isolation_forest.evaluate(log_series)]),
+            self._weighted_sum(raw_log_findings),
             metric_findings,
         )
+        self.last_algorithm_findings = [*raw_metric_findings, *raw_log_findings]
         return self._suppress_busy_cpu([*metric_findings, *log_findings], [*series, *log_series])
 
     def _correlated_log_findings(self, log_findings: list[AnomalyFinding], metric_findings: list[AnomalyFinding]) -> list[AnomalyFinding]:

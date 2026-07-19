@@ -16,7 +16,7 @@ from aiops.enrichment import Enricher
 from aiops.features import FeatureBuilder
 from aiops.anomaly import V001AnomalyEngine
 from aiops.rca import V001RcaEngine
-from aiops.schemas import MetricSeries, NotificationMessage, PipelineResult, PolicyDecision, RcaResult, RuntimeConfig
+from aiops.schemas import AnomalyFinding, MetricSeries, NotificationMessage, PipelineResult, PolicyDecision, RcaResult, RuntimeConfig
 from aiops.normalization import Normalizer
 from aiops.qualification import QualificationGate
 from aiops.remediation import (
@@ -255,7 +255,9 @@ class AiopsPipeline:
         )
         findings = anomaly_engine.evaluate(metric_series, logs=log_messages) if log_messages else anomaly_engine.evaluate(metric_series)
         rca_engine = V001RcaEngine(self.runtime_config, config["graph"], config["combined"])
-        return rca_engine.rank(findings, metric_series, top_k=int(config["top_k"]))
+        result = rca_engine.rank(findings, metric_series, top_k=int(config["top_k"]))
+        _log_final_root_cause_algorithm_scores(result, anomaly_engine.last_algorithm_findings)
+        return result
 
     def _record_rca_history(
         self,
@@ -310,6 +312,14 @@ class AiopsPipeline:
                 root.score,
                 ",".join(root.root_cause_metrics),
             )
+            if root.service == "frontend-proxy":
+                logger.info(
+                    "AIOPS_FRONTEND_PROXY_ROOT_CAUSE service=%s score=%.3f metrics=%s evidence=%s",
+                    root.service,
+                    root.score,
+                    ",".join(root.root_cause_metrics),
+                    ";".join(root.evidence),
+                )
             return
         if incidents:
             logger.info(
@@ -397,6 +407,29 @@ def _counts(values) -> dict[str, int]:
     for value in values:
         counts[value] = counts.get(value, 0) + 1
     return counts
+
+
+def _log_final_root_cause_algorithm_scores(result: RcaResult, findings: list[AnomalyFinding]) -> None:
+    if not result.root_causes:
+        return
+    root = result.root_causes[0]
+    metrics = set(root.root_cause_metrics)
+    scores = {
+        finding.algorithm: finding.score
+        for finding in findings
+        if finding.service == root.service and finding.metric in metrics
+    }
+    logger.info(
+        "AIOPS_RCA_FINAL_ALGORITHM_SCORES service=%s metrics=%s ewma_stl=%s isolation_forest=%s",
+        root.service,
+        root.root_cause_metrics,
+        _score(scores.get("ewma_stl")),
+        _score(scores.get("isolation_forest")),
+    )
+
+
+def _score(value: float | None) -> str:
+    return "NA" if value is None else f"{value:.3f}"
 
 
 def _log_excerpts(summary: str, max_events: int = 100) -> list[str]:

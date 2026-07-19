@@ -142,6 +142,14 @@ class SQLiteIncidentStore:
                     (incident.incident_id, fingerprint, notification.model_dump_json(), _now()),
                 )
                 self._last_enqueued_incident_ids.add(incident.incident_id)
+                self._append_notification_history(incident, notification, "ready")
+                logger.info(
+                    "AIOPS_NOTIFY_ENQUEUED_READY incident=%s service=%s severity=%s runbook=%s status=pending",
+                    incident.incident_id,
+                    incident.service,
+                    incident.severity,
+                    notification.runbook_id,
+                )
             elif suppressed_by is not None:
                 logger.info(
                     "AIOPS_NOTIFY_SUPPRESSED incident=%s service=%s parent_root_cause=%s reason=active_root_cause",
@@ -160,6 +168,22 @@ class SQLiteIncidentStore:
             notification is not None,
         )
         return incident
+
+    def _append_notification_history(self, incident: Incident, notification: NotificationMessage, status: str) -> None:
+        path = self.path.parent / "notification_history.jsonl"
+        payload = {
+            "recorded_at": _now(),
+            "status": status,
+            "incident_id": incident.incident_id,
+            "fingerprint": incident.fingerprint,
+            "service": incident.service,
+            "severity": incident.severity,
+            "flow": incident.flow,
+            "runbook_id": notification.runbook_id,
+            "title": notification.title,
+        }
+        with path.open("a", encoding="utf-8") as handle:
+            handle.write(json.dumps(payload, ensure_ascii=False, sort_keys=True) + "\n")
 
     def register_active_root_cause(self, root_service: str, affected_services: set[str], suppress_seconds: int = 900) -> None:
         expires_at = (datetime.now(UTC) + timedelta(seconds=suppress_seconds)).isoformat()

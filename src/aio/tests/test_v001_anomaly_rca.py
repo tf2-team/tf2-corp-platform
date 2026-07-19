@@ -9,9 +9,10 @@ from aiops.anomaly import V001AnomalyEngine
 from aiops.anomaly.v001 import AnomalyMergeQueue, EwmaStlDetector, LogTemplateAnomalyDetector, ServiceIsolationForestDetector
 from aiops.api.app import run_static_pipeline
 from aiops.config import Settings, load_hyperparameters, load_runtime_config
+from aiops.pipeline.runtime import _log_final_root_cause_algorithm_scores
 from aiops.rca.graph import GraphTraversalRca
 from aiops.rca import V001RcaEngine
-from aiops.schemas import AnomalyFinding, MetricPoint, MetricSeries, PipelineRunRequest, RuntimeConfig
+from aiops.schemas import AnomalyFinding, MetricPoint, MetricSeries, PipelineRunRequest, RcaResult, RootCauseCandidate, RuntimeConfig
 
 
 def metric(service: str, name: str, values: list[float]) -> MetricSeries:
@@ -63,6 +64,24 @@ class V001AnomalyRcaTest(unittest.TestCase):
             residuals = detector._residuals([1.0] * 8)
 
         self.assertEqual(len(residuals), 8)
+
+    def test_logs_algorithm_scores_for_final_root_cause_only(self):
+        result = RcaResult(root_causes=[RootCauseCandidate(service="checkout", score=1.0, root_cause_metrics=["latency"])])
+        findings = [
+            AnomalyFinding(algorithm="ewma_stl", service="checkout", metric="latency", signal_id="checkout_latency", score=4.0, timestamp=1),
+            AnomalyFinding(algorithm="isolation_forest", service="checkout", metric="latency", signal_id="checkout_latency", score=8.0, timestamp=1),
+            AnomalyFinding(algorithm="ewma_stl", service="payment", metric="latency", signal_id="payment_latency", score=99.0, timestamp=1),
+        ]
+
+        with self.assertLogs("aiops.pipeline.runtime", level="INFO") as logs:
+            _log_final_root_cause_algorithm_scores(result, findings)
+
+        output = "\n".join(logs.output)
+        self.assertIn("AIOPS_RCA_FINAL_ALGORITHM_SCORES", output)
+        self.assertIn("service=checkout", output)
+        self.assertIn("ewma_stl=4.000", output)
+        self.assertIn("isolation_forest=8.000", output)
+        self.assertNotIn("99.000", output)
 
     def test_v001_detects_hidden_error_signal_that_ramps_up_slowly(self):
         findings = anomaly_engine().evaluate(

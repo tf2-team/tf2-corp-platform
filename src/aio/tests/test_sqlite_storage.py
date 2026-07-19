@@ -1,3 +1,4 @@
+import json
 import tempfile
 import unittest
 from pathlib import Path
@@ -62,9 +63,11 @@ class SQLiteIncidentStoreTest(unittest.TestCase):
                 outbox_count = second_store._connection.execute("SELECT COUNT(*) FROM notification_outbox").fetchone()[0]
                 incidents = second_store.list_incidents()
                 second_store.close()
+                history_rows = [json.loads(line) for line in (Path(tmp) / "notification_history.jsonl").read_text(encoding="utf-8").splitlines()]
 
         self.assertEqual(incident.incident_id, same_incident.incident_id)
         text = "\n".join(logs.output)
+        self.assertIn("AIOPS_NOTIFY_ENQUEUED_READY", text)
         self.assertIn("AIOPS_INCIDENT_UPSERT action=created", text)
         self.assertIn("AIOPS_INCIDENT_UPSERT action=deduped", text)
         self.assertIn("notification_enqueued=False", text)
@@ -75,6 +78,11 @@ class SQLiteIncidentStoreTest(unittest.TestCase):
         self.assertEqual(same_incident.occurrence_count, 2)
         self.assertEqual(len(same_incident.events), 2)
         self.assertEqual(len(incidents), 1)
+        self.assertEqual(len(history_rows), 1)
+        self.assertEqual(history_rows[0]["status"], "ready")
+        self.assertEqual(history_rows[0]["incident_id"], incident.incident_id)
+        self.assertEqual(history_rows[0]["service"], "checkout")
+        self.assertEqual(history_rows[0]["runbook_id"], "RB-CHECKOUT-SLO")
         self.assertEqual(same_incident.state, "open")
         self.assertEqual(same_incident.last_seen, "1970-01-01T00:03:20+00:00")
         self.assertIsNone(same_incident.recovered_at)
