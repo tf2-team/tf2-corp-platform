@@ -263,7 +263,7 @@ Runbook: `techx-corp-chart/docs/operations/external-secrets.md` · infra: `techx
 > | `workflow_dispatch` | chọn thủ công | theo environment (republish khi chỉ sửa bake/compose/CI) |
 >
 > Tag CI: `sha-<7-char>` trên branch; tên tag git (ví dụ `v1.2.3`) khi push tag.  
-> Catalog: 21 release images trong `docker-bake.hcl` (gồm customized `opensearch`); cache tag `${IMAGE_NAME}/<service>:buildcache`.  
+> Catalog: 22 release images trong `docker-bake.hcl` (gồm customized `opensearch`); BuildKit cache là GHA `type=gha` (không push tag `:buildcache` lên ECR).  
 > Sau **release-ready** xanh: **dev** auto direct-push `values-dev.yaml` tag; **prod** auto-open PR `values-prod.yaml` (human merge). Secret `CHART_REPO_TOKEN` cho cả hai.  
 > Chi tiết OIDC / Environments / chart token: **[CICD.md](./CICD.md)**.
 
@@ -289,13 +289,13 @@ Runbook: `techx-corp-chart/docs/operations/external-secrets.md` · infra: `techx
 
 3. Push `techx-dev-corp` (dev) trước; promote production chỉ sau khi development pass.
 4. Xác minh workflow: 21 job build riêng; job **Verify ECR** + **Release ready** xanh; dev có **Update chart values-dev tag**; prod có **Create chart values-prod PR**.
-5. Xác minh tag runtime (và tùy chọn `buildcache`):
+5. Xác minh tag runtime (không cần `:buildcache` — cache nằm trên GitHub Actions):
 
    ```bash
    aws ecr describe-images --repository-name techx-corp/ad \
      --image-ids imageTag=sha-<7char> --region us-east-1
    # dev: techx-dev-corp/ad
-   # lặp cho đủ 21 service trong catalog release (gồm opensearch)
+   # lặp cho đủ 22 service trong catalog release (gồm opensearch)
    # dev: chart values-dev.yaml default.image.tag được bot push sau release-ready
    # prod: chart PR values-prod.yaml default.image.tag; merge PR để Argo sync
    ```
@@ -315,10 +315,11 @@ docker buildx create --name techx-corp-builder --bootstrap --use \
 
 IMAGE_NAME=493499579600.dkr.ecr.us-east-1.amazonaws.com/techx-corp \
 IMAGE_VERSION=sha-manual DEMO_VERSION=sha-manual \
-docker buildx bake -f docker-compose.yml -f docker-bake.hcl release --push
+docker buildx bake -f docker-compose.yml -f docker-bake.hcl release --push \
+  --set "*.cache-from=" --set "*.cache-to="
 ```
 
-Kết quả mẫu: `.../techx-corp/ad:sha-manual` + cache `.../techx-corp/ad:buildcache`, …
+Kết quả mẫu: `.../techx-corp/ad:sha-manual` (runtime tag only; clear GHA cache flags locally).
 
 Hoặc Makefile sau khi set `.env.override`:
 
@@ -330,7 +331,7 @@ DEMO_VERSION=sha-manual
 
 ```bash
 make create-multiplatform-builder
-make build-multiplatform-and-push   # bake group "release" (21 services)
+make build-multiplatform-and-push   # bake group "release" (22 services); clears GHA cache flags
 ```
 
 ---
@@ -463,3 +464,5 @@ aws s3api list-object-versions --bucket techx-tf-state-493499579600-us-east-1 \
 - [CICD.md](./CICD.md) — GitHub Actions, OIDC, Environments  
 - `techx-corp-infra` — Terraform `bootstrap/` (OIDC + GHA ECR roles), modules `ecr`, `github-actions-ecr`  
 - `techx-corp-chart` — Helm values + smoke test  
+
+<!-- Change trail: @hungxqt - 2026-07-19 - Manual bake clears GHA cache; no ECR :buildcache tag. -->

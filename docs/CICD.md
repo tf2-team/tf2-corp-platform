@@ -44,7 +44,7 @@ PR bake intentionally differs from publish: single platform, no registry cache, 
 CI (reusable lint + unit tests)
   → prepare            # env, tag, bake catalog validation, classify build vs retag
   → AWS/ECR preflight  # OIDC + verify 22 ECR repos; refine lists if PREV_TAG missing
-  → build matrix       # changed services only (bake from source + :buildcache)
+  → build matrix       # changed services only (bake from source + GHA BuildKit cache)
   → retag matrix       # unchanged services: PREV_TAG → NEW_TAG (parallel with build)
   → verify ECR         # describe-images for every release service under NEW_TAG
   → Mem0 FastEmbed     # build model cache when mem0 bakes; else S3 retag PREV_TAG→NEW_TAG
@@ -89,7 +89,7 @@ Helm still uses **one global image tag** for all release services. Every success
 
 | Service classification | Action |
 |---|---|
-| **Changed** (`src/<service>/**`, or `third-party/mem0` for mem0) | `docker buildx bake … --push` from source (BuildKit still uses ECR `:buildcache` for layers) |
+| **Changed** (`src/<service>/**`, or `third-party/mem0` for mem0) | `docker buildx bake … --push` from source (BuildKit uses GHA `type=gha` layer cache) |
 | **Unchanged** | Retag previous runtime image: `PREV_TAG` → `NEW_TAG` via `docker buildx imagetools create` (same digest, new tag) |
 | **Shared / global path** (`pb/**`, `.env`, `buildkitd.toml`, `.gitmodules`) | **Full** bake of all 22 (no retag) |
 | **Catalog only** (`docker-compose.yml`, `docker-bake.hcl`) | **Selective**: does not by itself bake every service; new services missing `PREV_TAG` are moved to build by preflight |
@@ -129,7 +129,7 @@ CI uploads to `${MEM0_FASTEMBED_ARTIFACT_S3_URI}/${VERSION}/`. The chart compose
 
 | Ref | Purpose |
 |---|---|
-| `…/<service>:buildcache` | BuildKit **layer** cache during bake only — never deploy |
+| GHA `type=gha,scope=<service>` | BuildKit **layer** cache in GitHub Actions only — never an ECR tag |
 | `…/<service>:<PREV_TAG>` → `…/<service>:<NEW_TAG>` | Skip source rebuild for unchanged services while keeping the global tag contract |
 
 ### workflow_dispatch inputs
@@ -193,16 +193,17 @@ Defined in `docker-bake.hcl` group `release` (layered over `docker-compose.yml`)
 
 `prepare` asserts `release` equals all Compose build targets (22), with no duplicates or missing services. A newly added Compose build target must be listed in `docker-bake.hcl` group `release`.
 
-### Registry cache and retag
+### BuildKit cache and retag
 
-Each release target imports and exports BuildKit registry cache at:
+Each release target imports and exports BuildKit cache via **GitHub Actions cache** (not ECR):
 
 ```text
-${IMAGE_NAME}/<service>:buildcache
+type=gha,scope=<service>
+cache-to: type=gha,mode=max,scope=<service>
 ```
 
-Export uses `mode=max`, OCI media types, and an image manifest.  
-**`buildcache` is a movable cache artifact only** — never a Helm-deployable runtime tag. Deploy only uses immutable release tags (`sha-*` or `v*`).
+This avoids pushing movable tags such as `:buildcache` into ECR, which fails when repositories use `image_tag_mutability=IMMUTABLE`.  
+Deploy only uses immutable release tags (`sha-*` or `v*`). Local multiplatform push clears `cache-from` / `cache-to` (GHA cache is unavailable outside Actions).
 
 Selective publishes additionally copy multi-arch **runtime** manifests:
 
@@ -212,7 +213,7 @@ docker buildx imagetools create \
   ${IMAGE_NAME}/<service>:${PREV_TAG}
 ```
 
-That reuses the previous image digest under the new global tag; it does not rebuild layers and does not use `:buildcache`.
+That reuses the previous image digest under the new global tag; it does not rebuild layers and does not use GHA cache.
 
 Platforms: `linux/amd64` and `linux/arm64` (QEMU on bake jobs only).
 
@@ -301,7 +302,7 @@ Do **not** store PATs or role ARNs in the repository, in Environment *secrets* u
 | `development` | `493499579600.dkr.ecr.us-east-1.amazonaws.com/techx-dev-corp` |
 | `production` | `493499579600.dkr.ecr.us-east-1.amazonaws.com/techx-prod-corp` |
 
-Do **not** put a service name in `IMAGE_NAME`. Bake appends `/<service>:<version>` (and `/<service>:buildcache` for registry cache).
+Do **not** put a service name in `IMAGE_NAME`. Bake appends `/<service>:<version>` only (layer cache uses GHA `type=gha`, not ECR tags).
 
 **Repository variables** (optional; workflow defaults apply if unset):
 
@@ -518,12 +519,12 @@ Without `CHART_REPO_TOKEN`, builds can still push images and pass `release-ready
 
 1. Merge workflow / bake changes to the development branch.
 2. Dry-run development: push to `techx-dev-corp`, or Actions → **Build and push images** → `development`.
-3. Confirm all 22 runtime tags and cache tags, for example:
+3. Confirm all 22 runtime tags, for example:
 
    ```bash
    aws ecr describe-images --repository-name techx-dev-corp/ad \
      --image-ids imageTag=sha-<7char> --region us-east-1
-   # also expect tag buildcache on each service repository
+   # no :buildcache tag required — layer cache lives in GitHub Actions
    ```
 
 4. Confirm the workflow summary shows **Release ready**, then **Chart values-dev update** with the new tag.
@@ -551,16 +552,17 @@ export IMAGE_NAME=493499579600.dkr.ecr.us-east-1.amazonaws.com/techx-prod-corp
 export IMAGE_VERSION=sha-manual
 export DEMO_VERSION=sha-manual
 
-# Release group only (22 services + registry cache)
-docker buildx bake -f docker-compose.yml -f docker-bake.hcl release --push
-# Produces: .../techx-prod-corp/ad:sha-manual + .../techx-prod-corp/ad:buildcache , ...
+# Release group only (22 services). Clear GHA cache outside Actions.
+docker buildx bake -f docker-compose.yml -f docker-bake.hcl release --push \
+  --set "*.cache-from=" --set "*.cache-to="
+# Produces: .../techx-prod-corp/ad:sha-manual (runtime tag only)
 ```
 
 Makefile (after setting `.env.override`):
 
 ```bash
 make create-multiplatform-builder
-make build-multiplatform-and-push   # invokes bake group "release"
+make build-multiplatform-and-push   # invokes bake group "release"; clears GHA cache flags
 ```
 
 Local non-push Compose builds (`make build`, `make start`) are unchanged and use BuildKit’s local cache.
@@ -583,7 +585,7 @@ Local non-push Compose builds (`make build`, `make start`) are unchanged and use
 | create-chart-prod-pr fails: cannot create PR | Ensure PAT has **Pull requests: Read and write**; confirm `CHART_PROD_BRANCH` exists. |
 | create-chart-prod-pr / update-chart-dev fails: `Could not locate default.image.tag under default.image` | Chart overlay has `default.image.tag` but not the old rigid layout (sibling keys under `default:` before `image:`). Workflow regex must allow indented lines before `image:` / `tag:`; re-run after that fix is on the platform default branch. |
 
-Rollback of this CI design: revert workflow, `docker-bake.hcl`, Makefile, and docs. Existing `:buildcache` tags may remain or be deleted; they do not affect deployed SHA/version tags.
+Rollback of this CI design: revert workflow, `docker-bake.hcl`, Makefile, and docs. Stale ECR `:buildcache` tags (if any) may remain or be deleted; they are not used by deploy or current CI.
 
 ---
 
@@ -594,6 +596,7 @@ Rollback of this CI design: revert workflow, `docker-bake.hcl`, Makefile, and do
 | `Not authorized to perform sts:AssumeRoleWithWebIdentity` | Trust policy `sub` does not match environment name or repo |
 | `denied: User is not authorized to perform ecr:PutImage` | Role policy missing repo ARN or wrong repository name |
 | Bake OOM / disk full | Runner disk; workflow frees space — re-run or use larger runner |
+| `The image tag 'buildcache' already exists … cannot be overwritten because the tag is immutable` | ECR is IMMUTABLE; CI must use GHA `type=gha` cache, not ECR `:buildcache`. Merge the GHA-cache bake change and re-run; optional: delete orphan `:buildcache` images in ECR |
 | Images pushed to wrong registry | `IMAGE_NAME` missing or wrong on the GitHub Environment (see §4) |
 | `GitHub Environment variable AWS_ROLE_ARN is not set` | Add `AWS_ROLE_ARN` on that Environment (§4.2) |
 | `GitHub Environment variable IMAGE_NAME is not set` | Add `IMAGE_NAME` on that Environment (§4.2) |
@@ -645,4 +648,4 @@ See chart runbook: `techx-corp-chart/docs/operations/gitops-argocd.md`.
 - Native multi-arch runners, image security gates, SBOM/provenance, Cosign
 - Full e2e / tracetest in PR CI
 
-<!-- Change trail: @hungxqt - 2026-07-19 - Align MEM0_FASTEMBED_ARTIFACT_S3_URI docs with IRSA/chart prefix. -->
+<!-- Change trail: @hungxqt - 2026-07-19 - Document GHA BuildKit cache instead of ECR :buildcache under IMMUTABLE tags. -->
