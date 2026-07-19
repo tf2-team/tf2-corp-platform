@@ -24,7 +24,12 @@ lint  ||  unit-tests  ||  prepare-pr-images → build-pr-images (matrix) → pr-
 
 `workflow_call` from Build & Push runs **lint + unit-tests only** (PR image jobs are skipped). Publish still owns multi-arch bake + ECR.
 
-**Required check (branch protection):** add check name **`PR image build`** (job `pr-image-build`) so matrix job names do not need individual protection rules.
+**Required checks (branch protection):** require **`PR image build`**, **`Semgrep
+SAST`**, and **`TruffleHog secrets`**. Image promotion is additionally blocked by
+**`Trivy image scan`** and
+**`Sign and attest <service>`** for every catalog service. See
+`docs/changes/2026-07-19-secure-delivery-person-1.md` for repository settings and the
+selective per-service digest contract.
 
 **PR path classification** (same image-affecting roots as publish):
 
