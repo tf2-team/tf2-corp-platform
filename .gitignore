@@ -60,3 +60,4 @@ contract
 # Generated AI model archives are published to S3, never committed.
 /dist/ai-model/
 .agents
+skills-lock.json

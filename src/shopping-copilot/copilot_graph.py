@@ -168,7 +168,7 @@ def make_nodes(deps: CopilotDeps):
                     "catalog_results": [],
                     "allowed_product_ids": [],
                     "status": CopilotStatus.NO_RESULTS,
-                    "reason": f"No products matching '{q_text}' were found in our store catalog. Available categories include headphones, t-shirts, cameras, and telescopes.",
+                    "reason": f"No products matching '{q_text}' were found in our store catalog. Available categories include telescopes, accessories, binoculars, flashlights, travel, and books.",
                 }
             return {
                 **state,

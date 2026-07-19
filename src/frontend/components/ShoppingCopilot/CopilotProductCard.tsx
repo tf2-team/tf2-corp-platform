@@ -10,54 +10,63 @@ const Grid = styled.div`
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
   gap: 16px;
-  margin-bottom: 24px;
+  margin-bottom: 20px;
 `;
 
 const Card = styled.div`
-  background: ${({ theme }) => theme.colors.white};
-  border: 1px solid ${({ theme }) => theme.colors.lightBorderGray};
-  border-radius: 10px;
-  padding: 16px;
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 18px;
   display: flex;
   flex-direction: column;
   justify-content: space-between;
-  transition: transform 0.2s, box-shadow 0.2s;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.03);
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
 
   &:hover {
     transform: translateY(-2px);
-    box-shadow: 0 6px 16px rgba(0, 0, 0, 0.08);
+    border-color: #93c5fd;
+    box-shadow: 0 8px 20px rgba(37, 99, 235, 0.1);
   }
 `;
 
+const ProductHeader = styled.div`
+  margin-bottom: 12px;
+`;
+
 const Title = styled.h3`
-  font-size: 16px;
+  font-size: 15px;
   font-weight: 600;
-  color: ${({ theme }) => theme.colors.textGray};
+  color: #0f172a;
   margin: 0 0 8px 0;
+  line-height: 1.4;
 `;
 
 const Price = styled.div`
   font-size: 18px;
   font-weight: 700;
-  color: ${({ theme }) => theme.colors.otelBlue};
-  margin-bottom: 12px;
+  color: #2563eb;
+  letter-spacing: -0.3px;
 `;
 
 const ViewButton = styled.a`
-  display: inline-block;
-  text-align: center;
-  padding: 8px 14px;
-  background-color: ${({ theme }) => theme.colors.backgroundGray};
-  color: ${({ theme }) => theme.colors.textGray};
-  border-radius: 6px;
-  font-size: 14px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 9px 16px;
+  background-color: #f1f5f9;
+  color: #334155;
+  border-radius: 8px;
+  font-size: 13.5px;
   font-weight: 600;
   text-decoration: none;
-  transition: background-color 0.2s;
+  transition: all 0.15s ease;
 
   &:hover {
-    background-color: ${({ theme }) => theme.colors.otelBlue};
-    color: ${({ theme }) => theme.colors.white};
+    background-color: #2563eb;
+    color: #ffffff;
+    box-shadow: 0 4px 12px rgba(37, 99, 235, 0.2);
   }
 `;
 
@@ -77,7 +86,7 @@ export const CopilotProductCard: React.FC<Props> = ({ products }) => {
     <Grid>
       {products.map((product) => (
         <Card key={product.productId}>
-          <div>
+          <ProductHeader>
             <Title>{product.name}</Title>
             <Price>
               {formatPrice(
@@ -86,9 +95,9 @@ export const CopilotProductCard: React.FC<Props> = ({ products }) => {
                 product.currencyCode || 'USD'
               )}
             </Price>
-          </div>
+          </ProductHeader>
           <Link href={`/product/${product.productId}`} passHref legacyBehavior>
-            <ViewButton>Xem chi tiết</ViewButton>
+            <ViewButton>View Details</ViewButton>
           </Link>
         </Card>
       ))}
