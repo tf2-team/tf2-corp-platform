@@ -13,11 +13,15 @@ class Correlator:
         self,
         runtime_config: RuntimeConfig | None = None,
         window_seconds: int = 0,
+        suppress_window_seconds: int = 900,
+        topology_max_hops: int = 2,
         confidence_threshold: float = 0.0,
         weights: dict[str, float] | None = None,
     ):
         self.environment = runtime_config.environment if runtime_config else "unknown"
         self.window_seconds = window_seconds
+        self.suppress_window_seconds = suppress_window_seconds
+        self.topology_max_hops = topology_max_hops
         self.confidence_threshold = confidence_threshold
         self.weights = weights or {}
         self.topology = {item.name: set(item.dependencies) for item in runtime_config.topology.services} if runtime_config else {}

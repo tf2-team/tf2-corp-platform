@@ -9,9 +9,10 @@ from aiops.anomaly import V001AnomalyEngine
 from aiops.anomaly.v001 import AnomalyMergeQueue, EwmaStlDetector, LogTemplateAnomalyDetector, ServiceIsolationForestDetector
 from aiops.api.app import run_static_pipeline
 from aiops.config import Settings, load_hyperparameters, load_runtime_config
+from aiops.pipeline.runtime import _log_final_root_cause_algorithm_scores
 from aiops.rca.graph import GraphTraversalRca
 from aiops.rca import V001RcaEngine
-from aiops.schemas import AnomalyFinding, MetricPoint, MetricSeries, PipelineRunRequest, RuntimeConfig
+from aiops.schemas import AnomalyFinding, MetricPoint, MetricSeries, PipelineRunRequest, RcaResult, RootCauseCandidate, RuntimeConfig
 
 
 def metric(service: str, name: str, values: list[float]) -> MetricSeries:
@@ -63,6 +64,24 @@ class V001AnomalyRcaTest(unittest.TestCase):
             residuals = detector._residuals([1.0] * 8)
 
         self.assertEqual(len(residuals), 8)
+
+    def test_logs_algorithm_scores_for_final_root_cause_only(self):
+        result = RcaResult(root_causes=[RootCauseCandidate(service="checkout", score=1.0, root_cause_metrics=["latency"])])
+        findings = [
+            AnomalyFinding(algorithm="ewma_stl", service="checkout", metric="latency", signal_id="checkout_latency", score=4.0, timestamp=1),
+            AnomalyFinding(algorithm="isolation_forest", service="checkout", metric="latency", signal_id="checkout_latency", score=8.0, timestamp=1),
+            AnomalyFinding(algorithm="ewma_stl", service="payment", metric="latency", signal_id="payment_latency", score=99.0, timestamp=1),
+        ]
+
+        with self.assertLogs("aiops.pipeline.runtime", level="INFO") as logs:
+            _log_final_root_cause_algorithm_scores(result, findings)
+
+        output = "\n".join(logs.output)
+        self.assertIn("AIOPS_RCA_FINAL_ALGORITHM_SCORES", output)
+        self.assertIn("service=checkout", output)
+        self.assertIn("ewma_stl=4.000", output)
+        self.assertIn("isolation_forest=8.000", output)
+        self.assertNotIn("99.000", output)
 
     def test_v001_detects_hidden_error_signal_that_ramps_up_slowly(self):
         findings = anomaly_engine().evaluate(
@@ -146,6 +165,26 @@ class V001AnomalyRcaTest(unittest.TestCase):
         ]
 
         self.assertEqual(engine._suppress_busy_cpu(findings, series), [])
+
+    def test_log_metric_does_not_keep_busy_cpu_anomaly(self):
+        engine = anomaly_engine()
+        findings = [
+            AnomalyFinding(algorithm="weighted_sum", service="checkout", metric="cpu_millicores", signal_id="checkout_cpu_millicores", score=0.5, timestamp=7),
+            AnomalyFinding(
+                algorithm="weighted_sum",
+                service="checkout",
+                metric="log_template_count_abc",
+                signal_id="checkout_log_template_count_abc",
+                score=0.5,
+                timestamp=7,
+            ),
+        ]
+        series = [
+            metric("checkout", "request_rate_5m", [10, 10, 10, 10, 10, 10, 10, 100]),
+            metric("checkout", "log_template_count_abc", [0, 0, 0, 0, 0, 0, 0, 10]),
+        ]
+
+        self.assertEqual([finding.metric for finding in engine._suppress_busy_cpu(findings, series)], ["log_template_count_abc"])
 
     def test_memory_growth_is_kept_as_early_oom_signal(self):
         engine = anomaly_engine()
@@ -310,6 +349,21 @@ class V001AnomalyRcaTest(unittest.TestCase):
         result = rca_engine(runtime_config).rank(findings, [], top_k=5)
 
         self.assertEqual([candidate.service for candidate in result.root_causes], ["product-catalog"])
+
+    def test_rca_prefers_dependency_that_drifted_before_checkout(self):
+        runtime_config = load_runtime_config(Path("config/runtime.json"))
+        findings = [
+            AnomalyFinding(algorithm="weighted_sum", service="cart", metric="error_rate_5m", signal_id="cart_error_rate_5m", score=0.8, timestamp=4),
+            AnomalyFinding(algorithm="weighted_sum", service="checkout", metric="error_rate_5m", signal_id="checkout_error_rate_5m", score=0.8, timestamp=6),
+        ]
+        series = [
+            metric("cart", "error_rate_5m", [0, 0, 0, 0, 10, 10, 10, 10]),
+            metric("checkout", "error_rate_5m", [0, 0, 0, 0, 0, 0, 10, 10]),
+        ]
+
+        result = rca_engine(runtime_config).rank(findings, series, top_k=5)
+
+        self.assertEqual([candidate.service for candidate in result.root_causes], ["cart"])
 
     def test_graph_traversal_uses_pagerank_and_timestamp_scoring(self):
         runtime_config = load_runtime_config(Path("config/runtime.json"))

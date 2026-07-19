@@ -28,11 +28,11 @@
       "timestamp_weight": 0.3
     },
     "combined": {
-      "rrf_k": 60,
+      "rrf_k": 20,
       "ranker_weights": {
-        "graph": 0.5,
-        "robust": 0.3,
-        "earliest_drift": 0.1,
+        "graph": 0.3,
+        "robust": 0.1,
+        "earliest_drift": 0.5,
         "correlation": 0.1
       }
     }
@@ -88,6 +88,8 @@
   },
   "correlation": {
     "window_seconds": 300,
+    "suppress_window_seconds": 900,
+    "topology_max_hops": 1,
     "confidence_threshold": 0.5,
     "weights": {
       "verified_primary_signal": 0.25,

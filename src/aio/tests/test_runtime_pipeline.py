@@ -107,6 +107,57 @@ class RecoveredDependencyDetector(Detector):
         ]
 
 
+class MultiServiceDetector(Detector):
+    def evaluate(self, features: list[Feature]) -> list[CandidateEvent]:
+        return [
+            CandidateEvent(
+                detector_id="auto_cart_error_rate",
+                timestamp=10,
+                flow="checkout",
+                service="cart",
+                severity="SEV2",
+                signal_id="cart_error_rate_5m",
+                value=0.2,
+                unit="ratio",
+                window="5m",
+                threshold=0.05,
+                quality=SignalQuality.VERIFIED,
+                reason="threshold_breached",
+                runbook_id="RB-CHECKOUT-SLO",
+            ),
+            CandidateEvent(
+                detector_id="ops01_checkout_slo",
+                timestamp=10,
+                flow="checkout",
+                service="checkout",
+                severity="SEV1",
+                signal_id="checkout_bad_ratio_24h",
+                value=0.2,
+                unit="ratio",
+                window="24h",
+                threshold=0.01,
+                quality=SignalQuality.VERIFIED,
+                reason="threshold_breached",
+                runbook_id="RB-CHECKOUT-SLO",
+            ),
+            CandidateEvent(
+                detector_id="auto_valkey_cart_error_rate",
+                timestamp=10,
+                flow="checkout",
+                service="valkey-cart",
+                severity="SEV2",
+                signal_id="valkey_cart_error_rate_5m",
+                value=0.2,
+                unit="ratio",
+                window="5m",
+                threshold=0.05,
+                quality=SignalQuality.VERIFIED,
+                reason="threshold_breached",
+                runbook_id="RB-CHECKOUT-SLO",
+            ),
+        ]
+
+
 class FakeNotificationSender:
     def __init__(self, fail: bool = False):
         self.fail = fail
@@ -120,6 +171,37 @@ class FakeNotificationSender:
 
 
 class RuntimePipelineTest(unittest.TestCase):
+    def test_frontend_proxy_root_cause_logs_evidence(self):
+        settings = Settings()
+        with TemporaryDirectory() as tmp:
+            store = SQLiteIncidentStore(Path(tmp) / "aiops.sqlite3", environment=settings.environment)
+            pipeline = AiopsPipeline(
+                collector=StaticCollector([]),
+                detectors=[],
+                store=store,
+                policy=policy(settings),
+                **runtime_kwargs(settings),
+            )
+            result = RcaResult(
+                root_causes=[
+                    RootCauseCandidate(
+                        service="frontend-proxy",
+                        score=0.93,
+                        root_cause_metrics=["request_rate_5m", "socket_io_bytes_per_second"],
+                        evidence=["graph_score=0.700", "robust_score=8.000"],
+                    )
+                ]
+            )
+
+            with self.assertLogs("aiops.pipeline.runtime", level="INFO") as logs:
+                pipeline._log_failure_conclusion(result, [])
+            store.close()
+
+        text = "\n".join(logs.output)
+        self.assertIn("AIOPS_FRONTEND_PROXY_ROOT_CAUSE", text)
+        self.assertIn("metrics=request_rate_5m,socket_io_bytes_per_second", text)
+        self.assertIn("evidence=graph_score=0.700;robust_score=8.000", text)
+
     def test_pipeline_runs_detect_to_incident_notify_and_dry_run(self):
         settings = Settings()
         with TemporaryDirectory() as tmp:
@@ -266,10 +348,13 @@ class RuntimePipelineTest(unittest.TestCase):
             store.close()
 
         text = "\n".join(logs.output)
+        self.assertRegex(text, r"-+ AIOPS_RUN_START run=\d+ -+")
         self.assertIn("AIOPS_DEDUP_RESULT", text)
         self.assertIn("input_candidates=1 incidents=1", text)
+        self.assertIn("AIOPS_CONCLUSION source=incident failed_service=checkout", text)
         self.assertIn("AIOPS_NOTIFY_READY", text)
         self.assertIn("status=pending", text)
+        self.assertRegex(text, r"-+ AIOPS_RUN_END run=\d+ candidates=1 incidents=1 root_causes=0 -+")
 
     def test_pipeline_marks_notification_failure_for_retry(self):
         settings = Settings()
@@ -540,6 +625,31 @@ class RuntimePipelineTest(unittest.TestCase):
         self.assertEqual(rows[0]["parameters"]["min_points"], hyperparameters["min_points"])
         self.assertEqual(rows[0]["series_point_count"]["max"], 60)
         self.assertEqual(rows[0]["root_causes"][0]["service"], result.rca_result.root_causes[0].service)
+
+    def test_pipeline_suppresses_blast_radius_child_notifications(self):
+        settings = Settings()
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            store = SQLiteIncidentStore(root / "aiops.sqlite3", environment=settings.environment)
+            pipeline = AiopsPipeline(
+                collector=StaticCollector([]),
+                detectors=[MultiServiceDetector()],
+                store=store,
+                policy=policy(settings),
+                **runtime_kwargs(settings),
+            )
+            pipeline._run_v001_rca = lambda metric_series, incidents: RcaResult(
+                root_causes=[RootCauseCandidate(service="checkout", score=1.0, root_cause_metrics=["error_rate_5m"])]
+            )
+
+            result = pipeline.run_once()
+            outbox_rows = store._connection.execute("SELECT incident_id, status FROM notification_outbox ORDER BY incident_id").fetchall()
+            store.close()
+
+        self.assertEqual([message.service for message in result.notifications], ["checkout"])
+        self.assertEqual({status: [row_status for _, row_status in outbox_rows].count(status) for status in {"pending", "suppressed"}}, {"pending": 1, "suppressed": 2})
+        self.assertEqual(len(result.policy_decisions), 1)
+        self.assertEqual(result.policy_decisions[0].result, "dry-run-recorded")
 
     def test_verified_remediation_is_added_to_incident_history(self):
         settings = Settings()

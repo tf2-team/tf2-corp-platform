@@ -195,9 +195,7 @@
   },
   "prometheus_queries": {
     "checkout.bad_ratio.24h": "(sum(increase(rpc_server_duration_milliseconds_count{service_name=\"checkout\",rpc_method=\"PlaceOrder\",rpc_grpc_status_code!=\"0\"}[24h])) / clamp_min(sum(increase(rpc_server_duration_milliseconds_count{service_name=\"checkout\",rpc_method=\"PlaceOrder\"}[24h])), 1)) or vector(0)",
-    "checkout.payment_error_rate.5m": "(sum(rate(http_client_duration_milliseconds_count{service_name=\"checkout\",server_address=~\"payment.*\",http_response_status_code=~\"5..\"}[5m])) / clamp_min(sum(rate(http_client_duration_milliseconds_count{service_name=\"checkout\",server_address=~\"payment.*\"}[5m])), 1)) or vector(0)",
-    "checkout.p95_latency.5m": "((histogram_quantile(0.95, sum(rate(traces_span_metrics_duration_milliseconds_bucket{service_name=\"checkout\"}[5m])) by (le, service_name)) / 1000) and on(service_name) (sum(rate(traces_span_metrics_duration_milliseconds_count{service_name=\"checkout\"}[5m])) by (service_name) > 0)) or on() vector(0)",
-    "product-catalog.cpu_millicores": "sum(k8s_pod_cpu_usage{k8s_deployment_name=\"product-catalog\"}) or on() vector(0)"
+    "checkout.payment_error_rate.5m": "(sum(rate(http_client_duration_milliseconds_count{service_name=\"checkout\",server_address=~\"payment.*\",http_response_status_code=~\"5..\"}[5m])) / clamp_min(sum(rate(http_client_duration_milliseconds_count{service_name=\"checkout\",server_address=~\"payment.*\"}[5m])), 1)) or vector(0)"
   },
   "prometheus_services": [
     "checkout",
@@ -240,28 +238,6 @@
         "service",
         "dependency"
       ]
-    },
-    {
-      "id": "checkout_p95_latency_5m",
-      "source": "prometheus",
-      "query_id": "checkout.p95_latency.5m",
-      "unit": "seconds",
-      "window": "5m",
-      "flow": "checkout",
-      "service": "checkout",
-      "feature_role": "anomaly_input",
-      "required_labels": []
-    },
-    {
-      "id": "product_catalog_cpu_millicores",
-      "source": "prometheus",
-      "query_id": "product-catalog.cpu_millicores",
-      "unit": "count",
-      "window": "5m",
-      "flow": "catalog",
-      "service": "product-catalog",
-      "feature_role": "anomaly_input",
-      "required_labels": []
     }
   ],
   "detectors": [
