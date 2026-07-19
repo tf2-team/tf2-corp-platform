@@ -74,6 +74,7 @@ class SettingsTest(unittest.TestCase):
         self.assertEqual(config["rca"]["graph"]["pagerank_weight"], 0.7)
         self.assertEqual(config["rca"]["graph"]["timestamp_weight"], 0.3)
         self.assertEqual(config["correlation"]["suppress_window_seconds"], 900)
+        self.assertEqual(config["correlation"]["suppress_min_root_score"], 0.8)
         self.assertEqual(config["correlation"]["topology_max_hops"], 1)
         self.assertEqual(
             config["rca"]["combined"],

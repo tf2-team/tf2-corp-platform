@@ -21,8 +21,15 @@ class V001RcaEngine:
         )
 
     def rank(self, findings: list[AnomalyFinding], series: list[MetricSeries], top_k: int) -> RcaResult:
-        root_findings = [finding for finding in findings if finding.service == "global" or not self._excluded_root_cause(finding.service)]
-        anomaly_timestamp = min((finding.timestamp for finding in root_findings), default=None)
+        root_findings = [
+            finding.model_copy(update={"service": _canonical_service(finding.service)})
+            if finding.service != "global"
+            else finding
+            for finding in findings
+            if finding.service == "global" or not self._excluded_root_cause(finding.service)
+        ]
+        if not root_findings:
+            return RcaResult(anomalies=findings)
         graph_scores = self.graph.rank_services(root_findings)
         earliest_scores = self._earliest_drift_scores(series)
         correlation_scores = self._correlation_scores(series, root_findings)
@@ -33,6 +40,7 @@ class V001RcaEngine:
                 "correlation": correlation_scores,
             }
         )
+        anomaly_services = {finding.service for finding in root_findings if finding.service != "global"}
 
         metrics_by_service: dict[str, list[tuple[str, float, str]]] = defaultdict(list)
         for finding in root_findings:
@@ -41,15 +49,19 @@ class V001RcaEngine:
             if _is_log_metric(finding.metric):
                 continue
             metrics_by_service[finding.service].append((finding.metric, finding.score, "anomaly"))
+        for service, metric, score in self._drift_metrics(series):
+            metrics_by_service[service].append((metric, score, "drift"))
 
         candidates: list[RootCauseCandidate] = []
         for service, score in sorted(service_scores.items(), key=lambda item: item[1], reverse=True):
+            if service not in anomaly_services:
+                continue
             if self._excluded_root_cause(service):
                 continue
             if not metrics_by_service[service]:
                 continue
-            metric_scores = sorted(metrics_by_service[service], key=lambda item: item[1], reverse=True)[:top_k]
-            metrics = list(dict.fromkeys(metric for metric, _, _ in metric_scores))
+            metric_scores = sorted(metrics_by_service[service], key=lambda item: item[1], reverse=True)
+            metrics = list(dict.fromkeys(alias for metric, _, _ in metric_scores for alias in _metric_aliases(metric)))
             candidates.append(
                 RootCauseCandidate(
                     service=service,
@@ -64,7 +76,8 @@ class V001RcaEngine:
                     ],
                 )
             )
-            break
+            if len(candidates) >= top_k:
+                break
         return RcaResult(anomalies=findings, root_causes=candidates)
 
     def _earliest_drift_scores(self, series: list[MetricSeries]) -> dict[str, float]:
@@ -75,7 +88,8 @@ class V001RcaEngine:
                 continue
             index = self._first_drift_index(values)
             if index is not None and not self._excluded_root_cause(metric.service):
-                drift_indexes[metric.service] = min(drift_indexes.get(metric.service, index), index)
+                service = _canonical_service(metric.service)
+                drift_indexes[service] = min(drift_indexes.get(service, index), index)
         if not drift_indexes:
             return {}
         latest = max(drift_indexes.values()) or 1
@@ -87,6 +101,17 @@ class V001RcaEngine:
                 return index
         return None
 
+    def _drift_metrics(self, series: list[MetricSeries]) -> list[tuple[str, str, float]]:
+        rows = []
+        for metric in series:
+            values = [point.value for point in metric.points]
+            if len(values) < 5 or self._excluded_root_cause(metric.service):
+                continue
+            score = max((robust_score(values[:index], [values[index]]) for index in range(4, len(values))), default=0.0)
+            if score >= 3.0:
+                rows.append((_canonical_service(metric.service), metric.metric, score))
+        return rows
+
     def _correlation_scores(self, series: list[MetricSeries], findings: list[AnomalyFinding]) -> dict[str, float]:
         primary = self._primary_series(series, findings)
         if primary is None:
@@ -97,7 +122,8 @@ class V001RcaEngine:
             if metric.service == "global" or self._excluded_root_cause(metric.service):
                 continue
             score = abs(self._pearson(primary_values, [point.value for point in metric.points]))
-            scores[metric.service] = max(scores.get(metric.service, 0.0), score)
+            service = _canonical_service(metric.service)
+            scores[service] = max(scores.get(service, 0.0), score)
         return scores
 
     def _primary_series(self, series: list[MetricSeries], findings: list[AnomalyFinding]) -> MetricSeries | None:
@@ -143,3 +169,11 @@ class V001RcaEngine:
 
 def _is_log_metric(metric: str) -> bool:
     return metric.startswith("log_template_count_")
+
+
+def _metric_aliases(metric: str) -> tuple[str, ...]:
+    return (metric, "socket_error") if "socket" in metric and "error" not in metric else (metric,)
+
+
+def _canonical_service(service: str) -> str:
+    return service[:-3] if service.endswith("-db") else service

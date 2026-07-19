@@ -63,6 +63,36 @@ class EwmaStlDetector:
         )
 
 
+class RobustDriftDetector:
+    def __init__(self, score_threshold: float, min_points: int):
+        self.score_threshold = score_threshold
+        self.min_points = min_points
+
+    def evaluate(self, series: list[MetricSeries]) -> list[AnomalyFinding]:
+        findings: list[AnomalyFinding] = []
+        for metric in series:
+            values = [point.value for point in metric.points]
+            if len(values) < self.min_points:
+                continue
+            scored = [
+                (robust_score(values[:index], [values[index]]), index)
+                for index in range(4, len(values))
+            ]
+            score, index = max(scored, default=(0.0, 0))
+            if score >= self.score_threshold:
+                findings.append(
+                    AnomalyFinding(
+                        algorithm="robust_drift",
+                        service=metric.service,
+                        metric=metric.metric,
+                        signal_id=metric.signal_id,
+                        score=score,
+                        timestamp=metric.points[index].timestamp,
+                    )
+                )
+        return findings
+
+
 class ServiceIsolationForestDetector:
     def __init__(self, score_threshold: float, min_points: int):
         self.score_threshold = score_threshold
@@ -234,15 +264,18 @@ class V001AnomalyEngine:
         log_min_nonzero_buckets: int = 2,
         log_correlation_window_seconds: int = 300,
         single_algorithm_min_normalized_score: float = 2.0,
+        robust_drift_threshold: float = 3.0,
     ):
-        self.algorithm_weights = algorithm_weights
+        self.algorithm_weights = {"robust_drift": 0.8, **algorithm_weights}
         self.weighted_score_threshold = weighted_score_threshold
         self.single_algorithm_min_normalized_score = single_algorithm_min_normalized_score
         self.log_correlation_window_seconds = log_correlation_window_seconds
         self.thresholds = {
+            "robust_drift": robust_drift_threshold,
             "ewma_stl": ewma_z_threshold,
             "isolation_forest": isolation_score_threshold,
         }
+        self.robust_drift = RobustDriftDetector(robust_drift_threshold, min_points)
         self.ewma_stl = EwmaStlDetector(ewma_alpha, ewma_z_threshold, min_points, seasonal_period)
         self.isolation_forest = ServiceIsolationForestDetector(isolation_score_threshold, min_points)
         self.log_templates = LogTemplateMetricBuilder(
@@ -256,7 +289,7 @@ class V001AnomalyEngine:
         self.last_algorithm_findings: list[AnomalyFinding] = []
 
     def evaluate(self, series: list[MetricSeries], logs: list[tuple[str, int, str]] | None = None) -> list[AnomalyFinding]:
-        raw_metric_findings = [*self.ewma_stl.evaluate(series), *self.isolation_forest.evaluate(series)]
+        raw_metric_findings = [*self.robust_drift.evaluate(series), *self.ewma_stl.evaluate(series), *self.isolation_forest.evaluate(series)]
         metric_findings = self._weighted_sum(raw_metric_findings)
         log_series = self.log_templates.build(logs or [])
         raw_log_findings = [*self.ewma_stl.evaluate(log_series), *self.isolation_forest.evaluate(log_series)]

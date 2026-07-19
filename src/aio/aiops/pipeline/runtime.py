@@ -268,7 +268,7 @@ class AiopsPipeline:
         findings = anomaly_engine.evaluate(metric_series, logs=log_messages) if log_messages else anomaly_engine.evaluate(metric_series)
         rca_engine = V001RcaEngine(self.runtime_config, config["graph"], config["combined"])
         result = rca_engine.rank(findings, metric_series, top_k=int(config["top_k"]))
-        _log_final_root_cause_algorithm_scores(result, anomaly_engine.last_algorithm_findings)
+        _log_final_root_cause_algorithm_scores(result, getattr(anomaly_engine, "last_algorithm_findings", findings))
         return result
 
     def _synthetic_rca_candidate(self, rca_result: RcaResult) -> CandidateEvent | None:
@@ -406,12 +406,16 @@ class AiopsPipeline:
     def _suppress_related_notifications(self, incidents: list[Incident], rca_result: RcaResult) -> set[str]:
         suppressed = set()
         if self.runtime_config is not None and rca_result.root_causes:
-            root_service = rca_result.root_causes[0].service
+            root = rca_result.root_causes[0]
+            if root.score < float(self.correlation_hyperparameters.get("suppress_min_root_score", 0.8)):
+                return suppressed
+            root_service = root.service
             affected_services = _blast_radius_services(
                 self.runtime_config,
                 root_service,
                 int(self.correlation_hyperparameters.get("topology_max_hops", 2)),
             )
+            affected_services -= {incident.service for incident in incidents if incident.severity == "SEV1"}
             register = getattr(self.store, "register_active_root_cause", None)
             suppress = getattr(self.store, "suppress_related_notifications", None)
             if register is not None:

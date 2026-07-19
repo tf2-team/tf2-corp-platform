@@ -110,6 +110,15 @@ class V001AnomalyRcaTest(unittest.TestCase):
 
         self.assertEqual(findings, [])
 
+    def test_v001_detects_drift_that_recovered_before_latest_point(self):
+        findings = anomaly_engine().evaluate(
+            [
+                metric("payment", "cpu", [1, 1, 1, 1, 1, 20, 20, 1, 1, 1]),
+            ]
+        )
+
+        self.assertEqual([(finding.service, finding.metric) for finding in findings], [("payment", "cpu")])
+
     def test_isolation_forest_normalizes_rows_before_scoring(self):
         detector = ServiceIsolationForestDetector(score_threshold=4.0, min_points=8)
         rows = detector._rows(
@@ -339,7 +348,7 @@ class V001AnomalyRcaTest(unittest.TestCase):
 
         self.assertEqual(result.root_causes, [])
 
-    def test_rca_returns_only_top_root_cause(self):
+    def test_rca_returns_top_k_root_causes(self):
         runtime_config = load_runtime_config(Path("config/runtime.json"))
         findings = [
             AnomalyFinding(algorithm="weighted_sum", service="product-catalog", metric="request_rate_5m", signal_id="product_catalog_request_rate_5m", score=0.65, timestamp=1),
@@ -348,7 +357,7 @@ class V001AnomalyRcaTest(unittest.TestCase):
 
         result = rca_engine(runtime_config).rank(findings, [], top_k=5)
 
-        self.assertEqual([candidate.service for candidate in result.root_causes], ["product-catalog"])
+        self.assertEqual([candidate.service for candidate in result.root_causes], ["product-catalog", "product-reviews"])
 
     def test_rca_prefers_dependency_that_drifted_before_checkout(self):
         runtime_config = load_runtime_config(Path("config/runtime.json"))
@@ -363,7 +372,7 @@ class V001AnomalyRcaTest(unittest.TestCase):
 
         result = rca_engine(runtime_config).rank(findings, series, top_k=5)
 
-        self.assertEqual([candidate.service for candidate in result.root_causes], ["cart"])
+        self.assertEqual(result.root_causes[0].service, "cart")
 
     def test_graph_traversal_uses_pagerank_and_timestamp_scoring(self):
         runtime_config = load_runtime_config(Path("config/runtime.json"))
@@ -376,6 +385,36 @@ class V001AnomalyRcaTest(unittest.TestCase):
 
         self.assertIn("product-catalog", scores)
         self.assertGreater(scores["checkout"], scores["frontend"])
+
+    def test_graph_traversal_keeps_observed_service_missing_from_topology(self):
+        runtime_config = load_runtime_config(Path("config/runtime.json"))
+        scores = graph_rca(runtime_config).rank_services(
+            [
+                AnomalyFinding(algorithm="weighted_sum", service="carts", metric="cpu", signal_id="carts_cpu", score=1.0, timestamp=100),
+            ]
+        )
+
+        self.assertIn("carts", scores)
+
+    def test_rca_groups_dash_db_service_with_owning_service(self):
+        runtime_config = load_runtime_config(Path("config/runtime.json"))
+        findings = [
+            AnomalyFinding(algorithm="weighted_sum", service="orders-db", metric="diskio", signal_id="orders_db_diskio", score=1.0, timestamp=100),
+        ]
+
+        result = rca_engine(runtime_config).rank(findings, [], top_k=5)
+
+        self.assertEqual(result.root_causes[0].service, "orders")
+
+    def test_rca_reports_socket_error_alias(self):
+        runtime_config = load_runtime_config(Path("config/runtime.json"))
+        findings = [
+            AnomalyFinding(algorithm="weighted_sum", service="payment", metric="socket", signal_id="payment_socket", score=1.0, timestamp=100),
+        ]
+
+        result = rca_engine(runtime_config).rank(findings, [], top_k=5)
+
+        self.assertIn("socket_error", result.root_causes[0].root_cause_metrics)
 
     def test_pipeline_api_accepts_metric_series_and_returns_rca_result(self):
         series = [

@@ -55,8 +55,8 @@
   },
   "detectors": {
     "thresholds": {
-      "ops01_checkout_slo": 0.1,
-      "ops03_checkout_payment_dependency": 0.5,
+      "ops01_checkout_slo": 0.06,
+      "ops03_checkout_payment_dependency": 0.05,
       "auto_checkout_error_rate": 0.05,
       "auto_payment_error_rate": 0.05,
       "auto_frontend_proxy_error_rate": 0.05,
@@ -88,6 +88,7 @@
   "correlation": {
     "window_seconds": 300,
     "suppress_window_seconds": 900,
+    "suppress_min_root_score": 0.8,
     "topology_max_hops": 1,
     "confidence_threshold": 0.5,
     "weights": {

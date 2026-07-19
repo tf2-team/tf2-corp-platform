@@ -108,6 +108,9 @@ class RecoveredDependencyDetector(Detector):
 
 
 class MultiServiceDetector(Detector):
+    def __init__(self, cart_severity: str = "SEV2"):
+        self.cart_severity = cart_severity
+
     def evaluate(self, features: list[Feature]) -> list[CandidateEvent]:
         return [
             CandidateEvent(
@@ -115,7 +118,7 @@ class MultiServiceDetector(Detector):
                 timestamp=10,
                 flow="checkout",
                 service="cart",
-                severity="SEV2",
+                severity=self.cart_severity,
                 signal_id="cart_error_rate_5m",
                 value=0.2,
                 unit="ratio",
@@ -690,10 +693,54 @@ class RuntimePipelineTest(unittest.TestCase):
             outbox_rows = store._connection.execute("SELECT incident_id, status FROM notification_outbox ORDER BY incident_id").fetchall()
             store.close()
 
-        self.assertEqual([message.service for message in result.notifications], ["checkout"])
-        self.assertEqual({status: [row_status for _, row_status in outbox_rows].count(status) for status in {"pending", "suppressed"}}, {"pending": 1, "suppressed": 2})
-        self.assertEqual(len(result.policy_decisions), 1)
+        self.assertEqual({message.service for message in result.notifications}, {"checkout", "valkey-cart"})
+        self.assertEqual({status: [row_status for _, row_status in outbox_rows].count(status) for status in {"pending", "suppressed"}}, {"pending": 2, "suppressed": 1})
+        self.assertEqual(len(result.policy_decisions), 2)
         self.assertEqual(result.policy_decisions[0].result, "dry-run-recorded")
+
+    def test_pipeline_does_not_suppress_children_for_low_confidence_root_cause(self):
+        settings = Settings()
+        with TemporaryDirectory() as tmp:
+            store = SQLiteIncidentStore(Path(tmp) / "aiops.sqlite3", environment=settings.environment)
+            pipeline = AiopsPipeline(
+                collector=StaticCollector([]),
+                detectors=[MultiServiceDetector()],
+                store=store,
+                policy=policy(settings),
+                **runtime_kwargs(settings),
+            )
+            pipeline._run_v001_rca = lambda metric_series, incidents: RcaResult(
+                root_causes=[RootCauseCandidate(service="checkout", score=0.79, root_cause_metrics=["error_rate_5m"])]
+            )
+
+            result = pipeline.run_once()
+            outbox_rows = store._connection.execute("SELECT status FROM notification_outbox").fetchall()
+            store.close()
+
+        self.assertEqual({message.service for message in result.notifications}, {"checkout", "cart", "valkey-cart"})
+        self.assertEqual([status for (status,) in outbox_rows].count("suppressed"), 0)
+
+    def test_pipeline_does_not_suppress_sev1_child_notification(self):
+        settings = Settings()
+        with TemporaryDirectory() as tmp:
+            store = SQLiteIncidentStore(Path(tmp) / "aiops.sqlite3", environment=settings.environment)
+            kwargs = runtime_kwargs(settings)
+            kwargs["correlation_hyperparameters"] = {**kwargs["correlation_hyperparameters"], "topology_max_hops": 2}
+            pipeline = AiopsPipeline(
+                collector=StaticCollector([]),
+                detectors=[MultiServiceDetector(cart_severity="SEV1")],
+                store=store,
+                policy=policy(settings),
+                **kwargs,
+            )
+            pipeline._run_v001_rca = lambda metric_series, incidents: RcaResult(
+                root_causes=[RootCauseCandidate(service="checkout", score=1.0, root_cause_metrics=["error_rate_5m"])]
+            )
+
+            result = pipeline.run_once()
+            store.close()
+
+        self.assertEqual({message.service for message in result.notifications}, {"checkout", "cart"})
 
     def test_verified_remediation_is_added_to_incident_history(self):
         settings = Settings()

@@ -113,7 +113,7 @@ class SQLiteIncidentStore:
             incident.last_seen = seen_at
             incident.severity = min(incident.severity, candidate.severity)
 
-        suppressed_by = self._suppression_parent(candidate.service) if is_new else None
+        suppressed_by = self._suppression_parent(candidate.service) if is_new and candidate.severity != "SEV1" else None
         notification = NotificationBuilder().build([incident])[0] if is_new and suppressed_by is None else None
         with self._connection:
             self._connection.execute(

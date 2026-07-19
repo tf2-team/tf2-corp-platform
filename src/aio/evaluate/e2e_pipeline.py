@@ -13,7 +13,7 @@ if str(ROOT) not in sys.path:
 from aiops.anomaly.stats import robust_score
 from aiops.config import Settings, load_hyperparameters, load_runtime_config
 from aiops.rca import V001RcaEngine
-from aiops.schemas import MetricPoint, MetricSeries
+from aiops.schemas import AnomalyFinding, MetricPoint, MetricSeries
 
 
 def main() -> None:
@@ -24,17 +24,23 @@ def main() -> None:
     parser.add_argument("--max-metrics", type=int, default=40)
     parser.add_argument("--incident-threshold", type=float, default=1.0)
     parser.add_argument("--out", type=Path, default=None)
+    parser.add_argument("--progress", action="store_true")
     args = parser.parse_args()
 
     settings = Settings()
-    top_k = args.top_k or settings.rca_top_k
+    hyperparameters = load_hyperparameters(settings.hyperparameters_path)
+    top_k = args.top_k or int(hyperparameters["rca"]["top_k"])
     case_dirs = list_case_dirs(args.dataset)
     if args.limit:
         case_dirs = case_dirs[: args.limit]
 
-    hyperparameters = load_hyperparameters(settings.hyperparameters_path)
     rca = V001RcaEngine(load_runtime_config(settings.runtime_config_path), hyperparameters["rca"]["graph"], hyperparameters["rca"]["combined"])
-    cases = [evaluate_case(path, rca, top_k, args.max_metrics, args.incident_threshold) for path in case_dirs]
+    cases = []
+    for index, path in enumerate(case_dirs, start=1):
+        case = evaluate_case(path, rca, top_k, args.max_metrics, args.incident_threshold)
+        cases.append(case)
+        if args.progress:
+            print(f"{index}/{len(case_dirs)} {case['case_id']} hit={case['rca_top_k_hit']}", flush=True)
     report = {
         "metrics": score_report(cases),
         "top_k": top_k,
@@ -54,7 +60,8 @@ def list_case_dirs(dataset: Path) -> list[Path]:
 
 def evaluate_case(path: Path, rca: V001RcaEngine, top_k: int, max_metrics: int, anomaly_threshold: float) -> dict[str, object]:
     series = read_series(path / "simple_metrics.csv", max_metrics)
-    result = rca.rank([], series, top_k)
+    findings = anomaly_findings(series, anomaly_threshold)
+    result = rca.rank(findings, series, top_k)
     predicted_roots = [
         {"service": root.service, "metrics": root.root_cause_metrics}
         for root in result.root_causes[:top_k]
@@ -64,7 +71,7 @@ def evaluate_case(path: Path, rca: V001RcaEngine, top_k: int, max_metrics: int, 
     return {
         "case_id": str(path.relative_to(ROOT / "evaluate" / "dataset")),
         "expected_incident": True,
-        "predicted_incident": any(is_anomalous(metric, anomaly_threshold) for metric in series),
+        "predicted_incident": bool(findings),
         "expected_root_service": expected_root,
         "expected_root_metric": expected_metric,
         "expected_root_causes": [expected_root],
@@ -72,6 +79,25 @@ def evaluate_case(path: Path, rca: V001RcaEngine, top_k: int, max_metrics: int, 
         "predicted_root_services": [root["service"] for root in predicted_roots],
         "rca_top_k_hit": rca_hit(expected_root, expected_metric, predicted_roots),
     }
+
+
+def anomaly_findings(series: list[MetricSeries], threshold: float) -> list[AnomalyFinding]:
+    findings = []
+    for metric in series:
+        values = [point.value for point in metric.points]
+        score = robust_score(values[:-1], values[-1:])
+        if score >= threshold:
+            findings.append(
+                AnomalyFinding(
+                    algorithm="legacy_robust_score",
+                    service=metric.service,
+                    metric=metric.metric,
+                    signal_id=metric.signal_id,
+                    score=score,
+                    timestamp=metric.points[-1].timestamp,
+                )
+            )
+    return sorted(findings, key=lambda finding: finding.score, reverse=True)
 
 
 def read_series(path: Path, max_metrics: int) -> list[MetricSeries]:

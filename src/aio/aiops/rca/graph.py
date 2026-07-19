@@ -22,6 +22,8 @@ class GraphTraversalRca:
             return {}
 
         graph = {item.name: item.dependencies for item in self.config.topology.services}
+        for service in seed_scores:
+            graph.setdefault(service, [])
         pagerank = self._pagerank(graph, seed_scores)
         timestamp_scores = self._timestamp_scores(timestamps)
         max_seed = max(seed_scores.values())
