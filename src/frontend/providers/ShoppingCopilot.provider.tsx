@@ -1,7 +1,7 @@
 // Copyright The OpenTelemetry Authors
 // SPDX-License-Identifier: Apache-2.0
 
-import React, { createContext, useContext, useState } from 'react';
+import React, { createContext, useContext, useState, useEffect } from 'react';
 import SessionGateway from '../gateways/Session.gateway';
 
 export interface CopilotProduct {
@@ -71,6 +71,29 @@ const ShoppingCopilotContext = createContext<ShoppingCopilotContextType | undefi
 );
 
 const DEFAULT_SESSION_ID = 'session_default';
+const STORAGE_KEY = 'shopping_copilot_sessions_v2';
+const ACTIVE_SESSION_KEY = 'shopping_copilot_active_session_v2';
+
+function sanitizeCriteria(criteria: string): string {
+  if (!criteria) return '';
+  let cleaned = criteria;
+  // Filter out SQL query leaks or prompt injection code artifacts
+  if (/\b(SELECT|INSERT|UPDATE|DELETE|DROP|FROM|WHERE|JOIN|UNION|CREATE|ALTER|EXEC)\b/i.test(cleaned)) {
+    return 'Search parameters processed';
+  }
+  cleaned = cleaned.replace(/\[?(BLOCKED|GROUNDED|ABSTAINED|FALLBACK|NO_RESULTS)\]?/gi, '').trim();
+  return cleaned;
+}
+
+function sanitizeReason(reason: string): string {
+  if (!reason) return '';
+  let cleaned = reason;
+  if (/\b(SELECT|INSERT|UPDATE|DELETE|DROP|FROM|WHERE|JOIN|UNION|CREATE|ALTER|EXEC)\b/i.test(cleaned)) {
+    return 'The request could not be executed as specified.';
+  }
+  cleaned = cleaned.replace(/\[?(BLOCKED|GROUNDED|ABSTAINED|FALLBACK|NO_RESULTS)\]?/gi, '').trim();
+  return cleaned;
+}
 
 export const ShoppingCopilotProvider: React.FC<{ children: React.ReactNode }> = ({
   children,
@@ -82,15 +105,61 @@ export const ShoppingCopilotProvider: React.FC<{ children: React.ReactNode }> = 
   const [confirmSuccess, setConfirmSuccess] = useState<boolean | null>(null);
   const [confirmMessage, setConfirmMessage] = useState<string | null>(null);
 
-  const [sessions, setSessions] = useState<ChatSessionData[]>([
-    {
-      id: DEFAULT_SESSION_ID,
-      title: 'New Conversation',
-      turns: [],
-      createdAt: new Date().toISOString(),
-    },
-  ]);
-  const [activeSessionId, setActiveSessionId] = useState<string>(DEFAULT_SESSION_ID);
+  const [sessions, setSessions] = useState<ChatSessionData[]>(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const saved = localStorage.getItem(STORAGE_KEY);
+        if (saved) {
+          const parsed = JSON.parse(saved);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            return parsed;
+          }
+        }
+      } catch (e) {
+        console.error('Failed to load sessions from localStorage', e);
+      }
+    }
+    return [
+      {
+        id: DEFAULT_SESSION_ID,
+        title: 'New Conversation',
+        turns: [],
+        createdAt: new Date().toISOString(),
+      },
+    ];
+  });
+
+  const [activeSessionId, setActiveSessionId] = useState<string>(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const savedId = localStorage.getItem(ACTIVE_SESSION_KEY);
+        if (savedId) return savedId;
+      } catch (e) {
+        console.error('Failed to load active session ID from localStorage', e);
+      }
+    }
+    return DEFAULT_SESSION_ID;
+  });
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(sessions));
+      } catch (e) {
+        console.error('Failed to save sessions to localStorage', e);
+      }
+    }
+  }, [sessions]);
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        localStorage.setItem(ACTIVE_SESSION_KEY, activeSessionId);
+      } catch (e) {
+        console.error('Failed to save activeSessionId to localStorage', e);
+      }
+    }
+  }, [activeSessionId]);
 
   const activeSession = sessions.find((s) => s.id === activeSessionId) || sessions[0];
   const currentTurns = activeSession ? activeSession.turns : [];
@@ -140,6 +209,7 @@ export const ShoppingCopilotProvider: React.FC<{ children: React.ReactNode }> = 
       }
       return filtered;
     });
+
     if (activeSessionId === id) {
       const remaining = sessions.filter((s) => s.id !== id);
       const nextId = remaining.length > 0 ? remaining[0].id : DEFAULT_SESSION_ID;
@@ -160,26 +230,34 @@ export const ShoppingCopilotProvider: React.FC<{ children: React.ReactNode }> = 
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ user_message: message }),
       });
-      const data: CopilotResponse = await res.json();
-      if (!res.ok && !data.status) {
-        throw new Error((data as any).error || 'Request failed');
+      const rawData: CopilotResponse = await res.json();
+      if (!res.ok && !rawData.status) {
+        throw new Error((rawData as any).error || 'Request failed');
       }
-      setResponse(data);
+
+      const cleanData: CopilotResponse = {
+        ...rawData,
+        interpretedCriteria: sanitizeCriteria(rawData.interpretedCriteria),
+        reason: sanitizeReason(rawData.reason),
+      };
+
+      setResponse(cleanData);
 
       const newTurn: ChatTurn = {
         id: `turn_${Date.now()}`,
         userMessage: message,
-        response: data,
+        response: cleanData,
         timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
       };
 
       setSessions((prev) =>
         prev.map((s) => {
           if (s.id === activeSessionId) {
-            const title = s.turns.length === 0 ? message.slice(0, 30) : s.title;
+            const isFirstTurn = s.turns.length === 0;
+            const newTitle = isFirstTurn ? message.slice(0, 32) + (message.length > 32 ? '...' : '') : s.title;
             return {
               ...s,
-              title,
+              title: newTitle,
               turns: [...s.turns, newTurn],
             };
           }
@@ -193,7 +271,7 @@ export const ShoppingCopilotProvider: React.FC<{ children: React.ReactNode }> = 
         products: [],
         claims: [],
         sources: [],
-        reason: 'Service temporary unavailable. Please try again.',
+        reason: 'Assistant is temporarily unavailable. Please try again shortly.',
         pendingActionToken: '',
       };
       setError(err?.message || 'Failed to connect to Shopping Copilot');
