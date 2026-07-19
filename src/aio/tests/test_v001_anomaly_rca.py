@@ -43,6 +43,9 @@ def anomaly_engine(**overrides) -> V001AnomalyEngine:
         log_history_buckets=8,
         log_min_nonzero_buckets=1,
         single_algorithm_min_normalized_score=config["anomaly"]["single_algorithm_min_normalized_score"],
+        robust_drift_threshold=config["anomaly"]["robust_drift_threshold"],
+        robust_drift_min_baseline_points=config["anomaly"]["robust_drift_min_baseline_points"],
+        suppress_cpu_robust_threshold=config["anomaly"]["suppress_cpu_robust_threshold"],
     )
 
 

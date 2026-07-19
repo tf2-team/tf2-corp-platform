@@ -64,9 +64,12 @@ class SettingsTest(unittest.TestCase):
         config = load_hyperparameters(Path("config/hyperparameters.json"))
 
         self.assertEqual(config["rca"]["top_k"], 5)
-        self.assertEqual(config["rca"]["anomaly"]["algorithm_weights"], {"ewma_stl": 0.8, "isolation_forest": 0.2})
+        self.assertEqual(config["rca"]["anomaly"]["algorithm_weights"], {"robust_drift": 0.8, "ewma_stl": 0.8, "isolation_forest": 0.2})
         self.assertEqual(config["rca"]["anomaly"]["weighted_score_threshold"], 0.4)
         self.assertEqual(config["rca"]["anomaly"]["single_algorithm_min_normalized_score"], 2.0)
+        self.assertEqual(config["rca"]["anomaly"]["robust_drift_threshold"], 3.0)
+        self.assertEqual(config["rca"]["anomaly"]["robust_drift_min_baseline_points"], 4)
+        self.assertEqual(config["rca"]["anomaly"]["suppress_cpu_robust_threshold"], 3.0)
         self.assertEqual(config["rca"]["min_points"], 30)
         self.assertEqual(config["rca"]["anomaly"]["log_history_buckets"], 60)
         self.assertEqual(config["rca"]["anomaly"]["log_min_nonzero_buckets"], 2)
@@ -80,13 +83,17 @@ class SettingsTest(unittest.TestCase):
             config["rca"]["combined"],
             {
                 "rrf_k": 20,
+                "drift_min_points": 5,
+                "drift_score_threshold": 3.0,
+                "canonical_service_suffixes": ["-db"],
+                "metric_aliases": {"socket": ["socket_error"]},
                 "ranker_weights": {"graph": 0.3, "earliest_drift": 0.5, "correlation": 0.1},
             },
         )
         self.assertEqual(config["remediation"]["similarity_weights"]["service"], 0.35)
         self.assertEqual(config["remediation"]["similarity_weights"]["trace"], 0.2)
         self.assertEqual(config["no_data"]["missing_confidence"], 1.0)
-        self.assertEqual(config["detectors"]["thresholds"]["ops01_checkout_slo"], 0.01)
+        self.assertEqual(config["detectors"]["thresholds"]["ops01_checkout_slo"], 0.06)
         self.assertEqual(config["prometheus"]["metric_series"]["step_seconds"], 60)
         self.assertGreaterEqual(
             config["prometheus"]["metric_series"]["lookback_seconds"] // config["prometheus"]["metric_series"]["step_seconds"] + 1,
@@ -148,7 +155,7 @@ class SettingsTest(unittest.TestCase):
                     observations=[
                         Observation(
                             signal_id="checkout_bad_ratio_24h",
-                            value=2.0,
+                            value=7.0,
                             unit="percent",
                             window="1d",
                             quality=SignalQuality.UNQUALIFIED,
@@ -159,7 +166,7 @@ class SettingsTest(unittest.TestCase):
                 settings=settings,
             )
 
-        self.assertEqual(result.features[0].value, 0.02)
+        self.assertEqual(result.features[0].value, 0.07)
         self.assertEqual(result.features[0].unit, "ratio")
         self.assertEqual(result.features[0].window, "24h")
         self.assertEqual(result.features[0].labels["service"], "checkout")

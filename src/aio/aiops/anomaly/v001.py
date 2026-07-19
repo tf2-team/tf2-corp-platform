@@ -64,9 +64,10 @@ class EwmaStlDetector:
 
 
 class RobustDriftDetector:
-    def __init__(self, score_threshold: float, min_points: int):
+    def __init__(self, score_threshold: float, min_points: int, min_baseline_points: int):
         self.score_threshold = score_threshold
         self.min_points = min_points
+        self.min_baseline_points = min_baseline_points
 
     def evaluate(self, series: list[MetricSeries]) -> list[AnomalyFinding]:
         findings: list[AnomalyFinding] = []
@@ -76,7 +77,7 @@ class RobustDriftDetector:
                 continue
             scored = [
                 (robust_score(values[:index], [values[index]]), index)
-                for index in range(4, len(values))
+                for index in range(self.min_baseline_points, len(values))
             ]
             score, index = max(scored, default=(0.0, 0))
             if score >= self.score_threshold:
@@ -265,17 +266,20 @@ class V001AnomalyEngine:
         log_correlation_window_seconds: int = 300,
         single_algorithm_min_normalized_score: float = 2.0,
         robust_drift_threshold: float = 3.0,
+        robust_drift_min_baseline_points: int = 4,
+        suppress_cpu_robust_threshold: float = 3.0,
     ):
-        self.algorithm_weights = {"robust_drift": 0.8, **algorithm_weights}
+        self.algorithm_weights = algorithm_weights
         self.weighted_score_threshold = weighted_score_threshold
         self.single_algorithm_min_normalized_score = single_algorithm_min_normalized_score
         self.log_correlation_window_seconds = log_correlation_window_seconds
+        self.suppress_cpu_robust_threshold = suppress_cpu_robust_threshold
         self.thresholds = {
             "robust_drift": robust_drift_threshold,
             "ewma_stl": ewma_z_threshold,
             "isolation_forest": isolation_score_threshold,
         }
-        self.robust_drift = RobustDriftDetector(robust_drift_threshold, min_points)
+        self.robust_drift = RobustDriftDetector(robust_drift_threshold, min_points, robust_drift_min_baseline_points)
         self.ewma_stl = EwmaStlDetector(ewma_alpha, ewma_z_threshold, min_points, seasonal_period)
         self.isolation_forest = ServiceIsolationForestDetector(isolation_score_threshold, min_points)
         self.log_templates = LogTemplateMetricBuilder(
@@ -352,7 +356,11 @@ class V001AnomalyEngine:
             service_findings = by_service_findings[finding.service]
             service_series = by_service_series[finding.service]
             has_failure_or_memory = any(_is_failure_metric(item.metric) or _is_memory_metric(item.metric) for item in service_findings)
-            if has_failure_or_memory or not _request_rate_increased(service_series) or _failure_metric_increased(service_series):
+            if (
+                has_failure_or_memory
+                or not _request_rate_increased(service_series, self.suppress_cpu_robust_threshold)
+                or _failure_metric_increased(service_series, self.suppress_cpu_robust_threshold)
+            ):
                 filtered.append(finding)
         return filtered
 
@@ -369,12 +377,12 @@ def _is_failure_metric(metric: str) -> bool:
     return "latency" in metric or "error_rate" in metric or "ready_pods" in metric
 
 
-def _request_rate_increased(series: list[MetricSeries]) -> bool:
-    return any("request_rate" in metric.metric and _latest_robust_score(metric) >= 3.0 for metric in series)
+def _request_rate_increased(series: list[MetricSeries], threshold: float) -> bool:
+    return any("request_rate" in metric.metric and _latest_robust_score(metric) >= threshold for metric in series)
 
 
-def _failure_metric_increased(series: list[MetricSeries]) -> bool:
-    return any(_is_failure_metric(metric.metric) and _latest_robust_score(metric) >= 3.0 for metric in series)
+def _failure_metric_increased(series: list[MetricSeries], threshold: float) -> bool:
+    return any(_is_failure_metric(metric.metric) and _latest_robust_score(metric) >= threshold for metric in series)
 
 
 def _latest_robust_score(metric: MetricSeries) -> float:

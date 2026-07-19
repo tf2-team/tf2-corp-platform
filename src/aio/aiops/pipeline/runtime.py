@@ -264,6 +264,9 @@ class AiopsPipeline:
             log_min_nonzero_buckets=int(config["anomaly"].get("log_min_nonzero_buckets", 2)),
             log_correlation_window_seconds=int(config["anomaly"].get("log_correlation_window_seconds", 300)),
             single_algorithm_min_normalized_score=float(config["anomaly"]["single_algorithm_min_normalized_score"]),
+            robust_drift_threshold=float(config["anomaly"]["robust_drift_threshold"]),
+            robust_drift_min_baseline_points=int(config["anomaly"]["robust_drift_min_baseline_points"]),
+            suppress_cpu_robust_threshold=float(config["anomaly"]["suppress_cpu_robust_threshold"]),
         )
         findings = anomaly_engine.evaluate(metric_series, logs=log_messages) if log_messages else anomaly_engine.evaluate(metric_series)
         rca_engine = V001RcaEngine(self.runtime_config, config["graph"], config["combined"])
@@ -532,8 +535,12 @@ def _rca_history_parameters(config: dict) -> dict:
         "algorithm_weights": anomaly.get("algorithm_weights"),
         "weighted_score_threshold": anomaly.get("weighted_score_threshold"),
         "single_algorithm_min_normalized_score": anomaly.get("single_algorithm_min_normalized_score"),
+        "robust_drift_threshold": anomaly.get("robust_drift_threshold"),
+        "robust_drift_min_baseline_points": anomaly.get("robust_drift_min_baseline_points"),
+        "suppress_cpu_robust_threshold": anomaly.get("suppress_cpu_robust_threshold"),
         "log_bucket_seconds": anomaly.get("log_bucket_seconds"),
         "log_history_buckets": anomaly.get("log_history_buckets"),
         "log_min_nonzero_buckets": anomaly.get("log_min_nonzero_buckets"),
         "log_correlation_window_seconds": anomaly.get("log_correlation_window_seconds"),
+        "combined": config.get("combined"),
     }

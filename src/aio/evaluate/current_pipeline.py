@@ -91,6 +91,9 @@ def anomaly_engine(config: dict) -> V001AnomalyEngine:
         log_min_nonzero_buckets=int(anomaly.get("log_min_nonzero_buckets", 2)),
         log_correlation_window_seconds=int(anomaly.get("log_correlation_window_seconds", 300)),
         single_algorithm_min_normalized_score=float(anomaly["single_algorithm_min_normalized_score"]),
+        robust_drift_threshold=float(anomaly["robust_drift_threshold"]),
+        robust_drift_min_baseline_points=int(anomaly["robust_drift_min_baseline_points"]),
+        suppress_cpu_robust_threshold=float(anomaly["suppress_cpu_robust_threshold"]),
     )
 
 
