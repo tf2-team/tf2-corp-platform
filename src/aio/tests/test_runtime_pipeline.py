@@ -263,6 +263,50 @@ class RuntimePipelineTest(unittest.TestCase):
         self.assertEqual(result.policy_decisions[0].result, "dry-run-recorded")
         self.assertEqual(result.verification_results[0].status, "not_recovered")
 
+    def test_pipeline_notifies_rca_only_root_cause(self):
+        settings = Settings()
+        with TemporaryDirectory() as tmp:
+            store = SQLiteIncidentStore(Path(tmp) / "aiops.sqlite3", environment=settings.environment)
+            pipeline = AiopsPipeline(
+                collector=StaticCollector([]),
+                detectors=[],
+                store=store,
+                policy=policy(settings),
+                **runtime_kwargs(settings),
+            )
+            pipeline._run_v001_rca = lambda metric_series, incidents: RcaResult(
+                anomalies=[
+                    AnomalyFinding(
+                        algorithm="isolation_forest",
+                        service="frontend",
+                        metric="p95_latency_5m",
+                        signal_id="frontend_p95_latency_5m",
+                        score=5.127,
+                        timestamp=123,
+                    )
+                ],
+                root_causes=[
+                    RootCauseCandidate(
+                        service="frontend",
+                        score=0.882,
+                        root_cause_metrics=["p95_latency_5m"],
+                        evidence=["isolation_forest=5.127"],
+                    )
+                ],
+            )
+
+            with self.assertLogs("aiops.pipeline.runtime", level="INFO") as logs:
+                result = pipeline.run_once(metric_series=[metric("frontend", "p95_latency_5m", [0.1] * 31)])
+            store.close()
+
+        self.assertEqual(result.candidates[0].detector_id, "rca_root_cause")
+        self.assertEqual(result.incidents[0].service, "frontend")
+        self.assertEqual(result.notifications[0].service, "frontend")
+        self.assertEqual(result.notifications[0].runbook_id, "RB-SERVICE-ERROR-RATE")
+        text = "\n".join(logs.output)
+        self.assertIn("AIOPS_RCA_SYNTHETIC_CANDIDATE service=frontend", text)
+        self.assertIn("AIOPS_DEDUP_RESULT input_candidates=1 incidents=1", text)
+
     def test_pipeline_flushes_notification_outbox_to_sender(self):
         settings = Settings()
         sender = FakeNotificationSender()

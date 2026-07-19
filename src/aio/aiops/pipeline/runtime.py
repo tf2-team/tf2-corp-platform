@@ -16,7 +16,7 @@ from aiops.enrichment import Enricher
 from aiops.features import FeatureBuilder
 from aiops.anomaly import V001AnomalyEngine
 from aiops.rca import V001RcaEngine
-from aiops.schemas import AnomalyFinding, MetricSeries, NotificationMessage, PipelineResult, PolicyDecision, RcaResult, RuntimeConfig
+from aiops.schemas import AnomalyFinding, EvidenceItem, MetricSeries, NotificationMessage, PipelineResult, PolicyDecision, RcaResult, RuntimeConfig
 from aiops.normalization import Normalizer
 from aiops.qualification import QualificationGate
 from aiops.remediation import (
@@ -28,7 +28,7 @@ from aiops.remediation import (
     RemediationDecisionEngine,
     RemediationFeatureExtractor,
 )
-from aiops.schemas import CandidateEvent, Incident, RemediationDecision, VerificationResult
+from aiops.schemas import CandidateEvent, Incident, RemediationDecision, SignalQuality, VerificationResult
 from aiops.verification import VerificationEngine
 
 
@@ -130,6 +130,21 @@ class AiopsPipeline:
         logger.debug("AIOPS_BLOCK enrich candidates=%s evidence=%s", len(enriched), [len(candidate.evidence) for candidate in enriched])
         incidents = [self.store.upsert(candidate) for candidate in enriched]
         deduped_incidents = _unique_incidents(incidents)
+        logger.debug("AIOPS_BLOCK incident incidents=%s ids=%s", len(incidents), [incident.incident_id for incident in incidents])
+
+        rca_result = self._run_v001_rca(metric_series or [], incidents)
+        if not incidents:
+            synthetic = self._synthetic_rca_candidate(rca_result)
+            if synthetic is not None:
+                enriched.append(synthetic)
+                incidents.append(self.store.upsert(synthetic))
+                deduped_incidents = _unique_incidents(incidents)
+                logger.info(
+                    "AIOPS_RCA_SYNTHETIC_CANDIDATE service=%s score=%.3f metrics=%s",
+                    synthetic.service,
+                    synthetic.confidence,
+                    ",".join(synthetic.contributing_signals),
+                )
         logger.info(
             "AIOPS_DEDUP_RESULT input_candidates=%s incidents=%s ids=%s services=%s occurrences=%s",
             len(enriched),
@@ -138,11 +153,8 @@ class AiopsPipeline:
             [incident.service for incident in deduped_incidents],
             [incident.occurrence_count for incident in deduped_incidents],
         )
-        logger.debug("AIOPS_BLOCK incident incidents=%s ids=%s", len(incidents), [incident.incident_id for incident in incidents])
-
         verification_results = self.verification.verify(incidents, features)
         logger.debug("AIOPS_BLOCK verify results=%s statuses=%s", len(verification_results), [result.status for result in verification_results])
-        rca_result = self._run_v001_rca(metric_series or [], incidents)
         logger.info(
             "AIOPS_BLOCK rca anomalies=%s root_causes=%s",
             len(rca_result.anomalies),
@@ -258,6 +270,34 @@ class AiopsPipeline:
         result = rca_engine.rank(findings, metric_series, top_k=int(config["top_k"]))
         _log_final_root_cause_algorithm_scores(result, anomaly_engine.last_algorithm_findings)
         return result
+
+    def _synthetic_rca_candidate(self, rca_result: RcaResult) -> CandidateEvent | None:
+        if not rca_result.root_causes:
+            return None
+        root = rca_result.root_causes[0]
+        service_config = None
+        if self.runtime_config is not None:
+            service_config = next((item for item in self.runtime_config.topology.services if item.name == root.service), None)
+        metrics = tuple(root.root_cause_metrics)
+        timestamp = max((finding.timestamp for finding in rca_result.anomalies if finding.service == root.service), default=0)
+        return CandidateEvent(
+            detector_id="rca_root_cause",
+            timestamp=timestamp,
+            flow=service_config.flow if service_config is not None else root.service,
+            service=root.service,
+            severity="SEV2",
+            signal_id=metrics[0] if metrics else "rca_root_cause",
+            value=root.score,
+            unit="score",
+            window="rca",
+            threshold=None,
+            quality=SignalQuality.VERIFIED,
+            reason="rca_root_cause",
+            runbook_id="RB-SERVICE-ERROR-RATE",
+            confidence=root.score,
+            contributing_signals=metrics,
+            evidence=tuple(EvidenceItem(source="rca", reference=root.service, summary=item) for item in root.evidence),
+        )
 
     def _record_rca_history(
         self,

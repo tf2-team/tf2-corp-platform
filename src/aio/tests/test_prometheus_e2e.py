@@ -20,7 +20,7 @@ CAPTURED_AT = datetime(2026, 7, 16, 12, 0, tzinfo=UTC)
 
 class FakeAnomalyEngine:
     def __init__(self, **_: object):
-        pass
+        self.last_algorithm_findings = {}
 
     def evaluate(self, _series):
         return [
