@@ -95,7 +95,7 @@
   },
   "correlation": {
     "window_seconds": 300,
-    "suppress_window_seconds": 900,
+    "suppress_window_seconds": 1800,
     "suppress_min_root_score": 0.8,
     "topology_max_hops": 1,
     "confidence_threshold": 0.5,
