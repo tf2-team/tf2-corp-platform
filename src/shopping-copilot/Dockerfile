@@ -13,10 +13,13 @@ RUN apt-get update && \
     rm -rf /var/lib/apt/lists/*
 
 COPY ./src/shopping-copilot/requirements.txt requirements.txt
+# Shopping Copilot starts the shared product-reviews guardrail module, so its
+# image must install the same pinned guardrail runtime dependencies.
+COPY ./src/product-reviews/requirements.txt guardrail-requirements.txt
 
 RUN --mount=type=cache,id=techx-pip-cache,target=/root/.cache/pip,sharing=locked \
     python -m venv venv && \
-    venv/bin/pip install -r requirements.txt
+    venv/bin/pip install -r requirements.txt -r guardrail-requirements.txt
 
 RUN --mount=type=cache,id=techx-pip-cache,target=/root/.cache/pip,sharing=locked \
     venv/bin/opentelemetry-bootstrap -a install
@@ -58,7 +61,7 @@ COPY --chown=appuser:appgroup ./src/shopping-copilot/cart_tool.py cart_tool.py
 COPY --chown=appuser:appgroup ./src/shopping-copilot/copilot_graph.py copilot_graph.py
 COPY --chown=appuser:appgroup ./src/shopping-copilot/copilot_server.py copilot_server.py
 
-RUN /venv/bin/python -c "import guardrails, grounding"
+RUN /venv/bin/python -c "import guardrails, grounding, llm_guard, spacy; spacy.load('en_core_web_lg')"
 
 RUN chown -R appuser:appgroup /app
 
