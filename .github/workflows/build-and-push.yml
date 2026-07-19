@@ -1055,10 +1055,20 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
+        with:
+          fetch-depth: 0
       - name: Install pinned Semgrep
         run: python3 -m pip install --disable-pip-version-check 'semgrep==1.136.0'
       - name: Run blocking SAST rules
-        run: semgrep scan --error --metrics=off --config p/ci --config p/owasp-top-ten src
+        env:
+          BASELINE_COMMIT: ${{ github.event.before }}
+        run: |
+          set -euo pipefail
+          args=(scan --error --metrics=off --config p/ci --config p/owasp-top-ten)
+          if [[ -n "${BASELINE_COMMIT}" && ! "${BASELINE_COMMIT}" =~ ^0+$ ]] && git cat-file -e "${BASELINE_COMMIT}^{commit}"; then
+            args+=(--baseline-commit "${BASELINE_COMMIT}")
+          fi
+          semgrep "${args[@]}" src
 
   trufflehog-secrets:
     name: TruffleHog secrets

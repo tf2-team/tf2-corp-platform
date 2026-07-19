@@ -10,7 +10,9 @@ repositories.
 can run:
 
 - Trivy scans every release image and exits non-zero on HIGH or CRITICAL CVEs.
-- Semgrep scans `src/` with `p/ci` and `p/owasp-top-ten` rules.
+- Semgrep scans `src/` with `p/ci` and `p/owasp-top-ten` rules. It uses the PR
+  base/push-before commit as a baseline so new findings block delivery while the
+  pre-existing findings are remediated through a separate security backlog.
 - TruffleHog scans Git history and fails on verified secrets.
 - Every immutable image digest is signed with the configured AWS KMS Cosign key.
 - A CycloneDX SBOM is generated and attached to each digest.
