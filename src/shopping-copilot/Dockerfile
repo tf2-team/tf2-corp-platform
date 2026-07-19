@@ -49,6 +49,8 @@ COPY --chown=appuser:appgroup ./src/product-reviews/grounding.py grounding.py
 
 # Copy shopping-copilot service code
 COPY --chown=appuser:appgroup ./src/shopping-copilot/copilot_contracts.py copilot_contracts.py
+COPY --chown=appuser:appgroup ./src/shopping-copilot/bedrock_runtime.py bedrock_runtime.py
+COPY --chown=appuser:appgroup ./src/shopping-copilot/bedrock_grounding.py bedrock_grounding.py
 COPY --chown=appuser:appgroup ./src/shopping-copilot/intent_parser.py intent_parser.py
 COPY --chown=appuser:appgroup ./src/shopping-copilot/catalog_tool.py catalog_tool.py
 COPY --chown=appuser:appgroup ./src/shopping-copilot/review_tool.py review_tool.py
