@@ -96,10 +96,76 @@ message GetProductRequest {
 
 message SearchProductsRequest {
     string query = 1;
+    // Structured filter fields for Shopping Copilot (A2.1).
+    // All optional — omit to get unfiltered results.
+    optional int64 max_price_units = 2;  // whole currency units (e.g. USD)
+    optional int32 max_price_nanos = 3;  // nano units (10^-9)
+    optional string category = 4;        // must match one of Product.categories exactly
 }
 
 message SearchProductsResponse {
     repeated Product results = 1;
+}
+
+// ---------------Shopping Copilot service----------
+
+service ShoppingCopilotService {
+    // Single-turn: parse intent, search catalog, optionally ground Q&A on reviews.
+    rpc Search(CopilotSearchRequest) returns (CopilotSearchResponse) {}
+    // Separate confirmation RPC: validate pending token and write to cart.
+    // AI never calls this — only the frontend (user-triggered) does.
+    rpc ConfirmCartAction(ConfirmCartActionRequest) returns (ConfirmCartActionResponse) {}
+}
+
+message CopilotSearchRequest {
+    string user_message = 1;
+    // session_id is reserved for A2.4 (multi-turn) — omit in current MVP.
+}
+
+message CopilotSearchResponse {
+    // One of: GROUNDED | NO_RESULTS | ABSTAINED | BLOCKED | FALLBACK
+    string status = 1;
+    // Human-readable summary of what the copilot understood from the user query.
+    string interpreted_criteria = 2;
+    repeated CopilotProduct products = 3;
+    repeated CopilotClaim claims = 4;
+    repeated CopilotSource sources = 5;
+    // Explanation when status is not GROUNDED (e.g. abstention or fallback reason).
+    string reason = 6;
+    // Non-empty when the copilot proposes an add-to-cart action.
+    // Frontend must call ConfirmCartAction with this token to execute the write.
+    string pending_action_token = 7;
+}
+
+message CopilotProduct {
+    string product_id = 1;
+    string name = 2;
+    int64 price_units = 3;
+    int32 price_nanos = 4;
+    string currency_code = 5;
+}
+
+message CopilotClaim {
+    string text = 1;
+    repeated string source_ids = 2;
+}
+
+message CopilotSource {
+    string source_id = 1;
+    // "catalog" for product facts, "review" for review-grounded claims.
+    string source_type = 2;
+    string product_id = 3;
+}
+
+message ConfirmCartActionRequest {
+    string pending_action_token = 1;
+    string user_id = 2;
+}
+
+message ConfirmCartActionResponse {
+    bool success = 1;
+    // Human-readable reason on failure (expired, replayed, invalid token, etc.).
+    string reason = 2;
 }
 
 // ---------------Product Review service----------
@@ -114,6 +180,7 @@ message ProductReview {
     string username = 1;
     string description = 2;
     string score = 3;
+    string id = 4;
 }
 
 message GetProductReviewsRequest {
@@ -137,8 +204,16 @@ message AskProductAIAssistantRequest {
     string question = 2;
 }
 
+message GroundedClaim {
+    string text = 1;
+    repeated string source_ids = 2;
+}
+
 message AskProductAIAssistantResponse {
     string response = 1;
+    string status = 2;
+    string reason = 3;
+    repeated GroundedClaim claims = 4;
 }
 
 // ---------------Shipping Service----------

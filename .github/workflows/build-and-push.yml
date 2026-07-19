@@ -4,7 +4,7 @@ name: Build and push images
 
 # Job graph: CI → prepare → AWS/ECR preflight (refine build/retag lists)
 #            → build matrix (changed services from source) || retag (unchanged from PREV_TAG)
-#            → verify ECR (all 22 under NEW_TAG)
+#            → verify ECR (all 23 under NEW_TAG)
 #            → publish Mem0 FastEmbed artifact (build when mem0 bakes; else S3 retag)
 #            → release-ready → update-chart-dev (development) | create-chart-prod-pr (production)
 #
@@ -20,7 +20,7 @@ on:
   push:
     branches: [main, techx-dev-corp]
     # Branch pushes: only when image-affecting paths change.
-    # Selective bake+retag still produces the full 22-image set under one global tag.
+    # Selective bake+retag still produces the full 23-image set under one global tag.
     # Tag pushes (v*) and workflow_dispatch always run (no path filter on those entry points).
     paths:
       - "src/**"
@@ -42,7 +42,7 @@ on:
           - development
           - production
       force_full_rebuild:
-        description: Bake all 22 services from source (ignore path-based selective rebuild)
+        description: Bake all 23 services from source (ignore path-based selective rebuild)
         required: false
         type: boolean
         default: true
@@ -151,7 +151,7 @@ jobs:
           set -euo pipefail
 
           # Canonical release set (must match docker-bake.hcl group "release").
-          RELEASE_JSON='["accounting","ad","cart","checkout","currency","email","flagd-ui","fraud-detection","frontend","frontend-proxy","image-provider","kafka","llm","load-generator","mem0","opensearch","payment","product-catalog","product-reviews","quote","recommendation","shipping"]'
+          RELEASE_JSON='["accounting","ad","cart","checkout","currency","email","flagd-ui","fraud-detection","frontend","frontend-proxy","image-provider","kafka","llm","load-generator","mem0","opensearch","payment","product-catalog","product-reviews","quote","recommendation","shipping","shopping-copilot"]'
 
           mapfile -t RELEASE < <(printf '%s' "${RELEASE_JSON}" | jq -r '.[]')
 
@@ -201,8 +201,8 @@ jobs:
             fi
           done
 
-          if [[ "${#RELEASE[@]}" -ne 22 ]]; then
-            echo "::error::Expected 22 release services, got ${#RELEASE[@]}"
+          if [[ "${#RELEASE[@]}" -ne 23 ]]; then
+            echo "::error::Expected 23 release services, got ${#RELEASE[@]}"
             exit 1
           fi
 
@@ -214,11 +214,11 @@ jobs:
             echo "${BAKE_RAW}"
             exit 1
           fi
-          echo "${BAKE_JSON}" | jq -e '.group.release.targets | length == 22' >/dev/null
+          echo "${BAKE_JSON}" | jq -e '.group.release.targets | length == 23' >/dev/null
 
           mapfile -t BAKE_TARGETS < <(echo "${BAKE_JSON}" | jq -r '.group.release.targets[]' | sort -u)
-          if [[ "${#BAKE_TARGETS[@]}" -ne 22 ]]; then
-            echo "::error::Bake release group has ${#BAKE_TARGETS[@]} unique targets (want 22)"
+          if [[ "${#BAKE_TARGETS[@]}" -ne 23 ]]; then
+            echo "::error::Bake release group has ${#BAKE_TARGETS[@]} unique targets (want 23)"
             exit 1
           fi
 
@@ -696,7 +696,7 @@ jobs:
       actions: write
     strategy:
       fail-fast: false
-      max-parallel: 22
+      max-parallel: 23
       matrix:
         service: ${{ fromJson(needs.preflight.outputs.build_services) }}
     env:
@@ -814,7 +814,7 @@ jobs:
       id-token: write
     strategy:
       fail-fast: false
-      max-parallel: 22
+      max-parallel: 23
       matrix:
         service: ${{ fromJson(needs.preflight.outputs.retag_services) }}
     env:
@@ -887,7 +887,7 @@ jobs:
           } >> "${GITHUB_STEP_SUMMARY}"
 
   # ---------------------------------------------------------------------------
-  # 6. verify ECR — all 22 tags under NEW_TAG after build and/or retag
+  # 6. verify ECR — all 23 tags under NEW_TAG after build and/or retag
   # ---------------------------------------------------------------------------
   verify-ecr:
     name: Verify ECR tags
@@ -1610,7 +1610,7 @@ jobs:
             echo ""
             echo "## Notes"
             echo ""
-            echo "* All **22** release images were built and verified in ECR before this PR was opened."
+            echo "* All **23** release images were built and verified in ECR before this PR was opened."
             echo "* Merge this PR to let Argo CD Application \`techx-corp\` sync the new global tag."
             echo "* Do **not** merge while a platform publish for this tag is still in progress (this job only runs after \`release-ready\`)."
             echo ""
@@ -1692,4 +1692,4 @@ jobs:
             echo "Review and merge the PR to deploy. Argo CD (\`techx-corp\`) will sync after merge to \`${CHART_PROD_BRANCH}\`."
           } >> "${GITHUB_STEP_SUMMARY}"
 
-# Change trail: @hungxqt - 2026-07-19 - Switch BuildKit cache validation/export from ECR :buildcache to GHA type=gha.
+# Change trail: @hungxqt - 2026-07-19 - Add shopping-copilot to 23-service release catalog and publish gates.

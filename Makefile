@@ -121,7 +121,7 @@ build-multiplatform:
 .PHONY: build-multiplatform-and-push
 build-multiplatform-and-push:
     # Because buildx bake does not support --env-file yet, we need to load it into the environment first.
-    # Pushes only the release group (22 deployable services, including opensearch); see docker-bake.hcl.
+    # Pushes only the release group (23 deployable services, including opensearch and shopping-copilot); see docker-bake.hcl.
     # Clear GHA cache-from/to: type=gha only works on GitHub Actions runners (not local hosts).
 	set -a; . ./.env.override; set +a && docker buildx bake -f docker-compose.yml -f docker-bake.hcl release --push \
 		--set "*.cache-from=" --set "*.cache-to="
@@ -253,4 +253,4 @@ endif
 build-react-native-android:
 	docker build -f src/react-native-app/android.Dockerfile --platform=linux/amd64 --output=. src/react-native-app
 
-# Change trail: @hungxqt - 2026-07-19 - Clear GHA cache flags on local multiplatform ECR push.
+# Change trail: @hungxqt - 2026-07-19 - Release bake catalog is 23 services including shopping-copilot.

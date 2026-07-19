@@ -166,9 +166,13 @@ def test_generate_grounded_summary_calls_instructor_client():
     with patch("grounding._get_client_and_model", return_value=(object(), "fake-model")), \
          patch("grounding.instructor.from_openai") as mock_from_openai:
         mock_from_openai.return_value.chat.completions.create.return_value = expected_draft
-        result = generate_grounded_summary(safe_reviews)
+        result = generate_grounded_summary(safe_reviews, question="What do reviews say?")
 
     assert result == expected_draft
+    # question is prompt input only; output contract remains GroundedDraft
+    kwargs = mock_from_openai.return_value.chat.completions.create.call_args.kwargs
+    user_content = kwargs["messages"][1]["content"]
+    assert "What do reviews say?" in user_content
 
 
 # --- Contract sanity: SafeReviewSet with duplicate source_id is invalid

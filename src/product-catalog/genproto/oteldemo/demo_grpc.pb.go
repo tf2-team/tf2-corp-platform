@@ -491,6 +491,153 @@ var ProductCatalogService_ServiceDesc = grpc.ServiceDesc{
 }
 
 const (
+	ShoppingCopilotService_Search_FullMethodName            = "/oteldemo.ShoppingCopilotService/Search"
+	ShoppingCopilotService_ConfirmCartAction_FullMethodName = "/oteldemo.ShoppingCopilotService/ConfirmCartAction"
+)
+
+// ShoppingCopilotServiceClient is the client API for ShoppingCopilotService service.
+//
+// For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
+type ShoppingCopilotServiceClient interface {
+	// Single-turn: parse intent, search catalog, optionally ground Q&A on reviews.
+	Search(ctx context.Context, in *CopilotSearchRequest, opts ...grpc.CallOption) (*CopilotSearchResponse, error)
+	// Separate confirmation RPC: validate pending token and write to cart.
+	// AI never calls this — only the frontend (user-triggered) does.
+	ConfirmCartAction(ctx context.Context, in *ConfirmCartActionRequest, opts ...grpc.CallOption) (*ConfirmCartActionResponse, error)
+}
+
+type shoppingCopilotServiceClient struct {
+	cc grpc.ClientConnInterface
+}
+
+func NewShoppingCopilotServiceClient(cc grpc.ClientConnInterface) ShoppingCopilotServiceClient {
+	return &shoppingCopilotServiceClient{cc}
+}
+
+func (c *shoppingCopilotServiceClient) Search(ctx context.Context, in *CopilotSearchRequest, opts ...grpc.CallOption) (*CopilotSearchResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(CopilotSearchResponse)
+	err := c.cc.Invoke(ctx, ShoppingCopilotService_Search_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *shoppingCopilotServiceClient) ConfirmCartAction(ctx context.Context, in *ConfirmCartActionRequest, opts ...grpc.CallOption) (*ConfirmCartActionResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ConfirmCartActionResponse)
+	err := c.cc.Invoke(ctx, ShoppingCopilotService_ConfirmCartAction_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+// ShoppingCopilotServiceServer is the server API for ShoppingCopilotService service.
+// All implementations must embed UnimplementedShoppingCopilotServiceServer
+// for forward compatibility.
+type ShoppingCopilotServiceServer interface {
+	// Single-turn: parse intent, search catalog, optionally ground Q&A on reviews.
+	Search(context.Context, *CopilotSearchRequest) (*CopilotSearchResponse, error)
+	// Separate confirmation RPC: validate pending token and write to cart.
+	// AI never calls this — only the frontend (user-triggered) does.
+	ConfirmCartAction(context.Context, *ConfirmCartActionRequest) (*ConfirmCartActionResponse, error)
+	mustEmbedUnimplementedShoppingCopilotServiceServer()
+}
+
+// UnimplementedShoppingCopilotServiceServer must be embedded to have
+// forward compatible implementations.
+//
+// NOTE: this should be embedded by value instead of pointer to avoid a nil
+// pointer dereference when methods are called.
+type UnimplementedShoppingCopilotServiceServer struct{}
+
+func (UnimplementedShoppingCopilotServiceServer) Search(context.Context, *CopilotSearchRequest) (*CopilotSearchResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method Search not implemented")
+}
+func (UnimplementedShoppingCopilotServiceServer) ConfirmCartAction(context.Context, *ConfirmCartActionRequest) (*ConfirmCartActionResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ConfirmCartAction not implemented")
+}
+func (UnimplementedShoppingCopilotServiceServer) mustEmbedUnimplementedShoppingCopilotServiceServer() {
+}
+func (UnimplementedShoppingCopilotServiceServer) testEmbeddedByValue() {}
+
+// UnsafeShoppingCopilotServiceServer may be embedded to opt out of forward compatibility for this service.
+// Use of this interface is not recommended, as added methods to ShoppingCopilotServiceServer will
+// result in compilation errors.
+type UnsafeShoppingCopilotServiceServer interface {
+	mustEmbedUnimplementedShoppingCopilotServiceServer()
+}
+
+func RegisterShoppingCopilotServiceServer(s grpc.ServiceRegistrar, srv ShoppingCopilotServiceServer) {
+	// If the following call pancis, it indicates UnimplementedShoppingCopilotServiceServer was
+	// embedded by pointer and is nil.  This will cause panics if an
+	// unimplemented method is ever invoked, so we test this at initialization
+	// time to prevent it from happening at runtime later due to I/O.
+	if t, ok := srv.(interface{ testEmbeddedByValue() }); ok {
+		t.testEmbeddedByValue()
+	}
+	s.RegisterService(&ShoppingCopilotService_ServiceDesc, srv)
+}
+
+func _ShoppingCopilotService_Search_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(CopilotSearchRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ShoppingCopilotServiceServer).Search(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ShoppingCopilotService_Search_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ShoppingCopilotServiceServer).Search(ctx, req.(*CopilotSearchRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _ShoppingCopilotService_ConfirmCartAction_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ConfirmCartActionRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ShoppingCopilotServiceServer).ConfirmCartAction(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ShoppingCopilotService_ConfirmCartAction_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ShoppingCopilotServiceServer).ConfirmCartAction(ctx, req.(*ConfirmCartActionRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+// ShoppingCopilotService_ServiceDesc is the grpc.ServiceDesc for ShoppingCopilotService service.
+// It's only intended for direct use with grpc.RegisterService,
+// and not to be introspected or modified (even as a copy)
+var ShoppingCopilotService_ServiceDesc = grpc.ServiceDesc{
+	ServiceName: "oteldemo.ShoppingCopilotService",
+	HandlerType: (*ShoppingCopilotServiceServer)(nil),
+	Methods: []grpc.MethodDesc{
+		{
+			MethodName: "Search",
+			Handler:    _ShoppingCopilotService_Search_Handler,
+		},
+		{
+			MethodName: "ConfirmCartAction",
+			Handler:    _ShoppingCopilotService_ConfirmCartAction_Handler,
+		},
+	},
+	Streams:  []grpc.StreamDesc{},
+	Metadata: "demo.proto",
+}
+
+const (
 	ProductReviewService_GetProductReviews_FullMethodName            = "/oteldemo.ProductReviewService/GetProductReviews"
 	ProductReviewService_GetAverageProductReviewScore_FullMethodName = "/oteldemo.ProductReviewService/GetAverageProductReviewScore"
 	ProductReviewService_AskProductAIAssistant_FullMethodName        = "/oteldemo.ProductReviewService/AskProductAIAssistant"

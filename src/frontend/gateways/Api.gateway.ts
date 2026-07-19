@@ -85,7 +85,7 @@ const Apis = () => ({
     });
   },
   askProductAIAssistant(productId: string, question: string) {
-    return request<string>({
+    return request<any>({
       url: `${basePath}/product-ask-ai-assistant/${productId}`,
       method: 'POST',
       body: { question },

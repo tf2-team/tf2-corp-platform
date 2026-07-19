@@ -8,7 +8,7 @@ Helm deploy stays in `techx-corp-chart`.
 | Workflow | File | When | What |
 |---|---|---|---|
 | CI | `.github/workflows/ci.yml` | `pull_request` to `main` / `techx-dev-corp`; also `workflow_call` | Lint + selective unit tests; on PRs only, local (no-push) image bake for changed services |
-| Build & Push | `.github/workflows/build-and-push.yml` | `push` to `main` / `techx-dev-corp` with image-affecting path changes, tags `v*`, `workflow_dispatch` | Gated multi-arch bake and/or ECR retag → verify all 22 tags → Mem0 FastEmbed artifact (build/retag) → chart promote (dev push / prod PR) |
+| Build & Push | `.github/workflows/build-and-push.yml` | `push` to `main` / `techx-dev-corp` with image-affecting path changes, tags `v*`, `workflow_dispatch` | Gated multi-arch bake and/or ECR retag → verify all 23 tags → Mem0 FastEmbed artifact (build/retag) → chart promote (dev push / prod PR) |
 
 ### Job graph (PR CI)
 
@@ -32,7 +32,7 @@ lint  ||  unit-tests  ||  prepare-pr-images → build-pr-images (matrix) → pr-
 |---|---|
 | `src/<release-service>/**` | Selective: bake those services only |
 | `third-party/mem0` (submodule pin) | Selective: bake `mem0` only |
-| `pb/**`, `buildkitd.toml`, `.env`, `.gitmodules` | Full: all 22 release services |
+| `pb/**`, `buildkitd.toml`, `.env`, `.gitmodules` | Full: all 23 release services |
 | `docker-compose.yml`, `docker-bake.hcl` | Selective: catalog change only (no automatic full matrix); bake services that also have `src/**` changes |
 | Docs / workflows / other non-image paths only | Skip bake matrix (`build_count=0`); **pr-image-build** still succeeds |
 
@@ -43,7 +43,7 @@ PR bake intentionally differs from publish: single platform, no registry cache, 
 ```text
 CI (reusable lint + unit tests)
   → prepare            # env, tag, bake catalog validation, classify build vs retag
-  → AWS/ECR preflight  # OIDC + verify 22 ECR repos; refine lists if PREV_TAG missing
+  → AWS/ECR preflight  # OIDC + verify 23 ECR repos; refine lists if PREV_TAG missing
   → build matrix       # changed services only (bake from source + GHA BuildKit cache)
   → retag matrix       # unchanged services: PREV_TAG → NEW_TAG (parallel with build)
   → verify ECR         # describe-images for every release service under NEW_TAG
@@ -85,13 +85,13 @@ Git tag pushes (`v*`) and manual `workflow_dispatch` always run the pipeline (no
 
 ### Selective rebuild (build vs retag)
 
-Helm still uses **one global image tag** for all release services. Every successful publish must leave all **22** images present under the new tag (`sha-<7>` or `v*`). Selective CI does **not** promote a partial catalog.
+Helm still uses **one global image tag** for all release services. Every successful publish must leave all **23** images present under the new tag (`sha-<7>` or `v*`). Selective CI does **not** promote a partial catalog.
 
 | Service classification | Action |
 |---|---|
 | **Changed** (`src/<service>/**`, or `third-party/mem0` for mem0) | `docker buildx bake … --push` from source (BuildKit uses GHA `type=gha` layer cache) |
 | **Unchanged** | Retag previous runtime image: `PREV_TAG` → `NEW_TAG` via `docker buildx imagetools create` (same digest, new tag) |
-| **Shared / global path** (`pb/**`, `.env`, `buildkitd.toml`, `.gitmodules`) | **Full** bake of all 22 (no retag) |
+| **Shared / global path** (`pb/**`, `.env`, `buildkitd.toml`, `.gitmodules`) | **Full** bake of all 23 (no retag) |
 | **Catalog only** (`docker-compose.yml`, `docker-bake.hcl`) | **Selective**: does not by itself bake every service; new services missing `PREV_TAG` are moved to build by preflight |
 
 **When mode is full**
@@ -108,7 +108,7 @@ Helm still uses **one global image tag** for all release services. Every success
 * `workflow_dispatch` can set `previous_tag` (e.g. `sha-a1b2c3d` or `v1.2.3`)
 * Preflight checks each retag candidate exists in ECR under `PREV_TAG`; missing services are moved into the build list
 
-Non-release paths under `src/` (e.g. `src/flagd`, Grafana config) do not force a service bake; if nothing maps to a release service, all 22 are retagged to the new global tag.
+Non-release paths under `src/` (e.g. `src/flagd`, Grafana config) do not force a service bake; if nothing maps to a release service, all 23 are retagged to the new global tag.
 
 **Mem0 FastEmbed artifact** (S3, not ECR) follows the same classification as the mem0 image:
 
@@ -137,7 +137,7 @@ CI uploads to `${MEM0_FASTEMBED_ARTIFACT_S3_URI}/${VERSION}/`. The chart compose
 | Input | Default | Purpose |
 |---|---|---|
 | `target_environment` | required | `development` or `production` |
-| `force_full_rebuild` | `true` | Bake all 22 from source when true |
+| `force_full_rebuild` | `true` | Bake all 23 from source when true |
 | `previous_tag` | empty | When force is false, tag to retag unchanged services from |
 
 ### Environment mapping (Build & Push)
@@ -176,7 +176,7 @@ ${IMAGE_NAME}/<service>:${DEMO_VERSION}
 
 **CI release identity vs local `.env`:** committed `.env` keeps `DEMO_VERSION=latest` (and a default `IMAGE_NAME`) for local Compose. The build job loads Dockerfile-related vars from `.env`, then **overrides** them with the prepare-resolved `IMAGE_NAME` / `DEMO_VERSION` / `IMAGE_VERSION` so ECR receives immutable tags (`sha-*` or `v*`).
 
-### Release catalog (22 images)
+### Release catalog (23 images)
 
 Defined in `docker-bake.hcl` group `release` (layered over `docker-compose.yml`):
 
@@ -185,13 +185,15 @@ Defined in `docker-bake.hcl` group `release` (layered over `docker-compose.yml`)
 | accounting, ad, cart, checkout, currency, email |
 | flagd-ui, fraud-detection, frontend, frontend-proxy |
 | image-provider, kafka, llm, load-generator, mem0, opensearch, payment |
-| product-catalog, product-reviews, quote, recommendation, shipping |
+| product-catalog, product-reviews, quote, recommendation, shipping, shopping-copilot |
 
 `opensearch` is a **customized** image (`src/opensearch/Dockerfile`, based on `opensearchproject/opensearch:3.2.0` with unused plugins removed). CI pushes it to ECR; Helm’s OpenSearch subchart pulls that image (not the public Docker Hub image).
 
 `mem0` is a normal matrix service (multi-arch bake + retag). Its FastEmbed model cache is published separately to S3 under the same global tag identity (build when mem0 bakes; S3 retag otherwise).
 
-`prepare` asserts `release` equals all Compose build targets (22), with no duplicates or missing services. A newly added Compose build target must be listed in `docker-bake.hcl` group `release`.
+`shopping-copilot` is a normal matrix service (multi-arch bake + retag). PR CI also runs `Shopping copilot tests` (pytest under `src/shopping-copilot/tests`).
+
+`prepare` asserts `release` equals all Compose build targets (23), with no duplicates or missing services. A newly added Compose build target must be listed in `docker-bake.hcl` group `release`.
 
 ### BuildKit cache and retag
 
@@ -222,7 +224,7 @@ Build / retag matrix settings:
 | Setting | Value |
 |---|---|
 | `fail-fast` | `false` |
-| `max-parallel` | `22` |
+| `max-parallel` | `23` |
 | runner | `ubuntu-latest` |
 | `timeout-minutes` | `120` bake / `20` retag per service |
 | builder | Buildx + `buildkitd.toml` (`max-parallelism = 4`) on bake jobs |
@@ -519,7 +521,7 @@ Without `CHART_REPO_TOKEN`, builds can still push images and pass `release-ready
 
 1. Merge workflow / bake changes to the development branch.
 2. Dry-run development: push to `techx-dev-corp`, or Actions → **Build and push images** → `development`.
-3. Confirm all 22 runtime tags, for example:
+3. Confirm all 23 runtime tags, for example:
 
    ```bash
    aws ecr describe-images --repository-name techx-dev-corp/ad \
@@ -552,7 +554,7 @@ export IMAGE_NAME=493499579600.dkr.ecr.us-east-1.amazonaws.com/techx-prod-corp
 export IMAGE_VERSION=sha-manual
 export DEMO_VERSION=sha-manual
 
-# Release group only (22 services). Clear GHA cache outside Actions.
+# Release group only (23 services). Clear GHA cache outside Actions.
 docker buildx bake -f docker-compose.yml -f docker-bake.hcl release --push \
   --set "*.cache-from=" --set "*.cache-to="
 # Produces: .../techx-prod-corp/ad:sha-manual (runtime tag only)
@@ -610,7 +612,7 @@ Platform CI builds, pushes, and verifies images. Deploy is Argo CD reading the c
 
 Because the chart uses a **global** `default.image.tag` for all nested services (including first-party `opensearch`):
 
-1. **Rebuild and push the full release set** (22 services, including `mem0` and `opensearch`) with the same tag.
+1. **Rebuild and push the full release set** (23 services, including `mem0`, `opensearch`, and `shopping-copilot`) with the same tag.
 2. **Wait for `release-ready`** (includes ECR `describe-images` for every service).
 3. **Development:** job **update-chart-dev** direct-pushes `default.image.tag` in `values-dev.yaml` on chart branch `techx-dev-corp` (requires `CHART_REPO_TOKEN`).
 4. **Production:** job **create-chart-prod-pr** opens a chart PR updating `values-prod.yaml` (`default.image.tag` only) against base `main` (requires `CHART_REPO_TOKEN` with Pull requests write). A human merges the PR.
@@ -620,11 +622,11 @@ Do **not** promote chart values while any matrix job or verification is incomple
 
 ```text
 # Development
-CI → prepare → preflight → build (all 22) → verify ECR → release-ready
+CI → prepare → preflight → build (all 23) → verify ECR → release-ready
   → update-chart-dev (direct push values-dev.yaml) → Argo auto-sync
 
 # Production
-CI → prepare → preflight → build (all 22) → verify ECR → release-ready
+CI → prepare → preflight → build (all 23) → verify ECR → release-ready
   → create-chart-prod-pr (open values-prod.yaml PR) → human merge → Argo sync
 ```
 
@@ -648,4 +650,4 @@ See chart runbook: `techx-corp-chart/docs/operations/gitops-argocd.md`.
 - Native multi-arch runners, image security gates, SBOM/provenance, Cosign
 - Full e2e / tracetest in PR CI
 
-<!-- Change trail: @hungxqt - 2026-07-19 - Document GHA BuildKit cache instead of ECR :buildcache under IMMUTABLE tags. -->
+<!-- Change trail: @hungxqt - 2026-07-19 - Document shopping-copilot in 23-image release catalog and CI tests. -->
