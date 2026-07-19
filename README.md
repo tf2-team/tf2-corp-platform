@@ -27,8 +27,8 @@ GitHub Actions builds multi-arch images and pushes them to AWS ECR via OIDC.
 | branch push without `src/**` changes | — | publishing skipped (docs, workflows, compose/bake-only, etc.) |
 | manual dispatch | chosen | matching environment (use for republish without `src/` edits) |
 
-- **21 release images** defined in `docker-bake.hcl` (group `release`), including customized `opensearch`.
-- **Registry cache:** `${IMAGE_NAME}/<service>:buildcache` (not a deployable tag).
+- **22 release images** defined in `docker-bake.hcl` (group `release`), including customized `opensearch`.
+- **BuildKit cache:** GitHub Actions `type=gha` (not an ECR tag; safe with immutable ECR tags).
 - **`release-ready`** gates promotion. **Dev** direct-pushes chart `default.image.tag`. **Prod** opens a chart PR for `values-prod.yaml` (human merge). Both need secret `CHART_REPO_TOKEN`.
 
 Image format: `[REGISTRY]/[PROJECT]/[SERVICE]:[VERSION]`  
@@ -57,3 +57,5 @@ Storefront: http://localhost:8080/
 
 ## License
 Distributed under the Apache License 2.0. See `LICENSE`.
+
+<!-- Change trail: @hungxqt - 2026-07-19 - Document GHA BuildKit cache instead of ECR :buildcache. -->

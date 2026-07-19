@@ -231,30 +231,38 @@ jobs:
               exit 1
             fi
 
-            expected_ref="${IMAGE_NAME}/${svc}:buildcache"
-            # bake --print may emit cache entries as CSV strings or as objects {type,ref,...}.
-            cache_from_ok="$(echo "${BAKE_JSON}" | jq -r --arg t "${svc}" --arg ref "${expected_ref}" '
+            # BuildKit layer cache must be type=gha (not ECR :buildcache).
+            # ECR image_tag_mutability=IMMUTABLE rejects overwriting movable cache tags.
+            # bake --print may emit cache entries as CSV strings or as objects {type,scope,mode,...}.
+            cache_from_ok="$(echo "${BAKE_JSON}" | jq -r --arg t "${svc}" '
               [.target[$t]["cache-from"] // empty | if type == "array" then .[] else . end]
-              | map(if type == "object" then .ref // empty else tostring end)
-              | any(. == $ref or contains($ref))
+              | map(if type == "object" then
+                  ((.type // "") == "gha")
+                  and ((.scope // "") == $t)
+                else
+                  (tostring | test("type=gha") and (contains("scope=" + $t) or contains("scope=\"" + $t)))
+                end)
+              | any(.)
             ')"
-            cache_to_ok="$(echo "${BAKE_JSON}" | jq -r --arg t "${svc}" --arg ref "${expected_ref}" '
+            cache_to_ok="$(echo "${BAKE_JSON}" | jq -r --arg t "${svc}" '
               [.target[$t]["cache-to"] // empty | if type == "array" then .[] else . end]
               | map(if type == "object" then
-                  ((.ref // "") == $ref or ((.ref // "") | tostring | contains($ref)))
+                  ((.type // "") == "gha")
+                  and ((.scope // "") == $t)
                   and ((.mode // "") == "max" or (.mode // "") == "MAX")
                 else
-                  (tostring | contains($ref) and contains("mode=max"))
+                  (tostring | test("type=gha") and contains("mode=max")
+                    and (contains("scope=" + $t) or contains("scope=\"" + $t)))
                 end)
               | any(.)
             ')"
             if [[ "${cache_from_ok}" != "true" ]]; then
-              echo "::error::Target '${svc}' cache-from missing ${expected_ref}"
+              echo "::error::Target '${svc}' cache-from must be type=gha with scope=${svc}"
               echo "${BAKE_JSON}" | jq --arg t "${svc}" '.target[$t]["cache-from"]'
               exit 1
             fi
             if [[ "${cache_to_ok}" != "true" ]]; then
-              echo "::error::Target '${svc}' cache-to missing ${expected_ref} with mode=max"
+              echo "::error::Target '${svc}' cache-to must be type=gha,mode=max,scope=${svc}"
               echo "${BAKE_JSON}" | jq --arg t "${svc}" '.target[$t]["cache-to"]'
               exit 1
             fi
@@ -684,6 +692,8 @@ jobs:
     permissions:
       contents: read
       id-token: write
+      # GHA BuildKit cache export (type=gha in docker-bake.hcl)
+      actions: write
     strategy:
       fail-fast: false
       max-parallel: 22
@@ -762,7 +772,7 @@ jobs:
           echo "  IMAGE_NAME=${IMAGE_NAME}"
           echo "  DEMO_VERSION=${DEMO_VERSION}"
           echo "  platforms=linux/amd64,linux/arm64 (from docker-bake.hcl)"
-          echo "  cache=${IMAGE_NAME}/${SERVICE}:buildcache"
+          echo "  cache=type=gha,scope=${SERVICE}"
           echo "  runtime_tag=${IMAGE_NAME}/${SERVICE}:${DEMO_VERSION}"
 
           docker buildx bake -f docker-compose.yml -f docker-bake.hcl "${SERVICE}" --push
@@ -784,7 +794,7 @@ jobs:
             echo "| Environment | \`${TARGET_ENV}\` |"
             echo "| Service | \`${SERVICE}\` |"
             echo "| Image | \`${IMAGE_NAME}/${SERVICE}:${DEMO_VERSION}\` |"
-            echo "| Cache | \`${IMAGE_NAME}/${SERVICE}:buildcache\` |"
+            echo "| Cache | \`type=gha,scope=${SERVICE}\` |"
             echo "| Mode | bake from source |"
             echo "| Commit | \`${SHORT_SHA}\` |"
           } >> "${GITHUB_STEP_SUMMARY}"
@@ -1682,4 +1692,4 @@ jobs:
             echo "Review and merge the PR to deploy. Argo CD (\`techx-corp\`) will sync after merge to \`${CHART_PROD_BRANCH}\`."
           } >> "${GITHUB_STEP_SUMMARY}"
 
-# Change trail: @hungxqt - 2026-07-17 - Put mem0 on matrix build/retag; selective FastEmbed S3 retag.
+# Change trail: @hungxqt - 2026-07-19 - Switch BuildKit cache validation/export from ECR :buildcache to GHA type=gha.

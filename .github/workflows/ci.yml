@@ -307,7 +307,7 @@ jobs:
 
           # Overrides:
           # - single platform for PR speed (publish path still multi-arch)
-          # - clear registry cache-from/to so no AWS/ECR credentials are required
+          # - clear cache-from/to (bake defaults to GHA type=gha; not needed for PR gate)
           # - cacheonly validates the full Dockerfile build without exporting layers
           docker buildx bake \
             -f docker-compose.yml \
@@ -430,4 +430,4 @@ jobs:
           AI_GUARDRAIL_REQUIRE_MODEL: "true"
           PYTHONPATH: src/product-reviews
         run: python -c "import guardrails; guardrails.initialize_guardrails()"
-# Change trail: @hungxqt - 2026-07-17 - Align PR image classification with selective mem0 matrix build.
+# Change trail: @hungxqt - 2026-07-19 - PR bake still clears cache; bake defaults moved to GHA type=gha.
