@@ -6,21 +6,20 @@ import styled from 'styled-components';
 import { CopilotResponse } from '../../providers/ShoppingCopilot.provider';
 
 const Banner = styled.div<{ status: string }>`
-  padding: 18px 20px;
+  padding: 16px 20px;
   border-radius: 12px;
   font-size: 14px;
   line-height: 1.6;
-  margin-bottom: 20px;
   background-color: ${({ status }) => {
     switch (status) {
       case 'NO_RESULTS':
-        return '#fffbe6';
+        return '#fefce8';
       case 'ABSTAINED':
-        return '#f0f7ff';
+        return '#f0f9ff';
       case 'BLOCKED':
-        return '#fff1f0';
+        return '#fef2f2';
       case 'FALLBACK':
-        return '#f5f5f5';
+        return '#f8fafc';
       default:
         return '#ffffff';
     }
@@ -29,90 +28,74 @@ const Banner = styled.div<{ status: string }>`
     ${({ status }) => {
       switch (status) {
         case 'NO_RESULTS':
-          return '#ffe58f';
+          return '#fef08a';
         case 'ABSTAINED':
-          return '#91caff';
+          return '#bae6fd';
         case 'BLOCKED':
-          return '#ffa39e';
+          return '#fecaca';
         case 'FALLBACK':
-          return '#d9d9d9';
+          return '#e2e8f0';
         default:
-          return '#e8e8e8';
+          return '#e2e8f0';
       }
     }};
-  color: #1f2937;
+  color: #1e293b;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.03);
 `;
 
 const TitleRow = styled.div`
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 10px;
   margin-bottom: 6px;
-`;
-
-const Badge = styled.span<{ status: string }>`
-  padding: 2px 8px;
-  border-radius: 4px;
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.5px;
-  text-transform: uppercase;
-  background-color: ${({ status }) => {
-    switch (status) {
-      case 'NO_RESULTS':
-        return '#faad14';
-      case 'ABSTAINED':
-        return '#1677ff';
-      case 'BLOCKED':
-        return '#ff4d4f';
-      case 'FALLBACK':
-        return '#8c8c8c';
-      default:
-        return '#595959';
-    }
-  }};
-  color: #ffffff;
 `;
 
 const Title = styled.div`
   font-weight: 700;
   font-size: 15px;
-  color: #111827;
+  color: #0f172a;
 `;
 
 const Content = styled.div`
   font-size: 14px;
-  color: #4b5563;
-  margin-bottom: 10px;
+  color: #475569;
+  margin-bottom: 8px;
 `;
 
 const SuggestionsBox = styled.div`
   margin-top: 12px;
   padding-top: 10px;
   border-top: 1px dashed rgba(0, 0, 0, 0.1);
-  font-size: 12px;
-  color: #6b7280;
+  font-size: 13px;
+  color: #64748b;
 `;
 
 const SuggestionTitle = styled.div`
   font-weight: 600;
-  margin-bottom: 6px;
+  margin-bottom: 8px;
 `;
 
 const SuggestionList = styled.div`
   display: flex;
   flex-wrap: wrap;
-  gap: 6px;
+  gap: 8px;
 `;
 
-const SuggestionItem = styled.span`
-  background: rgba(255, 255, 255, 0.8);
-  border: 1px solid rgba(0, 0, 0, 0.08);
-  padding: 4px 8px;
-  border-radius: 6px;
-  font-size: 12px;
-  color: #374151;
+const SuggestionItem = styled.button`
+  background: #ffffff;
+  border: 1px solid #cbd5e1;
+  padding: 6px 12px;
+  border-radius: 8px;
+  font-size: 13px;
+  color: #334155;
+  cursor: pointer;
+  transition: all 0.15s ease;
+
+  &:hover {
+    background: #eff6ff;
+    color: #1d4ed8;
+    border-color: #93c5fd;
+  }
 `;
 
 interface Props {
@@ -128,15 +111,15 @@ export const CopilotStateMessage: React.FC<Props> = ({ response, onSuggestionCli
   const getTitle = () => {
     switch (status) {
       case 'NO_RESULTS':
-        return 'Product Not Found in Catalog';
+        return 'No Products Found';
       case 'ABSTAINED':
-        return 'Insufficient Review Evidence';
+        return 'Additional Review Evidence Needed';
       case 'BLOCKED':
-        return 'Out of Scope Request';
+        return 'Request Out of Shopping Scope';
       case 'FALLBACK':
         return 'Assistant Temporarily Unavailable';
       default:
-        return 'Notification';
+        return 'Assistant Notification';
     }
   };
 
@@ -144,15 +127,15 @@ export const CopilotStateMessage: React.FC<Props> = ({ response, onSuggestionCli
     switch (status) {
       case 'BLOCKED':
         return [
-          'Noise cancelling headphones under $100',
-          'Add the best headphones to my cart',
-          'How long does the battery last on these headphones?',
+          'Show me lens cleaning kits under $30',
+          'Find stargazing accessories under $100',
+          'Add the Lens Cleaning Kit to my cart',
         ];
       case 'NO_RESULTS':
         return [
-          'Headphones',
+          'Lens Cleaning Kit',
           'Solar System Color Imager',
-          'Casual comfort style t-shirt',
+          'Red Flashlight',
         ];
       default:
         return [];
@@ -164,19 +147,18 @@ export const CopilotStateMessage: React.FC<Props> = ({ response, onSuggestionCli
   return (
     <Banner status={status}>
       <TitleRow>
-        <Badge status={status}>{status}</Badge>
         <Title>{getTitle()}</Title>
       </TitleRow>
-      <Content>{reason || 'Please try again with a different query.'}</Content>
+      <Content>{reason || 'Sorry, we could not complete your request. Please try a different query.'}</Content>
 
       {suggestions.length > 0 && (
         <SuggestionsBox>
-          <SuggestionTitle>Try asking about available products:</SuggestionTitle>
+          <SuggestionTitle>Suggested queries:</SuggestionTitle>
           <SuggestionList>
             {suggestions.map((s, idx) => (
               <SuggestionItem
                 key={idx}
-                style={{ cursor: onSuggestionClick ? 'pointer' : 'default' }}
+                type="button"
                 onClick={() => onSuggestionClick && onSuggestionClick(s)}
               >
                 {s}

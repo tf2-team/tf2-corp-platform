@@ -6,18 +6,19 @@ import styled from 'styled-components';
 import { CopilotClaim, CopilotSource } from '../../providers/ShoppingCopilot.provider';
 
 const Container = styled.div`
-  background: #fdfdfd;
-  border: 1px solid ${({ theme }) => theme.colors.lightBorderGray};
-  border-left: 4px solid ${({ theme }) => theme.colors.otelYellow};
-  border-radius: 8px;
-  padding: 16px;
-  margin-bottom: 24px;
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-left: 4px solid #2563eb;
+  border-radius: 12px;
+  padding: 18px 20px;
+  margin-bottom: 20px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.03);
 `;
 
 const Header = styled.h4`
-  font-size: 15px;
+  font-size: 14.5px;
   font-weight: 700;
-  color: ${({ theme }) => theme.colors.textGray};
+  color: #0f172a;
   margin: 0 0 12px 0;
   display: flex;
   align-items: center;
@@ -26,8 +27,8 @@ const Header = styled.h4`
 
 const ClaimItem = styled.div`
   font-size: 14px;
-  line-height: 1.5;
-  color: ${({ theme }) => theme.colors.textGray};
+  line-height: 1.6;
+  color: #334155;
   margin-bottom: 10px;
 
   &:last-child {
@@ -37,13 +38,14 @@ const ClaimItem = styled.div`
 
 const CitationBadge = styled.span`
   display: inline-block;
-  background-color: ${({ theme }) => theme.colors.backgroundGray};
-  color: ${({ theme }) => theme.colors.otelBlue};
-  font-size: 11px;
+  background-color: #eff6ff;
+  color: #2563eb;
+  border: 1px solid #bfdbfe;
+  font-size: 11.5px;
   font-weight: 600;
-  padding: 2px 6px;
-  border-radius: 4px;
-  margin-left: 6px;
+  padding: 2px 8px;
+  border-radius: 6px;
+  margin-left: 8px;
   vertical-align: middle;
 `;
 
@@ -57,13 +59,13 @@ export const CopilotClaims: React.FC<Props> = ({ claims }) => {
 
   return (
     <Container>
-      <Header>User Reviews (Grounded Review Q&A)</Header>
+      <Header>Grounded Customer Review Insights</Header>
       {claims.map((claim, idx) => (
         <ClaimItem key={idx}>
           • {claim.text}
           {claim.sourceIds && claim.sourceIds.length > 0 && (
             <CitationBadge>
-              [Source: {claim.sourceIds.length} review{claim.sourceIds.length > 1 ? 's' : ''}]
+              Source: {claim.sourceIds.length} review{claim.sourceIds.length > 1 ? 's' : ''}
             </CitationBadge>
           )}
         </ClaimItem>

@@ -34,6 +34,8 @@ import demo_pb2_grpc
 from grounding import generate_grounded_summary, validate_grounded_summary
 from guardrails import sanitize_reviews
 from ai_contracts import GroundedResponse, ResponseStatus
+from bedrock_grounding import generate_grounded_summary as generate_bedrock_grounded_summary
+from bedrock_runtime import is_bedrock_provider
 
 logger = logging.getLogger("review_tool")
 
@@ -91,7 +93,11 @@ def answer_with_reviews(
             reason="The current reviews do not provide enough information.",
         )
 
-    draft = generate_grounded_summary(safe_reviews)
+    draft = (
+        generate_bedrock_grounded_summary(safe_reviews, question)
+        if is_bedrock_provider()
+        else generate_grounded_summary(safe_reviews, question)
+    )
     grounded = validate_grounded_summary(draft, safe_reviews)
 
     logger.info(
