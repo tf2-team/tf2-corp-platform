@@ -105,6 +105,7 @@ def search_catalog(
         CopilotProductResult(
             product_id=p.id,
             name=p.name,
+            description=p.description if isinstance(getattr(p, "description", None), str) else "",
             price_units=p.price_usd.units,
             price_nanos=p.price_usd.nanos,
             currency_code=p.price_usd.currency_code or "USD",

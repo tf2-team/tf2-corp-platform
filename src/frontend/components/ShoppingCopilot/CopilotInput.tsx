@@ -182,12 +182,11 @@ interface PromptCategory {
 
 const CATEGORIZED_PROMPTS: PromptCategory[] = [
   {
-    title: 'Products Under $100',
+    title: 'Product Catalog',
     variant: 'catalog',
     prompts: [
-      'Show me lens cleaning kits under $30',
-      'Find stargazing accessories under $100',
-      'Find a red flashlight under $60',
+      'Show me all products under $100',
+      'Show me accessories under $100',
     ],
   },
   {

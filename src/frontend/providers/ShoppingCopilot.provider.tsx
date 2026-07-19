@@ -10,6 +10,7 @@ export interface CopilotProduct {
   priceUnits: number;
   priceNanos: number;
   currencyCode: string;
+  description?: string;
 }
 
 export interface CopilotClaim {

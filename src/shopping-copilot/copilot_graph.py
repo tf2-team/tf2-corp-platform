@@ -126,6 +126,14 @@ def make_nodes(deps: CopilotDeps):
         """Parse safe_message into a ShoppingIntent."""
         try:
             intent = intent_parser.parse_intent(state["safe_message"])
+            if intent.is_greeting:
+                logger.info("Greeting request received: %r", state["safe_message"])
+                return {
+                    **state,
+                    "intent": intent,
+                    "status": CopilotStatus.GROUNDED,
+                    "reason": "Hello! How can I help you today?",
+                }
             if not intent.is_shopping_related:
                 logger.info("Out-of-scope request blocked: %r", state["safe_message"])
                 return {
@@ -185,14 +193,33 @@ def make_nodes(deps: CopilotDeps):
             }
 
     def qa_node(state: CopilotState) -> CopilotState:
-        """Ground-answer a review question for the first catalog result."""
+        """Ground-answer a review question for the matched catalog result."""
         if state.get("status") in (CopilotStatus.BLOCKED, CopilotStatus.FALLBACK, CopilotStatus.NO_RESULTS):
             return state
         intent = state["intent"]
         if not intent or not intent.needs_review_qa or not intent.follow_up_question:
             return state
-        # Default to the first/highest-ranked catalog result for Q&A.
-        target_product_id = state["catalog_results"][0].product_id
+
+        # Match target_product_id against catalog_results using hints or query if available.
+        target_product_id = None
+        search_terms = []
+        if intent.cart_product_hint:
+            search_terms.append(intent.cart_product_hint.lower())
+        if intent.query:
+            search_terms.append(intent.query.lower())
+
+        for p in state["catalog_results"]:
+            p_name_lower = p.name.lower()
+            for term in search_terms:
+                if term in p_name_lower or p_name_lower in term:
+                    target_product_id = p.product_id
+                    break
+            if target_product_id:
+                break
+
+        if not target_product_id:
+            target_product_id = state["catalog_results"][0].product_id
+
         try:
             grounded = answer_with_reviews(
                 product_id=target_product_id,
@@ -249,7 +276,14 @@ def make_nodes(deps: CopilotDeps):
         if qa_result and qa_result.status == ResponseStatus.ABSTAINED:
             return {**state, "status": CopilotStatus.ABSTAINED, "reason": qa_result.reason or ""}
 
-        return {**state, "status": CopilotStatus.GROUNDED}
+        intent = state.get("intent")
+        reason_text = state.get("reason", "")
+        if intent and intent.wants_description and state.get("catalog_results"):
+            target_p = state["catalog_results"][0]
+            desc = target_p.description or target_p.name
+            reason_text = f"Product Description ({target_p.name}): {desc}"
+
+        return {**state, "status": CopilotStatus.GROUNDED, "reason": reason_text}
 
     def fallback_node(state: CopilotState) -> CopilotState:
         """Safety net: ensure status is FALLBACK and reason is set."""
@@ -275,7 +309,9 @@ def make_nodes(deps: CopilotDeps):
 # ---------------------------------------------------------------------------
 
 def _should_skip(state: CopilotState) -> str:
-    """Route to 'skip' (build_response) if a terminal status is already set."""
+    """Route to 'skip' (build_response) if a terminal status is already set or if greeting."""
+    if state.get("intent") and state["intent"].is_greeting:
+        return "skip"
     if state.get("status") in (
         CopilotStatus.BLOCKED, CopilotStatus.FALLBACK,
         CopilotStatus.NO_RESULTS,
