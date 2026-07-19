@@ -270,7 +270,7 @@ class V001AnomalyRcaTest(unittest.TestCase):
         self.assertTrue(all((finding.algorithm, finding.service, finding.metric) in result_anomalies for finding in findings))
         self.assertEqual(result.root_causes[0].service, "payment")
         self.assertIn("latency", result.root_causes[0].root_cause_metrics)
-        self.assertTrue(any("robust_score=" in item for item in result.root_causes[0].evidence))
+        self.assertFalse(any("robust_score=" in item for item in result.root_causes[0].evidence))
         self.assertTrue(any("weighted_rrf_score=" in item for item in result.root_causes[0].evidence))
 
     def test_rca_excludes_observability_testing_and_protected_flagd_roots(self):

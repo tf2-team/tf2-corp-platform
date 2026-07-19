@@ -188,7 +188,7 @@ class RuntimePipelineTest(unittest.TestCase):
                         service="frontend-proxy",
                         score=0.93,
                         root_cause_metrics=["request_rate_5m", "socket_io_bytes_per_second"],
-                        evidence=["graph_score=0.700", "robust_score=8.000"],
+                        evidence=["graph_score=0.700", "weighted_rrf_score=0.930"],
                     )
                 ]
             )
@@ -200,7 +200,7 @@ class RuntimePipelineTest(unittest.TestCase):
         text = "\n".join(logs.output)
         self.assertIn("AIOPS_FRONTEND_PROXY_ROOT_CAUSE", text)
         self.assertIn("metrics=request_rate_5m,socket_io_bytes_per_second", text)
-        self.assertIn("evidence=graph_score=0.700;robust_score=8.000", text)
+        self.assertIn("evidence=graph_score=0.700;weighted_rrf_score=0.930", text)
 
     def test_pipeline_runs_detect_to_incident_notify_and_dry_run(self):
         settings = Settings()

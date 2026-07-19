@@ -5,7 +5,6 @@ import math
 
 from aiops.anomaly.stats import robust_score
 from aiops.rca.graph import GraphTraversalRca
-from aiops.rca.robust_score import RobustScoreRca
 from aiops.schemas import AnomalyFinding, MetricSeries, RcaResult, RootCauseCandidate, RuntimeConfig
 
 
@@ -20,19 +19,16 @@ class V001RcaEngine:
             pagerank_weight=graph_hyperparameters["pagerank_weight"],
             timestamp_weight=graph_hyperparameters["timestamp_weight"],
         )
-        self.robust_score = RobustScoreRca()
 
     def rank(self, findings: list[AnomalyFinding], series: list[MetricSeries], top_k: int) -> RcaResult:
         root_findings = [finding for finding in findings if finding.service == "global" or not self._excluded_root_cause(finding.service)]
         anomaly_timestamp = min((finding.timestamp for finding in root_findings), default=None)
         graph_scores = self.graph.rank_services(root_findings)
-        robust_scores = self._robust_service_scores(series, anomaly_timestamp)
         earliest_scores = self._earliest_drift_scores(series)
         correlation_scores = self._correlation_scores(series, root_findings)
         service_scores = self._weighted_rrf(
             {
                 "graph": graph_scores,
-                "robust": robust_scores,
                 "earliest_drift": earliest_scores,
                 "correlation": correlation_scores,
             }
@@ -45,11 +41,6 @@ class V001RcaEngine:
             if _is_log_metric(finding.metric):
                 continue
             metrics_by_service[finding.service].append((finding.metric, finding.score, "anomaly"))
-        for full_name, score in self.robust_score.rank(series, anomaly_timestamp).items():
-            service, metric = full_name.split(":", 1)
-            if self._excluded_root_cause(service) or _is_log_metric(metric):
-                continue
-            metrics_by_service[service].append((metric, score, "robust"))
 
         candidates: list[RootCauseCandidate] = []
         for service, score in sorted(service_scores.items(), key=lambda item: item[1], reverse=True):
@@ -66,7 +57,6 @@ class V001RcaEngine:
                     root_cause_metrics=metrics,
                     evidence=[
                         f"graph_score={graph_scores.get(service, 0.0):.3f}",
-                        f"robust_score={robust_scores.get(service, 0.0):.3f}",
                         f"earliest_drift_score={earliest_scores.get(service, 0.0):.3f}",
                         f"correlation_score={correlation_scores.get(service, 0.0):.3f}",
                         f"weighted_rrf_score={score:.3f}",
@@ -76,14 +66,6 @@ class V001RcaEngine:
             )
             break
         return RcaResult(anomalies=findings, root_causes=candidates)
-
-    def _robust_service_scores(self, series: list[MetricSeries], anomaly_timestamp: int | None) -> dict[str, float]:
-        scores: dict[str, float] = {}
-        for full_name, score in self.robust_score.rank(series, anomaly_timestamp).items():
-            service, _ = full_name.split(":", 1)
-            if not self._excluded_root_cause(service):
-                scores[service] = max(scores.get(service, 0.0), score)
-        return scores
 
     def _earliest_drift_scores(self, series: list[MetricSeries]) -> dict[str, float]:
         drift_indexes: dict[str, int] = {}

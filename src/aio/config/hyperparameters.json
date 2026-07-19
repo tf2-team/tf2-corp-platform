@@ -31,7 +31,6 @@
       "rrf_k": 20,
       "ranker_weights": {
         "graph": 0.3,
-        "robust": 0.1,
         "earliest_drift": 0.5,
         "correlation": 0.1
       }
@@ -56,8 +55,8 @@
   },
   "detectors": {
     "thresholds": {
-      "ops01_checkout_slo": 0.01,
-      "ops03_checkout_payment_dependency": 0.05,
+      "ops01_checkout_slo": 0.1,
+      "ops03_checkout_payment_dependency": 0.5,
       "auto_checkout_error_rate": 0.05,
       "auto_payment_error_rate": 0.05,
       "auto_frontend_proxy_error_rate": 0.05,
