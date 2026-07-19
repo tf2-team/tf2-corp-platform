@@ -85,8 +85,8 @@ class SettingsTest(unittest.TestCase):
                 "rrf_k": 20,
                 "drift_min_points": 5,
                 "drift_score_threshold": 3.0,
-                "canonical_service_suffixes": ["-db"],
-                "metric_aliases": {"socket": ["socket_error"]},
+                "canonical_service_suffixes": [],
+                "metric_aliases": {},
                 "ranker_weights": {"graph": 0.3, "earliest_drift": 0.5, "correlation": 0.1},
             },
         )

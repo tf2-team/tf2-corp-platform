@@ -1,3 +1,3 @@
-from aiops.anomaly.v001 import AnomalyMergeQueue, EwmaStlDetector, LogTemplateAnomalyDetector, ServiceIsolationForestDetector, V001AnomalyEngine
+from aiops.anomaly.v001 import EwmaStlDetector, LogTemplateMetricBuilder, ServiceIsolationForestDetector, V001AnomalyEngine, build_v001_anomaly_engine
 
-__all__ = ["AnomalyMergeQueue", "EwmaStlDetector", "LogTemplateAnomalyDetector", "ServiceIsolationForestDetector", "V001AnomalyEngine"]
+__all__ = ["EwmaStlDetector", "LogTemplateMetricBuilder", "ServiceIsolationForestDetector", "V001AnomalyEngine", "build_v001_anomaly_engine"]

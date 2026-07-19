@@ -174,7 +174,7 @@ class FakeNotificationSender:
 
 
 class RuntimePipelineTest(unittest.TestCase):
-    def test_frontend_proxy_root_cause_logs_evidence(self):
+    def test_root_cause_logs_conclusion(self):
         settings = Settings()
         with TemporaryDirectory() as tmp:
             store = SQLiteIncidentStore(Path(tmp) / "aiops.sqlite3", environment=settings.environment)
@@ -201,9 +201,9 @@ class RuntimePipelineTest(unittest.TestCase):
             store.close()
 
         text = "\n".join(logs.output)
-        self.assertIn("AIOPS_FRONTEND_PROXY_ROOT_CAUSE", text)
+        self.assertIn("AIOPS_CONCLUSION", text)
+        self.assertIn("failed_service=frontend-proxy", text)
         self.assertIn("metrics=request_rate_5m,socket_io_bytes_per_second", text)
-        self.assertIn("evidence=graph_score=0.700;weighted_rrf_score=0.930", text)
 
     def test_pipeline_runs_detect_to_incident_notify_and_dry_run(self):
         settings = Settings()

@@ -9,7 +9,7 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from aiops.anomaly import V001AnomalyEngine
+from aiops.anomaly import build_v001_anomaly_engine
 from aiops.config import Settings, load_hyperparameters, load_runtime_config
 from aiops.rca import V001RcaEngine
 from evaluate.e2e_pipeline import (
@@ -55,7 +55,7 @@ def main() -> None:
 
 def evaluate_case(path: Path, config: dict, rca: V001RcaEngine, top_k: int, max_metrics: int) -> dict[str, object]:
     series = read_series(path / "simple_metrics.csv", max_metrics)
-    findings = anomaly_engine(config).evaluate(series)
+    findings = build_v001_anomaly_engine(config).evaluate(series)
     result = rca.rank(findings, series, top_k)
     predicted_roots = [{"service": root.service, "metrics": root.root_cause_metrics} for root in result.root_causes[:top_k]]
     expected_root = expected_service(path)
@@ -72,29 +72,6 @@ def evaluate_case(path: Path, config: dict, rca: V001RcaEngine, top_k: int, max_
         "predicted_root_services": [root["service"] for root in predicted_roots],
         "rca_top_k_hit": rca_hit(expected_root, expected_metric, predicted_roots),
     }
-
-
-def anomaly_engine(config: dict) -> V001AnomalyEngine:
-    anomaly = config["anomaly"]
-    return V001AnomalyEngine(
-        ewma_alpha=float(config["ewma_alpha"]),
-        ewma_z_threshold=float(config["ewma_z_threshold"]),
-        isolation_score_threshold=float(config["isolation_score_threshold"]),
-        min_points=int(config["min_points"]),
-        seasonal_period=int(config["seasonal_period"]),
-        algorithm_weights=anomaly["algorithm_weights"],
-        weighted_score_threshold=float(anomaly["weighted_score_threshold"]),
-        drain3_config_path=anomaly.get("drain3_config_path", "config/drain3.ini"),
-        log_bucket_seconds=int(anomaly.get("log_bucket_seconds", 60)),
-        log_history_buckets=int(anomaly.get("log_history_buckets", config["min_points"])),
-        log_max_templates_per_service=int(anomaly.get("log_max_templates_per_service", 20)),
-        log_min_nonzero_buckets=int(anomaly.get("log_min_nonzero_buckets", 2)),
-        log_correlation_window_seconds=int(anomaly.get("log_correlation_window_seconds", 300)),
-        single_algorithm_min_normalized_score=float(anomaly["single_algorithm_min_normalized_score"]),
-        robust_drift_threshold=float(anomaly["robust_drift_threshold"]),
-        robust_drift_min_baseline_points=int(anomaly["robust_drift_min_baseline_points"]),
-        suppress_cpu_robust_threshold=float(anomaly["suppress_cpu_robust_threshold"]),
-    )
 
 
 if __name__ == "__main__":

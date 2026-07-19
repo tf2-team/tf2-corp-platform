@@ -5,8 +5,8 @@ from contextlib import redirect_stdout
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
-from aiops.anomaly import V001AnomalyEngine
-from aiops.anomaly.v001 import AnomalyMergeQueue, EwmaStlDetector, LogTemplateAnomalyDetector, ServiceIsolationForestDetector
+from aiops.anomaly import V001AnomalyEngine, build_v001_anomaly_engine
+from aiops.anomaly.v001 import EwmaStlDetector, LogTemplateMetricBuilder, ServiceIsolationForestDetector
 from aiops.api.app import run_static_pipeline
 from aiops.config import Settings, load_hyperparameters, load_runtime_config
 from aiops.pipeline.runtime import _log_final_root_cause_algorithm_scores
@@ -31,22 +31,9 @@ def rca_hyperparameters(**overrides):
 
 def anomaly_engine(**overrides) -> V001AnomalyEngine:
     config = rca_hyperparameters()
-    config = {**config, "min_points": overrides.pop("min_points", 8), **overrides}
-    return V001AnomalyEngine(
-        ewma_alpha=config["ewma_alpha"],
-        ewma_z_threshold=config["ewma_z_threshold"],
-        isolation_score_threshold=config["isolation_score_threshold"],
-        min_points=config["min_points"],
-        seasonal_period=config["seasonal_period"],
-        algorithm_weights=config["anomaly"]["algorithm_weights"],
-        weighted_score_threshold=config["anomaly"]["weighted_score_threshold"],
-        log_history_buckets=8,
-        log_min_nonzero_buckets=1,
-        single_algorithm_min_normalized_score=config["anomaly"]["single_algorithm_min_normalized_score"],
-        robust_drift_threshold=config["anomaly"]["robust_drift_threshold"],
-        robust_drift_min_baseline_points=config["anomaly"]["robust_drift_min_baseline_points"],
-        suppress_cpu_robust_threshold=config["anomaly"]["suppress_cpu_robust_threshold"],
-    )
+    anomaly = {**config["anomaly"], "log_history_buckets": 8, "log_min_nonzero_buckets": 1}
+    config = {**config, "anomaly": anomaly, "min_points": overrides.pop("min_points", 8), **overrides}
+    return build_v001_anomaly_engine(config)
 
 
 def rca_engine(config: RuntimeConfig) -> V001RcaEngine:
@@ -218,26 +205,8 @@ class V001AnomalyRcaTest(unittest.TestCase):
 
         self.assertEqual(engine._suppress_busy_cpu(findings, series), findings)
 
-    def test_anomaly_merge_queue_drains_detector_findings_fifo(self):
-        queue = AnomalyMergeQueue()
-        ewma = AnomalyFinding(algorithm="ewma_stl", service="checkout", metric="latency", signal_id="checkout_latency", score=4.0, timestamp=1)
-        isolation = AnomalyFinding(
-            algorithm="isolation_forest",
-            service="checkout",
-            metric="latency",
-            signal_id="checkout_latency",
-            score=8.0,
-            timestamp=1,
-        )
-
-        queue.push_many([ewma])
-        queue.push_many([isolation])
-
-        self.assertEqual([finding.algorithm for finding in queue.drain()], ["ewma_stl", "isolation_forest"])
-        self.assertEqual(queue.drain(), [])
-
     def test_log_template_builder_groups_variable_log_lines_as_metric_series(self):
-        builder = LogTemplateAnomalyDetector(min_nonzero_buckets=1)
+        builder = LogTemplateMetricBuilder(min_nonzero_buckets=1)
         builder.template_miner = None
 
         series = builder.build(
@@ -399,7 +368,7 @@ class V001AnomalyRcaTest(unittest.TestCase):
 
         self.assertIn("carts", scores)
 
-    def test_rca_groups_dash_db_service_with_owning_service(self):
+    def test_rca_keeps_runtime_service_names_unmodified_without_suffix_config(self):
         runtime_config = load_runtime_config(Path("config/runtime.json"))
         findings = [
             AnomalyFinding(algorithm="weighted_sum", service="orders-db", metric="diskio", signal_id="orders_db_diskio", score=1.0, timestamp=100),
@@ -407,9 +376,9 @@ class V001AnomalyRcaTest(unittest.TestCase):
 
         result = rca_engine(runtime_config).rank(findings, [], top_k=5)
 
-        self.assertEqual(result.root_causes[0].service, "orders")
+        self.assertEqual(result.root_causes[0].service, "orders-db")
 
-    def test_rca_reports_socket_error_alias(self):
+    def test_rca_does_not_invent_metric_aliases_without_runtime_config(self):
         runtime_config = load_runtime_config(Path("config/runtime.json"))
         findings = [
             AnomalyFinding(algorithm="weighted_sum", service="payment", metric="socket", signal_id="payment_socket", score=1.0, timestamp=100),
@@ -417,7 +386,7 @@ class V001AnomalyRcaTest(unittest.TestCase):
 
         result = rca_engine(runtime_config).rank(findings, [], top_k=5)
 
-        self.assertIn("socket_error", result.root_causes[0].root_cause_metrics)
+        self.assertEqual(result.root_causes[0].root_cause_metrics, ["socket"])
 
     def test_pipeline_api_accepts_metric_series_and_returns_rca_result(self):
         series = [

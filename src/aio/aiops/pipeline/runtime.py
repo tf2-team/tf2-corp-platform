@@ -14,7 +14,7 @@ from aiops.correlation import Correlator
 from aiops.detectors import Detector, DetectorEngine
 from aiops.enrichment import Enricher
 from aiops.features import FeatureBuilder
-from aiops.anomaly import V001AnomalyEngine
+from aiops.anomaly import build_v001_anomaly_engine
 from aiops.rca import V001RcaEngine
 from aiops.schemas import AnomalyFinding, EvidenceItem, MetricSeries, NotificationMessage, PipelineResult, PolicyDecision, RcaResult, RuntimeConfig
 from aiops.normalization import Normalizer
@@ -249,25 +249,7 @@ class AiopsPipeline:
             )
             return RcaResult()
         config = self.rca_hyperparameters
-        anomaly_engine = V001AnomalyEngine(
-            ewma_alpha=float(config["ewma_alpha"]),
-            ewma_z_threshold=float(config["ewma_z_threshold"]),
-            isolation_score_threshold=float(config["isolation_score_threshold"]),
-            min_points=int(config["min_points"]),
-            seasonal_period=int(config["seasonal_period"]),
-            algorithm_weights=config["anomaly"]["algorithm_weights"],
-            weighted_score_threshold=float(config["anomaly"]["weighted_score_threshold"]),
-            drain3_config_path=config["anomaly"].get("drain3_config_path", "config/drain3.ini"),
-            log_bucket_seconds=int(config["anomaly"].get("log_bucket_seconds", 60)),
-            log_history_buckets=int(config["anomaly"].get("log_history_buckets", config["min_points"])),
-            log_max_templates_per_service=int(config["anomaly"].get("log_max_templates_per_service", 20)),
-            log_min_nonzero_buckets=int(config["anomaly"].get("log_min_nonzero_buckets", 2)),
-            log_correlation_window_seconds=int(config["anomaly"].get("log_correlation_window_seconds", 300)),
-            single_algorithm_min_normalized_score=float(config["anomaly"]["single_algorithm_min_normalized_score"]),
-            robust_drift_threshold=float(config["anomaly"]["robust_drift_threshold"]),
-            robust_drift_min_baseline_points=int(config["anomaly"]["robust_drift_min_baseline_points"]),
-            suppress_cpu_robust_threshold=float(config["anomaly"]["suppress_cpu_robust_threshold"]),
-        )
+        anomaly_engine = build_v001_anomaly_engine(config)
         findings = anomaly_engine.evaluate(metric_series, logs=log_messages) if log_messages else anomaly_engine.evaluate(metric_series)
         rca_engine = V001RcaEngine(self.runtime_config, config["graph"], config["combined"])
         result = rca_engine.rank(findings, metric_series, top_k=int(config["top_k"]))
@@ -326,7 +308,7 @@ class AiopsPipeline:
             "recorded_at": datetime.now(UTC).isoformat(),
             "detectors": [candidate.detector_id for candidate in candidates],
             "incidents": incident_rows,
-            "parameters": _rca_history_parameters(self.rca_hyperparameters),
+            "parameters": self.rca_hyperparameters,
             "series_point_count": {
                 "min": min(point_counts) if point_counts else 0,
                 "max": max(point_counts) if point_counts else 0,
@@ -355,14 +337,6 @@ class AiopsPipeline:
                 root.score,
                 ",".join(root.root_cause_metrics),
             )
-            if root.service == "frontend-proxy":
-                logger.info(
-                    "AIOPS_FRONTEND_PROXY_ROOT_CAUSE service=%s score=%.3f metrics=%s evidence=%s",
-                    root.service,
-                    root.score,
-                    ",".join(root.root_cause_metrics),
-                    ";".join(root.evidence),
-                )
             return
         if incidents:
             logger.info(
@@ -522,25 +496,3 @@ def _blast_radius_services(config: RuntimeConfig, root_service: str, max_hops: i
             break
     return seen
 
-
-def _rca_history_parameters(config: dict) -> dict:
-    anomaly = config.get("anomaly", {})
-    return {
-        "top_k": config.get("top_k"),
-        "min_points": config.get("min_points"),
-        "ewma_alpha": config.get("ewma_alpha"),
-        "ewma_z_threshold": config.get("ewma_z_threshold"),
-        "isolation_score_threshold": config.get("isolation_score_threshold"),
-        "seasonal_period": config.get("seasonal_period"),
-        "algorithm_weights": anomaly.get("algorithm_weights"),
-        "weighted_score_threshold": anomaly.get("weighted_score_threshold"),
-        "single_algorithm_min_normalized_score": anomaly.get("single_algorithm_min_normalized_score"),
-        "robust_drift_threshold": anomaly.get("robust_drift_threshold"),
-        "robust_drift_min_baseline_points": anomaly.get("robust_drift_min_baseline_points"),
-        "suppress_cpu_robust_threshold": anomaly.get("suppress_cpu_robust_threshold"),
-        "log_bucket_seconds": anomaly.get("log_bucket_seconds"),
-        "log_history_buckets": anomaly.get("log_history_buckets"),
-        "log_min_nonzero_buckets": anomaly.get("log_min_nonzero_buckets"),
-        "log_correlation_window_seconds": anomaly.get("log_correlation_window_seconds"),
-        "combined": config.get("combined"),
-    }

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from collections import defaultdict, deque
+from collections import defaultdict
 import hashlib
 import os
 from pathlib import Path
@@ -223,29 +223,12 @@ class LogTemplateMetricBuilder:
                 yield service, template, buckets
 
 
-LogTemplateAnomalyDetector = LogTemplateMetricBuilder
-
-
 def _drain3_config(config_path: str | Path):
     config = TemplateMinerConfig()
     path = Path(config_path)
     if path.exists():
         config.load(str(path))
     return config
-
-
-class AnomalyMergeQueue:
-    def __init__(self):
-        self._items: deque[AnomalyFinding] = deque()
-
-    def push_many(self, findings: list[AnomalyFinding]) -> None:
-        self._items.extend(findings)
-
-    def drain(self) -> list[AnomalyFinding]:
-        findings: list[AnomalyFinding] = []
-        while self._items:
-            findings.append(self._items.popleft())
-        return findings
 
 
 class V001AnomalyEngine:
@@ -289,7 +272,6 @@ class V001AnomalyEngine:
             log_max_templates_per_service,
             log_min_nonzero_buckets,
         )
-        self.merge_queue = AnomalyMergeQueue()
         self.last_algorithm_findings: list[AnomalyFinding] = []
 
     def evaluate(self, series: list[MetricSeries], logs: list[tuple[str, int, str]] | None = None) -> list[AnomalyFinding]:
@@ -388,3 +370,27 @@ def _failure_metric_increased(series: list[MetricSeries], threshold: float) -> b
 def _latest_robust_score(metric: MetricSeries) -> float:
     values = [point.value for point in metric.points]
     return robust_score(values[:-1], [values[-1]]) if len(values) >= 5 else 0.0
+
+
+def build_v001_anomaly_engine(config: dict, **overrides) -> V001AnomalyEngine:
+    anomaly = config["anomaly"]
+    config = {**config, **overrides}
+    return V001AnomalyEngine(
+        ewma_alpha=float(config["ewma_alpha"]),
+        ewma_z_threshold=float(config["ewma_z_threshold"]),
+        isolation_score_threshold=float(config["isolation_score_threshold"]),
+        min_points=int(config["min_points"]),
+        seasonal_period=int(config["seasonal_period"]),
+        algorithm_weights=anomaly["algorithm_weights"],
+        weighted_score_threshold=float(anomaly["weighted_score_threshold"]),
+        drain3_config_path=anomaly.get("drain3_config_path", "config/drain3.ini"),
+        log_bucket_seconds=int(anomaly.get("log_bucket_seconds", 60)),
+        log_history_buckets=int(anomaly.get("log_history_buckets", config["min_points"])),
+        log_max_templates_per_service=int(anomaly.get("log_max_templates_per_service", 20)),
+        log_min_nonzero_buckets=int(anomaly.get("log_min_nonzero_buckets", 2)),
+        log_correlation_window_seconds=int(anomaly.get("log_correlation_window_seconds", 300)),
+        single_algorithm_min_normalized_score=float(anomaly["single_algorithm_min_normalized_score"]),
+        robust_drift_threshold=float(anomaly["robust_drift_threshold"]),
+        robust_drift_min_baseline_points=int(anomaly["robust_drift_min_baseline_points"]),
+        suppress_cpu_robust_threshold=float(anomaly["suppress_cpu_robust_threshold"]),
+    )
