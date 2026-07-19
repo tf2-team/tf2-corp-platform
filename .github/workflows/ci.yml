@@ -394,7 +394,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
       - name: Install pinned Semgrep
-        run: python3 -m pip install --disable-pip-version-check 'semgrep==1.129.0'
+        run: python3 -m pip install --disable-pip-version-check 'semgrep==1.136.0'
       - name: Run blocking SAST rules
         run: semgrep scan --error --metrics=off --config p/ci --config p/owasp-top-ten src
 

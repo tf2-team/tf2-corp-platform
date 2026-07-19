@@ -1,4 +1,6 @@
-#!/usr/bin/env python3
+#!/usr/bin/python
+# Copyright The OpenTelemetry Authors
+# SPDX-License-Identifier: Apache-2.0
 """Update only per-service Helm values files for images rebuilt in this run."""
 
 from __future__ import annotations
