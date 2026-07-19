@@ -236,6 +236,17 @@ class CurrencyService final : public oteldemo::CurrencyService::Service
   }
 };
 
+#include <signal.h>
+
+std::unique_ptr<Server> global_server;
+
+void handle_sigterm(int signum) {
+  logger->Info("SIGTERM received, shutting down gRPC server gracefully...");
+  if (global_server) {
+    global_server->Shutdown(std::chrono::system_clock::now() + std::chrono::seconds(5));
+  }
+}
+
 void RunServer(uint16_t port)
 {
   std::string ip("0.0.0.0");
@@ -257,10 +268,12 @@ void RunServer(uint16_t port)
   builder.RegisterService(&healthService);
   builder.AddListeningPort(address, grpc::InsecureServerCredentials());
 
-  std::unique_ptr<Server> server(builder.BuildAndStart());
+  global_server = std::unique_ptr<Server>(builder.BuildAndStart());
   logger->Info("Currency Server listening on port: " + address);
-  server->Wait();
-  server->Shutdown();
+  
+  signal(SIGTERM, handle_sigterm);
+  
+  global_server->Wait();
 }
 }
 
