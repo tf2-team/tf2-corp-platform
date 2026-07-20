@@ -25,14 +25,36 @@ aws sts get-caller-identity --profile bedrock-dev
 
 ## 2. Kiểm tra quyền gọi Bedrock Nova
 
-Chạy một request Converse nhỏ trước khi khởi động Docker Compose:
+Trên Windows PowerShell, tạo thư mục local `bedrocks` và file JSON bên trong thay vì truyền JSON trực tiếp trên command line:
+
+```powershell
+$messages = @'
+[
+  {
+    "role": "user",
+    "content": [
+      { "text": "Reply with OK" }
+    ]
+  }
+]
+'@
+
+[System.IO.Directory]::CreateDirectory((Join-Path $PWD 'bedrocks')) | Out-Null
+[System.IO.File]::WriteAllText(
+  (Join-Path $PWD 'bedrocks/bedrock-messages.json'),
+  $messages,
+  (New-Object System.Text.UTF8Encoding($false))
+)
+```
+
+Sau đó chạy một request Converse nhỏ trước khi khởi động Docker Compose:
 
 ```powershell
 aws bedrock-runtime converse `
   --region us-east-1 `
   --profile bedrock-dev `
   --model-id us.amazon.nova-2-lite-v1:0 `
-  --messages '[{"role":"user","content":[{"text":"Reply with OK"}]}]'
+  --messages file://bedrocks/bedrock-messages.json
 ```
 
 Lệnh phải trả về response. Nếu nhận `AccessDeniedException`, IAM identity cần quyền `bedrock:InvokeModel` cho Nova inference profile và foundation model.
