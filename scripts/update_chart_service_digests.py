@@ -12,11 +12,19 @@ from pathlib import Path
 
 DIGEST = re.compile(r"^sha256:[0-9a-f]{64}$")
 COMPONENT_ALIASES = {"load-generator": ("load-generator", "load-generator-worker")}
-TOP_LEVEL_IMAGES = {"mem0"}
+TOP_LEVEL_IMAGES = {"aiops", "mem0"}
 
 
 def render(service: str, digest: str) -> str:
     header = "# Managed by tf2-corp-platform secure delivery pipeline.\n"
+    if service == "aiops":
+        return (
+            f"{header}aiops:\n"
+            "  enabled: true\n"
+            "  existingSecret: techx-corp-aiops-grafana-webhook\n"
+            "  image:\n"
+            f'    digest: "{digest}"\n'
+        )
     if service in TOP_LEVEL_IMAGES:
         return f'{header}{service}:\n  image:\n    digest: "{digest}"\n'
     if service == "flagd-ui":

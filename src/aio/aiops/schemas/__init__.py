@@ -1,3 +1,6 @@
+#!/usr/bin/python
+# Copyright The OpenTelemetry Authors
+# SPDX-License-Identifier: Apache-2.0
 from aiops.schemas.api import GrafanaAlert, GrafanaNormalizedEvent, GrafanaWebhookEvent, HealthResponse, PipelineRunRequest
 from aiops.schemas.base import AiopsModel
 from aiops.schemas.config import (

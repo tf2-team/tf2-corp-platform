@@ -1,4 +1,4 @@
-﻿# AIOps Evidence Index
+# AIOps Evidence Index
 
 > Status: Draft. Link real evidence here as work is completed. Do not store secrets, webhook URLs, raw prompts, PII, or unredacted logs.
 

@@ -1,3 +1,6 @@
+#!/usr/bin/python
+# Copyright The OpenTelemetry Authors
+# SPDX-License-Identifier: Apache-2.0
 """Strict smoke tests for AIOps integrations through AWS EKS port-forwards.
 
 Preparation (run from ``src/aio``):

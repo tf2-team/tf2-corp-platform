@@ -1,3 +1,6 @@
+#!/usr/bin/python
+# Copyright The OpenTelemetry Authors
+# SPDX-License-Identifier: Apache-2.0
 from aiops.detectors.base import Detector
 from aiops.detectors.dependency import DependencyDetector
 from aiops.detectors.engine import DetectorEngine

@@ -1,0 +1,16 @@
+.env
+.env.*
+!.env.example
+!.env.live.example
+.git
+.gitignore
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.test-tmp/
+docs/
+evaluate/
+evidence/
+scripts/
+state/
+tests/

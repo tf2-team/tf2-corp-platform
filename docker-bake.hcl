@@ -19,11 +19,12 @@ variable "DEMO_VERSION" {
   default = "dev"
 }
 
-# Exactly the 23 deployable services pushed to ECR by CI (includes customized OpenSearch).
+# Exactly the 24 deployable services pushed to ECR by CI (includes customized OpenSearch).
 group "release" {
   targets = [
     "accounting",
     "ad",
+    "aiops",
     "cart",
     "checkout",
     "currency",
@@ -64,6 +65,13 @@ target "ad" {
   tags       = ["${IMAGE_NAME}/ad:${DEMO_VERSION}"]
   cache-from = ["type=gha,scope=ad"]
   cache-to   = ["type=gha,mode=max,scope=ad"]
+}
+
+target "aiops" {
+  inherits   = ["_release-common"]
+  tags       = ["${IMAGE_NAME}/aiops:${DEMO_VERSION}"]
+  cache-from = ["type=gha,scope=aiops"]
+  cache-to   = ["type=gha,mode=max,scope=aiops"]
 }
 
 target "cart" {

@@ -18,7 +18,7 @@ on:
   push:
     branches: [main, techx-dev-corp]
     # Branch pushes: only when image-affecting paths change.
-    # Selective bake+retag still produces the full 23-image set under one global tag.
+    # Selective bake+retag still produces the full 24-image set under one global tag.
     # Tag pushes (v*) and workflow_dispatch always run (no path filter on those entry points).
     paths:
       - "src/**"
@@ -40,7 +40,7 @@ on:
           - development
           - production
       force_full_rebuild:
-        description: Bake all 23 services from source (ignore selective rebuild; reason required)
+        description: Bake all 24 services from source (ignore selective rebuild; reason required)
         required: false
         type: boolean
         default: false
@@ -154,7 +154,7 @@ jobs:
           set -euo pipefail
 
           # Canonical release set (must match docker-bake.hcl group "release").
-          RELEASE_JSON='["accounting","ad","cart","checkout","currency","email","flagd-ui","fraud-detection","frontend","frontend-proxy","image-provider","kafka","llm","load-generator","mem0","opensearch","payment","product-catalog","product-reviews","quote","recommendation","shipping","shopping-copilot"]'
+          RELEASE_JSON='["accounting","ad","aiops","cart","checkout","currency","email","flagd-ui","fraud-detection","frontend","frontend-proxy","image-provider","kafka","llm","load-generator","mem0","opensearch","payment","product-catalog","product-reviews","quote","recommendation","shipping","shopping-copilot"]'
 
           mapfile -t RELEASE < <(printf '%s' "${RELEASE_JSON}" | jq -r '.[]')
 
@@ -204,8 +204,8 @@ jobs:
             fi
           done
 
-          if [[ "${#RELEASE[@]}" -ne 23 ]]; then
-            echo "::error::Expected 23 release services, got ${#RELEASE[@]}"
+          if [[ "${#RELEASE[@]}" -ne 24 ]]; then
+            echo "::error::Expected 24 release services, got ${#RELEASE[@]}"
             exit 1
           fi
 
@@ -217,11 +217,11 @@ jobs:
             echo "${BAKE_RAW}"
             exit 1
           fi
-          echo "${BAKE_JSON}" | jq -e '.group.release.targets | length == 23' >/dev/null
+          echo "${BAKE_JSON}" | jq -e '.group.release.targets | length == 24' >/dev/null
 
           mapfile -t BAKE_TARGETS < <(echo "${BAKE_JSON}" | jq -r '.group.release.targets[]' | sort -u)
-          if [[ "${#BAKE_TARGETS[@]}" -ne 23 ]]; then
-            echo "::error::Bake release group has ${#BAKE_TARGETS[@]} unique targets (want 23)"
+          if [[ "${#BAKE_TARGETS[@]}" -ne 24 ]]; then
+            echo "::error::Bake release group has ${#BAKE_TARGETS[@]} unique targets (want 24)"
             exit 1
           fi
 
@@ -704,7 +704,7 @@ jobs:
       actions: write
     strategy:
       fail-fast: false
-      max-parallel: 23
+      max-parallel: 24
       matrix:
         service: ${{ fromJson(needs.preflight.outputs.build_services) }}
     env:
@@ -822,7 +822,7 @@ jobs:
       id-token: write
     strategy:
       fail-fast: false
-      max-parallel: 23
+      max-parallel: 24
       matrix:
         service: ${{ fromJson(needs.preflight.outputs.retag_services) }}
     env:
@@ -895,7 +895,7 @@ jobs:
           } >> "${GITHUB_STEP_SUMMARY}"
 
   # ---------------------------------------------------------------------------
-  # 6. verify ECR — all 23 tags under NEW_TAG after build and/or retag
+  # 6. verify ECR — all 24 tags under NEW_TAG after build and/or retag
   # ---------------------------------------------------------------------------
   verify-ecr:
     name: Verify ECR tags
@@ -1945,7 +1945,7 @@ jobs:
             echo ""
             echo "## Notes"
             echo ""
-            echo "* All **23** release images were built and verified in ECR before this PR was opened."
+            echo "* All **24** release images were built and verified in ECR before this PR was opened."
             echo "* Merge this PR to let Argo CD Application \`techx-corp\` sync the new global tag."
             echo "* Do **not** merge while a platform publish for this tag is still in progress (this job only runs after \`release-ready\`)."
             echo ""

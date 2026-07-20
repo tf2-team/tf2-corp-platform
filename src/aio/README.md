@@ -43,6 +43,32 @@ These are reused by detectors, enrichment, and verification. Other code is still
 conda run -n capstone python -B -m unittest discover -s tests
 ```
 
+## Deployment Scaffold
+
+The runtime now has a production container definition and pinned direct
+dependencies in `Dockerfile` and `requirements.lock`. The image runs as UID
+10001, exposes port 8000, stores SQLite and audit state under `/app/state`, and
+provides these operational endpoints:
+
+- `/health/live` for process liveness
+- `/health/ready` for runtime configuration and writable-state readiness
+- `/metrics` for Prometheus pipeline counters, duration, and last-run gauges
+
+Both platform Compose files define an internal `aiops` service with a durable
+named volume and Prometheus connectivity. The Helm chart provides an opt-in
+single-replica workload, internal Service, persistent volume, read-only
+Kubernetes RBAC, probes, and Prometheus scrape annotations. Enable it with
+`tf2-corp-chart/values-aiops.yaml` only after publishing the image. Keep
+`policyMode: dry-run` until live remediation has separate approval.
+
+For Kubernetes, the ESO-managed `techx-corp-aiops-grafana-webhook` Secret is
+referenced by `aiops.existingSecret`; do not put credentials in chart values.
+The in-cluster endpoint is `http://aiops-runtime:8080`, backed by the FastAPI
+container on port 8000. The pod uses its service-account token and cluster CA
+for read-only Kubernetes enrichment. Grafana keeps the existing on-call route
+and also sends warning, critical, SEV1, and SEV2 events to the authenticated
+AIOps contact point. Compose provisions the equivalent local dual route.
+
 ## Live Smoke Test Through EKS Port-Forward
 
 The canonical endpoint and credential inventory is in
@@ -107,7 +133,9 @@ IDs, query IDs, units, windows, and required labels are validated against
 
 ## Configuration
 
-Runtime secrets, URLs, paths, and all numeric hyperparameters are loaded from `.env` through `aiops.config.Settings`.
+Runtime secrets, URLs, paths, and numeric hyperparameters are loaded from
+`AIOPS_*` environment variables through `aiops.config.Settings`. Local
+development may source them from `.env`.
 Set `AIOPS_ENV_FILE=.env.live` to select the ignored live file without copying
 secrets into the tracked template.
 Infrastructure topology, signal IDs, detector definitions, and policy lists are loaded from `config/runtime.json`.

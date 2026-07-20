@@ -1,3 +1,5 @@
+# Copyright The OpenTelemetry Authors
+# SPDX-License-Identifier: Apache-2.0
 name: capstone
 dependencies:
   - python
@@ -11,3 +13,5 @@ dependencies:
       - scikit-learn>=1.4,<2
       - tqdm>=4.66,<5
       - drain3>=0.9,<1
+      - uvicorn[standard]>=0.35,<1
+      - prometheus-client>=0.22,<1

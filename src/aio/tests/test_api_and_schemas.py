@@ -1,6 +1,11 @@
+#!/usr/bin/python
+# Copyright The OpenTelemetry Authors
+# SPDX-License-Identifier: Apache-2.0
 import unittest
 from pathlib import Path
 from tempfile import TemporaryDirectory
+
+from fastapi import HTTPException
 
 from aiops.api import create_app
 from aiops.api.app import build_enricher, handle_grafana_webhook, run_static_pipeline
@@ -44,6 +49,8 @@ class FastApiAppTest(unittest.TestCase):
         paths = {route.path for route in create_app().routes}
 
         self.assertIn("/health/live", paths)
+        self.assertIn("/health/ready", paths)
+        self.assertIn("/metrics", paths)
         self.assertIn("/api/v1/pipeline/run", paths)
         self.assertIn("/api/v1/pipeline/run/live", paths)
         self.assertIn("/api/v1/incidents", paths)
@@ -67,7 +74,7 @@ class FastApiAppTest(unittest.TestCase):
         self.assertIsNone(enricher.kubernetes)
 
     def test_grafana_webhook_normalizes_event(self):
-        settings = Settings()
+        settings = Settings().model_copy(update={"grafana_webhook_secret": "test-grafana-webhook-secret"})
         response = handle_grafana_webhook(
             GrafanaWebhookEvent(
                 receiver="aiops",
@@ -88,6 +95,22 @@ class FastApiAppTest(unittest.TestCase):
         self.assertEqual(response.status, "firing")
         self.assertEqual(response.labels["alertname"], "CheckoutSLOBreach")
         self.assertEqual(response.schema_version, "1.0")
+
+    def test_grafana_webhook_fails_closed_without_secret(self):
+        settings = Settings().model_copy(update={"grafana_webhook_secret": ""})
+
+        with self.assertRaises(HTTPException) as raised:
+            handle_grafana_webhook(
+                GrafanaWebhookEvent(
+                    receiver="aiops",
+                    status="firing",
+                    alerts=[{"status": "firing", "labels": {}, "startsAt": "2026-07-20T00:00:00Z"}],
+                ),
+                x_aiops_grafana_secret="",
+                settings=settings,
+            )
+
+        self.assertEqual(raised.exception.status_code, 503)
 
 
 if __name__ == "__main__":

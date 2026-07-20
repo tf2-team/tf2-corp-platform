@@ -1,5 +1,9 @@
+#!/usr/bin/python
+# Copyright The OpenTelemetry Authors
+# SPDX-License-Identifier: Apache-2.0
 from __future__ import annotations
 
+import ssl
 from typing import Any
 
 import httpx
@@ -12,7 +16,7 @@ class HttpApiClient:
         token: str = "",
         account: str = "",
         basic_auth: tuple[str, str] | None = None,
-        verify_tls: bool = True,
+        verify_tls: bool | ssl.SSLContext = True,
         transport: httpx.BaseTransport | None = None,
     ):
         headers = {}

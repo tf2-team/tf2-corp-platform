@@ -1,7 +1,13 @@
+#!/usr/bin/python
+# Copyright The OpenTelemetry Authors
+# SPDX-License-Identifier: Apache-2.0
 from __future__ import annotations
 
 import asyncio
+import hmac
 import logging
+import os
+import time
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime
 from urllib.parse import urlparse
@@ -13,6 +19,7 @@ from aiops.config import Settings, build_detectors, load_hyperparameters, load_r
 from aiops.enrichment import Enricher
 from aiops.integrations import JaegerClient, KubernetesClient, NotificationClient, OpenSearchClient, PrometheusClient
 from aiops.normalization import load_normalization_schema
+from aiops.observability import metrics_response, record_pipeline_failure, record_pipeline_success
 from aiops.pipeline import AiopsPipeline
 from aiops.qualification import load_qualification_schema
 from aiops.remediation import (
@@ -67,6 +74,7 @@ def run_live_pipeline(settings: Settings | None = None) -> PipelineResult:
 
 
 def run_pipeline_with_collector(collector, settings: Settings, runtime_config, metric_series=None) -> PipelineResult:
+    started = time.monotonic()
     hyperparameters = load_hyperparameters(settings.hyperparameters_path)
     store = SQLiteIncidentStore(
         path=settings.state_store_path,
@@ -112,8 +120,12 @@ def run_pipeline_with_collector(collector, settings: Settings, runtime_config, m
     )
     try:
         result = pipeline.run_once(metric_series=metric_series or [])
+        record_pipeline_success(result, time.monotonic() - started)
         print_rca_result(result)
         return result
+    except Exception:
+        record_pipeline_failure(time.monotonic() - started)
+        raise
     finally:
         store.close()
 
@@ -176,7 +188,30 @@ def _configured_kubernetes(settings: Settings) -> bool:
     if not _configured_secret(settings.kubernetes_api_url):
         return False
     host = urlparse(settings.kubernetes_api_url).hostname or ""
-    return _configured_secret(settings.kubernetes_bearer_token) or host in {"localhost", "127.0.0.1"}
+    return (
+        _configured_secret(settings.kubernetes_bearer_token)
+        or settings.kubernetes_bearer_token_file.is_file()
+        or host in {"localhost", "127.0.0.1"}
+    )
+
+
+def readiness(settings: Settings) -> HealthResponse:
+    try:
+        load_runtime_config(settings.runtime_config_path)
+        load_hyperparameters(settings.hyperparameters_path)
+        load_qualification_schema(settings.qualification_schema_path)
+        load_normalization_schema(settings.normalization_schema_path)
+        if settings.auto_run_enabled and not _configured_url(settings.prometheus_base_url):
+            raise RuntimeError("automatic runs require Prometheus")
+        if not _configured_secret(settings.grafana_webhook_secret):
+            raise RuntimeError("Grafana webhook secret is not configured")
+        state_parent = settings.state_store_path.parent
+        if not state_parent.is_dir() or not os.access(state_parent, os.W_OK):
+            raise RuntimeError("state directory is not writable")
+    except Exception as exc:
+        logger.warning("AIOps readiness check failed: %s", type(exc).__name__)
+        raise HTTPException(status_code=503, detail="runtime dependencies are not ready") from exc
+    return HealthResponse(status="ready")
 
 
 def handle_grafana_webhook(
@@ -185,7 +220,9 @@ def handle_grafana_webhook(
     settings: Settings | None = None,
 ) -> GrafanaNormalizedEvent:
     settings = settings or Settings()
-    if x_aiops_grafana_secret != settings.grafana_webhook_secret:
+    if not _configured_secret(settings.grafana_webhook_secret):
+        raise HTTPException(status_code=503, detail="grafana webhook is not configured")
+    if not hmac.compare_digest(x_aiops_grafana_secret, settings.grafana_webhook_secret):
         raise HTTPException(status_code=401, detail="invalid grafana webhook secret")
     alert = event.alerts[0]
     alert_name = alert.labels.get("alertname", "unknown")
@@ -223,6 +260,14 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     @app.get(settings.api_health_live_path, response_model=HealthResponse)
     def live() -> HealthResponse:
         return HealthResponse(status=settings.health_status)
+
+    @app.get("/health/ready", response_model=HealthResponse)
+    def ready() -> HealthResponse:
+        return readiness(settings)
+
+    @app.get("/metrics", include_in_schema=False)
+    def metrics():
+        return metrics_response()
 
     @app.post(settings.api_pipeline_run_path, response_model=PipelineResult)
     def run_pipeline(request: PipelineRunRequest) -> PipelineResult:

@@ -680,6 +680,7 @@ services:
     restart: unless-stopped
     environment:
       - "GF_INSTALL_PLUGINS=grafana-opensearch-datasource"
+      - AIOPS_GRAFANA_WEBHOOK_SECRET=${AIOPS_GRAFANA_WEBHOOK_SECRET:-local-aiops-webhook}
     volumes:
       - ./src/grafana/grafana.ini:/etc/grafana/grafana.ini
       - ./src/grafana/provisioning/:/etc/grafana/provisioning/
@@ -724,6 +725,43 @@ services:
       - POSTGRES_PORT
       - POSTGRES_PASSWORD
       - GOMEMLIMIT=160MiB
+
+  # AIOps runtime
+  aiops:
+    image: ${IMAGE_NAME}/aiops:${DEMO_VERSION}
+    container_name: aiops
+    build:
+      context: ./src/aio
+      dockerfile: Dockerfile
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+    restart: unless-stopped
+    expose:
+      - "8000"
+    environment:
+      - AIOPS_ENVIRONMENT=local-compose
+      - AIOPS_POLICY_MODE=dry-run
+      - AIOPS_AUTO_RUN_ENABLED=true
+      - AIOPS_AUTO_RUN_INTERVAL_SECONDS=60
+      - AIOPS_PROMETHEUS_BASE_URL=http://prometheus:9090
+      - AIOPS_GRAFANA_WEBHOOK_SECRET=${AIOPS_GRAFANA_WEBHOOK_SECRET:-local-aiops-webhook}
+      - AIOPS_STATE_STORE_PATH=/app/state/aiops.sqlite3
+      - AIOPS_REMEDIATION_AUDIT_PATH=/app/state/remediation_audit.jsonl
+      - AIOPS_RCA_HISTORY_PATH=/app/state/rca_history.jsonl
+    volumes:
+      - aiops-state:/app/state
+    depends_on:
+      prometheus:
+        condition: service_started
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health/ready', timeout=2)"]
+      start_period: 20s
+      interval: 15s
+      timeout: 3s
+      retries: 5
+    logging: *logging
 
   # Prometheus
   prometheus:
@@ -791,4 +829,5 @@ services:
     logging: *logging
 
 volumes:
+  aiops-state:
   valkey-cart-data:

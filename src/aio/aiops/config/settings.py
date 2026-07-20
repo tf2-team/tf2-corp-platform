@@ -1,3 +1,6 @@
+#!/usr/bin/python
+# Copyright The OpenTelemetry Authors
+# SPDX-License-Identifier: Apache-2.0
 from __future__ import annotations
 
 import os
@@ -45,39 +48,41 @@ class Settings(BaseSettings):
     action_type_restart: str = "restart"
     action_target_kind_deployment: str = "Deployment"
     default_action_replicas: int = 3
-    prometheus_base_url: str
-    prometheus_token: str
-    prometheus_account: str
+    prometheus_base_url: str = ""
+    prometheus_token: str = ""
+    prometheus_account: str = ""
 
-    grafana_webhook_secret: str
+    grafana_webhook_secret: str = ""
 
-    jaeger_base_url: str
-    jaeger_token: str
-    jaeger_account: str
+    jaeger_base_url: str = ""
+    jaeger_token: str = ""
+    jaeger_account: str = ""
 
-    opensearch_base_url: str
-    opensearch_username: str
-    opensearch_password: str
-    opensearch_account: str
-    opensearch_verify_tls: bool
+    opensearch_base_url: str = ""
+    opensearch_username: str = ""
+    opensearch_password: str = ""
+    opensearch_account: str = ""
+    opensearch_verify_tls: bool = True
 
-    kubernetes_api_url: str
-    kubernetes_bearer_token: str
-    kubernetes_account: str
+    kubernetes_api_url: str = ""
+    kubernetes_bearer_token: str = ""
+    kubernetes_bearer_token_file: Path = Path("/var/run/secrets/kubernetes.io/serviceaccount/token")
+    kubernetes_ca_cert_path: Path = Path("/var/run/secrets/kubernetes.io/serviceaccount/ca.crt")
+    kubernetes_account: str = ""
 
-    notification_webhook_url: str
-    notification_token: str
-    notification_account: str
+    notification_webhook_url: str = ""
+    notification_token: str = ""
+    notification_account: str = ""
     notification_provider: Literal["auto", "generic", "grafana", "discord"] = "auto"
 
-    aie_status_url: str
-    aie_token: str
-    aie_account: str
+    aie_status_url: str = ""
+    aie_token: str = ""
+    aie_account: str = ""
 
-    cdo_cost_url: str
-    cdo_cost_token: str
-    cdo_cost_account: str
+    cdo_cost_url: str = ""
+    cdo_cost_token: str = ""
+    cdo_cost_account: str = ""
 
-    live_executor_url: str
-    live_executor_token: str
-    live_executor_account: str
+    live_executor_url: str = ""
+    live_executor_token: str = ""
+    live_executor_account: str = ""

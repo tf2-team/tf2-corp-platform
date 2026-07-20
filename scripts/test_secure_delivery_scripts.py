@@ -16,6 +16,12 @@ class DigestOverlayTests(unittest.TestCase):
     def test_mem0_top_level_image(self) -> None:
         self.assertIn("mem0:\n  image:\n    digest:", render("mem0", self.digest))
 
+    def test_aiops_top_level_image_keeps_runtime_contract(self) -> None:
+        overlay = render("aiops", self.digest)
+        self.assertIn("aiops:\n  enabled: true", overlay)
+        self.assertIn("existingSecret: techx-corp-aiops-grafana-webhook", overlay)
+        self.assertIn("  image:\n    digest:", overlay)
+
     def test_load_generator_updates_worker_alias(self) -> None:
         overlay = render("load-generator", self.digest)
         self.assertIn("  load-generator:", overlay)

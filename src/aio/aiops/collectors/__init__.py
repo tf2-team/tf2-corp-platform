@@ -1,3 +1,6 @@
+#!/usr/bin/python
+# Copyright The OpenTelemetry Authors
+# SPDX-License-Identifier: Apache-2.0
 from aiops.collectors.base import Collector
 from aiops.collectors.prometheus import PrometheusCollector, load_prometheus_collection_plan
 from aiops.collectors.static import StaticCollector
