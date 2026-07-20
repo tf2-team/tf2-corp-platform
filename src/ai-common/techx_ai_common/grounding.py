@@ -34,6 +34,7 @@ from .contracts import (
     SafeReview,
     SafeReviewSet,
 )
+from .bedrock import converse_json, is_bedrock_provider
 
 logger = logging.getLogger("grounding")
 
@@ -94,6 +95,9 @@ def generate_grounded_summary(safe_reviews: SafeReviewSet, question: str = "") -
     question is optional input context only — the GroundedDraft / claims
     output contract is unchanged.
     """
+    if is_bedrock_provider():
+        return converse_json(GroundedDraft, _SYSTEM_PROMPT, _build_review_prompt(safe_reviews, question))
+
     client, model = _get_client_and_model()
     instructor_client = instructor.from_openai(client, mode=instructor.Mode.JSON)
     return instructor_client.chat.completions.create(

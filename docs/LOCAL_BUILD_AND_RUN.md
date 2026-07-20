@@ -92,17 +92,32 @@ echo IMAGE_NAME=techx-corp> .env.override
 echo DEMO_VERSION=latest>> .env.override
 ```
 
-### Optional: real OpenAI-compatible LLM
+### Amazon Bedrock / Nova for local AI development
 
-By default the mock `llm` service satisfies product-review summarization. To point product-reviews at a real OpenAI-compatible API, set values in `.env.override` (do not commit secrets):
+Shopping Copilot, Product Reviews and Mem0 use Bedrock by default. Each developer supplies their own AWS profile; do not put an AWS key in `.env` or Git.
 
-```text
-LLM_BASE_URL=https://api.openai.com/v1
-LLM_MODEL=gpt-4o-mini
-OPENAI_API_KEY=<your-key>
-```
+1. Log in with a profile that has `bedrock:InvokeModel` for Nova in `us-east-1`:
 
-See comments in `.env` and `src/llm/README.md`.
+   ```powershell
+   aws sso login --profile <your-profile>
+   ```
+
+2. Create/update your untracked `.env.override`:
+
+   ```text
+   AWS_PROFILE=<your-profile>
+   AWS_CONFIG_DIR=C:/Users/<your-windows-user>/.aws
+   AWS_REGION=us-east-1
+   BEDROCK_MODEL_ID=us.amazon.nova-2-lite-v1:0
+   ```
+
+3. Confirm the profile can invoke Nova before starting Compose:
+
+   ```powershell
+   aws bedrock-runtime converse --region us-east-1 --profile <your-profile> --model-id us.amazon.nova-2-lite-v1:0 --messages '[{"role":"user","content":[{"text":"Reply with OK"}]}]'
+   ```
+
+Compose mounts this credential directory read-only only into the three AI containers. If the profile is unavailable, those services return a controlled fallback instead of using Groq.
 
 ---
 
