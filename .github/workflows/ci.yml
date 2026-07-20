@@ -29,7 +29,7 @@ jobs:
         # actions/setup-go@v6.5.0
         uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16
         with:
-          go-version: "1.25.x"
+          go-version: "1.24.x"
           cache-dependency-path: internal/tools/go.sum
 
       - name: Setup Node
@@ -88,7 +88,7 @@ jobs:
         # actions/setup-go@v6.5.0
         uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16
         with:
-          go-version: "1.25.x"
+          go-version: "1.24.x"
           cache-dependency-path: ${{ matrix.workdir }}/go.sum
 
       - name: Setup .NET
@@ -540,4 +540,4 @@ jobs:
       - name: Validate shared guardrail dependency
         run: >-
           python -c "from llm_guard.input_scanners import PromptInjection; from techx_ai_common import guardrails"
-# Change trail: @hungxqt - 2026-07-20 - Bump setup-go to 1.25.x to match checkout/product-catalog go.mod
+# Change trail: @hungxqt - 2026-07-20 - Shared release catalog; skip SAST/secrets/IaC on workflow_call.

@@ -33,7 +33,6 @@ Remediate HIGH/CRITICAL findings that failed **Build and push images** run `2972
 - Flagd-ui builder/runtime on Debian bookworm
 - Email gems: net-imap ≥ 0.5.14, rack-session ≥ 2.1.2
 - Trivy: `ignore-unfixed: true` (still fails on fixable HIGH/CRITICAL that remain in the image)
-- CI `setup-go` uses **1.25.x** (aligned with `go.mod`; was 1.24.x and failed with `GOTOOLCHAIN=local`)
 
 ## Technical Design Decisions
 
@@ -65,7 +64,6 @@ Remediate HIGH/CRITICAL findings that failed **Build and push images** run `2972
 **Workflow / env**
 
 * `.github/workflows/build-and-push.yml` — Trivy image scan `ignore-unfixed: true`
-* `.github/workflows/ci.yml` — `setup-go` `go-version` **1.25.x** (lint + unit tests; matches module floor)
 * `.env` — `OTEL_JAVA_AGENT_VERSION=2.26.1`
 
 **Go**
@@ -134,7 +132,6 @@ Remediate HIGH/CRITICAL findings that failed **Build and push images** run `2972
 |---|---|---|
 | Checkout unit tests | `go test ./...` in `src/checkout` | Pass (after module bump) |
 | Product-catalog | `go test ./...` | Pass (no tests) |
-| CI Go version | `setup-go` → `1.25.x` in `ci.yml` | Aligns with `go 1.25.0` modules |
 | Frontend lock | `npm install --package-lock-only` | Lock resolves next 16.2.6, protobufjs 7.5.6 |
 | Payment lock | `npm install --package-lock-only` | protobufjs 7.5.6 |
 | Email gems | `bundle update net-imap rack-session` | net-imap 0.6.4.1, rack-session 2.1.2 |
@@ -178,4 +175,4 @@ Ordering: platform images first → chart digest promote (automated on success) 
 2. Force full rebuild again to republish previous image contents under a new tag.
 3. Chart digests follow the successful publish path.
 
-<!-- Change trail: @hungxqt - 2026-07-20 - Trivy remediation plus CI setup-go 1.25.x for module floor -->
+<!-- Change trail: @hungxqt - 2026-07-20 - Trivy HIGH/CRITICAL remediation across release images and scan gate -->
