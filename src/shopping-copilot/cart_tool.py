@@ -20,19 +20,8 @@ import json
 import logging
 import os
 import secrets
-import sys
-
-_PRODUCT_REVIEWS_DIR = os.path.abspath(
-    os.path.join(os.path.dirname(__file__), "../product-reviews")
-)
-if _PRODUCT_REVIEWS_DIR not in sys.path:
-    sys.path.insert(0, _PRODUCT_REVIEWS_DIR)
-
 import valkey as valkeylib
-
-
-import demo_pb2
-import demo_pb2_grpc
+from techx_ai_common.proto import demo_pb2, demo_pb2_grpc
 from copilot_contracts import PendingCartAction
 
 logger = logging.getLogger("cart_tool")
@@ -113,13 +102,13 @@ def confirm_cart_action(
     payload_raw = valkey_client.getdel(key)
 
     if payload_raw is None:
-        logger.info("Confirm cart: token not found or expired. token_prefix=%s", token[:8])
+        logger.info("Confirm cart: pending action not found or expired")
         return False, "Token expired or not found."
 
     try:
         payload = json.loads(payload_raw)
     except json.JSONDecodeError:
-        logger.error("Confirm cart: corrupt token payload. token_prefix=%s", token[:8])
+        logger.error("Confirm cart: corrupt pending-action payload")
         return False, "Invalid token payload."
 
     stored_user_id = payload.get("user_id", "")
@@ -159,3 +148,4 @@ def make_cart_stub() -> demo_pb2_grpc.CartServiceStub:
 # Deferred import to avoid circular issues; cart_tool is imported by
 # copilot_server.py which also imports grpc for the server setup.
 import grpc  # noqa: E402
+# Change trail: @hungxqt - 2026-07-20 - Stop logging pending-action secrets in confirm_cart_action

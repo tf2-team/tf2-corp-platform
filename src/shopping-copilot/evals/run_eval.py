@@ -40,7 +40,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from copilot_graph import CopilotDeps, run_copilot, CopilotStatus
 from copilot_contracts import ShoppingIntent
-from ai_contracts import GroundedResponse, GroundedClaim, ResponseStatus
+from techx_ai_common.contracts import GroundedResponse, GroundedClaim, ResponseStatus
 
 EVAL_CASES_PATH = Path(__file__).parent / "eval_cases.json"
 

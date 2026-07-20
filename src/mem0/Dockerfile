@@ -2,9 +2,7 @@
 # Copyright The OpenTelemetry Authors
 # SPDX-License-Identifier: Apache-2.0
 
-ARG PYTHON_VERSION=3.12.10
-
-FROM python:${PYTHON_VERSION}-slim-bookworm AS builder
+FROM python:3.12.10-slim-bookworm@sha256:fd95fa221297a88e1cf49c55ec1828edd7c5a428187e67b5d1805692d11588db AS builder
 
 ENV PIP_DISABLE_PIP_VERSION_CHECK=1 \
     PIP_NO_CACHE_DIR=1
@@ -19,7 +17,7 @@ COPY third-party/mem0 /build/mem0
 RUN python -m pip install --prefix=/install --no-deps /build/mem0
 
 
-FROM python:${PYTHON_VERSION}-slim-bookworm AS runtime
+FROM python:3.12.10-slim-bookworm@sha256:fd95fa221297a88e1cf49c55ec1828edd7c5a428187e67b5d1805692d11588db AS runtime
 
 ARG APP_UID=10001
 ARG APP_GID=10001
@@ -41,6 +39,9 @@ RUN groupadd --gid "${APP_GID}" mem0 \
 
 COPY --from=builder /install /usr/local
 COPY --from=builder /build/mem0/server /app/server
+
+# Fail the image build when Psycopg cannot load a PostgreSQL backend.
+RUN python -c "import psycopg; import psycopg.pq"
 
 WORKDIR /app/server
 USER ${APP_UID}:${APP_GID}

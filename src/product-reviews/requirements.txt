@@ -7,16 +7,4 @@ psutil==7.0.0 # Importing this will also import opentelemetry-instrumentation-sy
 python-dotenv==1.2.1
 python-json-logger==4.0.0
 psycopg2-binary==2.9.11
-openai==2.14.0
-instructor==1.15.4
-pydantic==2.12.5
 simplejson==3.20.2
-
-presidio-analyzer==2.2.363
-presidio-anonymizer==2.2.363
-llm-guard==0.3.14
-spacy==3.8.13
-en-core-web-lg @ https://github.com/explosion/spacy-models/releases/download/en_core_web_lg-3.8.0/en_core_web_lg-3.8.0-py3-none-any.whl
-torch==2.3.1
-transformers==4.41.2
-numpy==1.26.4

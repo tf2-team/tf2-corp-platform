@@ -22,7 +22,7 @@ from product_reviews_server import (
     ProductReviewService
 )
 from ai_contracts import ResponseStatus
-import demo_pb2
+from techx_ai_common.proto import demo_pb2
 
 
 def _payload(resp):

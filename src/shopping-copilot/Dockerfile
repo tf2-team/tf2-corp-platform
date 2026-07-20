@@ -2,7 +2,7 @@
 # Copyright The OpenTelemetry Authors
 # SPDX-License-Identifier: Apache-2.0
 
-FROM docker.io/library/python:3.12-slim-bookworm AS build-venv
+FROM docker.io/library/python:3.12-slim-bookworm@sha256:d50fb7611f86d04a3b0471b46d7557818d88983fc3136726336b2a4c657aa30b AS build-venv
 
 ENV PIP_DEFAULT_TIMEOUT=120 \
     PIP_RETRIES=10 \
@@ -12,16 +12,18 @@ RUN apt-get update && \
     apt-get install --no-install-recommends -y gcc g++ && \
     rm -rf /var/lib/apt/lists/*
 
+COPY ./src/ai-common /build/ai-common
 COPY ./src/shopping-copilot/requirements.txt requirements.txt
 
 RUN --mount=type=cache,id=techx-pip-cache,target=/root/.cache/pip,sharing=locked \
     python -m venv venv && \
+    venv/bin/pip install /build/ai-common && \
     venv/bin/pip install -r requirements.txt
 
 RUN --mount=type=cache,id=techx-pip-cache,target=/root/.cache/pip,sharing=locked \
     venv/bin/opentelemetry-bootstrap -a install
 
-FROM docker.io/library/python:3.12-slim-bookworm
+FROM docker.io/library/python:3.12-slim-bookworm@sha256:d50fb7611f86d04a3b0471b46d7557818d88983fc3136726336b2a4c657aa30b
 
 RUN apt-get update && \
     apt-get install --no-install-recommends -y libgomp1 && \
@@ -38,15 +40,6 @@ RUN groupadd --gid 10001 appgroup && \
 
 ENV HF_HOME=/home/appuser/.cache/huggingface
 
-# Copy generated proto stubs
-COPY --chown=appuser:appgroup ./src/product-reviews/demo_pb2_grpc.py demo_pb2_grpc.py
-COPY --chown=appuser:appgroup ./src/product-reviews/demo_pb2.py demo_pb2.py
-
-# Copy shared AI code from product-reviews for Docker build
-COPY --chown=appuser:appgroup ./src/product-reviews/ai_contracts.py ai_contracts.py
-COPY --chown=appuser:appgroup ./src/product-reviews/guardrails.py guardrails.py
-COPY --chown=appuser:appgroup ./src/product-reviews/grounding.py grounding.py
-
 # Copy shopping-copilot service code
 COPY --chown=appuser:appgroup ./src/shopping-copilot/copilot_contracts.py copilot_contracts.py
 COPY --chown=appuser:appgroup ./src/shopping-copilot/bedrock_runtime.py bedrock_runtime.py
@@ -58,7 +51,7 @@ COPY --chown=appuser:appgroup ./src/shopping-copilot/cart_tool.py cart_tool.py
 COPY --chown=appuser:appgroup ./src/shopping-copilot/copilot_graph.py copilot_graph.py
 COPY --chown=appuser:appgroup ./src/shopping-copilot/copilot_server.py copilot_server.py
 
-RUN /venv/bin/python -c "import guardrails, grounding"
+RUN /venv/bin/python -c "from techx_ai_common import guardrails, grounding"
 
 RUN chown -R appuser:appgroup /app
 

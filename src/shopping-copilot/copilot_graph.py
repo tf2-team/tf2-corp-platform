@@ -25,31 +25,19 @@ Bounds (enforced by LangGraph config):
 
 import asyncio
 import logging
-import os
-import sys
 from typing import Optional, TypedDict
 
-_PRODUCT_REVIEWS_DIR = os.path.abspath(
-    os.path.join(os.path.dirname(__file__), "../product-reviews")
-)
-if _PRODUCT_REVIEWS_DIR not in sys.path:
-    sys.path.insert(0, _PRODUCT_REVIEWS_DIR)
-
-
 from langgraph.graph import StateGraph, START, END
-
-import demo_pb2_grpc
 import valkey as valkeylib
-
-from ai_contracts import GroundedResponse, ResponseStatus
+from techx_ai_common.contracts import GroundedResponse, GuardrailAction, ResponseStatus
+from techx_ai_common.guardrails import sanitize_request
+from techx_ai_common.proto import demo_pb2_grpc
 from copilot_contracts import (
     CopilotStatus,
     ShoppingIntent,
     CopilotProductResult,
     PendingCartAction,
 )
-from guardrails import sanitize_request
-from ai_contracts import GuardrailAction
 import intent_parser
 from catalog_tool import search_catalog
 from review_tool import answer_with_reviews
@@ -233,7 +221,7 @@ def make_nodes(deps: CopilotDeps):
             )
             return {**state, "pending_action": action}
         except Exception as exc:
-            logger.error("Cart token creation failed: %s", exc)
+            logger.error("Cart pending-action creation failed: %s", type(exc).__name__)
             # Non-fatal.
             return {**state, "pending_action": None}
 
@@ -388,3 +376,4 @@ def run_copilot(user_message: str, deps: CopilotDeps) -> CopilotState:
             "reason": "An unexpected error occurred.",
             "error": str(exc),
         }
+# Change trail: @hungxqt - 2026-07-20 - Avoid logging token-related strings on pending-action create failure

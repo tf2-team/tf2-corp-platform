@@ -3,7 +3,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 
-FROM docker.io/library/python:3.12-slim-bookworm AS build-venv
+FROM docker.io/library/python:3.12-slim-bookworm@sha256:d50fb7611f86d04a3b0471b46d7557818d88983fc3136726336b2a4c657aa30b AS build-venv
 
 ENV PIP_DEFAULT_TIMEOUT=120 \
     PIP_RETRIES=10 \
@@ -13,16 +13,18 @@ RUN apt-get update && \
     apt-get install --no-install-recommends -y gcc g++ && \
     rm -rf /var/lib/apt/lists/*
 
+COPY ./src/ai-common /build/ai-common
 COPY ./src/product-reviews/requirements.txt requirements.txt
 
 RUN python -m venv venv && \
+    venv/bin/pip install --no-cache-dir /build/ai-common && \
     venv/bin/pip install --no-cache-dir -r requirements.txt
 
 RUN venv/bin/python -c "import spacy; spacy.load('en_core_web_lg')"
 
 RUN --mount=type=cache,id=techx-pip-cache,target=/root/.cache/pip,sharing=locked \
     venv/bin/opentelemetry-bootstrap -a install
-FROM docker.io/library/python:3.12-slim-bookworm
+FROM docker.io/library/python:3.12-slim-bookworm@sha256:d50fb7611f86d04a3b0471b46d7557818d88983fc3136726336b2a4c657aa30b
 
 RUN apt-get update && \
     apt-get install --no-install-recommends -y libgomp1 && \
@@ -39,16 +41,11 @@ RUN groupadd --gid 10001 appgroup && \
 
 ENV HF_HOME=/home/appuser/.cache/huggingface
 
-COPY --chown=appuser:appgroup ./src/product-reviews/demo_pb2_grpc.py demo_pb2_grpc.py
-COPY --chown=appuser:appgroup ./src/product-reviews/demo_pb2.py demo_pb2.py
 COPY --chown=appuser:appgroup ./src/product-reviews/product_reviews_server.py product_reviews_server.py
 COPY --chown=appuser:appgroup ./src/product-reviews/database.py database.py
 COPY --chown=appuser:appgroup ./src/product-reviews/metrics.py metrics.py
-COPY --chown=appuser:appgroup ./src/product-reviews/ai_contracts.py ai_contracts.py
-COPY --chown=appuser:appgroup ./src/product-reviews/guardrails.py guardrails.py
-COPY --chown=appuser:appgroup ./src/product-reviews/grounding.py grounding.py
 
-RUN /venv/bin/python -c "import guardrails, grounding, spacy; spacy.load('en_core_web_lg')"
+RUN /venv/bin/python -c "from techx_ai_common import guardrails, grounding; import spacy; spacy.load('en_core_web_lg')"
 
 RUN chown -R appuser:appgroup /app
 

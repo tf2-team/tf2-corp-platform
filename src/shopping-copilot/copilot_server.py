@@ -15,14 +15,6 @@ Only ConfirmCartAction does, after validating the token.
 
 import logging
 import os
-import sys
-
-_PRODUCT_REVIEWS_DIR = os.path.abspath(
-    os.path.join(os.path.dirname(__file__), "../product-reviews")
-)
-if _PRODUCT_REVIEWS_DIR not in sys.path:
-    sys.path.insert(0, _PRODUCT_REVIEWS_DIR)
-
 from concurrent import futures
 
 
@@ -35,11 +27,8 @@ from opentelemetry.sdk._logs import LoggerProvider, LoggingHandler
 from opentelemetry.sdk._logs.export import BatchLogRecordProcessor
 from opentelemetry.sdk.resources import Resource
 
-import demo_pb2
-import demo_pb2_grpc
-
-# Imported via symlink → src/product-reviews/
-from guardrails import initialize_guardrails
+from techx_ai_common.guardrails import initialize_guardrails
+from techx_ai_common.proto import demo_pb2, demo_pb2_grpc
 
 from copilot_graph import CopilotDeps, run_copilot, CopilotStatus
 from copilot_contracts import CopilotStatus as CS
@@ -113,10 +102,7 @@ class ShoppingCopilotServicer(demo_pb2_grpc.ShoppingCopilotServiceServicer):
         request: demo_pb2.ConfirmCartActionRequest,
         context,
     ) -> demo_pb2.ConfirmCartActionResponse:
-        logger.info(
-            "ConfirmCartAction: user_id=%r token_prefix=%s",
-            request.user_id, request.pending_action_token[:8],
-        )
+        logger.info("ConfirmCartAction: user_id=%r", request.user_id)
         success, reason = confirm_cart_action(
             token=request.pending_action_token,
             user_id=request.user_id,
@@ -181,3 +167,4 @@ if __name__ == "__main__":
     server.start()
     logger.info("Shopping Copilot gRPC server started on port %s", port)
     server.wait_for_termination()
+# Change trail: @hungxqt - 2026-07-20 - Drop pending-action secret prefix from ConfirmCartAction logs
