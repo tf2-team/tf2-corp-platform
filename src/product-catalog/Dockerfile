@@ -23,6 +23,5 @@ WORKDIR /usr/src/app/
 COPY --from=builder /usr/src/app/product-catalog/ ./
 
 EXPOSE ${PRODUCT_CATALOG_PORT}
-USER nonroot
 ENTRYPOINT [ "./product-catalog" ]
-# Change trail: @hungxqt - 2026-07-20 - Explicit nonroot USER before ENTRYPOINT for Semgrep/CI container hardening
+USER nonroot

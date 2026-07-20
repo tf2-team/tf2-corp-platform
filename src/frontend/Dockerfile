@@ -57,6 +57,5 @@ COPY ./src/frontend/utils/telemetry/Instrumentation.js Instrumentation.js
 
 EXPOSE ${FRONTEND_PORT}
 
-USER nonroot
 CMD ["--require=./Instrumentation.js", "server.js"]
-# Change trail: @hungxqt - 2026-07-20 - Explicit nonroot USER before CMD for Semgrep/CI container hardening
+USER nonroot

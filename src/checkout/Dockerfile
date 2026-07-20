@@ -26,6 +26,6 @@ WORKDIR /usr/src/app/
 COPY --from=builder /usr/src/app/checkout/ ./
 
 EXPOSE ${CHECKOUT_PORT}
-USER nonroot
 ENTRYPOINT [ "./checkout" ]
-# Change trail: @hungxqt - 2026-07-20 - Explicit nonroot USER before ENTRYPOINT for Semgrep/CI container hardening
+USER nonroot
+# Change trail: @hungxqt - 2026-07-15 - Copy outbox package into image build context for durable Kafka outbox

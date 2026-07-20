@@ -28,6 +28,5 @@ COPY ./src/payment/opentelemetry.js opentelemetry.js
 
 EXPOSE ${PAYMENT_PORT}
 
-USER nonroot
 CMD ["--require=./opentelemetry.js", "index.js"]
-# Change trail: @hungxqt - 2026-07-20 - Explicit nonroot USER before CMD for Semgrep/CI container hardening
+USER nonroot
