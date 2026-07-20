@@ -30,6 +30,19 @@ gen_proto_python() {
     python -m grpc_tools.protoc -I /build/pb/ --python_out="./src/$1/" --grpc_python_out="./src/$1/" /build/pb/demo.proto
 }
 
+gen_proto_python_common() {
+  echo "Generating shared Python protobuf files"
+  docker build -f "src/product-reviews/genproto/Dockerfile" -t "ai-common-genproto" .
+  docker run --rm -v $(pwd):/build "ai-common-genproto" /bin/sh -c '
+    mkdir -p /build/src/ai-common/techx_ai_common/proto && \
+    python -m grpc_tools.protoc -I /build/pb/ \
+      --python_out="/build/src/ai-common/techx_ai_common/proto" \
+      --grpc_python_out="/build/src/ai-common/techx_ai_common/proto" \
+      /build/pb/demo.proto && \
+    sed -i "s/^import demo_pb2 as demo__pb2$/from . import demo_pb2 as demo__pb2/" \
+      /build/src/ai-common/techx_ai_common/proto/demo_pb2_grpc.py'
+}
+
 gen_proto_ts() {
   echo "Generating Typescript protobuf files for $1"
   docker build -f "src/$1/genproto/Dockerfile" -t "$1-genproto" .
@@ -54,7 +67,7 @@ if [ -z "$1" ]; then
   #gen_proto_js payment
   gen_proto_go product-catalog
   #gen_proto_php quote
-  gen_proto_python product-reviews
+  gen_proto_python_common
   gen_proto_python recommendation
   #gen_proto_rust shipping
 else

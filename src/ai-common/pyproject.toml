@@ -1,0 +1,29 @@
+# Copyright The OpenTelemetry Authors
+# SPDX-License-Identifier: Apache-2.0
+
+[build-system]
+requires = ["setuptools>=75"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "techx-ai-common"
+version = "0.1.0"
+description = "Shared AI safety, grounding, and protobuf contracts for TechX services"
+requires-python = ">=3.12"
+dependencies = [
+  "grpcio==1.71.0",
+  "instructor==1.15.4",
+  "llm-guard==0.3.14",
+  "numpy==1.26.4",
+  "openai==2.14.0",
+  "presidio-analyzer==2.2.363",
+  "presidio-anonymizer==2.2.363",
+  "pydantic==2.12.5",
+  "spacy==3.8.13",
+  "torch==2.3.1",
+  "transformers==4.41.2",
+  "en-core-web-lg @ https://github.com/explosion/spacy-models/releases/download/en_core_web_lg-3.8.0/en_core_web_lg-3.8.0-py3-none-any.whl",
+]
+
+[tool.setuptools.packages.find]
+include = ["techx_ai_common*"]
