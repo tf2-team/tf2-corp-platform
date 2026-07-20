@@ -1,0 +1,298 @@
+#0 building with "desktop-linux" instance using docker driver
+
+#1 [internal] load local bake definitions
+#1 reading docker-compose.yml 31.23kB / 31.23kB done
+#1 reading docker-bake.hcl 6.69kB / 6.69kB done
+#1 DONE 0.0s
+
+#2 [internal] load build definition from Dockerfile
+#2 transferring dockerfile: 2.80kB 0.0s done
+#2 DONE 0.0s
+
+#3 [internal] load metadata for docker.io/library/node:22-slim@sha256:6c74791e557ce11fc957704f6d4fe134a7bc8d6f5ca4403205b2966bd488f6b3
+#3 ...
+
+#4 [auth] library/node:pull token for registry-1.docker.io
+#4 DONE 0.0s
+
+#3 [internal] load metadata for docker.io/library/node:22-slim@sha256:6c74791e557ce11fc957704f6d4fe134a7bc8d6f5ca4403205b2966bd488f6b3
+#3 DONE 4.6s
+
+#5 [internal] load .dockerignore
+#5 transferring context: 464B done
+#5 DONE 0.0s
+
+#6 [deps 1/6] FROM docker.io/library/node:22-slim@sha256:6c74791e557ce11fc957704f6d4fe134a7bc8d6f5ca4403205b2966bd488f6b3
+#6 resolve docker.io/library/node:22-slim@sha256:6c74791e557ce11fc957704f6d4fe134a7bc8d6f5ca4403205b2966bd488f6b3 0.1s done
+#6 ...
+
+#7 [internal] load build context
+#7 transferring context: 1.09MB 0.2s done
+#7 DONE 0.2s
+
+#6 [deps 1/6] FROM docker.io/library/node:22-slim@sha256:6c74791e557ce11fc957704f6d4fe134a7bc8d6f5ca4403205b2966bd488f6b3
+#6 sha256:437216719022b2853003498de36b055604c6ff1bcee290b912ed44226f2d3d46 0B / 446B 0.2s
+#6 sha256:392df1351ac2d7628088ee58b248e62a2c1b749e4beb94b7640994df1857c8ca 0B / 1.71MB 0.2s
+#6 sha256:bb65bd65926c2b38f8a7d518cefa8524e1484182dd6ffba7883654d886b4cfb3 0B / 49.94MB 0.2s
+#6 sha256:e33bee2ce77b0c3748e6a8f2b808a5ab1d2ed466d5ee5a9b991cba597bd028e2 0B / 3.31kB 0.2s
+#6 sha256:437216719022b2853003498de36b055604c6ff1bcee290b912ed44226f2d3d46 446B / 446B 0.5s done
+#6 sha256:597c6c618d36213af657a6a8444a5d87801f9a219682b206ad21ccb8f3e57bbd 0B / 28.23MB 0.2s
+#6 sha256:e33bee2ce77b0c3748e6a8f2b808a5ab1d2ed466d5ee5a9b991cba597bd028e2 3.31kB / 3.31kB 1.4s done
+#6 sha256:392df1351ac2d7628088ee58b248e62a2c1b749e4beb94b7640994df1857c8ca 1.05MB / 1.71MB 2.4s
+#6 sha256:392df1351ac2d7628088ee58b248e62a2c1b749e4beb94b7640994df1857c8ca 1.71MB / 1.71MB 2.6s done
+#6 sha256:bb65bd65926c2b38f8a7d518cefa8524e1484182dd6ffba7883654d886b4cfb3 3.15MB / 49.94MB 3.5s
+#6 sha256:597c6c618d36213af657a6a8444a5d87801f9a219682b206ad21ccb8f3e57bbd 2.10MB / 28.23MB 2.9s
+#6 sha256:bb65bd65926c2b38f8a7d518cefa8524e1484182dd6ffba7883654d886b4cfb3 6.29MB / 49.94MB 3.9s
+#6 sha256:597c6c618d36213af657a6a8444a5d87801f9a219682b206ad21ccb8f3e57bbd 4.19MB / 28.23MB 3.3s
+#6 sha256:bb65bd65926c2b38f8a7d518cefa8524e1484182dd6ffba7883654d886b4cfb3 9.44MB / 49.94MB 4.2s
+#6 sha256:597c6c618d36213af657a6a8444a5d87801f9a219682b206ad21ccb8f3e57bbd 6.29MB / 28.23MB 3.6s
+#6 sha256:597c6c618d36213af657a6a8444a5d87801f9a219682b206ad21ccb8f3e57bbd 8.39MB / 28.23MB 3.9s
+#6 sha256:bb65bd65926c2b38f8a7d518cefa8524e1484182dd6ffba7883654d886b4cfb3 13.63MB / 49.94MB 4.8s
+#6 sha256:597c6c618d36213af657a6a8444a5d87801f9a219682b206ad21ccb8f3e57bbd 10.49MB / 28.23MB 4.4s
+#6 sha256:bb65bd65926c2b38f8a7d518cefa8524e1484182dd6ffba7883654d886b4cfb3 16.78MB / 49.94MB 5.6s
+#6 sha256:bb65bd65926c2b38f8a7d518cefa8524e1484182dd6ffba7883654d886b4cfb3 23.07MB / 49.94MB 6.2s
+#6 sha256:597c6c618d36213af657a6a8444a5d87801f9a219682b206ad21ccb8f3e57bbd 15.73MB / 28.23MB 5.6s
+#6 sha256:bb65bd65926c2b38f8a7d518cefa8524e1484182dd6ffba7883654d886b4cfb3 26.21MB / 49.94MB 6.3s
+#6 sha256:597c6c618d36213af657a6a8444a5d87801f9a219682b206ad21ccb8f3e57bbd 17.83MB / 28.23MB 6.0s
+#6 sha256:bb65bd65926c2b38f8a7d518cefa8524e1484182dd6ffba7883654d886b4cfb3 30.41MB / 49.94MB 7.4s
+#6 sha256:bb65bd65926c2b38f8a7d518cefa8524e1484182dd6ffba7883654d886b4cfb3 33.55MB / 49.94MB 7.5s
+#6 sha256:597c6c618d36213af657a6a8444a5d87801f9a219682b206ad21ccb8f3e57bbd 22.02MB / 28.23MB 6.9s
+#6 sha256:597c6c618d36213af657a6a8444a5d87801f9a219682b206ad21ccb8f3e57bbd 24.12MB / 28.23MB 7.1s
+#6 sha256:bb65bd65926c2b38f8a7d518cefa8524e1484182dd6ffba7883654d886b4cfb3 36.70MB / 49.94MB 7.8s
+#6 sha256:597c6c618d36213af657a6a8444a5d87801f9a219682b206ad21ccb8f3e57bbd 26.21MB / 28.23MB 7.4s
+#6 sha256:597c6c618d36213af657a6a8444a5d87801f9a219682b206ad21ccb8f3e57bbd 28.23MB / 28.23MB 7.7s done
+#6 sha256:bb65bd65926c2b38f8a7d518cefa8524e1484182dd6ffba7883654d886b4cfb3 39.85MB / 49.94MB 8.3s
+#6 extracting sha256:597c6c618d36213af657a6a8444a5d87801f9a219682b206ad21ccb8f3e57bbd
+#6 sha256:bb65bd65926c2b38f8a7d518cefa8524e1484182dd6ffba7883654d886b4cfb3 42.99MB / 49.94MB 8.6s
+#6 sha256:bb65bd65926c2b38f8a7d518cefa8524e1484182dd6ffba7883654d886b4cfb3 46.14MB / 49.94MB 8.9s
+#6 extracting sha256:597c6c618d36213af657a6a8444a5d87801f9a219682b206ad21ccb8f3e57bbd 0.9s done
+#6 sha256:bb65bd65926c2b38f8a7d518cefa8524e1484182dd6ffba7883654d886b4cfb3 49.94MB / 49.94MB 9.1s done
+#6 extracting sha256:e33bee2ce77b0c3748e6a8f2b808a5ab1d2ed466d5ee5a9b991cba597bd028e2 0.0s done
+#6 extracting sha256:bb65bd65926c2b38f8a7d518cefa8524e1484182dd6ffba7883654d886b4cfb3
+#6 extracting sha256:bb65bd65926c2b38f8a7d518cefa8524e1484182dd6ffba7883654d886b4cfb3 1.2s done
+#6 DONE 10.7s
+
+#6 [deps 1/6] FROM docker.io/library/node:22-slim@sha256:6c74791e557ce11fc957704f6d4fe134a7bc8d6f5ca4403205b2966bd488f6b3
+#6 extracting sha256:392df1351ac2d7628088ee58b248e62a2c1b749e4beb94b7640994df1857c8ca 0.1s done
+#6 DONE 10.8s
+
+#6 [deps 1/6] FROM docker.io/library/node:22-slim@sha256:6c74791e557ce11fc957704f6d4fe134a7bc8d6f5ca4403205b2966bd488f6b3
+#6 extracting sha256:437216719022b2853003498de36b055604c6ff1bcee290b912ed44226f2d3d46 0.0s done
+#6 DONE 10.8s
+
+#8 [deps 2/6] RUN apt-get update     && apt-get upgrade -y --no-install-recommends     && rm -rf /var/lib/apt/lists/*
+#8 1.526 Get:1 http://deb.debian.org/debian bookworm InRelease [151 kB]
+#8 2.235 Get:2 http://deb.debian.org/debian bookworm-updates InRelease [55.4 kB]
+#8 2.491 Get:3 http://deb.debian.org/debian-security bookworm-security InRelease [34.8 kB]
+#8 2.741 Get:4 http://deb.debian.org/debian bookworm/main amd64 Packages [8790 kB]
+#8 4.258 Get:5 http://deb.debian.org/debian bookworm-updates/main amd64 Packages [6924 B]
+#8 4.487 Get:6 http://deb.debian.org/debian-security bookworm-security/main amd64 Packages [318 kB]
+#8 5.247 Fetched 9356 kB in 5s (1939 kB/s)
+#8 5.247 Reading package lists...
+#8 5.841 Reading package lists...
+#8 6.319 Building dependency tree...
+#8 6.445 Reading state information...
+#8 6.485 Calculating upgrade...
+#8 6.675 0 upgraded, 0 newly installed, 0 to remove and 0 not upgraded.
+#8 DONE 7.6s
+
+#9 [deps 3/6] WORKDIR /app
+#9 DONE 0.1s
+
+#10 [deps 4/6] COPY ./src/frontend/package.json package.json
+#10 DONE 0.1s
+
+#11 [deps 5/6] COPY ./src/frontend/package-lock.json package-lock.json
+#11 DONE 0.1s
+
+#12 [builder  6/21] RUN npm ci
+#12 7.342 npm warn deprecated node-domexception@1.0.0: Use your platform's native DOMException instead
+#12 9.192 npm warn deprecated glob@10.5.0: Old versions of glob are not supported, and contain widely publicized security vulnerabilities, which have been fixed in the current version. Please update. Support for old versions may be purchased (at exorbitant rates) by contacting i@izs.me
+#12 9.579 npm warn deprecated lodash@4.18.0: Bad release. Please use lodash@4.17.21 instead.
+#12 ...
+
+#13 [deps 6/6] RUN npm ci --omit=dev
+#13 3.147 npm warn deprecated node-domexception@1.0.0: Use your platform's native DOMException instead
+#13 3.708 npm warn deprecated glob@10.5.0: Old versions of glob are not supported, and contain widely publicized security vulnerabilities, which have been fixed in the current version. Please update. Support for old versions may be purchased (at exorbitant rates) by contacting i@izs.me
+#13 ...
+
+#12 [builder  6/21] RUN npm ci
+#12 12.38 npm warn deprecated @types/uuid@11.0.0: This is a stub types definition. uuid provides its own type definitions, so you do not need this installed.
+#12 ...
+
+#13 [deps 6/6] RUN npm ci --omit=dev
+#13 44.27 
+#13 44.27 added 496 packages, and audited 497 packages in 44s
+#13 44.27 
+#13 44.27 40 packages are looking for funding
+#13 44.27   run `npm fund` for details
+#13 44.33 
+#13 44.33 41 vulnerabilities (38 moderate, 3 high)
+#13 44.33 
+#13 44.33 To address issues that do not require attention, run:
+#13 44.33   npm audit fix
+#13 44.33 
+#13 44.33 To address all issues (including breaking changes), run:
+#13 44.33   npm audit fix --force
+#13 44.33 
+#13 44.33 Run `npm audit` for details.
+#13 44.33 npm notice
+#13 44.33 npm notice New major version of npm available! 10.9.8 -> 12.0.1
+#13 44.33 npm notice Changelog: https://github.com/npm/cli/releases/tag/v12.0.1
+#13 44.33 npm notice To update run: npm install -g npm@12.0.1
+#13 44.33 npm notice
+#13 DONE 44.8s
+
+#12 [builder  6/21] RUN npm ci
+#12 104.9 
+#12 104.9 added 991 packages, and audited 992 packages in 2m
+#12 104.9 
+#12 104.9 209 packages are looking for funding
+#12 104.9   run `npm fund` for details
+#12 105.0 
+#12 105.0 50 vulnerabilities (1 low, 42 moderate, 7 high)
+#12 105.0 
+#12 105.0 To address issues that do not require attention, run:
+#12 105.0   npm audit fix
+#12 105.0 
+#12 105.0 To address all issues (including breaking changes), run:
+#12 105.0   npm audit fix --force
+#12 105.0 
+#12 105.0 Run `npm audit` for details.
+#12 105.0 npm notice
+#12 105.0 npm notice New major version of npm available! 10.9.8 -> 12.0.1
+#12 105.0 npm notice Changelog: https://github.com/npm/cli/releases/tag/v12.0.1
+#12 105.0 npm notice To update run: npm install -g npm@12.0.1
+#12 105.0 npm notice
+#12 DONE 105.5s
+
+#14 [builder  7/21] COPY ./src/frontend/components/ components/
+#14 DONE 0.8s
+
+#15 [builder  8/21] COPY ./src/frontend/gateways/ gateways/
+#15 DONE 0.1s
+
+#16 [builder  9/21] COPY ./src/frontend/pages/ pages/
+#16 DONE 0.1s
+
+#17 [builder 10/21] COPY ./src/frontend/protos/ protos/
+#17 DONE 0.1s
+
+#18 [builder 11/21] COPY ./src/frontend/providers/ providers/
+#18 DONE 0.1s
+
+#19 [builder 12/21] COPY ./src/frontend/services/ services/
+#19 DONE 0.0s
+
+#20 [builder 13/21] COPY ./src/frontend/styles/ styles/
+#20 DONE 0.1s
+
+#21 [builder 14/21] COPY ./src/frontend/types/ types/
+#21 DONE 0.1s
+
+#22 [builder 15/21] COPY ./src/frontend/utils/enums/ utils/enums/
+#22 DONE 0.1s
+
+#23 [builder 16/21] COPY ./src/frontend/utils/telemetry/ utils/telemetry/
+#23 DONE 0.1s
+
+#24 [builder 17/21] COPY ./src/frontend/utils/imageLoader.js utils/imageLoader.js
+#24 DONE 0.1s
+
+#25 [builder 18/21] COPY ./src/frontend/utils/Request.ts utils/Request.ts
+#25 DONE 0.1s
+
+#26 [builder 19/21] COPY ./src/frontend/next.config.js next.config.js
+#26 DONE 0.1s
+
+#27 [builder 20/21] COPY ./src/frontend/tsconfig.json tsconfig.json
+#27 DONE 0.1s
+
+#28 [builder 21/21] RUN npm run build
+#28 0.667 
+#28 0.667 > frontend@0.1.0 build
+#28 0.667 > next build
+#28 0.667 
+#28 1.366 [dotenv@17.2.3] injecting env (0) from ../.env -- tip: ΓÜÖ∩╕Å  write to custom object with { processEnv: myObject }
+#28 1.398 Attention: Next.js now collects completely anonymous telemetry regarding usage.
+#28 1.398 This information is used to shape Next.js' roadmap and prioritize features.
+#28 1.399 You can learn more, including how to opt-out if you'd not like to participate in this anonymous program, by visiting the following URL:
+#28 1.399 https://nextjs.org/telemetry
+#28 1.399 
+#28 1.512 Γû▓ Next.js 16.2.6 (Turbopack)
+#28 1.513 
+#28 1.628   Running TypeScript ...
+#28 1.694 
+#28 1.694   We detected TypeScript in your project and reconfigured your tsconfig.json file for you.
+#28 1.694   The following mandatory changes were made to your tsconfig.json:
+#28 1.694 
+#28 1.694   	- moduleResolution was set to bundler (to match modern bundler resolution)
+#28 1.694 
+#28 8.437   Finished TypeScript in 6.8s ...
+#28 8.442   Creating an optimized production build ...
+#28 8.625 [dotenv@17.2.3] injecting env (0) from ../.env -- tip: ≡ƒæÑ sync secrets across teammates & machines: https://dotenvx.com/ops
+#28 10.83 Γ£ô Compiled successfully in 2.2s
+#28 10.84   Collecting page data using 11 workers ...
+#28 11.85 Warning: You have opted-out of Automatic Static Optimization due to `getInitialProps` in `pages/_app`. This does not opt-out pages with `getStaticProps`
+#28 11.85 Read more: https://nextjs.org/docs/messages/opt-out-auto-static-optimization
+#28 11.85 
+#28 11.85   Finalizing page optimization ...
+#28 12.44 
+#28 12.44 Route (pages)
+#28 12.44 Γöî ╞Æ /
+#28 12.44 Γö£   /_app
+#28 12.44 Γö£ ╞Æ /404
+#28 12.44 Γö£ ╞Æ /api/cart
+#28 12.44 Γö£ ╞Æ /api/checkout
+#28 12.44 Γö£ ╞Æ /api/copilot
+#28 12.44 Γö£ ╞Æ /api/copilot/confirm-cart
+#28 12.44 Γö£ ╞Æ /api/currency
+#28 12.44 Γö£ ╞Æ /api/data
+#28 12.44 Γö£ ╞Æ /api/product-ask-ai-assistant/[productId]
+#28 12.44 Γö£ ╞Æ /api/product-reviews-avg-score/[productId]
+#28 12.44 Γö£ ╞Æ /api/product-reviews/[productId]
+#28 12.44 Γö£ ╞Æ /api/products
+#28 12.44 Γö£ ╞Æ /api/products/[productId]
+#28 12.44 Γö£ ╞Æ /api/recommendations
+#28 12.44 Γö£ ╞Æ /api/shipping
+#28 12.44 Γö£ ╞Æ /cart
+#28 12.44 Γö£ ╞Æ /cart/checkout/[orderId]
+#28 12.44 Γö£ ╞Æ /copilot
+#28 12.44 Γöö ╞Æ /product/[productId]
+#28 12.44 
+#28 12.44 ╞Æ  (Dynamic)  server-rendered on demand
+#28 12.44 
+#28 DONE 12.6s
+
+#29 [stage-2 4/9] COPY --from=builder /app/.next/standalone/ ./
+#29 DONE 0.4s
+
+#30 [stage-2 5/9] COPY --from=builder /app/.next/static/ .next/static/
+#30 DONE 0.1s
+
+#31 [stage-2 6/9] COPY --from=deps /app/node_modules/ node_modules/
+#31 DONE 14.4s
+
+#32 [stage-2 7/9] COPY ./src/frontend/public/ public/
+#32 DONE 0.4s
+
+#33 [stage-2 8/9] COPY ./src/frontend/utils/telemetry/Instrumentation.js Instrumentation.js
+#33 DONE 0.1s
+
+#34 [stage-2 9/9] RUN groupadd -g 10001 appgroup     && useradd -r -u 10001 -g appgroup appuser     && chown -R appuser:appgroup /app
+#34 0.566 useradd warning: appuser's uid 10001 is greater than SYS_UID_MAX 999
+#34 DONE 478.8s
+
+#35 exporting to image
+#35 exporting layers
+#35 exporting layers 39.5s done
+#35 exporting manifest sha256:b395504c84d2b4ad83bf50d352889676796be4f861b59a6195e6dfe01758b308 0.0s done
+#35 exporting config sha256:a1e6063fba24eaf82b8e36a78d2f9b270fae0efb620e5a9cc37488e6a002cdd0 0.0s done
+#35 exporting attestation manifest sha256:cd96c063e9dfadf018101302e2fee35309eca10d359a6e6914f853227c28b176
+#35 exporting attestation manifest sha256:cd96c063e9dfadf018101302e2fee35309eca10d359a6e6914f853227c28b176 0.3s done
+#35 exporting manifest list sha256:ee37246aa789bbc617595a1f858f9b275dacd48bd377ed9b82501ed62a935e2d
+#35 exporting manifest list sha256:ee37246aa789bbc617595a1f858f9b275dacd48bd377ed9b82501ed62a935e2d 0.1s done
+#35 naming to docker.io/local/frontend:trivy-test done
+#35 unpacking to docker.io/local/frontend:trivy-test
+#35 unpacking to docker.io/local/frontend:trivy-test 40.8s done
+#35 DONE 80.9s
