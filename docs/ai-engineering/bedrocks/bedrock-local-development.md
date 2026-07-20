@@ -10,6 +10,8 @@ Tạo profile tên `bedrock-dev`:
 aws configure --profile bedrock-dev
 ```
 
+Mỗi người dùng AWS credential được cấp riêng. Không đính kèm hoặc sao chép file CSV access key vào ClickUp, chat hay Git.
+
 Khi được hỏi, nhập access key ID và secret access key, sau đó đặt:
 
 ```text
@@ -61,13 +63,16 @@ Lệnh phải trả về response. Nếu nhận `AccessDeniedException`, IAM ide
 
 ## 3. Cấu hình Docker Compose
 
-Tạo hoặc cập nhật file không được Git theo dõi `.env.override` ở thư mục gốc repository:
+Cập nhật file `.env` local ở thư mục gốc repository. Không commit AWS credential hoặc đường dẫn máy cá nhân:
 
 ```text
 AWS_PROFILE=bedrock-dev
 AWS_CONFIG_DIR=C:/Users/<WindowsUser>/.aws
 AWS_REGION=us-east-1
 BEDROCK_MODEL_ID=us.amazon.nova-2-lite-v1:0
+LLM_PROVIDER=bedrock
+MEM0_LLM_PROVIDER=aws_bedrock
+MEM0_DEFAULT_LLM_MODEL=us.amazon.nova-2-lite-v1:0
 ```
 
 Thay `<WindowsUser>` bằng tên tài khoản Windows. Ví dụ:
@@ -81,14 +86,16 @@ Compose sẽ mount thư mục credential này dưới dạng chỉ đọc vào `
 ## 4. Khởi động local stack
 
 ```powershell
-docker compose --env-file .env --env-file .env.override up --build --detach
+docker compose up --build --detach frontend-proxy shopping-copilot mem0
 ```
 
 Kiểm tra log của ba service AI:
 
 ```powershell
-docker compose --env-file .env --env-file .env.override logs --tail=100 shopping-copilot product-reviews mem0
+docker compose logs --tail=100 shopping-copilot product-reviews mem0
 ```
+
+Mở `http://localhost:8080`, rồi thử một prompt tìm sản phẩm, một câu hỏi review và một thao tác thêm giỏ hàng. Lần build đầu có thể lâu vì Compose phải dựng các service phụ thuộc.
 
 ## 5. Cấu hình runtime mong đợi
 
