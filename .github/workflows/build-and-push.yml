@@ -1044,7 +1044,7 @@ jobs:
         uses: aws-actions/amazon-ecr-login@d539f0932e70871a027e9d5a9d8fc38589180a64
       - name: Block HIGH and CRITICAL vulnerabilities
         # aquasecurity/trivy-action@v0.36.0
-        uses: aquasecurity/trivy-action@a9c7b0f06e461e9d4b4d1711f154ee024b8d7ab8
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25
         with:
           version: v0.69.3
           image-ref: ${{ env.IMAGE_REF }}
@@ -1067,7 +1067,7 @@ jobs:
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
       - name: Block HIGH and CRITICAL IaC misconfigurations
         # aquasecurity/trivy-action@v0.36.0
-        uses: aquasecurity/trivy-action@a9c7b0f06e461e9d4b4d1711f154ee024b8d7ab8
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25
         with:
           version: v0.69.3
           scan-type: config
