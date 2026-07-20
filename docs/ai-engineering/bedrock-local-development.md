@@ -1,31 +1,31 @@
-# Run Amazon Bedrock Nova Locally
+# Chạy Amazon Bedrock Nova trên máy local
 
-This guide configures local Docker Compose to call Amazon Bedrock Nova through an AWS CLI profile.
+Tài liệu này hướng dẫn cấu hình Docker Compose trên máy local để gọi Amazon Bedrock Nova thông qua AWS CLI profile.
 
-## 1. Configure an AWS CLI profile
+## 1. Cấu hình AWS CLI profile
 
-Create a profile named `bedrock-dev`:
+Tạo profile tên `bedrock-dev`:
 
 ```powershell
 aws configure --profile bedrock-dev
 ```
 
-Enter the access key ID and secret access key when prompted, then use:
+Khi được hỏi, nhập access key ID và secret access key, sau đó đặt:
 
 ```text
-Default region name: us-east-1
-Default output format: json
+Tên region mặc định: us-east-1
+Định dạng output mặc định: json
 ```
 
-Verify that AWS CLI can use the profile:
+Kiểm tra AWS CLI có thể dùng profile này:
 
 ```powershell
 aws sts get-caller-identity --profile bedrock-dev
 ```
 
-## 2. Verify Bedrock Nova access
+## 2. Kiểm tra quyền gọi Bedrock Nova
 
-Run a small Converse request before starting Docker Compose:
+Chạy một request Converse nhỏ trước khi khởi động Docker Compose:
 
 ```powershell
 aws bedrock-runtime converse `
@@ -35,11 +35,11 @@ aws bedrock-runtime converse `
   --messages '[{"role":"user","content":[{"text":"Reply with OK"}]}]'
 ```
 
-The command must return a response. If it returns `AccessDeniedException`, the IAM identity needs `bedrock:InvokeModel` for the Nova inference profile and foundation model.
+Lệnh phải trả về response. Nếu nhận `AccessDeniedException`, IAM identity cần quyền `bedrock:InvokeModel` cho Nova inference profile và foundation model.
 
-## 3. Configure Docker Compose
+## 3. Cấu hình Docker Compose
 
-Create or update the untracked file `.env.override` in the repository root:
+Tạo hoặc cập nhật file không được Git theo dõi `.env.override` ở thư mục gốc repository:
 
 ```text
 AWS_PROFILE=bedrock-dev
@@ -48,27 +48,27 @@ AWS_REGION=us-east-1
 BEDROCK_MODEL_ID=us.amazon.nova-2-lite-v1:0
 ```
 
-Replace `<WindowsUser>` with the Windows account name. For example:
+Thay `<WindowsUser>` bằng tên tài khoản Windows. Ví dụ:
 
 ```text
 AWS_CONFIG_DIR=C:/Users/alex/.aws
 ```
 
-Compose mounts this directory read-only into `shopping-copilot`, `product-reviews`, and `mem0`.
+Compose sẽ mount thư mục credential này dưới dạng chỉ đọc vào `shopping-copilot`, `product-reviews` và `mem0`.
 
-## 4. Start the local stack
+## 4. Khởi động local stack
 
 ```powershell
 docker compose --env-file .env --env-file .env.override up --build --detach
 ```
 
-Check the three AI services:
+Kiểm tra log của ba service AI:
 
 ```powershell
 docker compose --env-file .env --env-file .env.override logs --tail=100 shopping-copilot product-reviews mem0
 ```
 
-## 5. Expected runtime configuration
+## 5. Cấu hình runtime mong đợi
 
 | Service | Provider | Model |
 | --- | --- | --- |
@@ -76,4 +76,4 @@ docker compose --env-file .env --env-file .env.override logs --tail=100 shopping
 | Product Reviews | Bedrock Converse | `us.amazon.nova-2-lite-v1:0` |
 | Mem0 | Mem0 `aws_bedrock` provider | `us.amazon.nova-2-lite-v1:0` |
 
-`LLM_PROVIDER=bedrock` and the Nova model ID are Compose defaults. They can be overridden in `.env.override` for a different permitted Bedrock inference profile.
+`LLM_PROVIDER=bedrock` và Nova model ID là cấu hình mặc định của Compose. Có thể ghi đè chúng trong `.env.override` để dùng một Bedrock inference profile khác đã được cấp quyền.
