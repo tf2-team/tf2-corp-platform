@@ -17,8 +17,8 @@ group = "ad"
 version = "0.1.0-SNAPSHOT"
 
 def opentelemetryVersion = "1.57.0"
-def opentelemetryInstrumentationVersion = "2.26.1"
-def grpcVersion = "1.79.0"
+def opentelemetryInstrumentationVersion = "2.23.0"
+def grpcVersion = "1.78.0"
 def jacksonVersion = "2.20.1"
 def protocVersion = "4.33.2"
 
@@ -141,4 +141,3 @@ applicationDistribution.into('bin') {
     from(ad)
     fileMode = 0755
 }
-// Change trail: @hungxqt - 2026-07-20 - Bump OTEL instrumentation and gRPC for Trivy CRITICAL javaagent

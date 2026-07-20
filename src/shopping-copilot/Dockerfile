@@ -9,7 +9,6 @@ ENV PIP_DEFAULT_TIMEOUT=120 \
     PIP_DISABLE_PIP_VERSION_CHECK=1
 
 RUN apt-get update && \
-    apt-get upgrade -y --no-install-recommends && \
     apt-get install --no-install-recommends -y gcc g++ && \
     rm -rf /var/lib/apt/lists/*
 
@@ -27,7 +26,6 @@ RUN --mount=type=cache,id=techx-pip-cache,target=/root/.cache/pip,sharing=locked
 FROM docker.io/library/python:3.12-slim-bookworm@sha256:d50fb7611f86d04a3b0471b46d7557818d88983fc3136726336b2a4c657aa30b
 
 RUN apt-get update && \
-    apt-get upgrade -y --no-install-recommends && \
     apt-get install --no-install-recommends -y libgomp1 && \
     rm -rf /var/lib/apt/lists/*
 
@@ -61,4 +59,3 @@ USER 10001
 
 EXPOSE ${SHOPPING_COPILOT_PORT}
 ENTRYPOINT [ "/venv/bin/opentelemetry-instrument", "/venv/bin/python", "copilot_server.py" ]
-# Change trail: @hungxqt - 2026-07-20 - Trivy HIGH/CRITICAL remediation (base upgrades, OS package updates, dep bumps)

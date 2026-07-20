@@ -3,9 +3,6 @@
 source "https://rubygems.org"
 
 gem "net-smtp", "~> 0.5.1"
-# Security pins for Trivy CRITICAL findings (net-imap, rack-session)
-gem "net-imap", ">= 0.5.14"
-gem "rack-session", ">= 2.1.2"
 gem "pony",     "~> 1.13"
 gem "puma",     "~> 7.1"
 gem "sinatra",  "~> 4.2"
@@ -26,4 +23,3 @@ gem "opentelemetry-instrumentation-all",   "~> 0.87"
 
 gem "openfeature-sdk", "~> 0.4"
 gem "openfeature-flagd-provider", "~> 0.1"
-# Change trail: @hungxqt - 2026-07-20 - Pin net-imap and rack-session for Trivy CRITICAL gem CVEs

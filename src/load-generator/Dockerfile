@@ -5,10 +5,6 @@
 
 FROM python:3.12-slim-bookworm@sha256:d50fb7611f86d04a3b0471b46d7557818d88983fc3136726336b2a4c657aa30b AS base
 
-RUN apt-get -qq update \
-    && apt-get upgrade -y --no-install-recommends \
-    && rm -rf /var/lib/apt/lists/*
-
 FROM base AS builder
 
 ENV PIP_DEFAULT_TIMEOUT=120 \
@@ -44,4 +40,3 @@ RUN chown -R appuser:appgroup /usr/src/app /opt/pw-browsers
 USER 10001
 
 ENTRYPOINT ["locust", "--skip-log-setup"]
-# Change trail: @hungxqt - 2026-07-20 - Trivy HIGH/CRITICAL remediation (base upgrades, OS package updates, dep bumps)

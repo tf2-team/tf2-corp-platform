@@ -7,10 +7,6 @@ FROM python:3.12.10-slim-bookworm@sha256:fd95fa221297a88e1cf49c55ec1828edd7c5a42
 ENV PIP_DISABLE_PIP_VERSION_CHECK=1 \
     PIP_NO_CACHE_DIR=1
 
-RUN apt-get update \
-    && apt-get upgrade -y --no-install-recommends \
-    && rm -rf /var/lib/apt/lists/*
-
 WORKDIR /build
 
 COPY src/mem0/requirements-production.txt /build/requirements-production.txt
@@ -36,10 +32,7 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     FASTEMBED_LOCAL_FILES_ONLY=true \
     MEM0_TELEMETRY=false
 
-RUN apt-get update \
-    && apt-get upgrade -y --no-install-recommends \
-    && rm -rf /var/lib/apt/lists/* \
-    && groupadd --gid "${APP_GID}" mem0 \
+RUN groupadd --gid "${APP_GID}" mem0 \
     && useradd --uid "${APP_UID}" --gid "${APP_GID}" --no-create-home --shell /usr/sbin/nologin mem0 \
     && mkdir -p /app/server /app/history /models/fastembed \
     && chown -R "${APP_UID}:${APP_GID}" /app/history /models/fastembed
@@ -56,4 +49,3 @@ USER ${APP_UID}:${APP_GID}
 EXPOSE 8000
 
 CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000", "--no-access-log"]
-# Change trail: @hungxqt - 2026-07-20 - Trivy HIGH/CRITICAL remediation (base upgrades, OS package updates, dep bumps)

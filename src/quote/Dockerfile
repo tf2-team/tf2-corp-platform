@@ -25,8 +25,7 @@ FROM docker.io/library/php:8.4-cli-alpine3.22@sha256:191228671fb45eb35d0fa53d909
 
 COPY --from=installer /usr/bin/install-php-extensions /usr/local/bin/
 
-RUN apk upgrade --no-cache \
-    && install-php-extensions pcntl protobuf-4.33.6 opentelemetry-1.2.1 \
+RUN install-php-extensions pcntl protobuf-4.33.6 opentelemetry-1.2.1 \
     && php -m | grep -E '^(pcntl|protobuf|opentelemetry)$'
 
 WORKDIR /var/www
@@ -42,4 +41,3 @@ COPY ./src/quote/src/ src/
 EXPOSE ${QUOTE_PORT}
 
 CMD ["php", "public/index.php"]
-# Change trail: @hungxqt - 2026-07-20 - Trivy HIGH/CRITICAL remediation (base upgrades, OS package updates, dep bumps)

@@ -7,15 +7,6 @@ FROM apache/kafka:3.9.1@sha256:4ceccc577f03f51f6af8dbfda55194d0d892f4fa7913ffbde
 USER root
 ARG OTEL_JAVA_AGENT_VERSION
 
-# Apply OS package security updates when the base is Alpine-based (Trivy OpenSSL/gnutls).
-RUN if command -v apk >/dev/null 2>&1; then \
-      apk upgrade --no-cache; \
-    elif command -v microdnf >/dev/null 2>&1; then \
-      microdnf upgrade -y && microdnf clean all; \
-    elif command -v apt-get >/dev/null 2>&1; then \
-      apt-get update && apt-get upgrade -y --no-install-recommends && rm -rf /var/lib/apt/lists/*; \
-    fi
-
 USER appuser
 
 ADD --chown=appuser:appuser https://github.com/open-telemetry/opentelemetry-java-instrumentation/releases/download/v$OTEL_JAVA_AGENT_VERSION/opentelemetry-javaagent.jar /tmp/opentelemetry-javaagent.jar
@@ -33,4 +24,3 @@ ENV KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR=1
 ENV KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR=1
 ENV KAFKA_OPTS="-javaagent:/tmp/opentelemetry-javaagent.jar -Dotel.jmx.target.system=kafka-broker"
 ENV CLUSTER_ID=ckjPoprWQzOf0-FuNkGfFQ
-# Change trail: @hungxqt - 2026-07-20 - Trivy HIGH/CRITICAL remediation (base upgrades, OS package updates, dep bumps)
