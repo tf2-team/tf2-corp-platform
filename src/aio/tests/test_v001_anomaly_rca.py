@@ -135,7 +135,7 @@ class V001AnomalyRcaTest(unittest.TestCase):
         engine = anomaly_engine()
 
         findings = engine._weighted_sum(
-            [AnomalyFinding(algorithm="isolation_forest", service="checkout", metric="cpu", signal_id="checkout_cpu", score=15.0, timestamp=1)]
+            [AnomalyFinding(algorithm="isolation_forest", service="checkout", metric="cpu", signal_id="checkout_cpu", score=24.0, timestamp=1)]
         )
 
         self.assertEqual([(finding.algorithm, finding.score) for finding in findings], [("weighted_sum", engine.weighted_score_threshold)])
