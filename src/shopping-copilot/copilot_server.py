@@ -102,10 +102,7 @@ class ShoppingCopilotServicer(demo_pb2_grpc.ShoppingCopilotServiceServicer):
         request: demo_pb2.ConfirmCartActionRequest,
         context,
     ) -> demo_pb2.ConfirmCartActionResponse:
-        logger.info(
-            "ConfirmCartAction: user_id=%r token_prefix=%s",
-            request.user_id, request.pending_action_token[:8],
-        )
+        logger.info("ConfirmCartAction: user_id=%r", request.user_id)
         success, reason = confirm_cart_action(
             token=request.pending_action_token,
             user_id=request.user_id,
@@ -170,3 +167,4 @@ if __name__ == "__main__":
     server.start()
     logger.info("Shopping Copilot gRPC server started on port %s", port)
     server.wait_for_termination()
+# Change trail: @hungxqt - 2026-07-20 - Drop pending-action secret prefix from ConfirmCartAction logs
