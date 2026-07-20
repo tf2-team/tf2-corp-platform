@@ -220,7 +220,11 @@ if __name__ == '__main__':
 
     app.logger.info(f"Loaded product review summaries count: {len(product_review_summaries)}")
 
-    print("OpenAI API server starting on http://localhost:8000")
-    print("Set your OpenAI base URL to: http://localhost:8000/v1")
-    app.run(host='0.0.0.0', port=8000, debug=True)
-# Change trail: @hungxqt - 2026-07-15 - Dual-read local- LLM flags with BTC keys.
+    # Bind from env (default all interfaces for container networking). Never enable
+    # Flask debug in-process — the interactive debugger leaks state if reached.
+    host = os.environ.get("LLM_BIND_HOST", "0.0.0.0")
+    port = int(os.environ.get("LLM_PORT", os.environ.get("PORT", "8000")))
+    print(f"OpenAI API server starting on http://{host}:{port}")
+    print(f"Set your OpenAI base URL to: http://{host}:{port}/v1")
+    app.run(host=host, port=port, debug=False)
+# Change trail: @hungxqt - 2026-07-20 - Disable Flask debug; bind host/port via env (no hardcode in app.run)

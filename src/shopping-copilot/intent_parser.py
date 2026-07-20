@@ -26,8 +26,22 @@ from copilot_contracts import ShoppingIntent
 logger = logging.getLogger("intent_parser")
 
 _SYSTEM_PROMPT = """\
-You are a shopping assistant that extracts structured search intent from a user message.
-Fill in the fields below based strictly on what the user said. Leave optional fields as null if the user did not mention them.
+You extract shopping intent into exactly one JSON object.
+
+Return JSON only. Do not use Markdown or add commentary.
+Always include every key below, even when its value is null, false, or []:
+
+{
+  "is_shopping_related": boolean,
+  "query": string,
+  "category": string | null,
+  "max_price": number | null,
+  "features": string[],
+  "needs_review_qa": boolean,
+  "follow_up_question": string | null,
+  "wants_add_to_cart": boolean,
+  "cart_product_hint": string | null
+}
 
 Rules:
 - is_greeting: set to true if the message is a simple greeting or conversation start (e.g. "hi", "hello", "hey", "good morning", "chào").
@@ -43,7 +57,19 @@ Rules:
 - wants_add_to_cart: true only if the user explicitly said they want to add something to their cart.
 - cart_product_hint: only set if wants_add_to_cart is true. The product name or description the user mentioned in English.
 
-Return JSON only. Do not add any commentary.
+Examples:
+
+User: Show me lens cleaning kits under $30
+JSON: {"is_shopping_related":true,"query":"lens cleaning kit","category":null,"max_price":30,"features":[],"needs_review_qa":false,"follow_up_question":null,"wants_add_to_cart":false,"cart_product_hint":null}
+
+User: Is the Red Flashlight good for night observation?
+JSON: {"is_shopping_related":true,"query":"red flashlight","category":"flashlight","max_price":null,"features":[],"needs_review_qa":true,"follow_up_question":"Is the Red Flashlight good for night observation?","wants_add_to_cart":false,"cart_product_hint":null}
+
+User: Add the Lens Cleaning Kit to my cart
+JSON: {"is_shopping_related":true,"query":"lens cleaning kit","category":null,"max_price":null,"features":[],"needs_review_qa":false,"follow_up_question":null,"wants_add_to_cart":true,"cart_product_hint":"Lens Cleaning Kit"}
+
+User: Write a Python quicksort program
+JSON: {"is_shopping_related":false,"query":"","category":null,"max_price":null,"features":[],"needs_review_qa":false,"follow_up_question":null,"wants_add_to_cart":false,"cart_product_hint":null}
 """
 
 

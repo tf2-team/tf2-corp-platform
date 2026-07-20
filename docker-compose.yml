@@ -427,11 +427,10 @@ services:
 
   # Local equivalent of the production model-delivery init containers. It is
   # the only service with write access to the FastEmbed cache volume.
+  # Reuses the mem0 release image (no build:) so Compose build targets match
+  # the bake "release" catalog 1:1. Build via: docker compose build mem0
   mem0-model-init:
     image: ${IMAGE_NAME}/mem0:${DEMO_VERSION}
-    build:
-      context: ./
-      dockerfile: ./src/mem0/Dockerfile
     user: "0:0"
     restart: "no"
     command: ["python", "/model-scripts/seed_embedding_model_cache.py", "--cache-dir", "/models/fastembed"]
@@ -462,11 +461,10 @@ services:
     logging: *logging
 
   # Keep schema migration outside API startup, as in the Kubernetes Job.
+  # Reuses the mem0 release image (no build:); same catalog invariant as
+  # mem0-model-init. Build via: docker compose build mem0
   mem0-migrate:
     image: ${IMAGE_NAME}/mem0:${DEMO_VERSION}
-    build:
-      context: ./
-      dockerfile: ./src/mem0/Dockerfile
     restart: "no"
     command: ["alembic", "upgrade", "head"]
     environment:
@@ -515,10 +513,15 @@ services:
       - MEM0_RDS_IAM_AUTH=false
       - JWT_SECRET
       - ADMIN_API_KEY
-      - GROQ_API_KEY=${OPENAI_API_KEY}
+      - MEM0_LLM_PROVIDER=${MEM0_LLM_PROVIDER:-aws_bedrock}
+      - MEM0_DEFAULT_LLM_MODEL=${MEM0_DEFAULT_LLM_MODEL:-us.amazon.nova-2-lite-v1:0}
+      - AWS_REGION=${AWS_REGION:-us-east-1}
+      - AWS_PROFILE
+      - AWS_SDK_LOAD_CONFIG=1
     volumes:
       - mem0-history:/app/history
       - mem0-fastembed-cache:/models/fastembed:ro
+      - ${AWS_CONFIG_DIR:-./.aws}:/tmp/.aws:ro
     depends_on:
       otel-collector:
         condition: service_started
@@ -618,6 +621,12 @@ services:
       - HF_HOME=/home/appuser/.cache/huggingface
       - AI_GUARDRAIL_REQUIRE_MODEL=${AI_GUARDRAIL_REQUIRE_MODEL:-false}
       - DB_CONNECTION_STRING=host=${POSTGRES_HOST} user=otelu password=otelp dbname=${POSTGRES_DB}
+      - LLM_PROVIDER=${LLM_PROVIDER:-bedrock}
+      - BEDROCK_MODEL_ID=${BEDROCK_MODEL_ID:-us.amazon.nova-2-lite-v1:0}
+      - BEDROCK_MAX_TOKENS=${BEDROCK_MAX_TOKENS:-1024}
+      - AWS_REGION=${AWS_REGION:-us-east-1}
+      - AWS_PROFILE
+      - AWS_SDK_LOAD_CONFIG=1
       - LLM_BASE_URL
       - OPENAI_API_KEY
       - LLM_MODEL
@@ -637,6 +646,7 @@ services:
         condition: service_started
     volumes:
       - product-reviews-hf-cache:/home/appuser/.cache/huggingface
+      - ${AWS_CONFIG_DIR:-./.aws}:/home/appuser/.aws:ro
     logging: *logging
 
   # Shopping Copilot service (A2.1–A2.3)
@@ -664,6 +674,12 @@ services:
       - PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION=python
       - HF_HOME=/home/appuser/.cache/huggingface
       - AI_GUARDRAIL_REQUIRE_MODEL=${AI_GUARDRAIL_REQUIRE_MODEL:-false}
+      - LLM_PROVIDER=${LLM_PROVIDER:-bedrock}
+      - BEDROCK_MODEL_ID=${BEDROCK_MODEL_ID:-us.amazon.nova-2-lite-v1:0}
+      - BEDROCK_MAX_TOKENS=${BEDROCK_MAX_TOKENS:-1024}
+      - AWS_REGION=${AWS_REGION:-us-east-1}
+      - AWS_PROFILE
+      - AWS_SDK_LOAD_CONFIG=1
       - LLM_BASE_URL
       - OPENAI_API_KEY
       - LLM_MODEL
@@ -684,6 +700,7 @@ services:
         condition: service_started
     volumes:
       - shopping-copilot-hf-cache:/home/appuser/.cache/huggingface
+      - ${AWS_CONFIG_DIR:-./.aws}:/home/appuser/.aws:ro
     logging: *logging
 
 
@@ -1108,3 +1125,5 @@ volumes:
   mem0-fastembed-cache:
   mem0-postgresql-data:
   shopping-copilot-hf-cache:
+
+# Change trail: @hungxqt - 2026-07-20 - Drop build from mem0-migrate/model-init so Compose builds match release catalog.
