@@ -12,17 +12,24 @@ COPY ./pb/ ./src/main/proto/
 RUN gradle shadowJar
 
 # -----------------------------------------------------------------------------
+# Temurin JRE (not distroless) so apt security upgrades apply for Trivy.
 
-FROM gcr.io/distroless/java17-debian12:nonroot@sha256:06484c2a9dcc9070aeafbc0fe752cb9f73bc0cea5c311f6a516e9010061998ad
+FROM eclipse-temurin:17-jre@sha256:92999aea37688157a53a40bfcb187c30f317422e028045fd5fc5c548fde9e626
 
 ARG OTEL_JAVA_AGENT_VERSION
 WORKDIR /usr/src/app/
 
-ADD --chmod=644 https://github.com/open-telemetry/opentelemetry-java-instrumentation/releases/download/v$OTEL_JAVA_AGENT_VERSION/opentelemetry-javaagent.jar /usr/src/app/opentelemetry-javaagent.jar
+RUN apt-get update \
+    && apt-get upgrade -y --no-install-recommends \
+    && rm -rf /var/lib/apt/lists/* \
+    && groupadd -g 10001 appgroup \
+    && useradd -r -u 10001 -g appgroup appuser
+
+ADD --chmod=644 --chown=appuser:appgroup https://github.com/open-telemetry/opentelemetry-java-instrumentation/releases/download/v$OTEL_JAVA_AGENT_VERSION/opentelemetry-javaagent.jar /usr/src/app/opentelemetry-javaagent.jar
 ENV JAVA_TOOL_OPTIONS=-javaagent:/usr/src/app/opentelemetry-javaagent.jar
 
-COPY --from=builder /usr/src/app/build/libs/fraud-detection-1.0-all.jar fraud-detection-1.0-all.jar
+COPY --from=builder --chown=appuser:appgroup /usr/src/app/build/libs/fraud-detection-1.0-all.jar fraud-detection-1.0-all.jar
 
-USER nonroot
+USER 10001
 ENTRYPOINT [ "java", "-jar", "fraud-detection-1.0-all.jar" ]
-# Change trail: @hungxqt - 2026-07-20 - Explicit nonroot USER before ENTRYPOINT for Semgrep/CI container hardening
+# Change trail: @hungxqt - 2026-07-20 - Switch to Temurin 17 JRE with apt upgrade and OTEL agent 2.26.1 for Trivy

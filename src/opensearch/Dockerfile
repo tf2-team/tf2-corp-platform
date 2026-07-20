@@ -1,9 +1,18 @@
 # Copyright The OpenTelemetry Authors
 # SPDX-License-Identifier: Apache-2.0
 
-FROM opensearchproject/opensearch:3.2.0@sha256:23297b8d8545e129dd58c254ed08d786dc552410ba772983ad2af31048d2f04b
+FROM opensearchproject/opensearch:3.3.0@sha256:d96afaf6cbd2a6a3695aeb2f1d48c9a16ad5c8918eb849e5cbf43475f0f8e146
 
 USER 0
+
+# Apply available OS security updates for Trivy HIGH/CRITICAL on the vendor base.
+RUN if command -v microdnf >/dev/null 2>&1; then \
+      microdnf upgrade -y && microdnf clean all; \
+    elif command -v yum >/dev/null 2>&1; then \
+      yum upgrade -y && yum clean all; \
+    elif command -v dnf >/dev/null 2>&1; then \
+      dnf upgrade -y && dnf clean all; \
+    fi
 
 # Remove plugins in dependency order - remove dependent plugins first
 # These plugins are not needed for basic log storage and retrieval in the demo
@@ -39,3 +48,4 @@ RUN rm -rf \
 # - opensearch-job-scheduler (task scheduling)
 
 USER 1000
+# Change trail: @hungxqt - 2026-07-20 - Trivy HIGH/CRITICAL remediation (base upgrades, OS package updates, dep bumps)

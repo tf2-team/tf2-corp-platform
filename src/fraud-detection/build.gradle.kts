@@ -16,7 +16,7 @@ group = "io.opentelemetry"
 version = "1.0"
 
 
-val grpcVersion = "1.78.0"
+val grpcVersion = "1.79.0"
 val protobufVersion = "4.33.2"
 
 
@@ -100,3 +100,4 @@ application {
 tasks.jar {
     manifest.attributes["Main-Class"] = "frauddetection.MainKt"
 }
+// Change trail: @hungxqt - 2026-07-20 - Bump gRPC for Trivy java dependency findings
