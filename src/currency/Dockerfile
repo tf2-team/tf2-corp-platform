@@ -14,14 +14,13 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-FROM docker.io/library/alpine:3.21 AS base
+FROM docker.io/library/alpine:3.21@sha256:48b0309ca019d89d40f670aa1bc06e426dc0931948452e8491e3d65087abc07d AS base
 
-RUN apk update && \
-    apk add grpc-dev protobuf-dev
+RUN apk add --no-cache grpc-dev protobuf-dev
 
 FROM base AS builder
 
-RUN apk add git cmake make g++ linux-headers
+RUN apk add --no-cache git cmake make g++ linux-headers
 
 ARG OPENTELEMETRY_CPP_VERSION
 

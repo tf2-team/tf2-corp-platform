@@ -19,6 +19,13 @@ def render(service: str, digest: str) -> str:
     header = "# Managed by tf2-corp-platform secure delivery pipeline.\n"
     if service in TOP_LEVEL_IMAGES:
         return f'{header}{service}:\n  image:\n    digest: "{digest}"\n'
+    if service == "flagd-ui":
+        return (
+            f"{header}components:\n"
+            "  flagd:\n"
+            "    sidecarImageDigests:\n"
+            f'      flagd-ui: "{digest}"\n'
+        )
     components = COMPONENT_ALIASES.get(service, (service,))
     body = [header.rstrip(), "components:"]
     for component in components:

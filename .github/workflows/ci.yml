@@ -48,6 +48,12 @@ jobs:
       - name: License headers
         run: make checklicense
 
+      - name: Enforce digest-pinned Dockerfile base images
+        run: python3 scripts/check_pinned_base_images.py
+
+      - name: Secure delivery script tests
+        run: python3 scripts/test_secure_delivery_scripts.py
+
   unit-tests:
     name: Unit tests
     runs-on: ubuntu-latest
@@ -428,6 +434,25 @@ jobs:
           sudo install -m 0755 /tmp/trufflehog /usr/local/bin/trufflehog
       - name: Scan repository history for verified secrets
         run: trufflehog git "file://${GITHUB_WORKSPACE}" --fail --only-verified --no-update
+
+  trivy-iac-scan:
+    name: Trivy IaC misconfiguration
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
+      - name: Block HIGH and CRITICAL IaC misconfigurations
+        # aquasecurity/trivy-action@v0.36.0
+        uses: aquasecurity/trivy-action@a9c7b0f06e461e9d4b4d1711f154ee024b8d7ab8
+        with:
+          version: v0.69.3
+          scan-type: config
+          scan-ref: .
+          skip-dirs: node_modules
+          format: table
+          severity: HIGH,CRITICAL
+          exit-code: "1"
 
   product-reviews-tests:
     name: Product reviews tests

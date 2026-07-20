@@ -1036,12 +1036,35 @@ jobs:
         # aws-actions/amazon-ecr-login@v2.1.6
         uses: aws-actions/amazon-ecr-login@d539f0932e70871a027e9d5a9d8fc38589180a64
       - name: Block HIGH and CRITICAL vulnerabilities
-        # aquasecurity/trivy-action@0.33.1
-        uses: aquasecurity/trivy-action@76071ef0d7ec797419534a183b498b4d6366cf37
+        # aquasecurity/trivy-action@v0.36.0
+        uses: aquasecurity/trivy-action@a9c7b0f06e461e9d4b4d1711f154ee024b8d7ab8
         with:
+          version: v0.69.3
           image-ref: ${{ env.IMAGE_REF }}
           format: table
           ignore-unfixed: false
+          severity: HIGH,CRITICAL
+          exit-code: "1"
+
+  trivy-iac-scan:
+    name: Trivy IaC misconfiguration
+    needs: [prepare]
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
+      - name: Block HIGH and CRITICAL IaC misconfigurations
+        # aquasecurity/trivy-action@v0.36.0
+        uses: aquasecurity/trivy-action@a9c7b0f06e461e9d4b4d1711f154ee024b8d7ab8
+        with:
+          version: v0.69.3
+          scan-type: config
+          scan-ref: .
+          skip-dirs: node_modules
+          format: table
           severity: HIGH,CRITICAL
           exit-code: "1"
 
@@ -1099,7 +1122,7 @@ jobs:
 
   sign-and-attest:
     name: Sign and attest ${{ matrix.service }}
-    needs: [prepare, verify-ecr, trivy-image-scan, semgrep-sast, trufflehog-secrets]
+    needs: [prepare, verify-ecr, trivy-image-scan, trivy-iac-scan, semgrep-sast, trufflehog-secrets]
     runs-on: ubuntu-latest
     timeout-minutes: 30
     environment: ${{ needs.prepare.outputs.target_environment }}
@@ -1153,7 +1176,7 @@ jobs:
         env:
           IMAGE: ${{ steps.image.outputs.ref }}
         run: cosign sign --yes --key "${COSIGN_KEY}" "${IMAGE}"
-      - name: Generate and attach CycloneDX SBOM
+      - name: Generate and attest CycloneDX SBOM
         env:
           IMAGE: ${{ steps.image.outputs.ref }}
           SYFT_VERSION: 1.28.0
@@ -1166,7 +1189,7 @@ jobs:
           grep " ${archive}$" /tmp/syft_checksums.txt | sed 's#  #  /tmp/#' | sha256sum --check --strict
           tar -xzf "/tmp/${archive}" -C /tmp syft
           /tmp/syft "${IMAGE}" -o cyclonedx-json=sbom.cdx.json
-          cosign attach sbom --sbom sbom.cdx.json "${IMAGE}"
+          cosign attest --yes --predicate sbom.cdx.json --type cyclonedx --key "${COSIGN_KEY}" "${IMAGE}"
       - name: Create metadata provenance and attest image
         env:
           IMAGE: ${{ steps.image.outputs.ref }}
@@ -1178,8 +1201,9 @@ jobs:
             --arg commit "${GITHUB_SHA}" \
             --argjson pr_number "${PR_NUMBER}" \
             --arg pr_approved_by "${PR_APPROVER}" \
+            --arg signer "${COSIGN_KEY}" \
             --arg workflow_run_url "${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}" \
-            '{commit:$commit,pr_number:$pr_number,pr_approved_by:$pr_approved_by,scans:{trivy:"pass",semgrep:"pass",trufflehog:"pass"},workflow_run_url:$workflow_run_url}' \
+            '{schema_version:1,commit:$commit,pr_number:$pr_number,pr_approved_by:$pr_approved_by,signer:$signer,scans:{trivy_image:"pass",trivy_iac:"pass",semgrep:"pass",trufflehog:"pass"},sbom:{format:"cyclonedx",attested:true},workflow_run_url:$workflow_run_url}' \
             > predicate.json
           cosign attest --yes --predicate predicate.json --type "${PROVENANCE_TYPE}" --key "${COSIGN_KEY}" "${IMAGE}"
 
@@ -1387,7 +1411,7 @@ jobs:
   release-ready:
     name: Release ready
     if: always()
-    needs: [ci, prepare, preflight, build, retag, verify-ecr, trivy-image-scan, semgrep-sast, trufflehog-secrets, sign-and-attest, publish-mem0-fastembed-artifact]
+    needs: [ci, prepare, preflight, build, retag, verify-ecr, trivy-image-scan, trivy-iac-scan, semgrep-sast, trufflehog-secrets, sign-and-attest, publish-mem0-fastembed-artifact]
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -1401,6 +1425,7 @@ jobs:
           RETAG_RESULT: ${{ needs.retag.result }}
           VERIFY_RESULT: ${{ needs.verify-ecr.result }}
           TRIVY_RESULT: ${{ needs.trivy-image-scan.result }}
+          TRIVY_IAC_RESULT: ${{ needs.trivy-iac-scan.result }}
           SEMGREP_RESULT: ${{ needs.semgrep-sast.result }}
           TRUFFLEHOG_RESULT: ${{ needs.trufflehog-secrets.result }}
           SIGN_RESULT: ${{ needs.sign-and-attest.result }}
@@ -1426,6 +1451,7 @@ jobs:
             echo "| retag | \`${RETAG_RESULT}\` |"
             echo "| verify-ecr | \`${VERIFY_RESULT}\` |"
             echo "| trivy-image-scan | \`${TRIVY_RESULT}\` |"
+            echo "| trivy-iac-scan | \`${TRIVY_IAC_RESULT}\` |"
             echo "| semgrep-sast | \`${SEMGREP_RESULT}\` |"
             echo "| trufflehog-secrets | \`${TRUFFLEHOG_RESULT}\` |"
             echo "| sign-and-attest | \`${SIGN_RESULT}\` |"
@@ -1451,7 +1477,7 @@ jobs:
 
           FAILED=0
           # build/retag may be skipped when that side of the selective plan is empty.
-          for pair in "ci:${CI_RESULT}:strict" "prepare:${PREPARE_RESULT}:strict" "preflight:${PREFLIGHT_RESULT}:strict" "build:${BUILD_RESULT}:allow_skip" "retag:${RETAG_RESULT}:allow_skip" "verify-ecr:${VERIFY_RESULT}:strict" "trivy-image-scan:${TRIVY_RESULT}:strict" "semgrep-sast:${SEMGREP_RESULT}:strict" "trufflehog-secrets:${TRUFFLEHOG_RESULT}:strict" "sign-and-attest:${SIGN_RESULT}:strict" "publish-mem0-fastembed-artifact:${MEM0_ARTIFACT_RESULT}:strict"; do
+          for pair in "ci:${CI_RESULT}:strict" "prepare:${PREPARE_RESULT}:strict" "preflight:${PREFLIGHT_RESULT}:strict" "build:${BUILD_RESULT}:allow_skip" "retag:${RETAG_RESULT}:allow_skip" "verify-ecr:${VERIFY_RESULT}:strict" "trivy-image-scan:${TRIVY_RESULT}:strict" "trivy-iac-scan:${TRIVY_IAC_RESULT}:strict" "semgrep-sast:${SEMGREP_RESULT}:strict" "trufflehog-secrets:${TRUFFLEHOG_RESULT}:strict" "sign-and-attest:${SIGN_RESULT}:strict" "publish-mem0-fastembed-artifact:${MEM0_ARTIFACT_RESULT}:strict"; do
             name="${pair%%:*}"
             rest="${pair#*:}"
             result="${rest%%:*}"
