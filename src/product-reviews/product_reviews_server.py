@@ -44,6 +44,7 @@ from google.protobuf.json_format import MessageToJson, MessageToDict
 # AI trustworthiness pipeline (A1.2 guardrails -> A1.1 grounding -> A1.2 output scan)
 from techx_ai_common.contracts import GuardrailAction, ResponseStatus
 from techx_ai_common import guardrails
+from techx_ai_common.bedrock import converse_text, is_bedrock_provider
 from techx_ai_common.grounding import generate_grounded_summary, validate_grounded_summary
 
 llm_host = None
@@ -216,6 +217,57 @@ def is_review_related(question: str) -> bool:
     return False
 
 
+def _get_bedrock_response(request_product_id, question, system_prompt, span):
+    """Bedrock has no OpenAI-compatible client here; fetch trusted data directly."""
+    try:
+        if is_review_related(question):
+            safe_reviews = guardrails.sanitize_reviews(
+                request_product_id, fetch_product_reviews(product_id=request_product_id)
+            )
+            span.set_attribute("app.safe_reviews.count", len(safe_reviews.reviews))
+            if not safe_reviews.reviews:
+                candidate_text = ABSTAIN_MESSAGE
+                structured_response = _build_structured_response(
+                    status="ABSTAINED", answer=ABSTAIN_MESSAGE, reason=ABSTAIN_MESSAGE
+                )
+            else:
+                grounded = validate_grounded_summary(
+                    generate_grounded_summary(safe_reviews, question=question), safe_reviews
+                )
+                span.set_attribute("app.grounding.status", grounded.status.value)
+                candidate_text = grounded.answer if grounded.status == ResponseStatus.GROUNDED else grounded.reason
+                structured_response = _build_structured_response(
+                    status=grounded.status.value,
+                    answer=candidate_text or ABSTAIN_MESSAGE,
+                    reason="" if grounded.status == ResponseStatus.GROUNDED else candidate_text or ABSTAIN_MESSAGE,
+                    claims=[{"text": claim.text, "source_ids": claim.sources} for claim in grounded.claims],
+                )
+        else:
+            candidate_text = converse_text(
+                system_prompt,
+                f"Product information:\n{fetch_product_info(request_product_id)}\n\nQuestion: {question}",
+            )
+            structured_response = _build_structured_response(status="GROUNDED", answer=candidate_text)
+    except Exception as exc:
+        logger.error("Bedrock AI assistant request failed: %s", type(exc).__name__)
+        span.record_exception(exc)
+        span.set_status(Status(StatusCode.ERROR, description=type(exc).__name__))
+        return _fallback_response(type(exc).__name__)
+
+    output_guard = guardrails.scan_output(candidate_text or "")
+    span.set_attribute("app.guardrail.output_action", output_guard.action.value)
+    if output_guard.action == GuardrailAction.BLOCK:
+        return _blocked_response(output_guard.reason)
+    if output_guard.action == GuardrailAction.SANITIZED and output_guard.sanitized_text:
+        candidate_text = output_guard.sanitized_text
+        structured_response = _build_structured_response(status="GROUNDED", answer=candidate_text)
+
+    response = demo_pb2.AskProductAIAssistantResponse()
+    response.response = structured_response
+    product_review_svc_metrics["app_ai_assistant_counter"].add(1, {"product.id": request_product_id})
+    return response
+
+
 def get_ai_assistant_response(request_product_id, question):
 
     with tracer.start_as_current_span("get_ai_assistant_response") as span:
@@ -249,6 +301,9 @@ def get_ai_assistant_response(request_product_id, question):
             "If you don't know the answer, just say you don't know. "
             "All responses must be written in English."
         )
+
+        if is_bedrock_provider():
+            return _get_bedrock_response(request_product_id, question, system_prompt, span)
 
         llm_rate_limit_error = check_feature_flag("llmRateLimitError")
         logger.info(f"llmRateLimitError feature flag: {llm_rate_limit_error}")
@@ -579,9 +634,10 @@ if __name__ == "__main__":
     llm_host = must_map_env('LLM_HOST')
     llm_port = must_map_env('LLM_PORT')
     llm_mock_url = f"http://{llm_host}:{llm_port}/v1"
-    llm_base_url = must_map_env('LLM_BASE_URL')
-    llm_api_key = must_map_env('OPENAI_API_KEY')
-    llm_model = must_map_env('LLM_MODEL')
+    if not is_bedrock_provider():
+        llm_base_url = must_map_env('LLM_BASE_URL')
+        llm_api_key = must_map_env('OPENAI_API_KEY')
+        llm_model = must_map_env('LLM_MODEL')
 
     catalog_addr = must_map_env('PRODUCT_CATALOG_ADDR')
     pc_channel = grpc.insecure_channel(catalog_addr)

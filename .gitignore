@@ -32,6 +32,9 @@ next-env.d.ts
 composer.lock
 !src/quote/composer.lock
 .venv
+.aws/
+/bedrocks/
+*.egg-info/
 .dockerhub.env
 .ghcr.env
 

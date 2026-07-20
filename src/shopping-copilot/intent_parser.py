@@ -26,22 +26,46 @@ from copilot_contracts import ShoppingIntent
 logger = logging.getLogger("intent_parser")
 
 _SYSTEM_PROMPT = """\
-You are a shopping assistant that extracts structured search intent from a user message.
-Fill in the fields below based strictly on what the user said. Leave optional fields as null if the user did not mention them.
+You extract shopping intent into exactly one JSON object.
+
+Return JSON only. Do not use Markdown or add commentary.
+Always include every key below, even when its value is null, false, or []:
+
+{
+  "is_shopping_related": boolean,
+  "query": string,
+  "category": string | null,
+  "max_price": number | null,
+  "features": string[],
+  "needs_review_qa": boolean,
+  "follow_up_question": string | null,
+  "wants_add_to_cart": boolean,
+  "cart_product_hint": string | null
+}
 
 Rules:
-- is_shopping_related: set to false if the user asked something completely unrelated to shopping, e-commerce, products, reviews, or cart actions (e.g. math problems, general trivia, coding tasks, weather, unrelated chit-chat). Set to true for any product query, review question, or shopping request.
-- All output fields (query, category, features, follow_up_question, cart_product_hint) MUST be written in English.
-- query: a concise keyword string suitable for a product name/description search in English.
-- category: only set if the user mentioned a clear category (e.g. headphones, laptop, clothing). Use lowercase singular English form.
-- max_price: only set if the user mentioned a price limit. Extract the numeric value in USD.
-- features: list any product characteristics the user mentioned (e.g. "waterproof", "noise cancelling") in English. Keep each item short.
-- needs_review_qa: true only if the user asked a question about reviews, quality, or user experiences.
-- follow_up_question: only set if needs_review_qa is true. Translate or write the user's review-related question in English.
-- wants_add_to_cart: true only if the user explicitly said they want to add something to their cart.
-- cart_product_hint: only set if wants_add_to_cart is true. The product name or description the user mentioned in English.
+- Translate search terms into concise English keywords.
+- Put a numeric USD budget only in max_price. Never include price, currency symbols,
+  "under", "below", or "less than" in query.
+- "$30", "under 30 dollars", and "below $30" all become max_price: 30.
+- Set category only for a clear catalog category such as headphones, laptop, or clothing.
+- Set is_shopping_related=false only for requests unrelated to products, shopping, reviews, or carts.
+- Set needs_review_qa=true only for questions about reviews, quality, or user experience.
+- Set wants_add_to_cart=true only when the user explicitly asks to add an item to a cart.
 
-Return JSON only. Do not add any commentary.
+Examples:
+
+User: Show me lens cleaning kits under $30
+JSON: {"is_shopping_related":true,"query":"lens cleaning kit","category":null,"max_price":30,"features":[],"needs_review_qa":false,"follow_up_question":null,"wants_add_to_cart":false,"cart_product_hint":null}
+
+User: Is the Red Flashlight good for night observation?
+JSON: {"is_shopping_related":true,"query":"red flashlight","category":"flashlight","max_price":null,"features":[],"needs_review_qa":true,"follow_up_question":"Is the Red Flashlight good for night observation?","wants_add_to_cart":false,"cart_product_hint":null}
+
+User: Add the Lens Cleaning Kit to my cart
+JSON: {"is_shopping_related":true,"query":"lens cleaning kit","category":null,"max_price":null,"features":[],"needs_review_qa":false,"follow_up_question":null,"wants_add_to_cart":true,"cart_product_hint":"Lens Cleaning Kit"}
+
+User: Write a Python quicksort program
+JSON: {"is_shopping_related":false,"query":"","category":null,"max_price":null,"features":[],"needs_review_qa":false,"follow_up_question":null,"wants_add_to_cart":false,"cart_product_hint":null}
 """
 
 
