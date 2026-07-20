@@ -24,8 +24,7 @@ from opentelemetry.trace import Status, StatusCode
 
 # Local
 import logging
-import demo_pb2
-import demo_pb2_grpc
+from techx_ai_common.proto import demo_pb2, demo_pb2_grpc
 from grpc_health.v1 import health_pb2
 from grpc_health.v1 import health_pb2_grpc
 from database import fetch_product_reviews, fetch_product_reviews_from_db, fetch_avg_product_review_score_from_db
@@ -43,9 +42,9 @@ from openai import OpenAI
 from google.protobuf.json_format import MessageToJson, MessageToDict
 
 # AI trustworthiness pipeline (A1.2 guardrails -> A1.1 grounding -> A1.2 output scan)
-from ai_contracts import GuardrailAction, ResponseStatus
-import guardrails
-from grounding import generate_grounded_summary, validate_grounded_summary
+from techx_ai_common.contracts import GuardrailAction, ResponseStatus
+from techx_ai_common import guardrails
+from techx_ai_common.grounding import generate_grounded_summary, validate_grounded_summary
 
 llm_host = None
 llm_port = None

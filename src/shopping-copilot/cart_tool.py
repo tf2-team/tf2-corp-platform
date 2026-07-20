@@ -20,19 +20,8 @@ import json
 import logging
 import os
 import secrets
-import sys
-
-_PRODUCT_REVIEWS_DIR = os.path.abspath(
-    os.path.join(os.path.dirname(__file__), "../product-reviews")
-)
-if _PRODUCT_REVIEWS_DIR not in sys.path:
-    sys.path.insert(0, _PRODUCT_REVIEWS_DIR)
-
 import valkey as valkeylib
-
-
-import demo_pb2
-import demo_pb2_grpc
+from techx_ai_common.proto import demo_pb2, demo_pb2_grpc
 from copilot_contracts import PendingCartAction
 
 logger = logging.getLogger("cart_tool")

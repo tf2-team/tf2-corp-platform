@@ -15,14 +15,6 @@ Only ConfirmCartAction does, after validating the token.
 
 import logging
 import os
-import sys
-
-_PRODUCT_REVIEWS_DIR = os.path.abspath(
-    os.path.join(os.path.dirname(__file__), "../product-reviews")
-)
-if _PRODUCT_REVIEWS_DIR not in sys.path:
-    sys.path.insert(0, _PRODUCT_REVIEWS_DIR)
-
 from concurrent import futures
 
 
@@ -35,11 +27,8 @@ from opentelemetry.sdk._logs import LoggerProvider, LoggingHandler
 from opentelemetry.sdk._logs.export import BatchLogRecordProcessor
 from opentelemetry.sdk.resources import Resource
 
-import demo_pb2
-import demo_pb2_grpc
-
-# Imported via symlink → src/product-reviews/
-from guardrails import initialize_guardrails
+from techx_ai_common.guardrails import initialize_guardrails
+from techx_ai_common.proto import demo_pb2, demo_pb2_grpc
 
 from copilot_graph import CopilotDeps, run_copilot, CopilotStatus
 from copilot_contracts import CopilotStatus as CS

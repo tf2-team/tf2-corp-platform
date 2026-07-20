@@ -5,9 +5,9 @@
 
 """Bedrock generation path that reuses the existing grounding contract."""
 
-from ai_contracts import GroundedDraft, SafeReviewSet
 from bedrock_runtime import converse_json
-from grounding import _SYSTEM_PROMPT, _build_review_prompt
+from techx_ai_common.contracts import GroundedDraft, SafeReviewSet
+from techx_ai_common.grounding import _SYSTEM_PROMPT, _build_review_prompt
 
 
 def generate_grounded_summary(safe_reviews: SafeReviewSet, question: str = "") -> GroundedDraft:
