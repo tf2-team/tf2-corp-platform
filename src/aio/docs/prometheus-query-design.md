@@ -5,7 +5,7 @@
 Thiết kế này giải quyết ba vấn đề chính:
 
 1. PromQL chỉ có một nguồn chuẩn, không còn chia giữa `runtime.json` và mã Python.
-2. Mỗi dòng metric range cách nhau đúng 1 giây; dữ liệu thiếu không bị đổi thành giá trị 0 khỏe mạnh.
+2. Mỗi dòng metric range cách nhau đúng 1 giây; query không có series trả về `0` theo policy thống nhất của registry.
 3. Có thể thêm hoặc áp dụng lại query bằng JSON mà không sửa pipeline Python.
 
 Các file có trách nhiệm riêng:
@@ -36,7 +36,9 @@ Các tín hiệu saturation/resource bổ sung gồm CPU millicores, memory, dis
 
 ### Phân biệt zero và no-data
 
-Không dùng `or vector(0)` ở cuối query. Cách đó biến exporter hỏng, label sai hoặc service chưa được scrape thành một giá trị 0 có vẻ khỏe mạnh.
+Registry khai báo policy mặc định trong `result_defaults.on_empty`. Giá trị `zero` làm compiler bọc PromQL bằng `or on() vector(0)`, vì vậy query hợp lệ nhưng không có series vẫn trả về đúng một series giá trị `0`. Template đặc thù có thể đặt `result.on_empty: "missing"` để ghi đè khi no-data phải được giữ lại.
+
+Policy zero chỉ áp dụng cho kết quả PromQL rỗng. Timeout, lỗi HTTP, response sai định dạng, quá cardinality và NaN/Inf vẫn không được đổi thành zero; collector tiếp tục trả `MISSING` hoặc `INVALID` tương ứng.
 
 Với error ratio, numerator được viết theo mẫu:
 
@@ -53,7 +55,8 @@ and on() (total > 0)
 Vì vậy:
 
 - Có traffic và không có error series: kết quả là `0` hợp lệ.
-- Không có traffic hoặc không có metric nguồn: kết quả rỗng và collector đánh dấu `MISSING`.
+- Không có traffic hoặc expression không tìm thấy series: fallback mặc định trả `0`.
+- Prometheus không truy cập được hoặc từ chối query: collector đánh dấu `MISSING`, không fallback.
 
 Mẫu ratio dùng epsilon `0.000000001`, không dùng `clamp_min(..., 1)` cho rate/increase. Ép denominator thành 1 làm giảm sai error ratio của service có lưu lượng dưới 1 request/giây hoặc counter bị Prometheus extrapolate.
 
@@ -88,7 +91,7 @@ Cadence phải nhất quán từ nguồn đến collector:
 - Grafana Prometheus datasource minimum interval: 1 giây.
 - Collector `/query_range`: `step=1`.
 
-Collector kiểm tra timestamp sau khi sort và loại duplicate. Bất kỳ gap nào khác 1 giây trả về `INVALID/UnexpectedGap`; response rỗng hoặc lỗi request trả về `MISSING`. Giá trị NaN/Inf trả về `INVALID`.
+Collector kiểm tra timestamp sau khi sort và loại duplicate. Bất kỳ gap nào khác 1 giây trả về `INVALID/UnexpectedGap`; lỗi request hoặc raw response rỗng bất thường sau khi đã áp dụng zero fallback trả về `MISSING`. Giá trị NaN/Inf trả về `INVALID`.
 
 `lookback_seconds=6200` cung cấp khoảng 104 bucket một phút cho anomaly/RCA. Pipeline giữ raw 1 giây ở collector/evidence nhưng lấy sample cuối của mỗi bucket 60 giây trước khi chạy model, nhờ đó không làm thay đổi seasonal/min-points đã được hiệu chỉnh theo phút.
 

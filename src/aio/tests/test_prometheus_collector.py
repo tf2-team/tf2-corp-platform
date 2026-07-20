@@ -38,6 +38,23 @@ class EmptyPrometheus(FakePrometheus):
         return {"data": {"result": []}}
 
 
+class ZeroFallbackPrometheus(FakePrometheus):
+    def query(self, query: str, time: str | None = None) -> dict:
+        self.queries.append(query)
+        if "or on() vector(0)" not in query:
+            return {"data": {"result": []}}
+        return {"data": {"result": [{"metric": {}, "value": [123.0, "0"]}]}}
+
+    def query_range(self, query: str, start: str, end: str, step: str) -> dict:
+        self.range_queries.append((query, start, end, step))
+        if "or on() vector(0)" not in query:
+            return {"data": {"result": []}}
+        first = int(start)
+        spacing = int(step)
+        values = [[first + index * spacing, "0"] for index in range(8)]
+        return {"data": {"result": [{"metric": {}, "values": values}]}}
+
+
 class CardinalityPrometheus(FakePrometheus):
     def query(self, query: str, time: str | None = None) -> dict:
         self.queries.append(query)
@@ -110,12 +127,25 @@ class PrometheusCollectorTest(unittest.TestCase):
         self.assertTrue(all(item.points == [] for item in series))
         self.assertTrue(all(item.quality == SignalQuality.MISSING for item in series))
 
-    def test_empty_result_is_missing_instead_of_a_healthy_zero(self):
+    def test_raw_empty_api_result_remains_missing(self):
         config = load_runtime_config(Path("config/runtime.json"))
         observations = PrometheusCollector(EmptyPrometheus(), config).collect()
 
         self.assertTrue(all(item.value is None for item in observations))
         self.assertTrue(all(item.quality == SignalQuality.MISSING for item in observations))
+
+    def test_registry_zero_fallback_returns_numeric_zero(self):
+        config = load_runtime_config(Path("config/runtime.json"))
+        collector = PrometheusCollector(ZeroFallbackPrometheus(), config)
+        observations = collector.collect()
+        series = collector.collect_metric_series()
+
+        self.assertTrue(observations)
+        self.assertTrue(all(item.value == 0 for item in observations))
+        self.assertTrue(all(item.quality == SignalQuality.UNQUALIFIED for item in observations))
+        self.assertTrue(series)
+        self.assertTrue(all(point.value == 0 for item in series for point in item.points))
+        self.assertTrue(all(item.quality == SignalQuality.VERIFIED for item in series))
 
     def test_unexpected_cardinality_is_invalid(self):
         config = load_runtime_config(Path("config/runtime.json"))

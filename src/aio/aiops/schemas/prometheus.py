@@ -57,7 +57,7 @@ class PrometheusCollectionProfile(AiopsModel):
 
 class PrometheusResultContract(AiopsModel):
     max_series: int = Field(default=1, ge=1, le=1000)
-    on_empty: Literal["missing"] = "missing"
+    on_empty: Literal["missing", "zero"] = "missing"
     finite_only: Literal[True] = True
 
 
@@ -72,7 +72,7 @@ class PrometheusQueryTemplate(AiopsModel):
     collection_profile: str = "one_second"
     modes: set[Literal["instant", "range"]] = Field(default_factory=lambda: {"instant", "range"})
     required_labels: list[str] = Field(default_factory=list)
-    result: PrometheusResultContract = Field(default_factory=PrometheusResultContract)
+    result: PrometheusResultContract | None = None
     required_for_monitoring: bool = True
 
 
@@ -97,6 +97,7 @@ class PrometheusQueryInstance(AiopsModel):
 class PrometheusQueryRegistry(AiopsModel):
     schema_version: Literal["2.0"]
     collection_profiles: dict[str, PrometheusCollectionProfile]
+    result_defaults: PrometheusResultContract = Field(default_factory=PrometheusResultContract)
     templates: dict[str, PrometheusQueryTemplate]
     service_groups: list[PrometheusServiceGroup] = Field(default_factory=list)
     instances: list[PrometheusQueryInstance] = Field(default_factory=list)

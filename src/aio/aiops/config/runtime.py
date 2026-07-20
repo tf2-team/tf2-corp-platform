@@ -101,10 +101,12 @@ def _compiled_query(
     required_for_monitoring=None,
 ) -> CompiledPrometheusQuery:
     profile = registry.collection_profiles[template.collection_profile]
+    result = template.result or registry.result_defaults
+    promql = _render(template.promql, parameters, f"PromQL for {query_id}")
     return CompiledPrometheusQuery(
         query_id=query_id,
         signal_id=signal_id,
-        promql=_render(template.promql, parameters, f"PromQL for {query_id}"),
+        promql=_apply_empty_result_policy(promql, result.on_empty),
         unit=template.unit,
         window=template.window,
         service=service,
@@ -114,7 +116,7 @@ def _compiled_query(
         modes=template.modes,
         required_labels=list(dict.fromkeys([*template.required_labels, *(required_labels or [])])),
         labels=labels or {},
-        max_series=template.result.max_series,
+        max_series=result.max_series,
         lookback_seconds=profile.lookback_seconds,
         step_seconds=profile.step_seconds,
         detector_bucket_seconds=profile.detector_bucket_seconds,
@@ -123,6 +125,12 @@ def _compiled_query(
         max_concurrency=profile.max_concurrency,
         required_for_monitoring=template.required_for_monitoring if required_for_monitoring is None else required_for_monitoring,
     )
+
+
+def _apply_empty_result_policy(promql: str, on_empty: str) -> str:
+    if on_empty == "zero":
+        return f"(({promql}) or on() vector(0))"
+    return promql
 
 
 def _render(value: str, parameters: dict[str, str], description: str) -> str:

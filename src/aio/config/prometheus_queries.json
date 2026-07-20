@@ -10,6 +10,11 @@
       "max_concurrency": 8
     }
   },
+  "result_defaults": {
+    "max_series": 1,
+    "on_empty": "zero",
+    "finite_only": true
+  },
   "templates": {
     "red.http.p95_latency": {
       "query_id_template": "$service.p95_latency_5m",

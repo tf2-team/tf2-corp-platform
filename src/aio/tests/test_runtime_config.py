@@ -57,9 +57,9 @@ class RuntimeConfigTest(unittest.TestCase):
         self.assertIn('service_name="payment"', config.prometheus_queries["payment.p95_latency_5m"])
         self.assertIn("rpc_server_duration_milliseconds_bucket", config.prometheus_queries["payment.p95_latency_5m"])
         self.assertIn("rpc_server_duration_milliseconds_count", config.prometheus_queries["payment.p95_latency_5m"])
-        self.assertNotIn("or on() vector(0)", config.prometheus_queries["payment.p95_latency_5m"])
-        self.assertNotIn("or on() vector(0)", config.prometheus_queries["checkout.p95_latency_5m"])
-        self.assertTrue(all("or on() vector(0)" not in query for query in config.prometheus_queries.values()))
+        self.assertIn("or on() vector(0)", config.prometheus_queries["payment.p95_latency_5m"])
+        self.assertIn("or on() vector(0)", config.prometheus_queries["checkout.p95_latency_5m"])
+        self.assertTrue(all("or on() vector(0)" in query for query in config.prometheus_queries.values()))
         self.assertNotIn("traces_span_metrics_calls_total", config.prometheus_queries["payment.p95_latency_5m"])
         self.assertIn('container="payment"', config.prometheus_queries["payment.memory_usage_bytes"])
         self.assertNotIn("target_info", config.prometheus_queries["payment.memory_usage_bytes"])
@@ -105,6 +105,19 @@ class RuntimeConfigTest(unittest.TestCase):
         self.assertEqual(profile.required_source_resolution_seconds, 1)
         self.assertEqual(profile.detector_bucket_seconds, 60)
         self.assertGreaterEqual(profile.lookback_seconds // profile.detector_bucket_seconds, 100)
+        self.assertEqual(registry.result_defaults.on_empty, "zero")
+
+    def test_template_can_override_default_empty_result_policy(self):
+        raw = json.loads(Path("config/prometheus_queries.json").read_text(encoding="utf-8"))
+        raw["templates"]["red.grpc.p95_latency"]["result"] = {"on_empty": "missing"}
+
+        with tempfile.TemporaryDirectory() as tmp:
+            registry_path = Path(tmp) / "prometheus_queries.json"
+            registry_path.write_text(json.dumps(raw), encoding="utf-8")
+            config = load_runtime_config(Path("config/runtime.json"), registry_path)
+
+        self.assertNotIn("vector(0)", config.prometheus_queries["checkout.p95_latency_5m"])
+        self.assertIn("vector(0)", config.prometheus_queries["checkout.error_rate_5m"])
 
     def test_enabled_detector_runbooks_have_canonical_files(self):
         config = load_runtime_config(Path("config/runtime.json"))
