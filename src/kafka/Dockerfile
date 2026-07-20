@@ -8,6 +8,8 @@ FROM apache/kafka:4.3.1@sha256:77e3df9054047a88b520d0cc46e16696d3b22022e1d580aec
 USER root
 ARG OTEL_JAVA_AGENT_VERSION
 
+ADD --chmod=644 https://repo1.maven.org/maven2/com/fasterxml/jackson/core/jackson-databind/2.21.4/jackson-databind-2.21.4.jar /tmp/jackson-databind-2.21.4.jar
+
 # Apply OS package security updates when the base is Alpine-based (Trivy OpenSSL/gnutls).
 RUN if command -v apk >/dev/null 2>&1; then \
       apk upgrade --no-cache; \
@@ -16,6 +18,12 @@ RUN if command -v apk >/dev/null 2>&1; then \
     elif command -v apt-get >/dev/null 2>&1; then \
       apt-get update && apt-get upgrade -y --no-install-recommends && rm -rf /var/lib/apt/lists/*; \
     fi
+
+RUN find /opt/kafka/libs -name 'jackson-databind-*.jar' -delete \
+    && install -m 0644 /tmp/jackson-databind-2.21.4.jar /opt/kafka/libs/ \
+    && find /opt/kafka/libs -name 'jline-remote-*.jar' -delete \
+    && find /opt/kafka/libs -name 'jline-[0-9]*.jar' -delete \
+    && rm -f /tmp/jackson-databind-2.21.4.jar
 
 USER appuser
 

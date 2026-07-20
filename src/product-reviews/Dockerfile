@@ -20,8 +20,13 @@ COPY ./src/product-reviews/requirements.txt requirements.txt
 RUN python -m venv venv && \
     venv/bin/pip install --no-cache-dir --no-deps \
         llm-guard==0.3.16 presidio-anonymizer==2.2.363 && \
+    venv/bin/pip install --no-cache-dir \
+        --index-url https://download.pytorch.org/whl/cpu torch==2.6.0 && \
     venv/bin/pip install --no-cache-dir /build/ai-common && \
-    venv/bin/pip install --no-cache-dir -r requirements.txt
+    venv/bin/pip install --no-cache-dir -r requirements.txt && \
+    venv/bin/pip install --no-cache-dir --upgrade \
+        'setuptools>=78.1.1' 'wheel>=0.46.2' 'jaraco.context>=6.1.0' \
+        'json-repair>=0.60.1' 'transformers>=5.5.0'
 
 RUN venv/bin/python -c "import spacy; spacy.load('en_core_web_lg')"
 

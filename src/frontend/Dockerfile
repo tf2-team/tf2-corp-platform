@@ -1,12 +1,10 @@
 # Copyright The OpenTelemetry Authors
 # SPDX-License-Identifier: Apache-2.0
 
-FROM docker.io/library/node:22-slim@sha256:6c74791e557ce11fc957704f6d4fe134a7bc8d6f5ca4403205b2966bd488f6b3 AS builder
+FROM docker.io/library/node:22-alpine@sha256:16e22a550f3863206a3f701448c45f7912c6896a62de43add43bb9c86130c3e2 AS builder
 
 # Apply Debian security updates so builder OS packages (e.g. OpenSSL) match Trivy fixed versions.
-RUN apt-get update \
-    && apt-get upgrade -y --no-install-recommends \
-    && rm -rf /var/lib/apt/lists/*
+RUN apk upgrade --no-cache
 
 WORKDIR /app
 
@@ -36,11 +34,9 @@ RUN npm run build
 
 # -----------------------------------------------------------------------------
 
-FROM docker.io/library/node:22-slim@sha256:6c74791e557ce11fc957704f6d4fe134a7bc8d6f5ca4403205b2966bd488f6b3 AS deps
+FROM docker.io/library/node:22-alpine@sha256:16e22a550f3863206a3f701448c45f7912c6896a62de43add43bb9c86130c3e2 AS deps
 
-RUN apt-get update \
-    && apt-get upgrade -y --no-install-recommends \
-    && rm -rf /var/lib/apt/lists/*
+RUN apk upgrade --no-cache
 
 WORKDIR /app
 
@@ -53,11 +49,14 @@ RUN npm ci --omit=dev
 # Use node:22-slim (not distroless) so runtime can apply Debian security upgrades
 # required for Trivy HIGH/CRITICAL (e.g. OpenSSL CVE-2026-31789).
 
-FROM docker.io/library/node:22-slim@sha256:6c74791e557ce11fc957704f6d4fe134a7bc8d6f5ca4403205b2966bd488f6b3
+FROM docker.io/library/node:22-alpine@sha256:16e22a550f3863206a3f701448c45f7912c6896a62de43add43bb9c86130c3e2
 
-RUN apt-get update \
-    && apt-get upgrade -y --no-install-recommends \
-    && rm -rf /var/lib/apt/lists/*
+RUN apk upgrade --no-cache
+
+# The runtime invokes node directly; remove package managers and their bundled
+# dependency trees so build-only tooling is not part of the production image.
+RUN rm -rf /usr/local/lib/node_modules/npm /opt/yarn-v* \
+    && rm -f /usr/local/bin/npm /usr/local/bin/npx /usr/local/bin/yarn /usr/local/bin/yarnpkg
 
 WORKDIR /app
 
@@ -70,8 +69,8 @@ COPY ./src/frontend/public/ public/
 
 COPY ./src/frontend/utils/telemetry/Instrumentation.js Instrumentation.js
 
-RUN groupadd -g 10001 appgroup \
-    && useradd -r -u 10001 -g appgroup appuser \
+RUN addgroup -g 10001 -S appgroup \
+    && adduser -u 10001 -S -D -H -G appgroup appuser \
     && chown -R appuser:appgroup /app
 
 EXPOSE ${FRONTEND_PORT}
