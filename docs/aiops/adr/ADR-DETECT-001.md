@@ -2,7 +2,7 @@
 
 > Status: Proposed, pending reviewer sign-off  
 > Owner: Nguyen Quy Hung  
-> Reviewers: Pending team review  
+> Reviewers: Phan Duc Huy, Ngo Nguyen Phuc  
 > Last updated: 2026-07-17
 > Related docs: `docs/aiops/mandate/MANDATE-07a-detection-analysis.md`
 
@@ -293,7 +293,8 @@ Phase 3: Future production readiness
 
 | Reviewer      | Area                        | Decision       | Evidence link/comment  | Date    |
 | ------------- | --------------------------- | -------------- | ---------------------- | ------- |
-| team reviewer | AIOps detector architecture | Pending review | Pending review comment | Pending |
+| Phan Duc Huy | AIOps detector architecture | Sign-off | Approved | 2026-07-16 |
+| Ngo Nguyen Phuc | AIOps detector architecture | Sign-off | Approved | 2026-07-16 |
 
 
 ## Consequences
