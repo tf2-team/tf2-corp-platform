@@ -18,6 +18,8 @@ COPY ./src/shopping-copilot/requirements.txt requirements.txt
 
 RUN --mount=type=cache,id=techx-pip-cache,target=/root/.cache/pip,sharing=locked \
     python -m venv venv && \
+    venv/bin/pip install --no-deps \
+        llm-guard==0.3.16 presidio-anonymizer==2.2.363 && \
     venv/bin/pip install /build/ai-common && \
     venv/bin/pip install -r requirements.txt
 
