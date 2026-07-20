@@ -69,6 +69,7 @@
         "owner": "catalog-oncall",
         "flow": "catalog",
         "dependencies": [
+          "product-catalog",
           "flagd"
         ]
       },
@@ -177,18 +178,26 @@
       },
       {
         "name": "postgresql",
-        "namespace": "techx-corp-prod",
-        "kind": "Deployment",
+        "namespace": "external",
+        "kind": "Database",
         "owner": "data-platform-oncall",
         "flow": "data",
         "dependencies": []
       },
       {
         "name": "valkey-cart",
-        "namespace": "techx-corp-prod",
-        "kind": "Deployment",
+        "namespace": "external",
+        "kind": "Database",
         "owner": "checkout-oncall",
         "flow": "checkout",
+        "dependencies": []
+      },
+      {
+        "name": "opensearch",
+        "namespace": "techx-corp-prod",
+        "kind": "StatefulSet",
+        "owner": "platform-oncall",
+        "flow": "observability",
         "dependencies": []
       }
     ]
@@ -451,7 +460,9 @@
       "flagd",
       "jaeger",
       "load-generator",
-      "postgresql"
+      "postgresql",
+      "valkey-cart",
+      "opensearch"
     ],
     "stateful_kinds": [
       "StatefulSet",

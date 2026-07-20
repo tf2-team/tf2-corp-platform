@@ -353,6 +353,31 @@ class PolicyEngineTest(unittest.TestCase):
         self.assertIn("stateful_target", decision.reasons)
         self.assertIn("single_replica_target", decision.reasons)
 
+    def test_blocks_external_and_stateful_protected_targets(self):
+        cases = [
+            ("postgresql", "Database", "stateful_target"),
+            ("valkey-cart", "Database", "stateful_target"),
+            ("opensearch", "StatefulSet", "stateful_target"),
+        ]
+        for target, target_kind, expected_reason in cases:
+            with self.subTest(target=target):
+                decision = policy(mode="dry-run").evaluate(
+                    ActionProposal(
+                        action_type="restart",
+                        target=target,
+                        target_kind=target_kind,
+                        replicas=3,
+                        mutating=True,
+                        verification_defined=True,
+                        rollback_defined=True,
+                    )
+                )
+
+                self.assertFalse(decision.allowed)
+                self.assertEqual(decision.result, "blocked")
+                self.assertIn("protected_target", decision.reasons)
+                self.assertIn(expected_reason, decision.reasons)
+
     def test_dry_run_records_safe_recommendation_without_execution(self):
         decision = policy(mode="dry-run").evaluate(
             ActionProposal(

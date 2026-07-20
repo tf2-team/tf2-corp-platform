@@ -1,6 +1,6 @@
-﻿{
+{
   "_meta": {
-    "scenario": "TechX Corp Platform - Phase 3 TF2 storefront with e-commerce microservices, AI review assistant, Kafka async processing, feature flags, observability, and planned AIOps runtime.",
+    "scenario": "TechX Corp Platform - Phase 3 TF2 storefront with e-commerce microservices, AI review assistant, Kafka async processing, feature flags, observability, and AIOps runtime.",
     "schema_version": "1.0",
     "generated_for": "AIO4 TF2 AIOps topology / blast-radius map",
     "generated_at": "2026-07-11",
@@ -8,8 +8,9 @@
     "nab_mapping": "N/A - this repository does not include NAB stream CSV files. Keep nab_stream as N/A until a lab dataset mapping is assigned.",
     "source_notes": [
       "Derived from phase3 onboarding docs, tf2-corp-platform/docs/aiops AIOps architecture docs, Helm values, Docker Compose, Envoy routes, proto contracts, and service source code.",
-      "AIOps runtime is marked planned because tf2-corp-platform/src/aio is not present yet.",
+      "AIOps runtime exists under src/aio; runtime topology is maintained in src/aio/config/runtime.json and this graph remains the broader evidence/blast-radius artifact.",
       "Replica/SPOF status must be validated against live kubectl and Jaeger evidence before final incident use.",
+      "Live EKS validation on 2026-07-20 confirmed PostgreSQL and Valkey are external managed dependencies, while OpenSearch runs as a StatefulSet.",
       "flagd and OpenFeature incident paths are protected. AIOps may observe symptoms but must not mutate, disable, redirect, or bypass them."
     ]
   },
@@ -43,12 +44,12 @@
     {"name": "cdo-cost-snapshot",    "tier": "aiops-input",  "team": "platform",    "owner_pager": "platform-oncall", "criticality": "medium",   "nab_stream": "N/A"}
   ],
   "stores": [
-    {"name": "postgresql",  "type": "postgres",    "team": "platform", "criticality": "critical"},
-    {"name": "valkey-cart", "type": "redis",       "team": "checkout", "criticality": "critical"},
+    {"name": "postgresql",  "type": "postgres",    "team": "platform", "criticality": "critical", "runtime_kind": "Database", "namespace": "external", "remediation_class": "protected-stateful-external"},
+    {"name": "valkey-cart", "type": "redis",       "team": "checkout", "criticality": "critical", "runtime_kind": "Database", "namespace": "external", "remediation_class": "protected-stateful-external"},
     {"name": "kafka",       "type": "kafka",       "team": "platform", "criticality": "high"},
     {"name": "prometheus",  "type": "metrics",     "team": "platform", "criticality": "high"},
     {"name": "jaeger",      "type": "traces",      "team": "platform", "criticality": "medium"},
-    {"name": "opensearch",  "type": "logs",        "team": "platform", "criticality": "medium"},
+    {"name": "opensearch",  "type": "logs",        "team": "platform", "criticality": "medium", "runtime_kind": "StatefulSet", "namespace": "techx-corp-prod", "remediation_class": "protected-observability-stateful"},
     {"name": "aiops-state", "type": "sqlite-pvc",  "team": "aiops",    "criticality": "high"}
   ],
   "edges": [
@@ -158,7 +159,9 @@
     "flagd and flagd-ui are protected incident-control paths. AIOps may map symptoms and runbooks but must not mutate flags, OpenFeature hooks, or BTC incident delivery.",
     "otel-collector fans out traces to jaeger, metrics to prometheus, and logs to opensearch. Missing or stale telemetry is an incident state, never healthy.",
     "grafana must keep a direct hard-SLO route to tf2-oncall-channel so official alerts still fire if aiops-runtime is down.",
-    "aiops-runtime is planned. Default mode should be dry-run with read-only Kubernetes access, SQLite/PVC audit state, and bounded Prometheus/Jaeger/OpenSearch queries.",
+    "aiops-runtime is implemented under src/aio. Default mode remains dry-run with read-only Kubernetes access, SQLite/PVC audit state, and bounded Prometheus/Jaeger/OpenSearch queries.",
+    "postgresql and valkey-cart are external managed dependencies represented as Database in runtime config so remediation can reason about them without treating them as restartable Kubernetes Deployments.",
+    "opensearch is a Kubernetes StatefulSet in the observability path and is protected from automatic remediation.",
     "Do not mark any component as a confirmed SPOF from this static JSON alone. Validate deployed replicas, state durability, and failover behavior in EKS."
   ]
 }
