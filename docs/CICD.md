@@ -24,12 +24,7 @@ lint  ||  unit-tests  ||  prepare-pr-images → build-pr-images (matrix) → pr-
 
 `workflow_call` from Build & Push runs **lint + unit-tests only** (PR image jobs are skipped). Publish still owns multi-arch bake + ECR.
 
-**Required checks (branch protection):** require **`PR image build`**, **`Semgrep
-SAST`**, and **`TruffleHog secrets`**. Image promotion is additionally blocked by
-**`Trivy image scan`** and
-**`Sign and attest <service>`** for every catalog service. See
-`docs/changes/2026-07-19-secure-delivery-person-1.md` for repository settings and the
-selective per-service digest contract.
+**Required check (branch protection):** add check name **`PR image build`** (job `pr-image-build`) so matrix job names do not need individual protection rules.
 
 **PR path classification** (same image-affecting roots as publish):
 
@@ -640,11 +635,6 @@ See chart runbook: `techx-corp-chart/docs/operations/gitops-argocd.md`.
 ## Security notes
 
 - Actions pinned to full commit SHAs (major-version patch pins) with version comments.
-- Every external Dockerfile `FROM` is pinned to an immutable manifest digest; `scripts/check_pinned_base_images.py` blocks regressions in PR CI.
-- Trivy image CVE and IaC misconfiguration scans block on `HIGH`/`CRITICAL`; Semgrep and TruffleHog are also blocking gates.
-- Cosign signs each immutable image digest with AWS KMS. Both the CycloneDX SBOM and the provenance predicate are KMS-signed attestations.
-- Provenance schema v1 records commit, merged PR, approving reviewer, signing key URI, workflow run, SBOM status, and every blocking scan result.
-- Selective chart promotion writes only rebuilt services' `values-<service>.yaml`; a full rebuild is manual and requires a recorded reason.
 - Weekly Dependabot updates for `github-actions` (`.github/dependabot.yml`).
 - `id-token: write` only on preflight, build, and verify-ecr jobs.
 - GitHub expressions passed into shell steps via quoted environment variables.
@@ -655,27 +645,9 @@ See chart runbook: `techx-corp-chart/docs/operations/gitops-argocd.md`.
 
 - Auto-merge of production chart PRs (human review remains the prod deploy gate)
 - Helm/kubectl deploy or Argo CD API calls from this repo
-- Admission policy installation and enforcement (owned by `tf2-corp-chart` and `tf2-corp-infra`)
-- GitHub branch-protection administration (required checks must be enabled by a repository administrator)
+- Path-filtered partial image builds while using a global tag (unsafe for promotion)
+- Per-service Helm runtime tags / movable runtime tags
+- Native multi-arch runners, image security gates, SBOM/provenance, Cosign
 - Full e2e / tracetest in PR CI
-
-## Mandate 10 cross-repository contract
-
-The chart repository must consume the generated overlays and enforce the following keys:
-
-- Normal service: `components.<service>.imageOverride.digest`
-- Mem0: `mem0.image.digest`
-- Load generator: the same digest is written for `load-generator` and `load-generator-worker`
-- Flagd UI sidecar: `components.flagd.sidecarImageDigests.flagd-ui`
-
-The flagd UI map is intentionally not a `sidecarContainers` array override: replacing
-that array would discard the existing sidecar configuration and violate the mandate's
-requirement not to disable or alter flagd. The chart schema and template must support
-this map before the shared Mandate 10 branch is promoted.
-
-Admission must require two independent facts for first-party ECR images: a valid KMS
-signature and the custom provenance attestation type
-`https://techx-corp.dev/attestations/provenance/v1`. The attestation policy must require
-all `scans` values to equal `pass` and `sbom.attested` to equal `true`.
 
 <!-- Change trail: @hungxqt - 2026-07-19 - Document shopping-copilot in 23-image release catalog and CI tests. -->

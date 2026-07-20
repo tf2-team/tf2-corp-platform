@@ -14,7 +14,14 @@
 #   - https://pkgs.org/ - resource for finding needed packages
 #   - Ex: docker.io/hexpm/elixir:1.18.4-erlang-27.3.4-debian-bookworm-20250610-slim
 #
-FROM docker.io/hexpm/elixir:1.19.3-erlang-27.2.4-debian-bullseye-20251117-slim@sha256:1037258b28f07ccf0bc0bedb582867148fbf6d459140ac90be010583c067ab85 AS builder
+ARG ELIXIR_VERSION=1.19.3
+ARG OTP_VERSION=27.2.4
+ARG DEBIAN_VERSION=bullseye-20251117-slim
+
+ARG BUILDER_IMAGE="docker.io/hexpm/elixir:${ELIXIR_VERSION}-erlang-${OTP_VERSION}-debian-${DEBIAN_VERSION}"
+ARG RUNNER_IMAGE="docker.io/debian:${DEBIAN_VERSION}"
+
+FROM ${BUILDER_IMAGE} AS builder
 
 # install build dependencies
 RUN apt-get update \
@@ -60,7 +67,7 @@ RUN mix release
 
 # start a new build stage so that the final image will only contain
 # the compiled release and other runtime necessities
-FROM docker.io/debian:bullseye-20251117-slim@sha256:530a3348fc4b5734ffe1a137ddbcee6850154285251b53c3425c386ea8fac77b AS final
+FROM ${RUNNER_IMAGE} AS final
 
 RUN apt-get update \
   && apt-get install -y --no-install-recommends libstdc++6 openssl libncurses5 locales ca-certificates \
