@@ -284,7 +284,7 @@ class V001AnomalyEngine:
             metric_findings,
         )
         self.last_algorithm_findings = [*raw_metric_findings, *raw_log_findings]
-        return self._suppress_busy_cpu([*metric_findings, *log_findings], [*series, *log_series])
+        return self._suppress_busy_infra([*metric_findings, *log_findings], [*series, *log_series])
 
     def _correlated_log_findings(self, log_findings: list[AnomalyFinding], metric_findings: list[AnomalyFinding]) -> list[AnomalyFinding]:
         return [
@@ -322,7 +322,7 @@ class V001AnomalyEngine:
             )
         return sorted(combined, key=lambda item: item.score, reverse=True)
 
-    def _suppress_busy_cpu(self, findings: list[AnomalyFinding], series: list[MetricSeries]) -> list[AnomalyFinding]:
+    def _suppress_busy_infra(self, findings: list[AnomalyFinding], series: list[MetricSeries]) -> list[AnomalyFinding]:
         by_service_series: dict[str, list[MetricSeries]] = defaultdict(list)
         by_service_findings: dict[str, list[AnomalyFinding]] = defaultdict(list)
         for metric in series:
@@ -332,7 +332,7 @@ class V001AnomalyEngine:
 
         filtered = []
         for finding in findings:
-            if not _is_cpu_metric(finding.metric):
+            if not _is_busy_infra_metric(finding.metric):
                 filtered.append(finding)
                 continue
             service_findings = by_service_findings[finding.service]
@@ -346,9 +346,20 @@ class V001AnomalyEngine:
                 filtered.append(finding)
         return filtered
 
+    def _suppress_busy_cpu(self, findings: list[AnomalyFinding], series: list[MetricSeries]) -> list[AnomalyFinding]:
+        return self._suppress_busy_infra(findings, series)
+
 
 def _is_cpu_metric(metric: str) -> bool:
     return "cpu" in metric
+
+
+def _is_disk_metric(metric: str) -> bool:
+    return "disk" in metric
+
+
+def _is_busy_infra_metric(metric: str) -> bool:
+    return _is_cpu_metric(metric) or _is_disk_metric(metric)
 
 
 def _is_memory_metric(metric: str) -> bool:

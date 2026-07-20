@@ -308,6 +308,29 @@ class IncidentManagerTest(unittest.TestCase):
         self.assertEqual(incident.incident_id, same_incident.incident_id)
         self.assertEqual(same_incident.occurrence_count, 2)
 
+    def test_rca_root_cause_fingerprint_includes_primary_metric(self):
+        manager = IncidentManager(environment="tf2")
+        latency = CandidateEvent(
+            detector_id="rca_root_cause",
+            flow="checkout",
+            service="payment",
+            severity="SEV2",
+            signal_id="p95_latency_5m",
+            value=1.0,
+            unit="score",
+            window="rca",
+            threshold=None,
+            quality=SignalQuality.VERIFIED,
+            reason="rca_root_cause",
+            runbook_id="RB-SERVICE-ERROR-RATE",
+        )
+        errors = latency.model_copy(update={"signal_id": "error_rate_5m"})
+
+        first = manager.upsert(latency)
+        second = manager.upsert(errors)
+
+        self.assertNotEqual(first.incident_id, second.incident_id)
+
 
 class PolicyEngineTest(unittest.TestCase):
     def test_blocks_stateful_or_single_replica_mutation(self):

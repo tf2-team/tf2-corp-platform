@@ -133,18 +133,17 @@ class AiopsPipeline:
         logger.debug("AIOPS_BLOCK incident incidents=%s ids=%s", len(incidents), [incident.incident_id for incident in incidents])
 
         rca_result = self._run_v001_rca(metric_series or [], incidents)
-        if not incidents:
-            synthetic = self._synthetic_rca_candidate(rca_result)
-            if synthetic is not None:
-                enriched.append(synthetic)
-                incidents.append(self.store.upsert(synthetic))
-                deduped_incidents = _unique_incidents(incidents)
-                logger.info(
-                    "AIOPS_RCA_SYNTHETIC_CANDIDATE service=%s score=%.3f metrics=%s",
-                    synthetic.service,
-                    synthetic.confidence,
-                    ",".join(synthetic.contributing_signals),
-                )
+        synthetic = self._synthetic_rca_candidate(rca_result, incidents)
+        if synthetic is not None:
+            enriched.append(synthetic)
+            incidents.append(self.store.upsert(synthetic))
+            deduped_incidents = _unique_incidents(incidents)
+            logger.info(
+                "AIOPS_RCA_SYNTHETIC_CANDIDATE service=%s score=%.3f metrics=%s",
+                synthetic.service,
+                synthetic.confidence,
+                ",".join(synthetic.contributing_signals),
+            )
         logger.info(
             "AIOPS_DEDUP_RESULT input_candidates=%s incidents=%s ids=%s services=%s occurrences=%s",
             len(enriched),
@@ -256,10 +255,12 @@ class AiopsPipeline:
         _log_final_root_cause_algorithm_scores(result, getattr(anomaly_engine, "last_algorithm_findings", findings))
         return result
 
-    def _synthetic_rca_candidate(self, rca_result: RcaResult) -> CandidateEvent | None:
+    def _synthetic_rca_candidate(self, rca_result: RcaResult, incidents: list[Incident] | None = None) -> CandidateEvent | None:
         if not rca_result.root_causes:
             return None
         root = rca_result.root_causes[0]
+        if root.service in {incident.service for incident in incidents or []}:
+            return None
         service_config = None
         if self.runtime_config is not None:
             service_config = next((item for item in self.runtime_config.topology.services if item.name == root.service), None)
@@ -382,25 +383,31 @@ class AiopsPipeline:
 
     def _suppress_related_notifications(self, incidents: list[Incident], rca_result: RcaResult) -> set[str]:
         suppressed = set()
+        current_root_service = None
         if self.runtime_config is not None and rca_result.root_causes:
             root = rca_result.root_causes[0]
-            if root.score < float(self.correlation_hyperparameters.get("suppress_min_root_score", 0.8)):
-                return suppressed
-            root_service = root.service
-            affected_services = _blast_radius_services(
-                self.runtime_config,
-                root_service,
-                int(self.correlation_hyperparameters.get("topology_max_hops", 2)),
-            )
-            affected_services -= {incident.service for incident in incidents if incident.severity == "SEV1"}
-            register = getattr(self.store, "register_active_root_cause", None)
-            suppress = getattr(self.store, "suppress_related_notifications", None)
-            if register is not None:
-                register(root_service, affected_services, int(self.correlation_hyperparameters.get("suppress_window_seconds", 900)))
-            if suppress is not None:
-                suppressed.update(suppress(incidents, root_service, affected_services) or set())
+            if root.score >= float(self.correlation_hyperparameters.get("suppress_min_root_score", 0.8)):
+                root_service = root.service
+                current_root_service = root_service
+                affected_services = _blast_radius_services(
+                    self.runtime_config,
+                    root_service,
+                    int(self.correlation_hyperparameters.get("topology_max_hops", 2)),
+                )
+                affected_services -= {incident.service for incident in incidents if incident.severity == "SEV1"}
+                register = getattr(self.store, "register_active_root_cause", None)
+                suppress = getattr(self.store, "suppress_related_notifications", None)
+                if register is not None:
+                    register(root_service, affected_services, int(self.correlation_hyperparameters.get("suppress_window_seconds", 900)))
+                if suppress is not None:
+                    suppressed.update(suppress(incidents, root_service, affected_services) or set())
+        active_suppress = getattr(self.store, "suppress_active_root_notifications", None)
+        if active_suppress is not None:
+            exempt_services = {current_root_service} if current_root_service else set()
+            remaining = [incident for incident in incidents if incident.incident_id not in suppressed]
+            suppressed.update(active_suppress(remaining, exempt_services) or set())
         active_suppressed = getattr(self.store, "suppressed_incident_ids", None)
-        if active_suppressed is not None:
+        if active_suppressed is not None and active_suppress is None:
             suppressed.update(active_suppressed(incidents))
         return suppressed
 
@@ -495,4 +502,3 @@ def _blast_radius_services(config: RuntimeConfig, root_service: str, max_hops: i
         if not frontier:
             break
     return seen
-

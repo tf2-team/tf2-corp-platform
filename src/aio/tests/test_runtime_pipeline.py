@@ -310,6 +310,49 @@ class RuntimePipelineTest(unittest.TestCase):
         self.assertIn("AIOPS_RCA_SYNTHETIC_CANDIDATE service=frontend", text)
         self.assertIn("AIOPS_DEDUP_RESULT input_candidates=1 incidents=1", text)
 
+    def test_pipeline_adds_rca_root_incident_when_slo_incident_exists_for_different_service(self):
+        settings = Settings()
+        with TemporaryDirectory() as tmp:
+            store = SQLiteIncidentStore(Path(tmp) / "aiops.sqlite3", environment=settings.environment)
+            pipeline = AiopsPipeline(
+                collector=StaticCollector(
+                    [Observation(signal_id="checkout_bad_ratio_24h", value=0.2, unit="ratio", window="24h", quality=SignalQuality.VERIFIED)]
+                ),
+                detectors=[
+                    ThresholdDetector(
+                        detector_id="ops01_checkout_slo",
+                        signal_id="checkout_bad_ratio_24h",
+                        threshold=0.01,
+                        flow="checkout",
+                        service="checkout",
+                        severity="SEV1",
+                        runbook_id="RB-CHECKOUT-SLO",
+                    )
+                ],
+                store=store,
+                policy=policy(settings),
+                **runtime_kwargs(settings),
+            )
+            pipeline._run_v001_rca = lambda metric_series, incidents: RcaResult(
+                anomalies=[
+                    AnomalyFinding(
+                        algorithm="weighted_sum",
+                        service="payment",
+                        metric="error_rate_5m",
+                        signal_id="payment_error_rate_5m",
+                        score=0.8,
+                        timestamp=123,
+                    )
+                ],
+                root_causes=[RootCauseCandidate(service="payment", score=1.0, root_cause_metrics=["error_rate_5m"])],
+            )
+
+            result = pipeline.run_once(metric_series=[metric("payment", "error_rate_5m", [0.0] * 31)])
+            store.close()
+
+        self.assertEqual([incident.service for incident in result.incidents], ["checkout", "payment"])
+        self.assertEqual({message.service for message in result.notifications}, {"checkout", "payment"})
+
     def test_pipeline_flushes_notification_outbox_to_sender(self):
         settings = Settings()
         sender = FakeNotificationSender()
@@ -719,6 +762,27 @@ class RuntimePipelineTest(unittest.TestCase):
 
         self.assertEqual({message.service for message in result.notifications}, {"checkout", "cart", "valkey-cart"})
         self.assertEqual([status for (status,) in outbox_rows].count("suppressed"), 0)
+
+    def test_pipeline_does_not_suppress_current_child_root_cause_from_active_parent(self):
+        settings = Settings()
+        with TemporaryDirectory() as tmp:
+            store = SQLiteIncidentStore(Path(tmp) / "aiops.sqlite3", environment=settings.environment)
+            store.register_active_root_cause("checkout", {"checkout", "cart"}, suppress_seconds=900)
+            pipeline = AiopsPipeline(
+                collector=StaticCollector([]),
+                detectors=[MultiServiceDetector()],
+                store=store,
+                policy=policy(settings),
+                **runtime_kwargs(settings),
+            )
+            pipeline._run_v001_rca = lambda metric_series, incidents: RcaResult(
+                root_causes=[RootCauseCandidate(service="cart", score=1.0, root_cause_metrics=["error_rate_5m"])]
+            )
+
+            result = pipeline.run_once()
+            store.close()
+
+        self.assertIn("cart", {message.service for message in result.notifications})
 
     def test_pipeline_does_not_suppress_sev1_child_notification(self):
         settings = Settings()

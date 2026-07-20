@@ -74,6 +74,15 @@ class SQLiteIncidentStore:
         )
         self._connection.execute(
             """
+            CREATE TABLE IF NOT EXISTS notification_service_cooldowns (
+                service TEXT PRIMARY KEY,
+                cooldown_until TEXT NOT NULL,
+                updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+            )
+            """
+        )
+        self._connection.execute(
+            """
             CREATE TABLE IF NOT EXISTS active_root_causes (
                 root_service TEXT PRIMARY KEY,
                 affected_services_json TEXT NOT NULL,
@@ -115,15 +124,17 @@ class SQLiteIncidentStore:
             incident.severity = min(incident.severity, candidate.severity)
 
         now = datetime.now(UTC)
-        suppressed_by = self._suppression_parent(candidate.service) if candidate.severity != "SEV1" else None
         notification_due = self._notification_due(incident, is_new, now)
+        can_enqueue_incident = notification_due and self._can_enqueue_notification(incident.incident_id)
+        service_notification_due = self._service_notification_due(incident.service, incident.severity, now) if can_enqueue_incident else False
         notification = (
             NotificationBuilder().build([incident])[0]
-            if notification_due and suppressed_by is None and self._can_enqueue_notification(incident.incident_id)
+            if can_enqueue_incident and service_notification_due
             else None
         )
         if notification is not None:
             incident.cooldown_until = (now + timedelta(seconds=self.notification_cooldown_seconds)).isoformat()
+        service_suppressed = can_enqueue_incident and not service_notification_due
         notification_enqueued = False
         with self._connection:
             self._connection.execute(
@@ -159,6 +170,7 @@ class SQLiteIncidentStore:
                 )
                 notification_enqueued = cursor.rowcount > 0
                 if notification_enqueued:
+                    self._set_service_notification_cooldown(incident.service, incident.cooldown_until or _now())
                     self._last_enqueued_incident_ids.add(incident.incident_id)
                     self._append_notification_history(incident, notification, "ready")
                     logger.info(
@@ -168,12 +180,11 @@ class SQLiteIncidentStore:
                         incident.severity,
                         notification.runbook_id,
                     )
-            elif suppressed_by is not None:
+            elif service_suppressed:
                 logger.info(
-                    "AIOPS_NOTIFY_SUPPRESSED incident=%s service=%s parent_root_cause=%s reason=active_root_cause",
+                    "AIOPS_NOTIFY_SUPPRESSED incident=%s service=%s reason=same_service_cooldown",
                     incident.incident_id,
                     incident.service,
-                    suppressed_by,
                 )
         (logger.info if is_new else logger.debug)(
             "AIOPS_INCIDENT_UPSERT action=%s incident=%s fingerprint=%s service=%s detector=%s occurrence=%s notification_enqueued=%s",
@@ -198,6 +209,27 @@ class SQLiteIncidentStore:
             (incident_id,),
         ).fetchone()
         return row is None or row[0] in {"sent", "suppressed"}
+
+    def _service_notification_due(self, service: str, severity: str, now: datetime) -> bool:
+        if severity == "SEV1":
+            return True
+        row = self._connection.execute(
+            "SELECT cooldown_until FROM notification_service_cooldowns WHERE service = ?",
+            (service,),
+        ).fetchone()
+        return row is None or datetime.fromisoformat(row[0]) <= now
+
+    def _set_service_notification_cooldown(self, service: str, cooldown_until: str) -> None:
+        self._connection.execute(
+            """
+            INSERT INTO notification_service_cooldowns (service, cooldown_until, updated_at)
+            VALUES (?, ?, ?)
+            ON CONFLICT(service) DO UPDATE SET
+                cooldown_until = excluded.cooldown_until,
+                updated_at = excluded.updated_at
+            """,
+            (service, cooldown_until, _now()),
+        )
 
     def _append_notification_history(self, incident: Incident, notification: NotificationMessage, status: str) -> None:
         path = self.path.parent / "notification_history.jsonl"
@@ -256,6 +288,32 @@ class SQLiteIncidentStore:
                 )
         return suppressed_ids
 
+    def suppress_active_root_notifications(self, incidents: list[Incident], exempt_services: set[str] | None = None) -> set[str]:
+        exempt_services = exempt_services or set()
+        rows = [
+            (incident, parent)
+            for incident in incidents
+            if incident.severity != "SEV1" and incident.service not in exempt_services
+            for parent in [self._suppression_parent(incident.service)]
+            if parent is not None
+        ]
+        if not rows:
+            return set()
+        with self._connection:
+            for incident, parent in rows:
+                self._connection.execute(
+                    "UPDATE notification_outbox SET status = 'suppressed', updated_at = ? WHERE incident_id = ? AND status = 'pending'",
+                    (_now(), incident.incident_id),
+                )
+                self._last_enqueued_incident_ids.discard(incident.incident_id)
+                logger.info(
+                    "AIOPS_NOTIFY_SUPPRESSED incident=%s service=%s parent_root_cause=%s reason=active_root_cause",
+                    incident.incident_id,
+                    incident.service,
+                    parent,
+                )
+        return {incident.incident_id for incident, _ in rows}
+
     def list_incidents(self) -> list[Incident]:
         rows = self._connection.execute("SELECT incident_json FROM incidents ORDER BY fingerprint").fetchall()
         return [Incident.model_validate_json(row[0]) for row in rows]
@@ -272,7 +330,11 @@ class SQLiteIncidentStore:
         return [NotificationMessage.model_validate_json(row[0]) for row in rows]
 
     def suppressed_incident_ids(self, incidents: list[Incident]) -> set[str]:
-        return {incident.incident_id for incident in incidents if self._suppression_parent(incident.service) is not None}
+        return {
+            incident.incident_id
+            for incident in incidents
+            if incident.severity != "SEV1" and self._suppression_parent(incident.service) is not None
+        }
 
     def _suppression_parent(self, service: str) -> str | None:
         rows = self._connection.execute(

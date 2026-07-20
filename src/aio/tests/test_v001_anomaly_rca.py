@@ -165,6 +165,46 @@ class V001AnomalyRcaTest(unittest.TestCase):
 
         self.assertEqual(engine._suppress_busy_cpu(findings, series), [])
 
+    def test_busy_disk_without_failure_signal_is_suppressed(self):
+        engine = anomaly_engine()
+        findings = [
+            AnomalyFinding(
+                algorithm="weighted_sum",
+                service="checkout",
+                metric="disk_io_bytes_per_second",
+                signal_id="checkout_disk_io_bytes_per_second",
+                score=0.5,
+                timestamp=7,
+            )
+        ]
+        series = [
+            metric("checkout", "request_rate_5m", [10, 10, 10, 10, 10, 10, 10, 100]),
+            metric("checkout", "p95_latency_5m", [1, 1, 1, 1, 1, 1, 1, 1]),
+            metric("checkout", "error_rate_5m", [0, 0, 0, 0, 0, 0, 0, 0]),
+        ]
+
+        self.assertEqual(engine._suppress_busy_infra(findings, series), [])
+
+    def test_disk_with_failure_signal_is_kept(self):
+        engine = anomaly_engine()
+        findings = [
+            AnomalyFinding(
+                algorithm="weighted_sum",
+                service="checkout",
+                metric="disk_io_bytes_per_second",
+                signal_id="checkout_disk_io_bytes_per_second",
+                score=0.5,
+                timestamp=7,
+            ),
+            AnomalyFinding(algorithm="weighted_sum", service="checkout", metric="error_rate_5m", signal_id="checkout_error_rate_5m", score=0.5, timestamp=7),
+        ]
+        series = [
+            metric("checkout", "request_rate_5m", [10, 10, 10, 10, 10, 10, 10, 100]),
+            metric("checkout", "error_rate_5m", [0, 0, 0, 0, 0, 0, 0, 10]),
+        ]
+
+        self.assertEqual(engine._suppress_busy_infra(findings, series), findings)
+
     def test_log_metric_does_not_keep_busy_cpu_anomaly(self):
         engine = anomaly_engine()
         findings = [
