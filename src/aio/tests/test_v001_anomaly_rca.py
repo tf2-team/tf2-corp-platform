@@ -6,6 +6,7 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 
 from aiops.anomaly import V001AnomalyEngine, build_v001_anomaly_engine
+from aiops.anomaly.stats import robust_score
 from aiops.anomaly.v001 import EwmaStlDetector, LogTemplateMetricBuilder, ServiceIsolationForestDetector
 from aiops.api.app import run_static_pipeline
 from aiops.config import Settings, load_hyperparameters, load_runtime_config
@@ -134,7 +135,7 @@ class V001AnomalyRcaTest(unittest.TestCase):
         engine = anomaly_engine()
 
         findings = engine._weighted_sum(
-            [AnomalyFinding(algorithm="isolation_forest", service="checkout", metric="cpu", signal_id="checkout_cpu", score=8.0, timestamp=1)]
+            [AnomalyFinding(algorithm="isolation_forest", service="checkout", metric="cpu", signal_id="checkout_cpu", score=15.0, timestamp=1)]
         )
 
         self.assertEqual([(finding.algorithm, finding.score) for finding in findings], [("weighted_sum", engine.weighted_score_threshold)])
@@ -151,6 +152,21 @@ class V001AnomalyRcaTest(unittest.TestCase):
 
         weights = rca_hyperparameters()["anomaly"]["algorithm_weights"]
         self.assertEqual([(finding.algorithm, finding.score) for finding in findings], [("weighted_sum", weights["isolation_forest"] + weights["ewma_stl"])])
+
+    def test_anomaly_engine_filters_context_only_metrics(self):
+        engine = anomaly_engine()
+
+        findings = engine.evaluate(
+            [
+                metric("checkout", "request_rate_5m", [10, 10, 10, 10, 10, 10, 10, 100]),
+                metric("checkout", "socket_io_bytes_per_second", [1, 1, 1, 1, 1, 1, 1, 20]),
+            ]
+        )
+
+        self.assertEqual(findings, [])
+
+    def test_flat_baseline_failure_metric_still_scores_as_anomaly(self):
+        self.assertGreaterEqual(robust_score([0.0] * 35, [0.4]), 3.0)
 
     def test_busy_cpu_without_failure_signal_is_suppressed(self):
         engine = anomaly_engine()
@@ -360,16 +376,38 @@ class V001AnomalyRcaTest(unittest.TestCase):
 
         self.assertEqual(result.root_causes, [])
 
-    def test_rca_returns_top_k_root_causes(self):
+    def test_rca_ignores_context_only_metrics_as_root_causes(self):
         runtime_config = load_runtime_config(Path("config/runtime.json"))
         findings = [
             AnomalyFinding(algorithm="weighted_sum", service="product-catalog", metric="request_rate_5m", signal_id="product_catalog_request_rate_5m", score=0.65, timestamp=1),
             AnomalyFinding(algorithm="weighted_sum", service="product-reviews", metric="request_rate_5m", signal_id="product_reviews_request_rate_5m", score=0.64, timestamp=1),
+            AnomalyFinding(algorithm="weighted_sum", service="frontend-proxy", metric="socket_io_bytes_per_second", signal_id="frontend_proxy_socket_io_bytes_per_second", score=0.63, timestamp=1),
         ]
 
         result = rca_engine(runtime_config).rank(findings, [], top_k=5)
 
-        self.assertEqual([candidate.service for candidate in result.root_causes], ["product-catalog", "product-reviews"])
+        self.assertEqual(result.anomalies, findings)
+        self.assertEqual(result.root_causes, [])
+
+    def test_rca_keeps_context_metrics_out_of_root_cause_metrics(self):
+        runtime_config = load_runtime_config(Path("config/runtime.json"))
+        findings = [
+            AnomalyFinding(algorithm="weighted_sum", service="product-reviews", metric="error_rate_5m", signal_id="product_reviews_error_rate_5m", score=0.8, timestamp=1),
+            AnomalyFinding(algorithm="weighted_sum", service="product-reviews", metric="request_rate_5m", signal_id="product_reviews_request_rate_5m", score=0.9, timestamp=1),
+            AnomalyFinding(
+                algorithm="weighted_sum",
+                service="product-reviews",
+                metric="socket_io_bytes_per_second",
+                signal_id="product_reviews_socket_io_bytes_per_second",
+                score=0.9,
+                timestamp=1,
+            ),
+        ]
+
+        result = rca_engine(runtime_config).rank(findings, [], top_k=5)
+
+        self.assertEqual(result.root_causes[0].service, "product-reviews")
+        self.assertEqual(result.root_causes[0].root_cause_metrics, ["error_rate_5m"])
 
     def test_rca_prefers_dependency_that_drifted_before_checkout(self):
         runtime_config = load_runtime_config(Path("config/runtime.json"))
@@ -421,12 +459,12 @@ class V001AnomalyRcaTest(unittest.TestCase):
     def test_rca_does_not_invent_metric_aliases_without_runtime_config(self):
         runtime_config = load_runtime_config(Path("config/runtime.json"))
         findings = [
-            AnomalyFinding(algorithm="weighted_sum", service="payment", metric="socket", signal_id="payment_socket", score=1.0, timestamp=100),
+            AnomalyFinding(algorithm="weighted_sum", service="payment", metric="socket_error", signal_id="payment_socket_error", score=1.0, timestamp=100),
         ]
 
         result = rca_engine(runtime_config).rank(findings, [], top_k=5)
 
-        self.assertEqual(result.root_causes[0].root_cause_metrics, ["socket"])
+        self.assertEqual(result.root_causes[0].root_cause_metrics, ["socket_error"])
 
     def test_pipeline_api_accepts_metric_series_and_returns_rca_result(self):
         series = [

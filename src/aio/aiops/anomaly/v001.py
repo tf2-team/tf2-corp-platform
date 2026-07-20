@@ -276,7 +276,11 @@ class V001AnomalyEngine:
 
     def evaluate(self, series: list[MetricSeries], logs: list[tuple[str, int, str]] | None = None) -> list[AnomalyFinding]:
         raw_metric_findings = [*self.robust_drift.evaluate(series), *self.ewma_stl.evaluate(series), *self.isolation_forest.evaluate(series)]
-        metric_findings = self._weighted_sum(raw_metric_findings)
+        metric_findings = [
+            finding
+            for finding in self._weighted_sum(raw_metric_findings)
+            if not _is_context_metric(finding.metric)
+        ]
         log_series = self.log_templates.build(logs or [])
         raw_log_findings = [*self.ewma_stl.evaluate(log_series), *self.isolation_forest.evaluate(log_series)]
         log_findings = self._correlated_log_findings(
@@ -360,6 +364,10 @@ def _is_disk_metric(metric: str) -> bool:
 
 def _is_busy_infra_metric(metric: str) -> bool:
     return _is_cpu_metric(metric) or _is_disk_metric(metric)
+
+
+def _is_context_metric(metric: str) -> bool:
+    return "request_rate" in metric or "socket_io" in metric
 
 
 def _is_memory_metric(metric: str) -> bool:

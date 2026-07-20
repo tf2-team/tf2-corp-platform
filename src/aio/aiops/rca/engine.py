@@ -32,7 +32,12 @@ class V001RcaEngine:
             for finding in findings
             if finding.service == "global" or not self._excluded_root_cause(finding.service)
         ]
-        if not root_findings:
+        root_anomaly_findings = [
+            finding
+            for finding in root_findings
+            if finding.service != "global" and not _is_log_metric(finding.metric) and not _is_context_metric(finding.metric)
+        ]
+        if not root_anomaly_findings:
             return RcaResult(anomalies=findings)
         graph_scores = self.graph.rank_services(root_findings)
         earliest_scores = self._earliest_drift_scores(series)
@@ -44,13 +49,13 @@ class V001RcaEngine:
                 "correlation": correlation_scores,
             }
         )
-        anomaly_services = {finding.service for finding in root_findings if finding.service != "global"}
+        anomaly_services = {finding.service for finding in root_anomaly_findings}
 
         metrics_by_service: dict[str, list[tuple[str, float, str]]] = defaultdict(list)
         for finding in root_findings:
             if finding.service == "global":
                 continue
-            if _is_log_metric(finding.metric):
+            if _is_log_metric(finding.metric) or _is_context_metric(finding.metric):
                 continue
             metrics_by_service[finding.service].append((finding.metric, finding.score, "anomaly"))
         for service, metric, score in self._drift_metrics(series):
@@ -88,7 +93,7 @@ class V001RcaEngine:
         drift_indexes: dict[str, int] = {}
         for metric in series:
             values = [point.value for point in metric.points]
-            if len(values) < self.drift_min_points:
+            if len(values) < self.drift_min_points or _is_context_metric(metric.metric):
                 continue
             index = self._first_drift_index(values)
             if index is not None and not self._excluded_root_cause(metric.service):
@@ -109,7 +114,7 @@ class V001RcaEngine:
         rows = []
         for metric in series:
             values = [point.value for point in metric.points]
-            if len(values) < self.drift_min_points or self._excluded_root_cause(metric.service):
+            if len(values) < self.drift_min_points or _is_context_metric(metric.metric) or self._excluded_root_cause(metric.service):
                 continue
             score = max((robust_score(values[:index], [values[index]]) for index in range(self.drift_min_points - 1, len(values))), default=0.0)
             if score >= self.drift_score_threshold:
@@ -133,7 +138,10 @@ class V001RcaEngine:
     def _primary_series(self, series: list[MetricSeries], findings: list[AnomalyFinding]) -> MetricSeries | None:
         if not findings:
             return None
-        top = max(findings, key=lambda finding: finding.score)
+        candidates = [finding for finding in findings if not _is_context_metric(finding.metric)]
+        if not candidates:
+            return None
+        top = max(candidates, key=lambda finding: finding.score)
         return next((metric for metric in series if metric.signal_id == top.signal_id), None)
 
     def _pearson(self, left: list[float], right: list[float]) -> float:
@@ -186,3 +194,7 @@ class V001RcaEngine:
 
 def _is_log_metric(metric: str) -> bool:
     return metric.startswith("log_template_count_")
+
+
+def _is_context_metric(metric: str) -> bool:
+    return "request_rate" in metric or "socket_io" in metric

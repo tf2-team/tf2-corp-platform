@@ -33,8 +33,7 @@ def quantile(values: list[float], q: float) -> float:
 
 
 def iqr(values: list[float]) -> float:
-    spread = quantile(values, 0.75) - quantile(values, 0.25)
-    return spread if spread != 0 else 1.0
+    return quantile(values, 0.75) - quantile(values, 0.25)
 
 
 def robust_score(baseline: list[float], values: list[float]) -> float:
@@ -42,4 +41,6 @@ def robust_score(baseline: list[float], values: list[float]) -> float:
         return 0.0
     center = median(baseline)
     spread = iqr(baseline)
+    if spread == 0:
+        spread = max(abs(center), 1e-6)
     return max(abs(value - center) / spread for value in values)

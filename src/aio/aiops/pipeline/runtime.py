@@ -163,7 +163,7 @@ class AiopsPipeline:
         suppressed_incident_ids = self._suppress_related_notifications(deduped_incidents, rca_result)
         actionable_incidents = [incident for incident in incidents if incident.incident_id not in suppressed_incident_ids]
         self._record_rca_history(rca_result, incidents, enriched, metric_series or [])
-        notifications = self._flush_notifications(incidents)
+        notifications = self._flush_notifications(incidents, rca_result)
         logger.debug("AIOPS_BLOCK notify notifications=%s", len(notifications))
         decisions: list[PolicyDecision] = []
         for incident in actionable_incidents:
@@ -199,27 +199,35 @@ class AiopsPipeline:
         )
         return result
 
-    def _flush_notifications(self, incidents: list[Incident]) -> list[NotificationMessage]:
+    def _flush_notifications(self, incidents: list[Incident], rca_result: RcaResult) -> list[NotificationMessage]:
         if self.notification_sender is None:
             notifications = self.store.pending_notifications_for(incidents)
             for message in notifications:
+                root_cause, root_score, root_metrics = _notification_root_cause(message, rca_result)
                 logger.info(
-                    "AIOPS_NOTIFY_READY incident=%s service=%s severity=%s runbook=%s route=outbox status=pending",
+                    "AIOPS_NOTIFY_READY incident=%s service=%s severity=%s runbook=%s root_cause=%s root_score=%s root_metrics=%s route=outbox status=pending",
                     message.incident_id,
                     message.service,
                     message.severity,
                     message.runbook_id,
+                    root_cause,
+                    root_score,
+                    root_metrics,
                 )
             return notifications
 
         notifications = self.store.due_notifications()
         for message in notifications:
+            root_cause, root_score, root_metrics = _notification_root_cause(message, rca_result)
             logger.info(
-                "AIOPS_NOTIFY_READY incident=%s service=%s severity=%s runbook=%s route=outbox status=dispatching",
+                "AIOPS_NOTIFY_READY incident=%s service=%s severity=%s runbook=%s root_cause=%s root_score=%s root_metrics=%s route=outbox status=dispatching",
                 message.incident_id,
                 message.service,
                 message.severity,
                 message.runbook_id,
+                root_cause,
+                root_score,
+                root_metrics,
             )
             try:
                 self.notification_sender.send(message)
@@ -229,11 +237,14 @@ class AiopsPipeline:
             else:
                 self.store.mark_notification_sent(message.incident_id)
                 logger.info(
-                    "AIOPS_NOTIFY_SENT incident=%s service=%s severity=%s runbook=%s",
+                    "AIOPS_NOTIFY_SENT incident=%s service=%s severity=%s runbook=%s root_cause=%s root_score=%s root_metrics=%s",
                     message.incident_id,
                     message.service,
                     message.severity,
                     message.runbook_id,
+                    root_cause,
+                    root_score,
+                    root_metrics,
                 )
         return notifications
 
@@ -458,6 +469,13 @@ def _log_final_root_cause_algorithm_scores(result: RcaResult, findings: list[Ano
 
 def _score(value: float | None) -> str:
     return "NA" if value is None else f"{value:.3f}"
+
+
+def _notification_root_cause(message: NotificationMessage, rca_result: RcaResult) -> tuple[str, str, str]:
+    if not rca_result.root_causes:
+        return message.service, "none", "none"
+    root = rca_result.root_causes[0]
+    return root.service, f"{root.score:.3f}", ",".join(root.root_cause_metrics) or "none"
 
 
 def _log_excerpts(summary: str, max_events: int = 100) -> list[str]:

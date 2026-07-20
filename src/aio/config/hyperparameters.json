@@ -4,18 +4,18 @@
     "top_k": 5,
     "min_points": 30,
     "ewma_alpha": 0.3,
-    "ewma_z_threshold": 3.0,
+    "ewma_z_threshold": 4.0,
     "seasonal_period": 1,
-    "isolation_score_threshold": 4.0,
+    "isolation_score_threshold": 5.0,
     "anomaly": {
       "algorithm_weights": {
         "robust_drift": 0.8,
         "ewma_stl": 0.8,
         "isolation_forest": 0.2
       },
-      "weighted_score_threshold": 0.4,
-      "single_algorithm_min_normalized_score": 2.0,
-      "robust_drift_threshold": 3.0,
+      "weighted_score_threshold": 0.6,
+      "single_algorithm_min_normalized_score": 3.0,
+      "robust_drift_threshold": 5.0,
       "robust_drift_min_baseline_points": 4,
       "suppress_cpu_robust_threshold": 3.0,
       "drain3_config_path": "config/drain3.ini",
@@ -34,7 +34,7 @@
     "combined": {
       "rrf_k": 20,
       "drift_min_points": 5,
-      "drift_score_threshold": 3.0,
+      "drift_score_threshold": 5.0,
       "canonical_service_suffixes": [],
       "metric_aliases": {},
       "ranker_weights": {

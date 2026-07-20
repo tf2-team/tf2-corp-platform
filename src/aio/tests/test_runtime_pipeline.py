@@ -443,6 +443,9 @@ class RuntimePipelineTest(unittest.TestCase):
         self.assertIn("input_candidates=1 incidents=1", text)
         self.assertIn("AIOPS_CONCLUSION source=incident failed_service=checkout", text)
         self.assertIn("AIOPS_NOTIFY_READY", text)
+        self.assertIn("root_cause=checkout", text)
+        self.assertIn("root_score=none", text)
+        self.assertIn("root_metrics=none", text)
         self.assertIn("status=pending", text)
         self.assertRegex(text, r"-+ AIOPS_RUN_END run=\d+ candidates=1 incidents=1 root_causes=0 -+")
 
