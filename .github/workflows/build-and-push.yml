@@ -11,8 +11,8 @@ name: Build and push images
 # Global Helm tag contract: every release service must exist under the same NEW_TAG.
 # Unchanged services are retagged from PREV_TAG (not skipped); changed services bake from source.
 # mem0 is a normal matrix service; compose/bake catalog edits alone do not force full bake.
-# Dev: after release-ready, direct-push only rebuilt services' values-<service>.yaml.
-# Prod: after release-ready, open a PR containing only rebuilt service digests.
+# Dev: after release-ready, direct-push only rebuilt services under service-digest/values-<service>.yaml.
+# Prod: after release-ready, open a PR containing only rebuilt service digests under service-digest/.
 
 on:
   push:
@@ -153,8 +153,8 @@ jobs:
         run: |
           set -euo pipefail
 
-          # Canonical release set (must match docker-bake.hcl group "release").
-          RELEASE_JSON='["accounting","ad","cart","checkout","currency","email","flagd-ui","fraud-detection","frontend","frontend-proxy","image-provider","kafka","llm","load-generator","mem0","opensearch","payment","product-catalog","product-reviews","quote","recommendation","shipping","shopping-copilot"]'
+          # Canonical release set (shared with PR CI / scripts/release_services.json).
+          RELEASE_JSON="$(jq -c '.' scripts/release_services.json)"
 
           mapfile -t RELEASE < <(printf '%s' "${RELEASE_JSON}" | jq -r '.[]')
 
@@ -1010,7 +1010,14 @@ jobs:
 
   trivy-image-scan:
     name: Trivy image scan
-    needs: [prepare, verify-ecr]
+    needs: [prepare, preflight, verify-ecr]
+    # Selective rebuild: scan only services baked from source (retag reuses prior digests).
+    # Full rebuild or empty build list falls back to the full catalog.
+    if: >
+      always() &&
+      needs.prepare.result == 'success' &&
+      needs.preflight.result == 'success' &&
+      needs.verify-ecr.result == 'success'
     runs-on: ubuntu-latest
     timeout-minutes: 45
     environment: ${{ needs.prepare.outputs.target_environment }}
@@ -1021,7 +1028,7 @@ jobs:
       fail-fast: false
       max-parallel: 8
       matrix:
-        service: ${{ fromJson(needs.prepare.outputs.services) }}
+        service: ${{ fromJson(needs.preflight.outputs.build_count != '0' && needs.preflight.outputs.build_services || needs.prepare.outputs.services) }}
     env:
       AWS_REGION: ${{ vars.AWS_REGION || 'us-east-1' }}
       IMAGE_REF: ${{ vars.IMAGE_NAME }}/${{ matrix.service }}:${{ needs.prepare.outputs.version }}
@@ -1122,7 +1129,17 @@ jobs:
 
   sign-and-attest:
     name: Sign and attest ${{ matrix.service }}
-    needs: [prepare, verify-ecr, trivy-image-scan, trivy-iac-scan, semgrep-sast, trufflehog-secrets]
+    needs: [prepare, preflight, verify-ecr, trivy-image-scan, trivy-iac-scan, semgrep-sast, trufflehog-secrets]
+    # Sign digests that were (re)scanned this run; retag-only reuses prior signatures on full catalog scan.
+    if: >
+      always() &&
+      needs.prepare.result == 'success' &&
+      needs.preflight.result == 'success' &&
+      needs.verify-ecr.result == 'success' &&
+      needs.trivy-image-scan.result == 'success' &&
+      needs.trivy-iac-scan.result == 'success' &&
+      needs.semgrep-sast.result == 'success' &&
+      needs.trufflehog-secrets.result == 'success'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     environment: ${{ needs.prepare.outputs.target_environment }}
@@ -1134,7 +1151,7 @@ jobs:
       fail-fast: false
       max-parallel: 8
       matrix:
-        service: ${{ fromJson(needs.prepare.outputs.services) }}
+        service: ${{ fromJson(needs.preflight.outputs.build_count != '0' && needs.preflight.outputs.build_services || needs.prepare.outputs.services) }}
     env:
       AWS_REGION: ${{ vars.AWS_REGION || 'us-east-1' }}
       COSIGN_KEY: ${{ vars.COSIGN_KMS_KEY || 'awskms:///alias/tf2-cosign-signing-key' }}
@@ -1164,12 +1181,31 @@ jobs:
         id: approval
         env:
           GH_TOKEN: ${{ github.token }}
+          EVENT_NAME: ${{ github.event_name }}
+          REF: ${{ github.ref }}
+          ACTOR: ${{ github.actor }}
         run: |
           set -euo pipefail
-          pr_number="$(gh api "repos/${GITHUB_REPOSITORY}/commits/${GITHUB_SHA}/pulls" --jq 'map(select(.merged_at != null))[0].number // empty')"
-          [[ -n "${pr_number}" ]] || { echo "::error::No merged PR found for ${GITHUB_SHA}"; exit 1; }
-          approver="$(gh pr view "${pr_number}" --repo "${GITHUB_REPOSITORY}" --json reviews --jq '[.reviews[] | select(.state == "APPROVED")][-1].author.login // empty')"
-          [[ -n "${approver}" ]] || { echo "::error::PR #${pr_number} has no APPROVED review"; exit 1; }
+          pr_number="$(gh api "repos/${GITHUB_REPOSITORY}/commits/${GITHUB_SHA}/pulls" --jq 'map(select(.merged_at != null))[0].number // empty' || true)"
+          approver=""
+          if [[ -n "${pr_number}" ]]; then
+            approver="$(gh pr view "${pr_number}" --repo "${GITHUB_REPOSITORY}" --json reviews --jq '[.reviews[] | select(.state == "APPROVED")][-1].author.login // empty' || true)"
+          fi
+          if [[ -n "${pr_number}" && -n "${approver}" ]]; then
+            echo "Resolved PR #${pr_number} approved by ${approver}"
+          elif [[ "${EVENT_NAME}" == "workflow_dispatch" ]]; then
+            # Manual republish: Environment protection is the human gate.
+            pr_number="0"
+            approver="${ACTOR}"
+            echo "::warning::No approved merged PR for ${GITHUB_SHA}; recording workflow_dispatch actor=${ACTOR}"
+          elif [[ "${REF}" == refs/tags/v* ]]; then
+            pr_number="0"
+            approver="${ACTOR}"
+            echo "::warning::No approved merged PR for tag ${REF}; recording tag pusher actor=${ACTOR}"
+          else
+            echo "::error::No merged PR with APPROVED review for ${GITHUB_SHA}. Use an approved PR merge, a v* tag, or workflow_dispatch."
+            exit 1
+          fi
           echo "pr_number=${pr_number}" >> "${GITHUB_OUTPUT}"
           echo "approver=${approver}" >> "${GITHUB_OUTPUT}"
       - name: Sign image digest
@@ -1468,9 +1504,9 @@ jobs:
             echo "| Retag count | \`${RETAG_COUNT}\` |"
             echo ""
             if [[ "${TARGET_ENV}" == "development" ]]; then
-              echo "On success, **update-chart-dev** will direct-push \`default.image.tag\` to the chart repo."
+              echo "On success, **update-chart-dev** will direct-push rebuilt service digests under \`service-digest/\` on the chart repo."
             else
-              echo "On success, **create-chart-prod-pr** will open a chart PR for \`values-prod.yaml\` (merge still required)."
+              echo "On success, **create-chart-prod-pr** will open a chart PR for \`service-digest/\` overlays (merge still required)."
             fi
             echo "This workflow does **not** deploy Helm resources or merge production chart PRs."
           } >> "${GITHUB_STEP_SUMMARY}"
@@ -1521,7 +1557,9 @@ jobs:
     if: >
       always() &&
       needs.release-ready.result == 'success' &&
-      needs.prepare.outputs.target_environment == 'development'
+      needs.resolve-image-digests.result == 'success' &&
+      needs.prepare.outputs.target_environment == 'development' &&
+      needs.preflight.outputs.build_count != '0'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
@@ -1569,11 +1607,12 @@ jobs:
           set -euo pipefail
           python3 ../platform/scripts/update_chart_service_digests.py \
             --directory . \
+            --subdir service-digest \
             --services-json "${BUILD_SERVICES_JSON}" \
             --digests-json "${DIGEST_MAP_JSON}"
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add -- 'values-*.yaml'
+          git add -- 'service-digest/values-*.yaml'
           if git diff --cached --quiet; then
             echo "No rebuilt-service digest changed; nothing to push."
             exit 0
@@ -1583,158 +1622,18 @@ jobs:
             -m "Workflow: ${PLATFORM_RUN_URL}"
           for attempt in 1 2 3 4 5; do
             if git push origin "HEAD:${CHART_BRANCH}"; then
-              echo "Selective service digests pushed to ${CHART_REPO}@${CHART_BRANCH}"
+              echo "Selective service digests pushed to ${CHART_REPO}@${CHART_BRANCH} (service-digest/)"
               exit 0
             fi
             git fetch origin "${CHART_BRANCH}"
             git rebase "origin/${CHART_BRANCH}"
             python3 ../platform/scripts/update_chart_service_digests.py \
-              --directory . --services-json "${BUILD_SERVICES_JSON}" --digests-json "${DIGEST_MAP_JSON}"
-            git add -- 'values-*.yaml'
+              --directory . --subdir service-digest \
+              --services-json "${BUILD_SERVICES_JSON}" --digests-json "${DIGEST_MAP_JSON}"
+            git add -- 'service-digest/values-*.yaml'
             git commit --amend --no-edit
           done
           echo "::error::Failed to push selective digest update after 5 attempts"
-          exit 1
-
-      - name: Update default.image.tag and push
-        if: ${{ false }} # Replaced by per-service digest promotion above.
-        working-directory: chart
-        run: |
-          set -euo pipefail
-
-          FILE="values-dev.yaml"
-          if [[ ! -f "${FILE}" ]]; then
-            echo "::error::${FILE} not found in ${CHART_REPO}@${CHART_BRANCH}"
-            exit 1
-          fi
-
-          # Precise in-place update of default.image.tag only (preserve comments/layout).
-          # Allow comments and sibling keys under default: before image: (values-prod
-          # may set terminationGracePeriodSeconds etc. above image).
-          python3 - <<'PY'
-          import os
-          import re
-          import sys
-          from pathlib import Path
-
-          path = Path("values-dev.yaml")
-          text = path.read_text(encoding="utf-8")
-          version = os.environ["VERSION"]
-
-          pattern = re.compile(
-              r"(^default:\n"
-              r"(?:[ \t].*\n)*?"
-              r"  image:\n"
-              r"(?:[ \t].*\n)*?"
-              r"    tag:\s*)\"[^\"]*\"",
-              re.MULTILINE,
-          )
-          match = pattern.search(text)
-          if not match:
-              print(
-                  "::error::Could not locate default.image.tag under default.image in values-dev.yaml",
-                  file=sys.stderr,
-              )
-              sys.exit(1)
-
-          current_match = re.search(r'tag:\s*"([^"]*)"', match.group(0))
-          current = current_match.group(1) if current_match else ""
-          print(f"current_tag={current}")
-          print(f"new_tag={version}")
-
-          if current == version:
-              Path(".tag-unchanged").write_text("1", encoding="utf-8")
-              print("Tag already up to date; no commit needed.")
-              sys.exit(0)
-
-          new_text, n = pattern.subn(rf'\1"{version}"', text, count=1)
-          if n != 1:
-              print(f"::error::Expected 1 replacement, got {n}", file=sys.stderr)
-              sys.exit(1)
-
-          path.write_text(new_text, encoding="utf-8")
-          print(f"Updated default.image.tag: {current} → {version}")
-          PY
-
-          if [[ -f .tag-unchanged ]]; then
-            {
-              echo "## Chart values-dev update"
-              echo ""
-              echo "No change: \`default.image.tag\` already \`${VERSION}\` on \`${CHART_REPO}@${CHART_BRANCH}\`."
-            } >> "${GITHUB_STEP_SUMMARY}"
-            exit 0
-          fi
-
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-
-          git add "${FILE}"
-          if git diff --cached --quiet; then
-            echo "Working tree clean after update; nothing to commit."
-            exit 0
-          fi
-
-          git commit -m "chore(dev): promote image tag to ${VERSION}" \
-            -m "Automated by platform build after release-ready." \
-            -m "Platform commit: ${PLATFORM_SHA}" \
-            -m "Workflow: ${PLATFORM_RUN_URL}"
-
-          # checkout action already configured origin with CHART_REPO_TOKEN credentials.
-          # Retry push with rebase if another bot/human commit landed first.
-          ATTEMPTS=5
-          for attempt in $(seq 1 "${ATTEMPTS}"); do
-            if git push origin "HEAD:${CHART_BRANCH}"; then
-              echo "Pushed default.image.tag=${VERSION} to ${CHART_REPO}@${CHART_BRANCH}"
-              {
-                echo "## Chart values-dev update"
-                echo ""
-                echo "| Field | Value |"
-                echo "|---|---|"
-                echo "| Repository | \`${CHART_REPO}\` |"
-                echo "| Branch | \`${CHART_BRANCH}\` |"
-                echo "| File | \`values-dev.yaml\` |"
-                echo "| Tag | \`${VERSION}\` |"
-                echo "| Mode | direct push |"
-                echo ""
-                echo "Argo CD (\`techx-corp-dev\`) will auto-sync after this commit lands."
-              } >> "${GITHUB_STEP_SUMMARY}"
-              exit 0
-            fi
-            echo "Push rejected (attempt ${attempt}/${ATTEMPTS}); pulling with rebase..."
-            git fetch origin "${CHART_BRANCH}"
-            git rebase "origin/${CHART_BRANCH}"
-
-            # Re-apply tag after rebase in case remote also touched values-dev.yaml.
-            python3 - <<'PY'
-          import os
-          import re
-          import sys
-          from pathlib import Path
-
-          path = Path("values-dev.yaml")
-          text = path.read_text(encoding="utf-8")
-          version = os.environ["VERSION"]
-          pattern = re.compile(
-              r"(^default:\n"
-              r"  image:\n"
-              r"    repository:[^\n]+\n"
-              r"(?:    #[^\n]*\n)*"
-              r"    tag:\s*)\"[^\"]*\"",
-              re.MULTILINE,
-          )
-          if not pattern.search(text):
-              print("::error::values-dev.yaml lost default.image.tag after rebase", file=sys.stderr)
-              sys.exit(1)
-          path.write_text(pattern.sub(rf'\1"{version}"', text, count=1), encoding="utf-8")
-          PY
-            git add "${FILE}"
-            if ! git diff --cached --quiet; then
-              # Keep a single promote commit on top after resolving concurrent updates.
-              git commit --amend --no-edit
-            fi
-          done
-
-          echo "::error::Failed to push to ${CHART_REPO}@${CHART_BRANCH} after ${ATTEMPTS} attempts"
           exit 1
 
   # ---------------------------------------------------------------------------
@@ -1751,7 +1650,9 @@ jobs:
     if: >
       always() &&
       needs.release-ready.result == 'success' &&
-      needs.prepare.outputs.target_environment == 'production'
+      needs.resolve-image-digests.result == 'success' &&
+      needs.prepare.outputs.target_environment == 'production' &&
+      needs.preflight.outputs.build_count != '0'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
@@ -1801,6 +1702,7 @@ jobs:
           set -euo pipefail
           python3 ../platform/scripts/update_chart_service_digests.py \
             --directory . \
+            --subdir service-digest \
             --services-json "${BUILD_SERVICES_JSON}" \
             --digests-json "${DIGEST_MAP_JSON}"
           git config user.name "github-actions[bot]"
@@ -1808,7 +1710,7 @@ jobs:
           safe_version="$(printf '%s' "${VERSION}" | tr -c 'A-Za-z0-9._-' '-')"
           promote_branch="promote/prod-digests-${safe_version}"
           git checkout -B "${promote_branch}"
-          git add -- 'values-*.yaml'
+          git add -- 'service-digest/values-*.yaml'
           if git diff --cached --quiet; then
             echo "No rebuilt-service digest changed; no production PR required."
             exit 0
@@ -1817,7 +1719,7 @@ jobs:
             -m "Platform commit: ${PLATFORM_SHA}" \
             -m "Workflow: ${PLATFORM_RUN_URL}"
           git push --force origin "HEAD:${promote_branch}"
-          body="Promote only rebuilt service digests after all security scans and attestations passed. Platform run: ${PLATFORM_RUN_URL}"
+          body="Promote only rebuilt service digests under service-digest/ after security scans and attestations. Platform run: ${PLATFORM_RUN_URL}"
           existing="$(gh pr list --repo "${CHART_REPO}" --head "${promote_branch}" --base "${CHART_PROD_BRANCH}" --state open --json url --jq '.[0].url // empty')"
           if [[ -n "${existing}" ]]; then
             gh pr edit "${existing}" --repo "${CHART_REPO}" --title "chore(prod): promote rebuilt service digests (${VERSION})" --body "${body}"
@@ -1825,206 +1727,4 @@ jobs:
             gh pr create --repo "${CHART_REPO}" --base "${CHART_PROD_BRANCH}" --head "${promote_branch}" --title "chore(prod): promote rebuilt service digests (${VERSION})" --body "${body}"
           fi
 
-      - name: Update values-prod tag, push branch, open PR
-        if: ${{ false }} # Replaced by per-service digest promotion above.
-        working-directory: chart
-        env:
-          GH_TOKEN: ${{ secrets.CHART_REPO_TOKEN }}
-        run: |
-          set -euo pipefail
-
-          FILE="values-prod.yaml"
-          if [[ ! -f "${FILE}" ]]; then
-            echo "::error::${FILE} not found in ${CHART_REPO}@${CHART_PROD_BRANCH}"
-            exit 1
-          fi
-
-          # Sanitize version for a valid git branch segment (e.g. v1.2.3 or sha-a1b2c3d).
-          SAFE_VERSION="$(printf '%s' "${VERSION}" | tr -c 'A-Za-z0-9._-' '-')"
-          PROMOTE_BRANCH="promote/prod-image-${SAFE_VERSION}"
-
-          # Precise in-place update of default.image.tag only (preserve comments/layout).
-          # Allow comments and sibling keys under default: before image: (values-prod
-          # may set terminationGracePeriodSeconds etc. above image).
-          python3 - <<'PY'
-          import os
-          import re
-          import sys
-          from pathlib import Path
-
-          path = Path("values-prod.yaml")
-          text = path.read_text(encoding="utf-8")
-          version = os.environ["VERSION"]
-
-          pattern = re.compile(
-              r"(^default:\n"
-              r"(?:[ \t].*\n)*?"
-              r"  image:\n"
-              r"(?:[ \t].*\n)*?"
-              r"    tag:\s*)\"[^\"]*\"",
-              re.MULTILINE,
-          )
-          match = pattern.search(text)
-          if not match:
-              print(
-                  "::error::Could not locate default.image.tag under default.image in values-prod.yaml",
-                  file=sys.stderr,
-              )
-              sys.exit(1)
-
-          current_match = re.search(r'tag:\s*"([^"]*)"', match.group(0))
-          current = current_match.group(1) if current_match else ""
-          print(f"current_tag={current}")
-          print(f"new_tag={version}")
-
-          if current == version:
-              Path(".tag-unchanged").write_text("1", encoding="utf-8")
-              print("Tag already up to date; no PR needed.")
-              sys.exit(0)
-
-          new_text, n = pattern.subn(rf'\1"{version}"', text, count=1)
-          if n != 1:
-              print(f"::error::Expected 1 replacement, got {n}", file=sys.stderr)
-              sys.exit(1)
-
-          path.write_text(new_text, encoding="utf-8")
-          Path(".previous-tag").write_text(current, encoding="utf-8")
-          print(f"Updated default.image.tag: {current} → {version}")
-          PY
-
-          if [[ -f .tag-unchanged ]]; then
-            {
-              echo "## Chart values-prod PR"
-              echo ""
-              echo "No change: \`default.image.tag\` already \`${VERSION}\` on \`${CHART_REPO}@${CHART_PROD_BRANCH}\`."
-              echo "Skipped branch push and PR creation."
-            } >> "${GITHUB_STEP_SUMMARY}"
-            exit 0
-          fi
-
-          PREVIOUS_TAG="unknown"
-          if [[ -f .previous-tag ]]; then
-            PREVIOUS_TAG="$(cat .previous-tag)"
-          fi
-
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-
-          git checkout -B "${PROMOTE_BRANCH}"
-
-          git add "${FILE}"
-          if git diff --cached --quiet; then
-            echo "Working tree clean after update; nothing to commit."
-            exit 0
-          fi
-
-          git commit -m "chore(prod): promote image tag to ${VERSION}" \
-            -m "Automated PR by platform build after release-ready." \
-            -m "Platform commit: ${PLATFORM_SHA}" \
-            -m "Workflow: ${PLATFORM_RUN_URL}"
-
-          # Bot promote branches are disposable per tag; force refresh on re-runs.
-          git push --force origin "HEAD:${PROMOTE_BRANCH}"
-
-          PR_TITLE="chore(prod): promote image tag to ${VERSION}"
-          # Body file keeps YAML/script indentation out of the heredoc delimiter.
-          {
-            echo "## Summary"
-            echo ""
-            echo "Promote production Helm image tag after a successful platform image publish."
-            echo ""
-            echo "| Field | Value |"
-            echo "|---|---|"
-            echo "| File | \`${FILE}\` |"
-            echo "| Previous tag | \`${PREVIOUS_TAG}\` |"
-            echo "| New tag | \`${VERSION}\` |"
-            echo "| Base branch | \`${CHART_PROD_BRANCH}\` |"
-            echo "| Platform repo | \`${PLATFORM_REPO}\` |"
-            echo "| Platform commit | \`${PLATFORM_SHA}\` |"
-            echo "| Platform workflow | ${PLATFORM_RUN_URL} |"
-            echo ""
-            echo "## Notes"
-            echo ""
-            echo "* All **23** release images were built and verified in ECR before this PR was opened."
-            echo "* Merge this PR to let Argo CD Application \`techx-corp\` sync the new global tag."
-            echo "* Do **not** merge while a platform publish for this tag is still in progress (this job only runs after \`release-ready\`)."
-            echo ""
-            echo "## Validation after merge"
-            echo ""
-            echo '```cmd'
-            echo "argocd app wait techx-corp --sync --health --timeout 600"
-            echo '```'
-          } > /tmp/chart-prod-pr-body.md
-
-          # Idempotent: reuse an existing open PR for this head branch when present.
-          # Prefer owner:branch for --head so gh matches the chart repo owner reliably.
-          CHART_OWNER="${CHART_REPO%%/*}"
-          HEAD_REF="${CHART_OWNER}:${PROMOTE_BRANCH}"
-          EXISTING_URL="$(
-            gh pr list \
-              --repo "${CHART_REPO}" \
-              --head "${HEAD_REF}" \
-              --base "${CHART_PROD_BRANCH}" \
-              --state open \
-              --json url \
-              --jq '.[0].url // empty'
-          )"
-
-          MANUAL_PR_URL="https://github.com/${CHART_REPO}/compare/${CHART_PROD_BRANCH}...${PROMOTE_BRANCH}?expand=1"
-
-          if [[ -n "${EXISTING_URL}" ]]; then
-            echo "Updated existing PR: ${EXISTING_URL}"
-            if ! gh pr edit "${EXISTING_URL}" --repo "${CHART_REPO}" \
-              --title "${PR_TITLE}" \
-              --body-file /tmp/chart-prod-pr-body.md; then
-              echo "::error::Failed to update existing PR. Ensure CHART_REPO_TOKEN fine-grained PAT has Pull requests: Read and write on ${CHART_REPO}. Branch already pushed: ${PROMOTE_BRANCH}. Manual open: ${MANUAL_PR_URL}"
-              exit 1
-            fi
-            PR_URL="${EXISTING_URL}"
-          else
-            set +e
-            PR_URL="$(
-              gh pr create \
-                --repo "${CHART_REPO}" \
-                --base "${CHART_PROD_BRANCH}" \
-                --head "${PROMOTE_BRANCH}" \
-                --title "${PR_TITLE}" \
-                --body-file /tmp/chart-prod-pr-body.md \
-                2> /tmp/gh-pr-create.err
-            )"
-            PR_CREATE_RC=$?
-            set -e
-            if [[ "${PR_CREATE_RC}" -ne 0 ]]; then
-              cat /tmp/gh-pr-create.err >&2 || true
-              {
-                echo "::error::Failed to create chart PR (often GraphQL: Resource not accessible by personal access token)."
-                echo "::error::Fix: regenerate/edit the fine-grained PAT used as CHART_REPO_TOKEN with repository permissions:"
-                echo "::error::  - Contents: Read and write"
-                echo "::error::  - Pull requests: Read and write"
-                echo "::error::Then update the platform repo secret CHART_REPO_TOKEN and re-run this job."
-                echo "::error::Branch already pushed: ${PROMOTE_BRANCH}"
-                echo "::error::Manual PR (until PAT is fixed): ${MANUAL_PR_URL}"
-              }
-              exit 1
-            fi
-            echo "Opened PR: ${PR_URL}"
-          fi
-
-          {
-            echo "## Chart values-prod PR"
-            echo ""
-            echo "| Field | Value |"
-            echo "|---|---|"
-            echo "| Repository | \`${CHART_REPO}\` |"
-            echo "| Base branch | \`${CHART_PROD_BRANCH}\` |"
-            echo "| Head branch | \`${PROMOTE_BRANCH}\` |"
-            echo "| File | \`${FILE}\` |"
-            echo "| Previous tag | \`${PREVIOUS_TAG}\` |"
-            echo "| Tag | \`${VERSION}\` |"
-            echo "| Mode | pull request (no auto-merge) |"
-            echo "| PR | ${PR_URL} |"
-            echo ""
-            echo "Review and merge the PR to deploy. Argo CD (\`techx-corp\`) will sync after merge to \`${CHART_PROD_BRANCH}\`."
-          } >> "${GITHUB_STEP_SUMMARY}"
-
-# Change trail: @hungxqt - 2026-07-19 - Add shopping-copilot to 23-service release catalog and publish gates.
+# Change trail: @hungxqt - 2026-07-20 - Selective service-digest promote, sign/dispatch gates, scan rebuilt-only.

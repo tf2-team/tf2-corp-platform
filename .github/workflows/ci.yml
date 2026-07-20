@@ -51,6 +51,9 @@ jobs:
       - name: Enforce digest-pinned Dockerfile base images
         run: python3 scripts/check_pinned_base_images.py
 
+      - name: Release catalog consistency
+        run: python3 scripts/check_release_catalog.py
+
       - name: Secure delivery script tests
         run: python3 scripts/test_secure_delivery_scripts.py
 
@@ -152,8 +155,8 @@ jobs:
         run: |
           set -euo pipefail
 
-          # Canonical release set (must match docker-bake.hcl group "release").
-          RELEASE_JSON='["accounting","ad","cart","checkout","currency","email","flagd-ui","fraud-detection","frontend","frontend-proxy","image-provider","kafka","llm","load-generator","mem0","opensearch","payment","product-catalog","product-reviews","quote","recommendation","shipping","shopping-copilot"]'
+          # Canonical release set (shared with publish / scripts/release_services.json).
+          RELEASE_JSON="$(jq -c '.' scripts/release_services.json)"
           mapfile -t RELEASE < <(printf '%s' "${RELEASE_JSON}" | jq -r '.[]')
           declare -A IS_RELEASE=()
           for s in "${RELEASE[@]}"; do
@@ -394,6 +397,8 @@ jobs:
 
   semgrep-sast:
     name: Semgrep SAST
+    # Publish path re-runs SAST in build-and-push; skip on workflow_call to avoid duplicate cost.
+    if: github.event_name != 'workflow_call'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
@@ -413,6 +418,7 @@ jobs:
 
   trufflehog-secrets:
     name: TruffleHog secrets
+    if: github.event_name != 'workflow_call'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
@@ -437,6 +443,7 @@ jobs:
 
   trivy-iac-scan:
     name: Trivy IaC misconfiguration
+    if: github.event_name != 'workflow_call'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
@@ -499,7 +506,6 @@ jobs:
           AI_GUARDRAIL_REQUIRE_MODEL: "true"
           PYTHONPATH: src/product-reviews
         run: python -c "import guardrails; guardrails.initialize_guardrails()"
-# Change trail: @hungxqt - 2026-07-19 - PR bake still clears cache; bake defaults moved to GHA type=gha.
 
   shopping-copilot-tests:
     name: Shopping copilot tests
@@ -534,4 +540,4 @@ jobs:
       - name: Validate shared guardrail dependency
         run: >-
           python -c "from llm_guard.input_scanners import PromptInjection; from techx_ai_common import guardrails"
-# Change trail: @hungxqt - 2026-07-17 - Align PR image classification with selective mem0 matrix build.
+# Change trail: @hungxqt - 2026-07-20 - Shared release catalog; skip SAST/secrets/IaC on workflow_call.
