@@ -1,0 +1,352 @@
+{
+  "schema_version": "2.0",
+  "collection_profiles": {
+    "one_second": {
+      "step_seconds": 1,
+      "lookback_seconds": 6200,
+      "detector_bucket_seconds": 60,
+      "required_source_resolution_seconds": 1,
+      "incremental": true,
+      "max_concurrency": 8
+    }
+  },
+  "templates": {
+    "red.http.p95_latency": {
+      "query_id_template": "$service.p95_latency_5m",
+      "signal_id_template": "${service_id}_p95_latency_5m",
+      "promql": "histogram_quantile(0.95, sum(rate(http_server_request_duration_seconds_bucket{service_name=\"$service\"}[5m])) by (le)) and on() (sum(rate(http_server_request_duration_seconds_count{service_name=\"$service\"}[5m])) > 0)",
+      "unit": "seconds",
+      "window": "5m",
+      "metric": "p95_latency_5m",
+      "feature_role": "anomaly_input"
+    },
+    "red.http.p99_latency": {
+      "query_id_template": "$service.p99_latency_5m",
+      "signal_id_template": "${service_id}_p99_latency_5m",
+      "promql": "histogram_quantile(0.99, sum(rate(http_server_request_duration_seconds_bucket{service_name=\"$service\"}[5m])) by (le)) and on() (sum(rate(http_server_request_duration_seconds_count{service_name=\"$service\"}[5m])) > 0)",
+      "unit": "seconds",
+      "window": "5m",
+      "metric": "p99_latency_5m",
+      "feature_role": "anomaly_input"
+    },
+    "red.http.error_ratio": {
+      "query_id_template": "$service.error_rate_5m",
+      "signal_id_template": "${service_id}_error_rate_5m",
+      "promql": "(((sum(rate(http_server_request_duration_seconds_count{service_name=\"$service\",http_response_status_code=~\"5..\"}[5m])) or 0 * sum(rate(http_server_request_duration_seconds_count{service_name=\"$service\"}[5m]))) / clamp_min(sum(rate(http_server_request_duration_seconds_count{service_name=\"$service\"}[5m])), 0.000000001)) and on() (sum(rate(http_server_request_duration_seconds_count{service_name=\"$service\"}[5m])) > 0))",
+      "unit": "ratio",
+      "window": "5m",
+      "metric": "error_rate_5m",
+      "feature_role": "anomaly_input"
+    },
+    "red.http.request_rate": {
+      "query_id_template": "$service.request_rate_5m",
+      "signal_id_template": "${service_id}_request_rate_5m",
+      "promql": "sum(rate(http_server_request_duration_seconds_count{service_name=\"$service\"}[5m]))",
+      "unit": "requests_per_second",
+      "window": "5m",
+      "metric": "request_rate_5m",
+      "feature_role": "anomaly_input"
+    },
+    "red.grpc.p95_latency": {
+      "query_id_template": "$service.p95_latency_5m",
+      "signal_id_template": "${service_id}_p95_latency_5m",
+      "promql": "(histogram_quantile(0.95, sum(rate(rpc_server_duration_milliseconds_bucket{service_name=\"$service\"}[5m])) by (le)) / 1000) and on() (sum(rate(rpc_server_duration_milliseconds_count{service_name=\"$service\"}[5m])) > 0)",
+      "unit": "seconds",
+      "window": "5m",
+      "metric": "p95_latency_5m",
+      "feature_role": "anomaly_input"
+    },
+    "red.grpc.p99_latency": {
+      "query_id_template": "$service.p99_latency_5m",
+      "signal_id_template": "${service_id}_p99_latency_5m",
+      "promql": "(histogram_quantile(0.99, sum(rate(rpc_server_duration_milliseconds_bucket{service_name=\"$service\"}[5m])) by (le)) / 1000) and on() (sum(rate(rpc_server_duration_milliseconds_count{service_name=\"$service\"}[5m])) > 0)",
+      "unit": "seconds",
+      "window": "5m",
+      "metric": "p99_latency_5m",
+      "feature_role": "anomaly_input"
+    },
+    "red.grpc.error_ratio": {
+      "query_id_template": "$service.error_rate_5m",
+      "signal_id_template": "${service_id}_error_rate_5m",
+      "promql": "(((sum(rate(rpc_server_duration_milliseconds_count{service_name=\"$service\",rpc_grpc_status_code!=\"0\"}[5m])) or 0 * sum(rate(rpc_server_duration_milliseconds_count{service_name=\"$service\"}[5m]))) / clamp_min(sum(rate(rpc_server_duration_milliseconds_count{service_name=\"$service\"}[5m])), 0.000000001)) and on() (sum(rate(rpc_server_duration_milliseconds_count{service_name=\"$service\"}[5m])) > 0))",
+      "unit": "ratio",
+      "window": "5m",
+      "metric": "error_rate_5m",
+      "feature_role": "anomaly_input"
+    },
+    "red.grpc.request_rate": {
+      "query_id_template": "$service.request_rate_5m",
+      "signal_id_template": "${service_id}_request_rate_5m",
+      "promql": "sum(rate(rpc_server_duration_milliseconds_count{service_name=\"$service\"}[5m]))",
+      "unit": "requests_per_second",
+      "window": "5m",
+      "metric": "request_rate_5m",
+      "feature_role": "anomaly_input"
+    },
+    "red.spans.server.p95_latency": {
+      "query_id_template": "$service.p95_latency_5m",
+      "signal_id_template": "${service_id}_p95_latency_5m",
+      "promql": "(histogram_quantile(0.95, sum(rate(traces_span_metrics_duration_milliseconds_bucket{service_name=\"$service\",span_kind=\"SPAN_KIND_SERVER\"}[5m])) by (le)) / 1000) and on() (sum(rate(traces_span_metrics_duration_milliseconds_count{service_name=\"$service\",span_kind=\"SPAN_KIND_SERVER\"}[5m])) > 0)",
+      "unit": "seconds",
+      "window": "5m",
+      "metric": "p95_latency_5m",
+      "feature_role": "anomaly_input"
+    },
+    "red.spans.server.p99_latency": {
+      "query_id_template": "$service.p99_latency_5m",
+      "signal_id_template": "${service_id}_p99_latency_5m",
+      "promql": "(histogram_quantile(0.99, sum(rate(traces_span_metrics_duration_milliseconds_bucket{service_name=\"$service\",span_kind=\"SPAN_KIND_SERVER\"}[5m])) by (le)) / 1000) and on() (sum(rate(traces_span_metrics_duration_milliseconds_count{service_name=\"$service\",span_kind=\"SPAN_KIND_SERVER\"}[5m])) > 0)",
+      "unit": "seconds",
+      "window": "5m",
+      "metric": "p99_latency_5m",
+      "feature_role": "anomaly_input"
+    },
+    "red.spans.server.error_ratio": {
+      "query_id_template": "$service.error_rate_5m",
+      "signal_id_template": "${service_id}_error_rate_5m",
+      "promql": "(((sum(rate(traces_span_metrics_calls_total{service_name=\"$service\",span_kind=\"SPAN_KIND_SERVER\",status_code=\"STATUS_CODE_ERROR\"}[5m])) or 0 * sum(rate(traces_span_metrics_calls_total{service_name=\"$service\",span_kind=\"SPAN_KIND_SERVER\"}[5m]))) / clamp_min(sum(rate(traces_span_metrics_calls_total{service_name=\"$service\",span_kind=\"SPAN_KIND_SERVER\"}[5m])), 0.000000001)) and on() (sum(rate(traces_span_metrics_calls_total{service_name=\"$service\",span_kind=\"SPAN_KIND_SERVER\"}[5m])) > 0))",
+      "unit": "ratio",
+      "window": "5m",
+      "metric": "error_rate_5m",
+      "feature_role": "anomaly_input"
+    },
+    "red.spans.server.request_rate": {
+      "query_id_template": "$service.request_rate_5m",
+      "signal_id_template": "${service_id}_request_rate_5m",
+      "promql": "sum(rate(traces_span_metrics_calls_total{service_name=\"$service\",span_kind=\"SPAN_KIND_SERVER\"}[5m]))",
+      "unit": "requests_per_second",
+      "window": "5m",
+      "metric": "request_rate_5m",
+      "feature_role": "anomaly_input"
+    },
+    "red.consumer.p95_latency": {
+      "query_id_template": "$service.p95_latency_5m",
+      "signal_id_template": "${service_id}_p95_latency_5m",
+      "promql": "(histogram_quantile(0.95, sum(rate(traces_span_metrics_duration_milliseconds_bucket{service_name=\"$service\",span_kind=\"SPAN_KIND_CONSUMER\"}[5m])) by (le)) / 1000) and on() (sum(rate(traces_span_metrics_duration_milliseconds_count{service_name=\"$service\",span_kind=\"SPAN_KIND_CONSUMER\"}[5m])) > 0)",
+      "unit": "seconds",
+      "window": "5m",
+      "metric": "p95_latency_5m",
+      "feature_role": "anomaly_input"
+    },
+    "red.consumer.p99_latency": {
+      "query_id_template": "$service.p99_latency_5m",
+      "signal_id_template": "${service_id}_p99_latency_5m",
+      "promql": "(histogram_quantile(0.99, sum(rate(traces_span_metrics_duration_milliseconds_bucket{service_name=\"$service\",span_kind=\"SPAN_KIND_CONSUMER\"}[5m])) by (le)) / 1000) and on() (sum(rate(traces_span_metrics_duration_milliseconds_count{service_name=\"$service\",span_kind=\"SPAN_KIND_CONSUMER\"}[5m])) > 0)",
+      "unit": "seconds",
+      "window": "5m",
+      "metric": "p99_latency_5m",
+      "feature_role": "anomaly_input"
+    },
+    "red.consumer.error_ratio": {
+      "query_id_template": "$service.error_rate_5m",
+      "signal_id_template": "${service_id}_error_rate_5m",
+      "promql": "(((sum(rate(traces_span_metrics_calls_total{service_name=\"$service\",span_kind=\"SPAN_KIND_CONSUMER\",status_code=\"STATUS_CODE_ERROR\"}[5m])) or 0 * sum(rate(traces_span_metrics_calls_total{service_name=\"$service\",span_kind=\"SPAN_KIND_CONSUMER\"}[5m]))) / clamp_min(sum(rate(traces_span_metrics_calls_total{service_name=\"$service\",span_kind=\"SPAN_KIND_CONSUMER\"}[5m])), 0.000000001)) and on() (sum(rate(traces_span_metrics_calls_total{service_name=\"$service\",span_kind=\"SPAN_KIND_CONSUMER\"}[5m])) > 0))",
+      "unit": "ratio",
+      "window": "5m",
+      "metric": "error_rate_5m",
+      "feature_role": "anomaly_input"
+    },
+    "red.consumer.request_rate": {
+      "query_id_template": "$service.request_rate_5m",
+      "signal_id_template": "${service_id}_request_rate_5m",
+      "promql": "sum(rate(traces_span_metrics_calls_total{service_name=\"$service\",span_kind=\"SPAN_KIND_CONSUMER\"}[5m]))",
+      "unit": "requests_per_second",
+      "window": "5m",
+      "metric": "request_rate_5m",
+      "feature_role": "anomaly_input"
+    },
+    "resource.cpu_millicores": {
+      "query_id_template": "$service.cpu_millicores",
+      "signal_id_template": "${service_id}_cpu_millicores",
+      "promql": "(sum(rate(container_cpu_usage_seconds_total{container=\"$service\"}[5m])) * 1000) or (sum(rate(container_cpu_usage_total{container_name=~\".*$service.*\"}[5m])) * 1000) or (sum(k8s_pod_cpu_usage{k8s_deployment_name=\"$service\"}) * 1000)",
+      "unit": "millicores",
+      "window": "5m",
+      "metric": "cpu_millicores",
+      "feature_role": "anomaly_input"
+    },
+    "resource.memory_usage_bytes": {
+      "query_id_template": "$service.memory_usage_bytes",
+      "signal_id_template": "${service_id}_memory_usage_bytes",
+      "promql": "sum(container_memory_working_set_bytes{container=\"$service\"}) or sum(container_memory_usage_bytes{container=\"$service\"}) or sum(container_memory_usage_bytes{container_name=~\".*$service.*\"}) or sum(k8s_pod_memory_usage{k8s_deployment_name=\"$service\"})",
+      "unit": "bytes_per_second",
+      "window": "instant",
+      "metric": "memory_usage_bytes",
+      "feature_role": "anomaly_input"
+    },
+    "resource.disk_io_bytes_per_second": {
+      "query_id_template": "$service.disk_io_bytes_per_second",
+      "signal_id_template": "${service_id}_disk_io_bytes_per_second",
+      "promql": "((sum(rate(container_fs_reads_bytes_total{container=\"$service\"}[5m])) or 0 * sum(rate(container_fs_writes_bytes_total{container=\"$service\"}[5m]))) + (sum(rate(container_fs_writes_bytes_total{container=\"$service\"}[5m])) or 0 * sum(rate(container_fs_reads_bytes_total{container=\"$service\"}[5m])))) or sum(rate(container_blockio_io_service_bytes_recursive{container_name=~\".*$service.*\"}[5m]))",
+      "unit": "bytes_per_second",
+      "window": "5m",
+      "metric": "disk_io_bytes_per_second",
+      "feature_role": "anomaly_input",
+      "required_for_monitoring": false
+    },
+    "resource.socket_io_bytes_per_second": {
+      "query_id_template": "$service.socket_io_bytes_per_second",
+      "signal_id_template": "${service_id}_socket_io_bytes_per_second",
+      "promql": "((sum(rate(container_network_receive_bytes_total{pod=~\"$service.*\"}[5m])) or 0 * sum(rate(container_network_transmit_bytes_total{pod=~\"$service.*\"}[5m]))) + (sum(rate(container_network_transmit_bytes_total{pod=~\"$service.*\"}[5m])) or 0 * sum(rate(container_network_receive_bytes_total{pod=~\"$service.*\"}[5m])))) or ((sum(rate(container_network_io_usage_rx_bytes{container_name=~\".*$service.*\"}[5m])) or 0 * sum(rate(container_network_io_usage_tx_bytes{container_name=~\".*$service.*\"}[5m]))) + (sum(rate(container_network_io_usage_tx_bytes{container_name=~\".*$service.*\"}[5m])) or 0 * sum(rate(container_network_io_usage_rx_bytes{container_name=~\".*$service.*\"}[5m]))))",
+      "unit": "bytes",
+      "window": "5m",
+      "metric": "socket_io_bytes_per_second",
+      "feature_role": "anomaly_input",
+      "required_for_monitoring": false
+    },
+    "resource.workload_ready_pods": {
+      "query_id_template": "$service.workload_ready_pods",
+      "signal_id_template": "${service_id}_workload_ready_pods",
+      "promql": "sum(k8s_pod_ready{k8s_deployment_name=\"$service\"}) or sum(kube_pod_status_ready{pod=~\"$service.*\",condition=\"true\"})",
+      "unit": "count",
+      "window": "instant",
+      "metric": "workload_ready_pods",
+      "feature_role": "anomaly_input"
+    },
+    "resource.workload_ready_ratio": {
+      "query_id_template": "$service.workload_ready_ratio",
+      "signal_id_template": "${service_id}_workload_ready_ratio",
+      "promql": "(sum(k8s_pod_ready{k8s_deployment_name=\"$service\"}) / clamp_min(count(k8s_pod_ready{k8s_deployment_name=\"$service\"}), 1)) or (sum(kube_pod_status_ready{pod=~\"$service.*\",condition=\"true\"}) / clamp_min(count(kube_pod_status_ready{pod=~\"$service.*\",condition=\"true\"}), 1))",
+      "unit": "ratio",
+      "window": "instant",
+      "metric": "workload_ready_ratio",
+      "feature_role": "anomaly_input"
+    },
+    "slo.grpc.method_bad_ratio": {
+      "query_id_template": "$service.bad_ratio.24h",
+      "signal_id_template": "${service_id}_bad_ratio_24h",
+      "promql": "(((sum(increase(rpc_server_duration_milliseconds_count{service_name=\"$service\",rpc_method=\"$method\",rpc_grpc_status_code!=\"0\"}[24h])) or 0 * sum(increase(rpc_server_duration_milliseconds_count{service_name=\"$service\",rpc_method=\"$method\"}[24h]))) / clamp_min(sum(increase(rpc_server_duration_milliseconds_count{service_name=\"$service\",rpc_method=\"$method\"}[24h])), 0.000000001)) and on() (sum(increase(rpc_server_duration_milliseconds_count{service_name=\"$service\",rpc_method=\"$method\"}[24h])) > 0))",
+      "unit": "ratio",
+      "window": "24h",
+      "metric": "bad_ratio_24h",
+      "feature_role": "official_slo",
+      "modes": ["instant"]
+    },
+    "dependency.grpc_client.error_ratio": {
+      "query_id_template": "$service.$dependency.error_rate.5m",
+      "signal_id_template": "${service_id}_${dependency_id}_error_rate_5m",
+      "promql": "(((sum(rate(rpc_client_duration_milliseconds_count{service_name=\"$service\",server_address=~\"$dependency.*\",rpc_grpc_status_code!=\"0\"}[5m])) or 0 * sum(rate(rpc_client_duration_milliseconds_count{service_name=\"$service\",server_address=~\"$dependency.*\"}[5m]))) / clamp_min(sum(rate(rpc_client_duration_milliseconds_count{service_name=\"$service\",server_address=~\"$dependency.*\"}[5m])), 0.000000001)) and on() (sum(rate(rpc_client_duration_milliseconds_count{service_name=\"$service\",server_address=~\"$dependency.*\"}[5m])) > 0))",
+      "unit": "ratio",
+      "window": "5m",
+      "metric": "${dependency_id}_error_rate_5m",
+      "feature_role": "dependency_signal",
+      "modes": ["instant"],
+      "required_labels": ["service", "dependency"]
+    },
+    "postgres.active_connections": {
+      "query_id_template": "postgresql.active_connections",
+      "signal_id_template": "postgresql_active_connections",
+      "promql": "sum(postgresql_backends)",
+      "unit": "count",
+      "window": "instant",
+      "metric": "active_connections",
+      "feature_role": "anomaly_input"
+    },
+    "postgres.client_pool_utilization": {
+      "query_id_template": "$service.db_pool_utilization",
+      "signal_id_template": "${service_id}_db_pool_utilization",
+      "promql": "(sum(db_client_connections_usage{service_name=\"$service\"}) / clamp_min(sum(db_client_connections_max{service_name=\"$service\"}), 1)) and on() (sum(db_client_connections_max{service_name=\"$service\"}) > 0)",
+      "unit": "ratio",
+      "window": "instant",
+      "metric": "db_pool_utilization",
+      "feature_role": "anomaly_input",
+      "required_for_monitoring": false
+    },
+    "kafka.consumer_lag": {
+      "query_id_template": "kafka.consumer_lag",
+      "signal_id_template": "kafka_consumer_lag",
+      "promql": "sum(kafka_consumer_group_lag)",
+      "unit": "count",
+      "window": "instant",
+      "metric": "consumer_lag",
+      "feature_role": "anomaly_input"
+    },
+    "otel.exporter_queue_saturation": {
+      "query_id_template": "otel_collector.exporter_queue_saturation",
+      "signal_id_template": "otel_collector_exporter_queue_saturation",
+      "promql": "max(otelcol_exporter_queue_size / clamp_min(otelcol_exporter_queue_capacity, 1))",
+      "unit": "ratio",
+      "window": "instant",
+      "metric": "exporter_queue_saturation",
+      "feature_role": "anomaly_input"
+    },
+    "redis.memory_used_bytes": {
+      "query_id_template": "valkey_cart.memory_used_bytes",
+      "signal_id_template": "valkey_cart_memory_used_bytes",
+      "promql": "sum(redis_memory_used_bytes)",
+      "unit": "bytes",
+      "window": "instant",
+      "metric": "memory_used_bytes",
+      "feature_role": "anomaly_input",
+      "required_for_monitoring": false
+    }
+  },
+  "service_groups": [
+    {
+      "services": ["frontend", "cart", "quote"],
+      "template_ids": ["red.http.p95_latency", "red.http.p99_latency", "red.http.error_ratio", "red.http.request_rate"]
+    },
+    {
+      "services": ["frontend-proxy"],
+      "template_ids": ["red.spans.server.p95_latency", "red.spans.server.p99_latency", "red.spans.server.error_ratio", "red.spans.server.request_rate"]
+    },
+    {
+      "services": ["checkout", "payment", "product-catalog", "product-reviews", "recommendation", "ad", "currency", "shipping", "email"],
+      "template_ids": ["red.grpc.p95_latency", "red.grpc.p99_latency", "red.grpc.error_ratio", "red.grpc.request_rate"]
+    },
+    {
+      "services": ["fraud-detection", "accounting"],
+      "template_ids": ["red.consumer.p95_latency", "red.consumer.p99_latency", "red.consumer.error_ratio", "red.consumer.request_rate"]
+    },
+    {
+      "services": ["checkout", "payment", "frontend-proxy", "frontend", "product-catalog", "product-reviews", "recommendation", "ad", "currency", "cart", "shipping", "email", "quote", "fraud-detection", "accounting"],
+      "template_ids": ["resource.cpu_millicores", "resource.memory_usage_bytes", "resource.disk_io_bytes_per_second", "resource.socket_io_bytes_per_second", "resource.workload_ready_pods", "resource.workload_ready_ratio"]
+    }
+  ],
+  "instances": [
+    {
+      "query_id": "checkout.bad_ratio.24h",
+      "signal_id": "checkout_bad_ratio_24h",
+      "template_id": "slo.grpc.method_bad_ratio",
+      "service": "checkout",
+      "parameters": {"method": "PlaceOrder"}
+    },
+    {
+      "query_id": "checkout.payment_error_rate.5m",
+      "signal_id": "checkout_payment_error_rate_5m",
+      "template_id": "dependency.grpc_client.error_ratio",
+      "service": "checkout",
+      "parameters": {"dependency": "payment", "dependency_id": "payment"},
+      "labels": {"dependency": "payment"}
+    },
+    {
+      "query_id": "postgresql.active_connections",
+      "signal_id": "postgresql_active_connections",
+      "template_id": "postgres.active_connections",
+      "service": "postgresql"
+    },
+    {
+      "query_id": "product_catalog.db_pool_utilization",
+      "signal_id": "product_catalog_db_pool_utilization",
+      "template_id": "postgres.client_pool_utilization",
+      "service": "product-catalog"
+    },
+    {
+      "query_id": "kafka.consumer_lag",
+      "signal_id": "kafka_consumer_lag",
+      "template_id": "kafka.consumer_lag",
+      "service": "kafka"
+    },
+    {
+      "query_id": "otel_collector.exporter_queue_saturation",
+      "signal_id": "otel_collector_exporter_queue_saturation",
+      "template_id": "otel.exporter_queue_saturation",
+      "service": "otel-collector"
+    },
+    {
+      "query_id": "valkey_cart.memory_used_bytes",
+      "signal_id": "valkey_cart_memory_used_bytes",
+      "template_id": "redis.memory_used_bytes",
+      "service": "valkey-cart"
+    }
+  ]
+}

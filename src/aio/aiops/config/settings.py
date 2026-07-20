@@ -32,6 +32,7 @@ class Settings(BaseSettings):
     evidence_dir: Path = Path("evidence")
     state_store_path: Path = Path("state/aiops.sqlite3")
     runtime_config_path: Path = Path("config/runtime.json")
+    prometheus_registry_path: Path = Path("config/prometheus_queries.json")
     hyperparameters_path: Path = Path("config/hyperparameters.json")
     actions_catalog_path: Path = Path("config/actions.json")
     incidents_history_path: Path = Path("config/incidents_history.json")

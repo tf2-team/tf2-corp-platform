@@ -63,7 +63,7 @@
   },
   "detectors": {
     "thresholds": {
-      "ops01_checkout_slo": 0.06,
+      "ops01_checkout_slo": 0.01,
       "ops03_checkout_payment_dependency": 0.05,
       "auto_checkout_error_rate": 0.05,
       "auto_payment_error_rate": 0.05,
@@ -79,18 +79,13 @@
       "auto_email_error_rate": 0.05,
       "auto_quote_error_rate": 0.05,
       "auto_fraud_detection_error_rate": 0.05,
+      "auto_accounting_error_rate": 0.05,
       "ops04_checkout_latency_p95": 0.5,
       "ops05_cart_error_rate": 0.02,
       "ops06_product_catalog_cpu": 50.0
     },
     "confidences": {
       "ops03_checkout_payment_dependency": 0.8
-    }
-  },
-  "prometheus": {
-    "metric_series": {
-      "lookback_seconds": 6200,
-      "step_seconds": 60
     }
   },
   "correlation": {

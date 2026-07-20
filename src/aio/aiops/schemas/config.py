@@ -8,6 +8,7 @@ from typing import Literal
 from pydantic import Field, model_validator
 
 from aiops.schemas.base import AiopsModel
+from aiops.schemas.prometheus import CompiledPrometheusQuery
 
 
 PLACEHOLDER_TOKENS = ("<", "TODO", "TBD", "REPLACE_ME")
@@ -30,7 +31,7 @@ class SignalDefinition(AiopsModel):
     id: str
     source: Literal["prometheus", "grafana", "jaeger", "opensearch", "kubernetes", "aie", "cost"]
     query_id: str
-    unit: Literal["ratio", "seconds", "milliseconds", "count", "requests_per_second", "bytes", "percent", "boolean"]
+    unit: Literal["ratio", "seconds", "milliseconds", "count", "requests_per_second", "bytes", "bytes_per_second", "millicores", "percent", "boolean"]
     window: str
     flow: str
     service: str
@@ -76,6 +77,7 @@ class RuntimeConfig(AiopsModel):
     environment: str
     topology: TopologyConfig
     prometheus_queries: dict[str, str] = Field(default_factory=dict)
+    prometheus_query_specs: dict[str, CompiledPrometheusQuery] = Field(default_factory=dict)
     prometheus_services: list[str] = Field(default_factory=list)
     signals: list[SignalDefinition]
     detectors: list[DetectorDefinition]
@@ -94,6 +96,9 @@ class RuntimeConfig(AiopsModel):
         missing_prometheus_queries = {signal.query_id for signal in self.signals if signal.source == "prometheus"} - set(self.prometheus_queries)
         if missing_prometheus_queries:
             raise ValueError(f"missing prometheus queries: {sorted(missing_prometheus_queries)}")
+        missing_prometheus_specs = {signal.query_id for signal in self.signals if signal.source == "prometheus"} - set(self.prometheus_query_specs)
+        if missing_prometheus_specs:
+            raise ValueError(f"missing prometheus query specs: {sorted(missing_prometheus_specs)}")
         for service in self.topology.services:
             missing = set(service.dependencies) - service_names
             if missing:

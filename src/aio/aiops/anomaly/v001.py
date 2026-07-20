@@ -114,12 +114,14 @@ class ServiceIsolationForestDetector:
             eligible = [metric for metric in metrics if len(metric.points) >= self.min_points]
             if len(eligible) < 2:
                 continue
+            rows = self._normalized_rows(self._rows(eligible))
+            if len(rows) < self.min_points:
+                continue
             # ponytail: preserve existing threshold scale; recalibrate config if sklearn score is used directly.
             scores = [score * 10.0 for score in self._scores(eligible)]
             service_score = max(scores)
             if service_score < self.score_threshold:
                 continue
-            rows = self._normalized_rows(self._rows(eligible))
             latest_values = rows[-1]
             baseline_values = rows[-self.min_points : -1]
             baseline_center = [mean([row[index] for row in baseline_values]) for index in range(len(eligible))]
@@ -144,8 +146,9 @@ class ServiceIsolationForestDetector:
         return [-score for score in model.score_samples([rows[-1]])]
 
     def _rows(self, metrics: list[MetricSeries]) -> list[list[float]]:
-        length = min(len(metric.points) for metric in metrics)
-        return [[metric.points[index].value for metric in metrics] for index in range(-length, 0)]
+        values_by_metric = [{point.timestamp: point.value for point in metric.points} for metric in metrics]
+        timestamps = sorted(set.intersection(*(set(values) for values in values_by_metric)))
+        return [[values[timestamp] for values in values_by_metric] for timestamp in timestamps]
 
     def _normalized_rows(self, rows: list[list[float]]) -> list[list[float]]:
         if not rows:

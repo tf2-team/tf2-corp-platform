@@ -126,7 +126,7 @@ AIOps gọi Prometheus theo hướng read-only bằng query ID đã đăng ký t
     },
     "expected_unit": {
       "type": "string",
-      "enum": ["ratio", "seconds", "milliseconds", "count", "requests_per_second", "bytes", "percent", "boolean"]
+      "enum": ["ratio", "seconds", "milliseconds", "count", "requests_per_second", "bytes", "bytes_per_second", "millicores", "percent", "boolean"]
     },
     "required_labels": {
       "type": "array",

@@ -35,7 +35,19 @@ from aiops.schemas.domain import (
     SignalQuality,
     VerificationResult,
 )
-from aiops.schemas.prometheus import PrometheusCollectionPlan, PrometheusMetricSeriesQuery, PrometheusObservationQuery
+from aiops.schemas.prometheus import (
+    CompiledPrometheusQuery,
+    PrometheusCollectionPlan,
+    PrometheusCollectionProfile,
+    PrometheusMetricSeriesQuery,
+    PrometheusObservationQuery,
+    PrometheusPlanSelection,
+    PrometheusQueryInstance,
+    PrometheusQueryRegistry,
+    PrometheusQueryTemplate,
+    PrometheusResultContract,
+    PrometheusServiceGroup,
+)
 
 __all__ = [
     "ActionProposal",
@@ -43,6 +55,7 @@ __all__ = [
     "AnomalyFinding",
     "AiopsModel",
     "CandidateEvent",
+    "CompiledPrometheusQuery",
     "DetectorDefinition",
     "EvidenceItem",
     "Feature",
@@ -62,8 +75,15 @@ __all__ = [
     "PipelineRunRequest",
     "PolicyDecision",
     "PrometheusCollectionPlan",
+    "PrometheusCollectionProfile",
     "PrometheusMetricSeriesQuery",
     "PrometheusObservationQuery",
+    "PrometheusPlanSelection",
+    "PrometheusQueryInstance",
+    "PrometheusQueryRegistry",
+    "PrometheusQueryTemplate",
+    "PrometheusResultContract",
+    "PrometheusServiceGroup",
     "RcaConfig",
     "RcaResult",
     "RemediationDecision",

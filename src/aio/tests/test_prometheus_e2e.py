@@ -111,10 +111,11 @@ class PrometheusCollectorTest(unittest.TestCase):
         self.assertEqual(len(observations), 2)
         self.assertTrue(all(item.quality == SignalQuality.VERIFIED for item in observations))
         self.assertEqual(observations[1].labels["dependency"], "payment")
-        self.assertEqual(len(series), 3)
+        self.assertEqual(len(series), 9)
         self.assertTrue(all(len(item.points) == 8 for item in series))
+        self.assertTrue(all(item.step_seconds == 1 for item in series))
         instant_requests = [request for request in requests if request.url.path.endswith("/query")]
-        self.assertTrue(all(request.url.params.get("time") == str(CAPTURED_AT.timestamp()) for request in instant_requests))
+        self.assertTrue(all(request.url.params.get("time") == str(int(CAPTURED_AT.timestamp())) for request in instant_requests))
 
 
 class PrometheusE2ETest(unittest.TestCase):
@@ -125,7 +126,7 @@ class PrometheusE2ETest(unittest.TestCase):
             requests: list[httpx.Request] = []
             client = PrometheusClient(settings, transport=prometheus_transport(requests))
 
-            with patch("aiops.pipeline.runtime.V001AnomalyEngine", FakeAnomalyEngine), patch(
+            with patch("aiops.pipeline.runtime.build_v001_anomaly_engine", return_value=FakeAnomalyEngine()), patch(
                 "aiops.pipeline.runtime.V001RcaEngine", FakeRcaEngine
             ):
                 report = execute_prometheus_e2e(

@@ -49,6 +49,11 @@ class MetricSeries(AiopsModel):
     metric: str
     signal_id: str
     points: list[MetricPoint]
+    quality: SignalQuality = SignalQuality.VERIFIED
+    labels: dict[str, str] = Field(default_factory=dict)
+    step_seconds: int | None = None
+    detector_bucket_seconds: int | None = None
+    error: str | None = None
 
 
 class AnomalyFinding(AiopsModel):

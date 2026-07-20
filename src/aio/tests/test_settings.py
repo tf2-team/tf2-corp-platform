@@ -7,7 +7,7 @@ import unittest
 from pathlib import Path
 
 from aiops.api.app import create_app, run_static_pipeline
-from aiops.config import Settings, build_detectors, load_hyperparameters, load_runtime_config
+from aiops.config import Settings, build_detectors, load_hyperparameters, load_prometheus_query_registry, load_runtime_config
 from aiops.schemas import Observation, PipelineRunRequest, SignalQuality
 
 
@@ -96,10 +96,11 @@ class SettingsTest(unittest.TestCase):
         self.assertEqual(config["remediation"]["similarity_weights"]["service"], 0.35)
         self.assertEqual(config["remediation"]["similarity_weights"]["trace"], 0.2)
         self.assertEqual(config["no_data"]["missing_confidence"], 1.0)
-        self.assertEqual(config["detectors"]["thresholds"]["ops01_checkout_slo"], 0.06)
-        self.assertEqual(config["prometheus"]["metric_series"]["step_seconds"], 60)
+        self.assertEqual(config["detectors"]["thresholds"]["ops01_checkout_slo"], 0.01)
+        profile = load_prometheus_query_registry(Path("config/prometheus_queries.json")).collection_profiles["one_second"]
+        self.assertEqual(profile.step_seconds, 1)
         self.assertGreaterEqual(
-            config["prometheus"]["metric_series"]["lookback_seconds"] // config["prometheus"]["metric_series"]["step_seconds"] + 1,
+            profile.lookback_seconds // profile.detector_bucket_seconds + 1,
             config["rca"]["min_points"],
         )
 

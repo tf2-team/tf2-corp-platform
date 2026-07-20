@@ -1,57 +1,18 @@
 {
-  "schema_version": "1.0",
-  "observation_queries": [
-    {
-      "query_id": "checkout.bad_ratio.24h",
-      "signal_id": "checkout_bad_ratio_24h",
-      "promql": "(sum(increase(rpc_server_duration_milliseconds_count{service_name=\"checkout\",rpc_method=\"PlaceOrder\",rpc_grpc_status_code!=\"0\"}[24h])) / clamp_min(sum(increase(rpc_server_duration_milliseconds_count{service_name=\"checkout\",rpc_method=\"PlaceOrder\"}[24h])), 1)) or vector(0)",
-      "unit": "ratio",
-      "window": "24h",
-      "labels": {
-        "service": "checkout",
-        "flow": "checkout"
-      }
-    },
-    {
-      "query_id": "checkout.payment_error_rate.5m",
-      "signal_id": "checkout_payment_error_rate_5m",
-      "promql": "(sum by (span_name) (rate(traces_span_metrics_calls_total{service_name=\"checkout\",status_code=\"STATUS_CODE_ERROR\"}[5m]))) or vector(0)",
-      "unit": "ratio",
-      "window": "5m",
-      "labels": {
-        "service": "checkout",
-        "flow": "checkout",
-        "dependency": "payment"
-      }
-    }
+  "schema_version": "2.0",
+  "observation_query_ids": [
+    "checkout.bad_ratio.24h",
+    "checkout.payment_error_rate.5m"
   ],
-  "metric_series_queries": [
-    {
-      "query_id": "checkout.p95_latency.5m.range",
-      "signal_id": "checkout_p95_latency_5m",
-      "service": "checkout",
-      "metric": "p95_latency_ms",
-      "promql": "histogram_quantile(0.95, sum(rate(rpc_server_duration_milliseconds_bucket{service_name=\"checkout\"}[5m])) by (le))",
-      "lookback_seconds": 3600,
-      "step_seconds": 60
-    },
-    {
-      "query_id": "cart.error_rate.5m.range",
-      "signal_id": "cart_error_rate_5m",
-      "service": "cart",
-      "metric": "error_ratio_5m",
-      "promql": "((sum(rate(http_server_request_duration_seconds_count{service_name=\"cart\",http_response_status_code=~\"5..\"}[5m])) or vector(0)) / clamp_min(sum(rate(http_server_request_duration_seconds_count{service_name=\"cart\"}[5m])), 0.000000001))",
-      "lookback_seconds": 3600,
-      "step_seconds": 60
-    },
-    {
-      "query_id": "product-catalog.cpu_millicores.range",
-      "signal_id": "product_catalog_cpu_millicores",
-      "service": "product-catalog",
-      "metric": "cpu_millicores",
-      "promql": "sum(k8s_pod_cpu_usage{k8s_deployment_name=\"product-catalog\"})",
-      "lookback_seconds": 3600,
-      "step_seconds": 60
-    }
+  "metric_series_query_ids": [
+    "checkout.p95_latency_5m",
+    "checkout.p99_latency_5m",
+    "checkout.error_rate_5m",
+    "checkout.request_rate_5m",
+    "cart.error_rate_5m",
+    "product-catalog.cpu_millicores",
+    "postgresql.active_connections",
+    "kafka.consumer_lag",
+    "otel_collector.exporter_queue_saturation"
   ]
 }
