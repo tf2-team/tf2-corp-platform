@@ -18,6 +18,8 @@ COPY ./src/ai-common /build/ai-common
 COPY ./src/product-reviews/requirements.txt requirements.txt
 
 RUN python -m venv venv && \
+    venv/bin/pip install --no-cache-dir --no-deps \
+        llm-guard==0.3.16 presidio-anonymizer==2.2.363 && \
     venv/bin/pip install --no-cache-dir /build/ai-common && \
     venv/bin/pip install --no-cache-dir -r requirements.txt
 
