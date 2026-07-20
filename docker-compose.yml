@@ -427,11 +427,10 @@ services:
 
   # Local equivalent of the production model-delivery init containers. It is
   # the only service with write access to the FastEmbed cache volume.
+  # Reuses the mem0 release image (no build:) so Compose build targets match
+  # the bake "release" catalog 1:1. Build via: docker compose build mem0
   mem0-model-init:
     image: ${IMAGE_NAME}/mem0:${DEMO_VERSION}
-    build:
-      context: ./
-      dockerfile: ./src/mem0/Dockerfile
     user: "0:0"
     restart: "no"
     command: ["python", "/model-scripts/seed_embedding_model_cache.py", "--cache-dir", "/models/fastembed"]
@@ -462,11 +461,10 @@ services:
     logging: *logging
 
   # Keep schema migration outside API startup, as in the Kubernetes Job.
+  # Reuses the mem0 release image (no build:); same catalog invariant as
+  # mem0-model-init. Build via: docker compose build mem0
   mem0-migrate:
     image: ${IMAGE_NAME}/mem0:${DEMO_VERSION}
-    build:
-      context: ./
-      dockerfile: ./src/mem0/Dockerfile
     restart: "no"
     command: ["alembic", "upgrade", "head"]
     environment:
@@ -1108,3 +1106,5 @@ volumes:
   mem0-fastembed-cache:
   mem0-postgresql-data:
   shopping-copilot-hf-cache:
+
+# Change trail: @hungxqt - 2026-07-20 - Drop build from mem0-migrate/model-init so Compose builds match release catalog.
