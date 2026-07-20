@@ -88,7 +88,7 @@ flowchart TB
 ```
 
 
-![Chatbot Architecture]()
+![Chatbot Architecture](docs/ai-engineering/chatbot-c4-container.png)
 
 *Sơ đồ trên minh họa kiến trúc Container C4 cho Shopping Chatbots, mô tả chi tiết các luồng dữ liệu tương tác giữa người dùng cuối, các service e-commerce nội bộ, bộ lọc Guardrail và các nhà cung cấp LLM bên ngoài (AWS Bedrock, Groq).*
 
