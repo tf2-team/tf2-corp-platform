@@ -23,5 +23,6 @@ ENV JAVA_TOOL_OPTIONS=-javaagent:/usr/src/app/opentelemetry-javaagent.jar
 
 COPY --from=builder /usr/src/app/build/libs/fraud-detection-1.0-all.jar fraud-detection-1.0-all.jar
 
-ENTRYPOINT [ "java", "-jar", "fraud-detection-1.0-all.jar" ]
 USER nonroot
+ENTRYPOINT [ "java", "-jar", "fraud-detection-1.0-all.jar" ]
+# Change trail: @hungxqt - 2026-07-20 - Explicit nonroot USER before ENTRYPOINT for Semgrep/CI container hardening

@@ -43,5 +43,6 @@ COPY --from=builder /app/target/release/shipping shipping
 
 EXPOSE ${SHIPPING_PORT}
 
-CMD ["./shipping"]
 USER nonroot
+CMD ["./shipping"]
+# Change trail: @hungxqt - 2026-07-20 - Explicit nonroot USER before CMD for Semgrep/CI container hardening
