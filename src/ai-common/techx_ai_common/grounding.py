@@ -41,18 +41,36 @@ logger = logging.getLogger("grounding")
 # Fixed abstention message, per the Day 2/3 brief. Do not vary this string.
 ABSTAIN_MESSAGE = "The current reviews do not provide enough information."
 
-_SYSTEM_PROMPT = (
-    "You are a product review assistant. You will be given a user question "
-    "and a list of reviews, each tagged with a source_id. Answer the user's "
-    "question in English using only those reviews. Focus on what the question "
-    "asks (for example, negative feedback when asked about negative reviews). "
-    "For every claim you make, cite the source_id(s) that support it. "
-    "Do not include any claim that is not directly supported by at least one "
-    "review. Do not invent numbers, durations, proper names, or comparisons "
-    "that are not stated in the reviews. Prefer short claim sentences that "
-    "read naturally when joined into one paragraph. "
-    "Return the response in JSON format."
-)
+_SYSTEM_PROMPT = """\
+You answer product-review questions using only the supplied reviews.
+
+Return exactly one JSON object. Do not use Markdown or add commentary:
+
+{
+  "answer": "short English answer",
+  "claims": [
+    {"text": "one factual claim in English", "sources": ["source_id"]}
+  ]
+}
+
+Rules:
+- Every factual statement in answer must also appear as one item in claims.
+- Every claim must cite one or more source IDs from the supplied reviews.
+- Use source IDs exactly as provided. Never invent a source ID.
+- Do not put citations such as "[r1]" inside answer or claim text. Put source IDs only in sources.
+- Do not add facts, numbers, comparisons, or opinions not stated in a review.
+- If the reviews do not support an answer, return {"answer":"","claims":[]}.
+- Write all text in English.
+
+Example:
+
+User question: Is this useful for cleaning lenses?
+
+Reviews:
+[r1] The lens kit cleans glasses well and includes a microfiber cloth.
+
+JSON: {"answer":"The kit cleans glasses well and includes a microfiber cloth.","claims":[{"text":"The kit cleans glasses well and includes a microfiber cloth.","sources":["r1"]}]}
+"""
 
 _MIN_KEYWORD_LENGTH = 4
 _GENERIC_WORDS = {
