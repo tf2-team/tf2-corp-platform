@@ -23,9 +23,7 @@ RUN apt-get update \
     && apt-get upgrade -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/* \
     && groupadd -g 10001 appgroup \
-    && useradd -r -u 10001 -g appgroup appuser \
-    # Temurin image ships /usr/bin/pebble (Go) with HIGH x/net and stdlib CVEs; not used by this service.
-    && rm -f /usr/bin/pebble
+    && useradd -r -u 10001 -g appgroup appuser
 
 ADD --chmod=644 --chown=appuser:appgroup https://github.com/open-telemetry/opentelemetry-java-instrumentation/releases/download/v$OTEL_JAVA_AGENT_VERSION/opentelemetry-javaagent.jar /usr/src/app/opentelemetry-javaagent.jar
 ENV JAVA_TOOL_OPTIONS=-javaagent:/usr/src/app/opentelemetry-javaagent.jar
@@ -34,4 +32,4 @@ COPY --from=builder --chown=appuser:appgroup /usr/src/app/build/libs/fraud-detec
 
 USER 10001
 ENTRYPOINT [ "java", "-jar", "fraud-detection-1.0-all.jar" ]
-# Change trail: @hungxqt - 2026-07-20 - Remove pebble gobinary and keep Temurin apt upgrade for Trivy
+# Change trail: @hungxqt - 2026-07-20 - Switch to Temurin 17 JRE with apt upgrade and OTEL agent 2.26.1 for Trivy

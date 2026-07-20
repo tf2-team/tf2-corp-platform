@@ -4,7 +4,6 @@ GEM
     base64 (0.3.0)
     bigdecimal (3.2.2)
     date (3.5.1)
-    erb (6.0.6)
     google-protobuf (4.33.0-aarch64-linux-musl)
       bigdecimal
       rake (>= 13)
@@ -55,7 +54,7 @@ GEM
       timeout
     net-smtp (0.5.1)
       net-protocol
-    nio4r (2.7.5)
+    nio4r (2.7.4)
     openfeature-flagd-provider (0.1.0)
       grpc (~> 1.50)
       openfeature-sdk (~> 0.3)
@@ -265,7 +264,7 @@ GEM
     ostruct (0.6.3)
     pony (1.13.1)
       mail (>= 2.0)
-    puma (8.0.2)
+    puma (7.1.0)
       nio4r (~> 2.0)
     rack (3.2.6)
     rack-protection (4.2.1)
@@ -288,7 +287,6 @@ GEM
       tilt (~> 2.0)
     tilt (2.6.0)
     timeout (0.6.1)
-    zlib (3.2.3)
 
 PLATFORMS
   aarch64-linux-musl
@@ -298,7 +296,6 @@ PLATFORMS
   x86_64-linux-musl
 
 DEPENDENCIES
-  erb (>= 4.0.4.1)
   google-protobuf (~> 4.33.0)
   net-imap (>= 0.5.14)
   net-smtp (~> 0.5.1)
@@ -314,11 +311,10 @@ DEPENDENCIES
   opentelemetry-sdk (~> 1.10)
   ostruct
   pony (~> 1.13)
-  puma (>= 7.2.1)
+  puma (~> 7.1)
   rack-session (>= 2.1.2)
   rackup (~> 2.2)
   sinatra (~> 4.2)
-  zlib (>= 3.2.3)
 
 BUNDLED WITH
   4.0.8
