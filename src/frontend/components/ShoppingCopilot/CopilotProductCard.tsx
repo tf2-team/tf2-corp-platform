@@ -103,12 +103,12 @@ export const CopilotProductCard: React.FC<Props> = ({ products }) => {
               )}
             </Price>
             {product.description && <DescriptionText>{product.description}</DescriptionText>}
-          </ProductHeader>
+          </ProductHeader >
           <Link href={`/product/${product.productId}`} passHref legacyBehavior>
             <ViewButton>View Details</ViewButton>
           </Link>
-        </Card>
+        </Card >
       ))}
-    </Grid>
+    </Grid >
   );
 };

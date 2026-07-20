@@ -19,6 +19,8 @@ import org.apache.logging.log4j.Logger
 import oteldemo.Demo.*
 import java.time.Duration.ofMillis
 import java.util.*
+import redis.clients.jedis.DefaultJedisClientConfig
+import javax.net.ssl.SSLSocketFactory
 import kotlin.system.exitProcess
 import dev.openfeature.contrib.providers.flagd.FlagdOptions
 import dev.openfeature.contrib.providers.flagd.FlagdProvider
@@ -55,6 +57,17 @@ fun main() {
         props["security.protocol"] = "SSL"
     }
 
+    val saslUsername = System.getenv("KAFKA_SASL_USERNAME")
+    val saslPassword = System.getenv("KAFKA_SASL_PASSWORD")
+    if (!saslUsername.isNullOrBlank() || !saslPassword.isNullOrBlank()) {
+        require(!saslUsername.isNullOrBlank() && !saslPassword.isNullOrBlank()) {
+            "Both Kafka SCRAM credentials are required"
+        }
+        props["security.protocol"] = "SASL_SSL"
+        props["sasl.mechanism"] = "SCRAM-SHA-512"
+        props["sasl.jaas.config"] = "org.apache.kafka.common.security.scram.ScramLoginModule required username=\"$saslUsername\" password=\"$saslPassword\";"
+    }
+
     val consumer = KafkaConsumer<String, ByteArray>(props).apply {
         subscribe(listOf(topic))
     }
@@ -67,6 +80,11 @@ fun main() {
     if (System.getenv("KAFKA_TLS") == "true") {
         producerProps["security.protocol"] = "SSL"
     }
+    if (!saslUsername.isNullOrBlank() && !saslPassword.isNullOrBlank()) {
+        producerProps["security.protocol"] = "SASL_SSL"
+        producerProps["sasl.mechanism"] = "SCRAM-SHA-512"
+        producerProps["sasl.jaas.config"] = "org.apache.kafka.common.security.scram.ScramLoginModule required username=\"$saslUsername\" password=\"$saslPassword\";"
+    }
 
     val producer = KafkaProducer<String, ByteArray>(producerProps)
 
@@ -74,9 +92,20 @@ fun main() {
     val redisParts = redisAddr.split(":")
     val redisHost = redisParts[0]
     val redisPort = if (redisParts.size > 1) redisParts[1].toInt() else 6379
-    logger.info("Connecting to Valkey/Redis at $redisHost:$redisPort")
+    val redisPassword = System.getenv("VALKEY_PASSWORD")
+    val redisTls = System.getenv("REDIS_TLS") == "true" || !redisPassword.isNullOrBlank()
+    logger.info("Connecting to Valkey/Redis at $redisHost:$redisPort (TLS=$redisTls, auth=${!redisPassword.isNullOrBlank()})")
     val jedis = try {
-        redis.clients.jedis.Jedis(redisHost, redisPort).apply {
+        val clientConfig = DefaultJedisClientConfig.builder()
+            .apply {
+                if (!redisPassword.isNullOrBlank()) password(redisPassword)
+                if (redisTls) {
+                    ssl(true)
+                    sslSocketFactory(SSLSocketFactory.getDefault() as SSLSocketFactory)
+                }
+            }
+            .build()
+        redis.clients.jedis.Jedis(redisHost, redisPort, clientConfig).apply {
             ping()
         }
     } catch (e: Exception) {

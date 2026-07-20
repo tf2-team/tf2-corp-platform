@@ -1,3 +1,4 @@
+-e ../ai-common
 -r requirements.txt
 pytest==9.1.1
 pytest-mock==3.15.1

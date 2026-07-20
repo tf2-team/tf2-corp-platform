@@ -147,7 +147,7 @@ jobs:
           set -euo pipefail
 
           # Canonical release set (must match docker-bake.hcl group "release").
-          RELEASE_JSON='["accounting","ad","cart","checkout","currency","email","flagd-ui","fraud-detection","frontend","frontend-proxy","image-provider","kafka","llm","load-generator","mem0","opensearch","payment","product-catalog","product-reviews","quote","recommendation","shipping"]'
+          RELEASE_JSON='["accounting","ad","cart","checkout","currency","email","flagd-ui","fraud-detection","frontend","frontend-proxy","image-provider","kafka","llm","load-generator","mem0","opensearch","payment","product-catalog","product-reviews","quote","recommendation","shipping","shopping-copilot"]'
           mapfile -t RELEASE < <(printf '%s' "${RELEASE_JSON}" | jq -r '.[]')
           declare -A IS_RELEASE=()
           for s in "${RELEASE[@]}"; do
@@ -307,7 +307,7 @@ jobs:
 
           # Overrides:
           # - single platform for PR speed (publish path still multi-arch)
-          # - clear registry cache-from/to so no AWS/ECR credentials are required
+          # - clear cache-from/to (bake defaults to GHA type=gha; not needed for PR gate)
           # - cacheonly validates the full Dockerfile build without exporting layers
           docker buildx bake \
             -f docker-compose.yml \
@@ -404,6 +404,7 @@ jobs:
           cache-dependency-path: |
             src/product-reviews/requirements.txt
             src/product-reviews/requirements-dev.txt
+            src/ai-common/pyproject.toml
 
       - name: Install dependencies
         run: python -m pip install -r src/product-reviews/requirements-dev.txt
@@ -430,4 +431,39 @@ jobs:
           AI_GUARDRAIL_REQUIRE_MODEL: "true"
           PYTHONPATH: src/product-reviews
         run: python -c "import guardrails; guardrails.initialize_guardrails()"
+# Change trail: @hungxqt - 2026-07-19 - PR bake still clears cache; bake defaults moved to GHA type=gha.
+
+  shopping-copilot-tests:
+    name: Shopping copilot tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        # actions/checkout@v7.0.0
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
+
+      - name: Setup Python
+        # actions/setup-python@v6.2.0
+        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: |
+            src/ai-common/pyproject.toml
+            src/shopping-copilot/requirements.txt
+
+      - name: Install dependencies
+        run: >-
+          python -m pip install ./src/ai-common
+          -r src/shopping-copilot/requirements.txt pytest==9.1.1
+
+      - name: Run shopping copilot tests
+        env:
+          AI_GUARDRAIL_REQUIRE_MODEL: "false"
+          PYTHONPATH: src/shopping-copilot
+        run: python -m pytest src/shopping-copilot/tests -v
+
+      - name: Validate shared guardrail dependency
+        run: >-
+          python -c "from llm_guard.input_scanners import PromptInjection; from techx_ai_common import guardrails"
 # Change trail: @hungxqt - 2026-07-17 - Align PR image classification with selective mem0 matrix build.

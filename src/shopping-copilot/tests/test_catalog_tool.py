@@ -1,3 +1,5 @@
+#!/usr/bin/python
+
 # Copyright The OpenTelemetry Authors
 # SPDX-License-Identifier: Apache-2.0
 
@@ -40,6 +42,17 @@ class TestPriceToFloat:
 
     def test_fractional(self):
         assert abs(catalog_tool._price_to_float(50, 500_000_000) - 50.5) < 1e-6
+
+
+class TestCatalogStub:
+    def test_catalog_stub_reads_configured_address(self, monkeypatch):
+        channel = MagicMock()
+        monkeypatch.setenv("PRODUCT_CATALOG_ADDR", "product-catalog:3550")
+        monkeypatch.setattr(catalog_tool.grpc, "insecure_channel", lambda _: channel)
+
+        stub = catalog_tool.make_catalog_stub()
+
+        assert stub is not None
 
 
 class TestSecondaryFilters:

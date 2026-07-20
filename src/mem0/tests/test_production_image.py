@@ -19,6 +19,10 @@ class ProductionImageContractTest(unittest.TestCase):
         self.assertIn("--no-deps /build/mem0", DOCKERFILE)
         self.assertNotRegex(REQUIREMENTS, r"(?m)^mem0ai(?:[<>=]|$)")
 
+    def test_includes_a_postgresql_driver_backend(self):
+        self.assertIn("psycopg[binary]==3.2.8", REQUIREMENTS)
+        self.assertIn('RUN python -c "import psycopg; import psycopg.pq"', DOCKERFILE)
+
     def test_uvicorn_is_production_mode(self):
         command = next(line for line in DOCKERFILE.splitlines() if line.startswith("CMD "))
         self.assertIn('"uvicorn"', command)
@@ -39,6 +43,17 @@ class ProductionImageContractTest(unittest.TestCase):
         copy_lines = [line.strip() for line in DOCKERFILE.splitlines() if line.strip().startswith("COPY ")]
         self.assertFalse(any(re.search(r"(?:^|[ /])models?(?:[ /]|$)", line) for line in copy_lines))
 
+    def test_psycopg_includes_binary_backend_for_slim_runtime(self):
+        # pure psycopg needs system libpq; slim-bookworm does not ship it.
+        self.assertRegex(REQUIREMENTS, r"(?m)^psycopg\[binary\]==")
+        self.assertIn("slim-bookworm", DOCKERFILE)
+
+    def test_boto3_is_pinned_for_rds_iam_auth(self):
+        # Dockerfile installs mem0 with --no-deps; RDS IAM token gen needs boto3.
+        self.assertRegex(REQUIREMENTS, r"(?m)^boto3==")
+        self.assertIn("--no-deps /build/mem0", DOCKERFILE)
+
 
 if __name__ == "__main__":
     unittest.main()
+# Change trail: @hungxqt - 2026-07-19 - Assert mem0 image pins boto3 for RDS IAM auth.

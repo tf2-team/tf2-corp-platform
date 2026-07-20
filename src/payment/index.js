@@ -31,8 +31,16 @@ async function chargeServiceHandler(call, callback) {
 }
 
 async function closeGracefully(signal) {
-  server.forceShutdown()
-  process.kill(process.pid, signal)
+  logger.info("SIGTERM/SIGINT received. Starting graceful gRPC shutdown...");
+  server.tryShutdown((err) => {
+    if (err) {
+      logger.error({ err }, "Error during graceful shutdown, forcing shutdown");
+      server.forceShutdown();
+    } else {
+      logger.info("gRPC server gracefully shut down");
+    }
+    process.kill(process.pid, signal);
+  });
 }
 
 const otelDemoPackage = grpc.loadPackageDefinition(protoLoader.loadSync('demo.proto'))

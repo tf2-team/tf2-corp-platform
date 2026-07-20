@@ -20,6 +20,7 @@ import os
 import instructor
 from openai import OpenAI
 
+from bedrock_runtime import converse_json, is_bedrock_provider
 from copilot_contracts import ShoppingIntent
 
 logger = logging.getLogger("intent_parser")
@@ -68,6 +69,9 @@ def parse_intent(user_message: str) -> ShoppingIntent:
         Exception: propagated to the LangGraph node which must catch it
                    and route to the fallback node.
     """
+    if is_bedrock_provider():
+        return converse_json(ShoppingIntent, _SYSTEM_PROMPT, user_message)
+
     client, model = _get_instructor_client()
     intent = client.chat.completions.create(
         model=model,

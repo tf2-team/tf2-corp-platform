@@ -19,7 +19,9 @@ from typing import Callable
 
 
 MODEL_NAME = "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
-SOURCE_REPOSITORY = "Qdrant/paraphrase-multilingual-MiniLM-L12-v2-onnx-Q"
+# Match FastEmbed's canonical Hugging Face source exactly. Linux cache paths
+# are case-sensitive, so "Qdrant" would not be found by FastEmbed's "qdrant".
+SOURCE_REPOSITORY = "qdrant/paraphrase-multilingual-MiniLM-L12-v2-onnx-Q"
 SOURCE_REVISION = "faf4aa4225822f3bc6376869cb1164e8e3feedd0"
 FASTEMBED_VERSION = "0.8.0"
 EMBEDDING_DIMENSION = 384

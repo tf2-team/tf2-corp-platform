@@ -5,7 +5,6 @@ package main
 import (
 	"bytes"
 	"context"
-	"crypto/tls"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -251,11 +250,10 @@ func main() {
 			config := sarama.NewConfig()
 			config.Consumer.Offsets.Initial = sarama.OffsetOldest
 			config.Version = kafka.ProtocolVersion
-			if os.Getenv("KAFKA_TLS") == "true" {
-				config.Net.TLS.Enable = true
-				config.Net.TLS.Config = &tls.Config{
-					InsecureSkipVerify: true,
-				}
+			config.Net.MaxOpenRequests = 1 // SASL requires serialized handshake
+			if err := kafka.ConfigureSaramaSecurity(config); err != nil {
+				logger.Error(fmt.Sprintf("Invalid Kafka security configuration: %+v", err))
+				return
 			}
 
 			brokers := strings.Split(svc.kafkaBrokerSvcAddr, ",")
