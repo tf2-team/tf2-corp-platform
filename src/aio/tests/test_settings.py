@@ -71,9 +71,10 @@ class SettingsTest(unittest.TestCase):
         self.assertEqual(config["rca"]["anomaly"]["weighted_score_threshold"], 0.4)
         self.assertEqual(config["rca"]["anomaly"]["single_algorithm_min_normalized_score"], 2.0)
         self.assertEqual(config["rca"]["anomaly"]["robust_drift_threshold"], 3.0)
-        self.assertEqual(config["rca"]["anomaly"]["robust_drift_min_baseline_points"], 4)
+        self.assertEqual(config["rca"]["anomaly"]["robust_drift_min_baseline_points"], 300)
+        self.assertEqual(config["rca"]["anomaly"]["detection_window_seconds"], 90)
         self.assertEqual(config["rca"]["anomaly"]["suppress_cpu_robust_threshold"], 3.0)
-        self.assertEqual(config["rca"]["min_points"], 30)
+        self.assertEqual(config["rca"]["min_points"], 300)
         self.assertEqual(config["rca"]["anomaly"]["log_history_buckets"], 60)
         self.assertEqual(config["rca"]["anomaly"]["log_min_nonzero_buckets"], 2)
         self.assertEqual(config["rca"]["graph"]["damping"], 0.85)
@@ -86,8 +87,9 @@ class SettingsTest(unittest.TestCase):
             config["rca"]["combined"],
             {
                 "rrf_k": 20,
-                "drift_min_points": 5,
+                "drift_min_points": 300,
                 "drift_score_threshold": 3.0,
+                "detection_window_seconds": 90,
                 "canonical_service_suffixes": [],
                 "metric_aliases": {},
                 "ranker_weights": {"graph": 0.3, "earliest_drift": 0.5, "correlation": 0.1},
@@ -97,7 +99,8 @@ class SettingsTest(unittest.TestCase):
         self.assertEqual(config["remediation"]["similarity_weights"]["trace"], 0.2)
         self.assertEqual(config["no_data"]["missing_confidence"], 1.0)
         self.assertEqual(config["detectors"]["thresholds"]["ops01_checkout_slo"], 0.06)
-        self.assertEqual(config["prometheus"]["metric_series"]["step_seconds"], 60)
+        self.assertEqual(config["prometheus"]["metric_series"]["lookback_seconds"], 3600)
+        self.assertEqual(config["prometheus"]["metric_series"]["step_seconds"], 1)
         self.assertGreaterEqual(
             config["prometheus"]["metric_series"]["lookback_seconds"] // config["prometheus"]["metric_series"]["step_seconds"] + 1,
             config["rca"]["min_points"],

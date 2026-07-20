@@ -2,7 +2,7 @@
   "rca": {
     "enabled": true,
     "top_k": 5,
-    "min_points": 30,
+    "min_points": 300,
     "ewma_alpha": 0.3,
     "ewma_z_threshold": 3.0,
     "seasonal_period": 1,
@@ -16,7 +16,8 @@
       "weighted_score_threshold": 0.4,
       "single_algorithm_min_normalized_score": 2.0,
       "robust_drift_threshold": 3.0,
-      "robust_drift_min_baseline_points": 4,
+      "robust_drift_min_baseline_points": 300,
+      "detection_window_seconds": 90,
       "suppress_cpu_robust_threshold": 3.0,
       "drain3_config_path": "config/drain3.ini",
       "log_bucket_seconds": 60,
@@ -33,8 +34,9 @@
     },
     "combined": {
       "rrf_k": 20,
-      "drift_min_points": 5,
+      "drift_min_points": 300,
       "drift_score_threshold": 3.0,
+      "detection_window_seconds": 90,
       "canonical_service_suffixes": [],
       "metric_aliases": {},
       "ranker_weights": {
@@ -89,8 +91,8 @@
   },
   "prometheus": {
     "metric_series": {
-      "lookback_seconds": 6200,
-      "step_seconds": 60
+      "lookback_seconds": 3600,
+      "step_seconds": 1
     }
   },
   "correlation": {

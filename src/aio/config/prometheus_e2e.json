@@ -33,7 +33,7 @@
       "metric": "p95_latency_ms",
       "promql": "histogram_quantile(0.95, sum(rate(rpc_server_duration_milliseconds_bucket{service_name=\"checkout\"}[5m])) by (le))",
       "lookback_seconds": 3600,
-      "step_seconds": 60
+      "step_seconds": 1
     },
     {
       "query_id": "cart.error_rate.5m.range",
@@ -42,7 +42,7 @@
       "metric": "error_ratio_5m",
       "promql": "((sum(rate(http_server_request_duration_seconds_count{service_name=\"cart\",http_response_status_code=~\"5..\"}[5m])) or vector(0)) / clamp_min(sum(rate(http_server_request_duration_seconds_count{service_name=\"cart\"}[5m])), 0.000000001))",
       "lookback_seconds": 3600,
-      "step_seconds": 60
+      "step_seconds": 1
     },
     {
       "query_id": "product-catalog.cpu_millicores.range",
@@ -51,7 +51,7 @@
       "metric": "cpu_millicores",
       "promql": "sum(k8s_pod_cpu_usage{k8s_deployment_name=\"product-catalog\"})",
       "lookback_seconds": 3600,
-      "step_seconds": 60
+      "step_seconds": 1
     }
   ]
 }

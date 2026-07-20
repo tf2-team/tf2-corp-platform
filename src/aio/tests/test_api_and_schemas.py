@@ -32,7 +32,7 @@ class FastApiAppTest(unittest.TestCase):
                     observations=[
                         Observation(
                             signal_id="checkout_bad_ratio_24h",
-                            value=0.02,
+                            value=0.2,
                             unit="ratio",
                             window="24h",
                             quality=SignalQuality.VERIFIED,

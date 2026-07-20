@@ -18,6 +18,7 @@ class V001RcaEngine:
         self.rrf_k = combined_hyperparameters["rrf_k"]
         self.drift_min_points = int(combined_hyperparameters["drift_min_points"])
         self.drift_score_threshold = float(combined_hyperparameters["drift_score_threshold"])
+        self.detection_window_seconds = int(combined_hyperparameters.get("detection_window_seconds", 0)) or None
         self.canonical_service_suffixes = tuple(combined_hyperparameters["canonical_service_suffixes"])
         self.metric_aliases = combined_hyperparameters["metric_aliases"]
         self.graph = GraphTraversalRca(
@@ -93,7 +94,7 @@ class V001RcaEngine:
             values = [point.value for point in metric.points]
             if len(values) < self.drift_min_points:
                 continue
-            index = self._first_drift_index(values)
+            index = self._first_drift_index(metric, values)
             if index is not None and not self._excluded_root_cause(metric.service):
                 service = self._canonical_service(metric.service)
                 drift_indexes[service] = min(drift_indexes.get(service, index), index)
@@ -102,8 +103,8 @@ class V001RcaEngine:
         latest = max(drift_indexes.values()) or 1
         return {service: 1.0 - (index / latest) for service, index in drift_indexes.items()}
 
-    def _first_drift_index(self, values: list[float]) -> int | None:
-        for index in range(self.drift_min_points - 1, len(values)):
+    def _first_drift_index(self, metric: MetricSeries, values: list[float]) -> int | None:
+        for index in _tail_indexes(metric, self.detection_window_seconds, self.drift_min_points - 1):
             if robust_score(values[:index], [values[index]]) >= self.drift_score_threshold:
                 return index
         return None
@@ -114,7 +115,7 @@ class V001RcaEngine:
             values = [point.value for point in metric.points]
             if len(values) < self.drift_min_points or self._excluded_root_cause(metric.service):
                 continue
-            score = max((robust_score(values[:index], [values[index]]) for index in range(self.drift_min_points - 1, len(values))), default=0.0)
+            score = max((robust_score(values[:index], [values[index]]) for index in _tail_indexes(metric, self.detection_window_seconds, self.drift_min_points - 1)), default=0.0)
             if score >= self.drift_score_threshold:
                 rows.append((self._canonical_service(metric.service), metric.metric, score))
         return rows
@@ -189,3 +190,13 @@ class V001RcaEngine:
 
 def _is_log_metric(metric: str) -> bool:
     return metric.startswith("log_template_count_")
+
+
+def _tail_indexes(metric: MetricSeries, detection_window_seconds: int | None, start: int) -> range:
+    if not metric.points:
+        return range(0)
+    if not detection_window_seconds:
+        return range(start, len(metric.points))
+    cutoff = metric.points[-1].timestamp - detection_window_seconds
+    first = next((index for index, point in enumerate(metric.points) if point.timestamp >= cutoff), len(metric.points))
+    return range(max(start, first), len(metric.points))

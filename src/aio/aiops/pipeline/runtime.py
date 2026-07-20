@@ -17,7 +17,7 @@ from aiops.correlation import Correlator
 from aiops.detectors import Detector, DetectorEngine
 from aiops.enrichment import Enricher
 from aiops.features import FeatureBuilder
-from aiops.anomaly import build_v001_anomaly_engine
+from aiops.anomaly import V001AnomalyEngine, build_v001_anomaly_engine
 from aiops.rca import V001RcaEngine
 from aiops.schemas import AnomalyFinding, EvidenceItem, MetricSeries, NotificationMessage, PipelineResult, PolicyDecision, RcaResult, RuntimeConfig
 from aiops.normalization import Normalizer

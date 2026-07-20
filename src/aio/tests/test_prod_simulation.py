@@ -115,10 +115,10 @@ class ProdSimulationTest(unittest.TestCase):
 
             result = pipeline.run_once(
                 metric_series=[
-                    metric("payment", "error_rate_5m", [0.0] * 35 + [0.4] * 5),
-                    metric("payment", "p95_latency_5m", [0.1] * 35 + [1.2] * 5),
-                    metric("payment", "request_rate_5m", [10.0] * 35 + [80.0] * 5),
-                    metric("payment", "cpu_millicores", [100.0] * 35 + [900.0] * 5),
+                    metric("payment", "error_rate_5m", [0.0] * 350 + [0.4] * 10),
+                    metric("payment", "p95_latency_5m", [0.1] * 350 + [1.2] * 10),
+                    metric("payment", "request_rate_5m", [10.0] * 350 + [80.0] * 10),
+                    metric("payment", "cpu_millicores", [100.0] * 350 + [900.0] * 10),
                 ]
             )
             pipeline.store.close()

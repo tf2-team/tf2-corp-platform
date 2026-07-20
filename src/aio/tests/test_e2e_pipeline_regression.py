@@ -255,7 +255,7 @@ class E2EPipelineRegressionTest(unittest.TestCase):
             result = run_pipeline(
                 root,
                 [
-                    observation("checkout_bad_ratio_24h", 0.02),
+                    observation("checkout_bad_ratio_24h", 0.2),
                     observation("checkout_payment_error_rate_5m", 0.001),
                 ],
             )
@@ -275,7 +275,7 @@ class E2EPipelineRegressionTest(unittest.TestCase):
             result = run_pipeline(
                 root,
                 [
-                    observation("checkout_bad_ratio_24h", 0.02),
+                    observation("checkout_bad_ratio_24h", 0.2),
                     observation("checkout_payment_error_rate_5m", 0.2),
                 ],
             )
@@ -326,8 +326,8 @@ class E2EPipelineRegressionTest(unittest.TestCase):
                     root,
                     [observation("checkout_payment_error_rate_5m", 0.2)],
                     metric_series=[
-                        metric("checkout", "latency", [1.0, 1.0, 1.1, 1.0, 1.2, 1.0, 1.1, 2.0]),
-                        metric("payment", "latency", [1.0, 1.0, 1.1, 1.0, 1.2, 1.0, 1.1, 20.0]),
+                        metric("checkout", "latency", [1.0] * 350 + [2.0] * 10),
+                        metric("payment", "latency", [1.0] * 350 + [20.0] * 10),
                     ],
                     rca_enabled=True,
                 )

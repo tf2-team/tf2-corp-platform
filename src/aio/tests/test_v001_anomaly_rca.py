@@ -103,14 +103,23 @@ class V001AnomalyRcaTest(unittest.TestCase):
 
         self.assertEqual(findings, [])
 
-    def test_v001_detects_drift_that_recovered_before_latest_point(self):
-        findings = anomaly_engine().evaluate(
+    def test_v001_ignores_drift_that_recovered_before_detection_tail(self):
+        findings = anomaly_engine(detection_window_seconds=2).evaluate(
             [
                 metric("payment", "cpu", [1, 1, 1, 1, 1, 20, 20, 1, 1, 1]),
             ]
         )
 
-        self.assertEqual([(finding.service, finding.metric) for finding in findings], [("payment", "cpu")])
+        self.assertEqual(findings, [])
+
+    def test_v001_detects_drift_inside_detection_tail(self):
+        findings = anomaly_engine(detection_window_seconds=3).evaluate(
+            [
+                metric("payment", "error_ratio_5m", [0.001] * 10 + [10.0, 11.0]),
+            ]
+        )
+
+        self.assertEqual([(finding.service, finding.metric) for finding in findings], [("payment", "error_ratio_5m")])
 
     def test_isolation_forest_normalizes_rows_before_scoring(self):
         detector = ServiceIsolationForestDetector(score_threshold=4.0, min_points=8)
@@ -377,12 +386,12 @@ class V001AnomalyRcaTest(unittest.TestCase):
     def test_rca_prefers_dependency_that_drifted_before_checkout(self):
         runtime_config = load_runtime_config(Path("config/runtime.json"))
         findings = [
-            AnomalyFinding(algorithm="weighted_sum", service="cart", metric="error_rate_5m", signal_id="cart_error_rate_5m", score=0.8, timestamp=4),
-            AnomalyFinding(algorithm="weighted_sum", service="checkout", metric="error_rate_5m", signal_id="checkout_error_rate_5m", score=0.8, timestamp=6),
+            AnomalyFinding(algorithm="weighted_sum", service="cart", metric="error_rate_5m", signal_id="cart_error_rate_5m", score=0.8, timestamp=305),
+            AnomalyFinding(algorithm="weighted_sum", service="checkout", metric="error_rate_5m", signal_id="checkout_error_rate_5m", score=0.8, timestamp=330),
         ]
         series = [
-            metric("cart", "error_rate_5m", [0, 0, 0, 0, 10, 10, 10, 10]),
-            metric("checkout", "error_rate_5m", [0, 0, 0, 0, 0, 0, 10, 10]),
+            metric("cart", "error_rate_5m", [0] * 305 + [10] * 55),
+            metric("checkout", "error_rate_5m", [0] * 330 + [10] * 30),
         ]
 
         result = rca_engine(runtime_config).rank(findings, series, top_k=5)
@@ -433,9 +442,9 @@ class V001AnomalyRcaTest(unittest.TestCase):
 
     def test_pipeline_api_accepts_metric_series_and_returns_rca_result(self):
         series = [
-            metric("checkout", "latency", [1] * 59 + [2]),
-            metric("payment", "latency", [1] * 59 + [20]),
-            metric("payment", "error", [0] * 59 + [20]),
+            metric("checkout", "latency", [1] * 350 + [2] * 10),
+            metric("payment", "latency", [1] * 350 + [20] * 10),
+            metric("payment", "error", [0] * 350 + [20] * 10),
         ]
         with TemporaryDirectory() as tmp:
             settings = Settings().model_copy(update={"state_store_path": Path(tmp) / "aiops.sqlite3"})
