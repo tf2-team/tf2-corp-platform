@@ -1,0 +1,21 @@
+# Copyright The OpenTelemetry Authors
+# SPDX-License-Identifier: Apache-2.0
+
+# gRPC transport
+grpcio==1.71.0
+grpcio-health-checking==1.71.0
+
+# OpenTelemetry
+opentelemetry-distro==0.60b1
+opentelemetry-exporter-otlp-proto-grpc==1.39.1
+
+# LLM orchestration
+boto3==1.38.46
+langgraph==0.3.34
+openai==2.14.0
+instructor==1.15.4
+pydantic==2.12.5
+
+
+# Valkey (for pending cart action tokens)
+valkey==6.1.0

@@ -6,9 +6,10 @@
 #   docker buildx bake -f docker-compose.yml -f docker-bake.hcl release --push
 #   docker buildx bake -f docker-compose.yml -f docker-bake.hcl release --print
 #
-# Cache contract: ${IMAGE_NAME}/<service>:buildcache (registry cache, mode=max).
+# Cache contract: GitHub Actions BuildKit cache (type=gha, scope=<service>, mode=max).
 # Runtime tag:    ${IMAGE_NAME}/<service>:${DEMO_VERSION}
-# buildcache is never a Helm-deployable runtime tag.
+# GHA cache is not an ECR tag and is safe with image_tag_mutability=IMMUTABLE.
+# Outside GitHub Actions, clear cache-from/cache-to (see Makefile multiplatform push).
 
 variable "IMAGE_NAME" {
   default = ""
@@ -18,7 +19,7 @@ variable "DEMO_VERSION" {
   default = "dev"
 }
 
-# Exactly the 22 deployable services pushed to ECR by CI (includes customized OpenSearch).
+# Exactly the 23 deployable services pushed to ECR by CI (includes customized OpenSearch).
 group "release" {
   targets = [
     "accounting",
@@ -43,6 +44,7 @@ group "release" {
     "quote",
     "recommendation",
     "shipping",
+    "shopping-copilot",
   ]
 }
 
@@ -53,154 +55,162 @@ target "_release-common" {
 target "accounting" {
   inherits   = ["_release-common"]
   tags       = ["${IMAGE_NAME}/accounting:${DEMO_VERSION}"]
-  cache-from = ["type=registry,ref=${IMAGE_NAME}/accounting:buildcache"]
-  cache-to   = ["type=registry,ref=${IMAGE_NAME}/accounting:buildcache,mode=max,oci-mediatypes=true,image-manifest=true"]
+  cache-from = ["type=gha,scope=accounting"]
+  cache-to   = ["type=gha,mode=max,scope=accounting"]
 }
 
 target "ad" {
   inherits   = ["_release-common"]
   tags       = ["${IMAGE_NAME}/ad:${DEMO_VERSION}"]
-  cache-from = ["type=registry,ref=${IMAGE_NAME}/ad:buildcache"]
-  cache-to   = ["type=registry,ref=${IMAGE_NAME}/ad:buildcache,mode=max,oci-mediatypes=true,image-manifest=true"]
+  cache-from = ["type=gha,scope=ad"]
+  cache-to   = ["type=gha,mode=max,scope=ad"]
 }
 
 target "cart" {
   inherits   = ["_release-common"]
   tags       = ["${IMAGE_NAME}/cart:${DEMO_VERSION}"]
-  cache-from = ["type=registry,ref=${IMAGE_NAME}/cart:buildcache"]
-  cache-to   = ["type=registry,ref=${IMAGE_NAME}/cart:buildcache,mode=max,oci-mediatypes=true,image-manifest=true"]
+  cache-from = ["type=gha,scope=cart"]
+  cache-to   = ["type=gha,mode=max,scope=cart"]
 }
 
 target "checkout" {
   inherits   = ["_release-common"]
   tags       = ["${IMAGE_NAME}/checkout:${DEMO_VERSION}"]
-  cache-from = ["type=registry,ref=${IMAGE_NAME}/checkout:buildcache"]
-  cache-to   = ["type=registry,ref=${IMAGE_NAME}/checkout:buildcache,mode=max,oci-mediatypes=true,image-manifest=true"]
+  cache-from = ["type=gha,scope=checkout"]
+  cache-to   = ["type=gha,mode=max,scope=checkout"]
 }
 
 target "currency" {
   inherits   = ["_release-common"]
   tags       = ["${IMAGE_NAME}/currency:${DEMO_VERSION}"]
-  cache-from = ["type=registry,ref=${IMAGE_NAME}/currency:buildcache"]
-  cache-to   = ["type=registry,ref=${IMAGE_NAME}/currency:buildcache,mode=max,oci-mediatypes=true,image-manifest=true"]
+  cache-from = ["type=gha,scope=currency"]
+  cache-to   = ["type=gha,mode=max,scope=currency"]
 }
 
 target "email" {
   inherits   = ["_release-common"]
   tags       = ["${IMAGE_NAME}/email:${DEMO_VERSION}"]
-  cache-from = ["type=registry,ref=${IMAGE_NAME}/email:buildcache"]
-  cache-to   = ["type=registry,ref=${IMAGE_NAME}/email:buildcache,mode=max,oci-mediatypes=true,image-manifest=true"]
+  cache-from = ["type=gha,scope=email"]
+  cache-to   = ["type=gha,mode=max,scope=email"]
 }
 
 target "flagd-ui" {
   inherits   = ["_release-common"]
   tags       = ["${IMAGE_NAME}/flagd-ui:${DEMO_VERSION}"]
-  cache-from = ["type=registry,ref=${IMAGE_NAME}/flagd-ui:buildcache"]
-  cache-to   = ["type=registry,ref=${IMAGE_NAME}/flagd-ui:buildcache,mode=max,oci-mediatypes=true,image-manifest=true"]
+  cache-from = ["type=gha,scope=flagd-ui"]
+  cache-to   = ["type=gha,mode=max,scope=flagd-ui"]
 }
 
 target "fraud-detection" {
   inherits   = ["_release-common"]
   tags       = ["${IMAGE_NAME}/fraud-detection:${DEMO_VERSION}"]
-  cache-from = ["type=registry,ref=${IMAGE_NAME}/fraud-detection:buildcache"]
-  cache-to   = ["type=registry,ref=${IMAGE_NAME}/fraud-detection:buildcache,mode=max,oci-mediatypes=true,image-manifest=true"]
+  cache-from = ["type=gha,scope=fraud-detection"]
+  cache-to   = ["type=gha,mode=max,scope=fraud-detection"]
 }
 
 target "frontend" {
   inherits   = ["_release-common"]
   tags       = ["${IMAGE_NAME}/frontend:${DEMO_VERSION}"]
-  cache-from = ["type=registry,ref=${IMAGE_NAME}/frontend:buildcache"]
-  cache-to   = ["type=registry,ref=${IMAGE_NAME}/frontend:buildcache,mode=max,oci-mediatypes=true,image-manifest=true"]
+  cache-from = ["type=gha,scope=frontend"]
+  cache-to   = ["type=gha,mode=max,scope=frontend"]
 }
 
 target "frontend-proxy" {
   inherits   = ["_release-common"]
   tags       = ["${IMAGE_NAME}/frontend-proxy:${DEMO_VERSION}"]
-  cache-from = ["type=registry,ref=${IMAGE_NAME}/frontend-proxy:buildcache"]
-  cache-to   = ["type=registry,ref=${IMAGE_NAME}/frontend-proxy:buildcache,mode=max,oci-mediatypes=true,image-manifest=true"]
+  cache-from = ["type=gha,scope=frontend-proxy"]
+  cache-to   = ["type=gha,mode=max,scope=frontend-proxy"]
 }
 
 target "image-provider" {
   inherits   = ["_release-common"]
   tags       = ["${IMAGE_NAME}/image-provider:${DEMO_VERSION}"]
-  cache-from = ["type=registry,ref=${IMAGE_NAME}/image-provider:buildcache"]
-  cache-to   = ["type=registry,ref=${IMAGE_NAME}/image-provider:buildcache,mode=max,oci-mediatypes=true,image-manifest=true"]
+  cache-from = ["type=gha,scope=image-provider"]
+  cache-to   = ["type=gha,mode=max,scope=image-provider"]
 }
 
 target "kafka" {
   inherits   = ["_release-common"]
   tags       = ["${IMAGE_NAME}/kafka:${DEMO_VERSION}"]
-  cache-from = ["type=registry,ref=${IMAGE_NAME}/kafka:buildcache"]
-  cache-to   = ["type=registry,ref=${IMAGE_NAME}/kafka:buildcache,mode=max,oci-mediatypes=true,image-manifest=true"]
+  cache-from = ["type=gha,scope=kafka"]
+  cache-to   = ["type=gha,mode=max,scope=kafka"]
 }
 
 target "llm" {
   inherits   = ["_release-common"]
   tags       = ["${IMAGE_NAME}/llm:${DEMO_VERSION}"]
-  cache-from = ["type=registry,ref=${IMAGE_NAME}/llm:buildcache"]
-  cache-to   = ["type=registry,ref=${IMAGE_NAME}/llm:buildcache,mode=max,oci-mediatypes=true,image-manifest=true"]
+  cache-from = ["type=gha,scope=llm"]
+  cache-to   = ["type=gha,mode=max,scope=llm"]
 }
 
 target "load-generator" {
   inherits   = ["_release-common"]
   tags       = ["${IMAGE_NAME}/load-generator:${DEMO_VERSION}"]
-  cache-from = ["type=registry,ref=${IMAGE_NAME}/load-generator:buildcache"]
-  cache-to   = ["type=registry,ref=${IMAGE_NAME}/load-generator:buildcache,mode=max,oci-mediatypes=true,image-manifest=true"]
+  cache-from = ["type=gha,scope=load-generator"]
+  cache-to   = ["type=gha,mode=max,scope=load-generator"]
 }
 
 target "mem0" {
   inherits   = ["_release-common"]
   tags       = ["${IMAGE_NAME}/mem0:${DEMO_VERSION}"]
-  cache-from = ["type=registry,ref=${IMAGE_NAME}/mem0:buildcache"]
-  cache-to   = ["type=registry,ref=${IMAGE_NAME}/mem0:buildcache,mode=max,oci-mediatypes=true,image-manifest=true"]
+  cache-from = ["type=gha,scope=mem0"]
+  cache-to   = ["type=gha,mode=max,scope=mem0"]
 }
 
 target "payment" {
   inherits   = ["_release-common"]
   tags       = ["${IMAGE_NAME}/payment:${DEMO_VERSION}"]
-  cache-from = ["type=registry,ref=${IMAGE_NAME}/payment:buildcache"]
-  cache-to   = ["type=registry,ref=${IMAGE_NAME}/payment:buildcache,mode=max,oci-mediatypes=true,image-manifest=true"]
+  cache-from = ["type=gha,scope=payment"]
+  cache-to   = ["type=gha,mode=max,scope=payment"]
 }
 
 target "product-catalog" {
   inherits   = ["_release-common"]
   tags       = ["${IMAGE_NAME}/product-catalog:${DEMO_VERSION}"]
-  cache-from = ["type=registry,ref=${IMAGE_NAME}/product-catalog:buildcache"]
-  cache-to   = ["type=registry,ref=${IMAGE_NAME}/product-catalog:buildcache,mode=max,oci-mediatypes=true,image-manifest=true"]
+  cache-from = ["type=gha,scope=product-catalog"]
+  cache-to   = ["type=gha,mode=max,scope=product-catalog"]
 }
 
 target "product-reviews" {
   inherits   = ["_release-common"]
   tags       = ["${IMAGE_NAME}/product-reviews:${DEMO_VERSION}"]
-  cache-from = ["type=registry,ref=${IMAGE_NAME}/product-reviews:buildcache"]
-  cache-to   = ["type=registry,ref=${IMAGE_NAME}/product-reviews:buildcache,mode=max,oci-mediatypes=true,image-manifest=true"]
+  cache-from = ["type=gha,scope=product-reviews"]
+  cache-to   = ["type=gha,mode=max,scope=product-reviews"]
 }
 
 target "quote" {
   inherits   = ["_release-common"]
   tags       = ["${IMAGE_NAME}/quote:${DEMO_VERSION}"]
-  cache-from = ["type=registry,ref=${IMAGE_NAME}/quote:buildcache"]
-  cache-to   = ["type=registry,ref=${IMAGE_NAME}/quote:buildcache,mode=max,oci-mediatypes=true,image-manifest=true"]
+  cache-from = ["type=gha,scope=quote"]
+  cache-to   = ["type=gha,mode=max,scope=quote"]
 }
 
 target "recommendation" {
   inherits   = ["_release-common"]
   tags       = ["${IMAGE_NAME}/recommendation:${DEMO_VERSION}"]
-  cache-from = ["type=registry,ref=${IMAGE_NAME}/recommendation:buildcache"]
-  cache-to   = ["type=registry,ref=${IMAGE_NAME}/recommendation:buildcache,mode=max,oci-mediatypes=true,image-manifest=true"]
+  cache-from = ["type=gha,scope=recommendation"]
+  cache-to   = ["type=gha,mode=max,scope=recommendation"]
 }
 
 target "shipping" {
   inherits   = ["_release-common"]
   tags       = ["${IMAGE_NAME}/shipping:${DEMO_VERSION}"]
-  cache-from = ["type=registry,ref=${IMAGE_NAME}/shipping:buildcache"]
-  cache-to   = ["type=registry,ref=${IMAGE_NAME}/shipping:buildcache,mode=max,oci-mediatypes=true,image-manifest=true"]
+  cache-from = ["type=gha,scope=shipping"]
+  cache-to   = ["type=gha,mode=max,scope=shipping"]
+}
+
+target "shopping-copilot" {
+  inherits   = ["_release-common"]
+  tags       = ["${IMAGE_NAME}/shopping-copilot:${DEMO_VERSION}"]
+  cache-from = ["type=gha,scope=shopping-copilot"]
+  cache-to   = ["type=gha,mode=max,scope=shopping-copilot"]
 }
 
 # Customized OpenSearch (plugins stripped in src/opensearch/Dockerfile); used by Compose and Helm.
 target "opensearch" {
   inherits   = ["_release-common"]
   tags       = ["${IMAGE_NAME}/opensearch:${DEMO_VERSION}"]
-  cache-from = ["type=registry,ref=${IMAGE_NAME}/opensearch:buildcache"]
-  cache-to   = ["type=registry,ref=${IMAGE_NAME}/opensearch:buildcache,mode=max,oci-mediatypes=true,image-manifest=true"]
+  cache-from = ["type=gha,scope=opensearch"]
+  cache-to   = ["type=gha,mode=max,scope=opensearch"]
 }
+# Change trail: @hungxqt - 2026-07-19 - Add shopping-copilot to release bake catalog (23 services).

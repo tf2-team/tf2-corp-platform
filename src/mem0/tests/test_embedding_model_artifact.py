@@ -85,6 +85,15 @@ class EmbeddingArtifactTest(unittest.TestCase):
             marker = json.loads((extract / builder.READY_MARKER).read_text(encoding="utf-8"))
             self.assertEqual(marker["manifest_sha256"], builder.sha256_file(extract / builder.MANIFEST_NAME))
 
+    def test_source_repository_matches_fastembed_model_catalog(self):
+        try:
+            from fastembed import TextEmbedding
+        except ImportError:
+            self.skipTest("fastembed is installed in the production image, not this local unit-test environment")
+
+        model = next(item for item in TextEmbedding.list_supported_models() if item["model"] == builder.MODEL_NAME)
+        self.assertEqual(model["sources"]["hf"], builder.SOURCE_REPOSITORY)
+
 
 if __name__ == "__main__":
     unittest.main()

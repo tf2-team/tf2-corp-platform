@@ -9,7 +9,19 @@ export interface AiRequestPayload {
     question: string;
 }
 
-export type AiResponse = { text: string } | string;
+export interface AiClaim {
+    text: string;
+    source_ids: string[];
+}
+
+export interface AiStructuredResponse {
+    status: 'GROUNDED' | 'ABSTAINED' | 'BLOCKED' | 'FALLBACK';
+    answer: string;
+    reason: string;
+    claims: AiClaim[];
+}
+
+export type AiResponse = AiStructuredResponse | string;
 
 interface AiAssistantContextValue {
     aiResponse: AiResponse | null;
@@ -67,3 +79,4 @@ const ProductAIAssistantProvider = ({ children, productId }: ProductAIAssistantP
 };
 
 export default ProductAIAssistantProvider;
+

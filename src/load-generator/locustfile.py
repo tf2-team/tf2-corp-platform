@@ -110,11 +110,35 @@ base_url = f"http://{os.environ.get('FLAGD_HOST', 'localhost')}:{os.environ.get(
 api.set_provider(OFREPProvider(base_url=base_url))
 api.add_hooks([TracingHook()])
 
+def _read_integer_flag(client, flag_key: str, default: int = 0) -> int:
+    """Read one integer flag; fail closed to default on any evaluation error.
+
+    openfeature-sdk evaluate_flag_details can raise UnboundLocalError for
+    flag_evaluation when a BaseException (gevent Timeout / GreenletExit under
+    Locust) escapes before the local is assigned and the finally block runs.
+    Flood traffic must not fail the Locust task when flagd/OFREP is flaky.
+    """
+    try:
+        value = client.get_integer_value(flag_key, default)
+        if value is None:
+            return default
+        return int(value)
+    except Exception as err:
+        logging.warning(
+            "flagd integer evaluation failed for key=%s; using default=%s (%s: %s)",
+            flag_key,
+            default,
+            type(err).__name__,
+            err,
+        )
+        return default
+
+
 def get_flagd_value(FlagName):
     # BTC original + team local- twin: max so either source can inject.
     client = api.get_client()
-    btc = client.get_integer_value(FlagName, 0)
-    local = client.get_integer_value(f"local-{FlagName}", 0)
+    btc = _read_integer_flag(client, FlagName, 0)
+    local = _read_integer_flag(client, f"local-{FlagName}", 0)
     return max(btc, local)
 
 categories = [
@@ -331,4 +355,4 @@ async def add_baggage_header(route: Route, request: Request):
     }
     await route.continue_(headers=headers)
 
-# Change trail: @hungxqt - 2026-07-15 - Dual-read local- loadGeneratorFloodHomepage with BTC key.
+# Change trail: @hungxqt - 2026-07-19 - Fail-closed flagd integer reads to avoid OpenFeature UnboundLocalError under Locust.

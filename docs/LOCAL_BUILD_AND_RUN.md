@@ -353,7 +353,7 @@ make create-multiplatform-builder
 ```
 
 ```cmd
-REM Make recipe sources .env.override then bakes group "release" (21 images) and pushes
+REM Make recipe sources .env.override then bakes group "release" (23 images) and pushes
 make build-multiplatform-and-push
 ```
 
@@ -376,18 +376,18 @@ make build-multiplatform
 
 ## 12. Service catalog (full Compose)
 
-Application / platform images built from this repo (also the CI `release` set of 21 when using bake):
+Application / platform images built from this repo (also the CI `release` set of 23 when using bake):
 
 | Area | Services |
 |---|---|
 | Commerce | `frontend`, `frontend-proxy`, `image-provider`, `product-catalog`, `cart`, `checkout`, `payment`, `shipping`, `quote`, `currency`, `email`, `ad`, `recommendation`, `product-reviews` |
-| Async / AI | `kafka`, `accounting`, `fraud-detection`, `llm` |
+| Async / AI | `kafka`, `accounting`, `fraud-detection`, `llm`, `mem0`, `shopping-copilot` |
 | Feature flags | `flagd`, `flagd-ui` |
 | Load | `load-generator` |
 | Data | `postgresql`, `valkey-cart` |
 | Observability | `otel-collector`, `jaeger`, `grafana`, `prometheus`, `opensearch` |
 
-Release bake catalog details: [CICD.md § Release catalog](./CICD.md#release-catalog-21-images).
+Release bake catalog details: [CICD.md § Release catalog](./CICD.md#release-catalog-23-images).
 
 ---
 
@@ -449,3 +449,5 @@ Expect storefront HTTP **200** once the proxy and frontend are healthy (first bo
 | `make build-multiplatform-and-push` | Bake `release` group and push |
 | `make clean-images` | Remove local TechX-tagged images |
 | `make check` | Docs/tooling checks (misspell, markdownlint, license, links) |
+
+<!-- Change trail: @hungxqt - 2026-07-19 - Document shopping-copilot in release catalog (23 images). -->

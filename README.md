@@ -17,7 +17,7 @@ Kubernetes deploy: use the Helm chart in `../techx-corp-chart`.
 ## CI/CD
 GitHub Actions builds multi-arch images and pushes them to AWS ECR via OIDC.
 
-**Job graph:** `CI → prepare → AWS/ECR preflight → 21-service matrix → verify ECR → release-ready → update-chart-dev (dev) | create-chart-prod-pr (prod)`
+**Job graph:** `CI → prepare → AWS/ECR preflight → 23-service matrix → verify ECR → release-ready → update-chart-dev (dev) | create-chart-prod-pr (prod)`
 
 | Trigger | Environment | What |
 |---|---|---|
@@ -27,8 +27,8 @@ GitHub Actions builds multi-arch images and pushes them to AWS ECR via OIDC.
 | branch push without `src/**` changes | — | publishing skipped (docs, workflows, compose/bake-only, etc.) |
 | manual dispatch | chosen | matching environment (use for republish without `src/` edits) |
 
-- **21 release images** defined in `docker-bake.hcl` (group `release`), including customized `opensearch`.
-- **Registry cache:** `${IMAGE_NAME}/<service>:buildcache` (not a deployable tag).
+- **23 release images** defined in `docker-bake.hcl` (group `release`), including customized `opensearch` and `shopping-copilot`.
+- **BuildKit cache:** GitHub Actions `type=gha` (not an ECR tag; safe with immutable ECR tags).
 - **`release-ready`** gates promotion. **Dev** direct-pushes chart `default.image.tag`. **Prod** opens a chart PR for `values-prod.yaml` (human merge). Both need secret `CHART_REPO_TOKEN`.
 
 Image format: `[REGISTRY]/[PROJECT]/[SERVICE]:[VERSION]`  
@@ -57,3 +57,5 @@ Storefront: http://localhost:8080/
 
 ## License
 Distributed under the Apache License 2.0. See `LICENSE`.
+
+<!-- Change trail: @hungxqt - 2026-07-19 - Document 23 release images including shopping-copilot. -->
