@@ -1,7 +1,8 @@
 # Copyright The OpenTelemetry Authors
 # SPDX-License-Identifier: Apache-2.0
 
-FROM opensearchproject/opensearch:3.3.0@sha256:d96afaf6cbd2a6a3695aeb2f1d48c9a16ad5c8918eb849e5cbf43475f0f8e146
+# 3.7.0 vendor base ships newer Amazon Linux packages for Trivy HIGH OS CVEs.
+FROM opensearchproject/opensearch:3.7.0@sha256:44ba7ea58a319adf61c33ab16873f9ef5dbb30b291a832d375172f0b2d24e3c9
 
 USER 0
 
@@ -48,4 +49,4 @@ RUN rm -rf \
 # - opensearch-job-scheduler (task scheduling)
 
 USER 1000
-# Change trail: @hungxqt - 2026-07-20 - Trivy HIGH/CRITICAL remediation (base upgrades, OS package updates, dep bumps)
+# Change trail: @hungxqt - 2026-07-20 - Bump OpenSearch base to 3.7.0 for Trivy HIGH OS packages

@@ -18,6 +18,12 @@ version = "1.0"
 
 val grpcVersion = "1.79.0"
 val protobufVersion = "4.33.2"
+// Trivy HIGH: jackson-databind CVE-2026-54512/54513
+val jacksonVersion = "2.21.4"
+// jackson-annotations publishes major.minor only (no 2.21.x patch on Maven Central)
+val jacksonAnnotationsVersion = "2.21"
+// Trivy HIGH: Netty codec/handler floor 4.1.135+
+val nettyVersion = "4.1.135.Final"
 
 
 repositories {
@@ -28,6 +34,7 @@ repositories {
 
 
 dependencies {
+    implementation(platform("io.netty:netty-bom:${nettyVersion}"))
     implementation("com.google.protobuf:protobuf-java:${protobufVersion}")
     testImplementation(kotlin("test"))
     implementation(kotlin("script-runtime"))
@@ -46,11 +53,33 @@ dependencies {
     implementation("dev.openfeature:sdk:1.19.2")
     implementation("dev.openfeature.contrib.providers:flagd:0.11.19")
     implementation("redis.clients:jedis:5.1.2")
+    implementation("com.fasterxml.jackson.core:jackson-databind:${jacksonVersion}")
 
     if (JavaVersion.current().isJava9Compatible) {
         // Workaround for @javax.annotation.Generated
         // see: https://github.com/grpc/grpc-java/issues/3633
         implementation("javax.annotation:javax.annotation-api:1.3.2")
+    }
+}
+
+configurations.configureEach {
+    resolutionStrategy {
+        force(
+            "com.fasterxml.jackson.core:jackson-core:${jacksonVersion}",
+            "com.fasterxml.jackson.core:jackson-databind:${jacksonVersion}",
+            "com.fasterxml.jackson.core:jackson-annotations:${jacksonAnnotationsVersion}",
+            "io.netty:netty-buffer:${nettyVersion}",
+            "io.netty:netty-codec:${nettyVersion}",
+            "io.netty:netty-codec-http:${nettyVersion}",
+            "io.netty:netty-codec-http2:${nettyVersion}",
+            "io.netty:netty-common:${nettyVersion}",
+            "io.netty:netty-handler:${nettyVersion}",
+            "io.netty:netty-resolver:${nettyVersion}",
+            "io.netty:netty-transport:${nettyVersion}",
+            "io.netty:netty-transport-native-unix-common:${nettyVersion}",
+            "io.netty:netty-transport-classes-epoll:${nettyVersion}",
+            "io.netty:netty-transport-native-epoll:${nettyVersion}",
+        )
     }
 }
 
@@ -100,4 +129,4 @@ application {
 tasks.jar {
     manifest.attributes["Main-Class"] = "frauddetection.MainKt"
 }
-// Change trail: @hungxqt - 2026-07-20 - Bump gRPC for Trivy java dependency findings
+// Change trail: @hungxqt - 2026-07-20 - Force jackson 2.21.4 and Netty 4.1.135 for Trivy HIGH
