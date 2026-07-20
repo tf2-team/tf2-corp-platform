@@ -1,0 +1,25 @@
+{
+  "detail-type": "AWS API Call via CloudTrail",
+  "source": "aws.eks",
+  "account": "493499579600",
+  "region": "us-east-1",
+  "time": "2026-07-18T08:20:12Z",
+  "detail": {
+    "eventVersion": "1.10",
+    "userIdentity": {
+      "type": "IAMUser",
+      "arn": "arn:aws:iam::493499579600:user/example"
+    },
+    "eventTime": "2026-07-18T08:20:12Z",
+    "eventSource": "eks.amazonaws.com",
+    "eventName": "DescribeCluster",
+    "awsRegion": "us-east-1",
+    "sourceIPAddress": "203.0.113.30",
+    "userAgent": "aws-cli/2.x",
+    "requestParameters": {
+      "name": "techx-tf2"
+    },
+    "requestID": "request-id-describe",
+    "eventID": "event-id-describe"
+  }
+}

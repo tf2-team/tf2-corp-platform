@@ -1,0 +1,38 @@
+{
+  "detail-type": "AWS API Call via CloudTrail",
+  "source": "aws.iam",
+  "account": "493499579600",
+  "region": "us-east-1",
+  "time": "2026-07-19T03:30:00Z",
+  "detail": {
+    "eventVersion": "1.10",
+    "userIdentity": {
+      "type": "AssumedRole",
+      "arn": "arn:aws:sts::493499579600:assumed-role/terraform-ci/session"
+    },
+    "eventTime": "2026-07-19T03:30:00Z",
+    "eventSource": "iam.amazonaws.com",
+    "eventName": "CreatePolicy",
+    "awsRegion": "us-east-1",
+    "sourceIPAddress": "192.0.2.10",
+    "userAgent": "terraform/1.x",
+    "requestParameters": {
+      "policyName": "ReadOnlyAppMetadata",
+      "policyDocument": {
+        "Version": "2012-10-17",
+        "Statement": [
+          {
+            "Effect": "Allow",
+            "Action": [
+              "cloudwatch:GetMetricData",
+              "logs:DescribeLogGroups"
+            ],
+            "Resource": "*"
+          }
+        ]
+      }
+    },
+    "requestID": "request-id-create-policy-low-risk",
+    "eventID": "event-id-create-policy-low-risk"
+  }
+}

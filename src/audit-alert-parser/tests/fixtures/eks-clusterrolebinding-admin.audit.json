@@ -1,0 +1,29 @@
+{
+  "kind": "Event",
+  "apiVersion": "audit.k8s.io/v1",
+  "auditID": "audit-id-rbac",
+  "stage": "ResponseComplete",
+  "verb": "create",
+  "user": {
+    "username": "arn:aws:iam::493499579600:user/example",
+    "groups": [
+      "system:authenticated"
+    ]
+  },
+  "sourceIPs": [
+    "203.0.113.20"
+  ],
+  "userAgent": "kubectl/v1.33",
+  "objectRef": {
+    "resource": "clusterrolebindings",
+    "name": "example-cluster-admin"
+  },
+  "requestObject": {
+    "roleRef": {
+      "apiGroup": "rbac.authorization.k8s.io",
+      "kind": "ClusterRole",
+      "name": "cluster-admin"
+    }
+  },
+  "stageTimestamp": "2026-07-18T08:15:12Z"
+}

@@ -1,0 +1,26 @@
+{
+  "detail-type": "AWS API Call via CloudTrail",
+  "source": "aws.eks",
+  "account": "493499579600",
+  "region": "us-east-1",
+  "time": "2026-07-18T08:12:12Z",
+  "detail": {
+    "eventVersion": "1.10",
+    "userIdentity": {
+      "type": "IAMUser",
+      "arn": "arn:aws:iam::493499579600:user/example"
+    },
+    "eventTime": "2026-07-18T08:12:12Z",
+    "eventSource": "eks.amazonaws.com",
+    "eventName": "AssociateAccessPolicy",
+    "awsRegion": "us-east-1",
+    "sourceIPAddress": "203.0.113.12",
+    "userAgent": "Terraform/1.13",
+    "requestParameters": {
+      "clusterName": "techx-tf2",
+      "policyArn": "arn:aws:eks::aws:cluster-access-policy/AmazonEKSClusterAdminPolicy"
+    },
+    "requestID": "request-id-eks",
+    "eventID": "event-id-eks"
+  }
+}

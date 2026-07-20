@@ -1,0 +1,25 @@
+{
+  "detail-type": "AWS API Call via CloudTrail",
+  "source": "aws.cloudtrail",
+  "account": "493499579600",
+  "region": "us-east-1",
+  "time": "2026-07-18T08:13:12Z",
+  "detail": {
+    "eventVersion": "1.10",
+    "userIdentity": {
+      "type": "IAMUser",
+      "arn": "arn:aws:iam::493499579600:user/example"
+    },
+    "eventTime": "2026-07-18T08:13:12Z",
+    "eventSource": "cloudtrail.amazonaws.com",
+    "eventName": "StopLogging",
+    "awsRegion": "us-east-1",
+    "sourceIPAddress": "203.0.113.13",
+    "userAgent": "aws-cli/2.x",
+    "requestParameters": {
+      "name": "techx-audit-test-trail"
+    },
+    "requestID": "request-id-cloudtrail",
+    "eventID": "event-id-cloudtrail"
+  }
+}

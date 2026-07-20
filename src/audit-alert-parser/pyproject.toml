@@ -1,0 +1,17 @@
+[project]
+name = "techx-audit-alert-parser"
+version = "0.1.0"
+description = "Mandate 11 audit alert parser skeleton for CloudTrail and EKS audit events"
+requires-python = ">=3.11"
+dependencies = [
+  "PyYAML>=6.0",
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest>=8.0",
+]
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["tests"]

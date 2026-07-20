@@ -1,0 +1,13 @@
+version: 1
+environment: production
+
+# These rules are too sensitive to suppress automatically. If they fire, they
+# should reach the alert/router path even when the actor looks familiar.
+never_suppress_rule_ids:
+  - aws.cloudtrail.logging_changed
+  - aws.eks.audit_logging_disabled
+
+# Production starts with no active suppressions. Add entries only after a PR
+# review with owner, reason, ticket, review_after, actor scope, and action or
+# resource scope.
+entries: []

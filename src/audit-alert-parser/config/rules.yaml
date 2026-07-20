@@ -1,0 +1,206 @@
+version: 1
+source: Task/Task_mandate_11/MANDATE-11.1-dangerous-actions.md
+rules:
+  - id: aws.iam.create_access_key
+    source_type: cloudtrail
+    event_source: iam.amazonaws.com
+    event_names:
+      - CreateAccessKey
+    severity: high
+    title_vi: Tao IAM access key moi
+    impact_vi: Credential dai han co the bi lo va dung ngoai SSO/MFA.
+    first_action_vi: Xac minh user co request hop le khong. Neu khong, vo hieu hoa access key va dieu tra CloudTrail theo request ID.
+
+  - id: aws.iam.admin_policy_change
+    source_type: cloudtrail
+    event_source: iam.amazonaws.com
+    event_names:
+      - CreatePolicy
+      - CreatePolicyVersion
+      - PutUserPolicy
+      - PutRolePolicy
+      - PutGroupPolicy
+      - AttachUserPolicy
+      - AttachRolePolicy
+      - AttachGroupPolicy
+      - SetDefaultPolicyVersion
+      - UpdateAssumeRolePolicy
+    require_admin_policy: true
+    severity: critical
+    title_vi: Thay doi IAM policy cap admin
+    impact_vi: Principal co the duoc cap quyen rong tren AWS account hoac mo duong leo thang dac quyen.
+    first_action_vi: Xac minh co PR/change ticket hop le khong. Neu khong, thu hoi policy hoac rollback policy version va dieu tra CloudTrail theo request ID.
+
+  - id: aws.iam.policy_attach_requires_review
+    source_type: cloudtrail
+    event_source: iam.amazonaws.com
+    event_names:
+      - AttachUserPolicy
+      - AttachRolePolicy
+      - AttachGroupPolicy
+    severity: high
+    title_vi: Gan IAM policy can review tren production
+    impact_vi: Attach policy truc tiep co the mo rong quyen truy cap ngoai luong Terraform/CI-CD da phe duyet.
+    first_action_vi: Xac minh actor co phai Terraform/CI-CD trong allowlist va co change ticket hop le khong. Neu la human actor hoac actor la, thu hoi policy va dieu tra CloudTrail theo request ID.
+
+  - id: aws.iam.policy_mutation_requires_review
+    source_type: cloudtrail
+    event_source: iam.amazonaws.com
+    event_names:
+      - CreatePolicy
+      - CreatePolicyVersion
+      - SetDefaultPolicyVersion
+      - PutUserPolicy
+      - PutRolePolicy
+      - PutGroupPolicy
+      - UpdateAssumeRolePolicy
+    severity: high
+    title_vi: Thay doi IAM policy can review tren production
+    impact_vi: Policy mutation co the mo them quyen moi hoac kich hoat policy version nguy hiem ma khong qua luong change management.
+    first_action_vi: Doi chieu change ticket, policy document/version va actor. Neu khong hop le, rollback policy va dieu tra CloudTrail theo request ID.
+
+  - id: aws.iam.interactive_identity_access_changed
+    source_type: cloudtrail
+    event_source: iam.amazonaws.com
+    event_names:
+      - CreateUser
+      - CreateRole
+      - CreateLoginProfile
+      - UpdateLoginProfile
+    severity: high
+    title_vi: Thay doi IAM identity hoac console login can review
+    impact_vi: Actor co the tao identity moi hoac mo duong dang nhap tuong tac ngoai federation/SSO.
+    first_action_vi: Xac minh identity co nam trong change ticket va onboarding process khong. Neu khong, disable login/identity va dieu tra CloudTrail.
+
+  - id: aws.eks.access_entry_created
+    source_type: cloudtrail
+    event_source: eks.amazonaws.com
+    event_names:
+      - CreateAccessEntry
+    severity: critical
+    title_vi: Tao EKS access entry moi
+    impact_vi: IAM principal moi co the duoc mo duong truy cap Kubernetes cluster.
+    first_action_vi: Xac minh principal ARN va change ticket. Neu khong hop le, xoa access entry va dieu tra CloudTrail.
+
+  - id: aws.eks.cluster_admin_access
+    source_type: cloudtrail
+    event_source: eks.amazonaws.com
+    event_names:
+      - AssociateAccessPolicy
+    request_parameter_contains:
+      policyArn: AmazonEKSClusterAdminPolicy
+    severity: critical
+    title_vi: Gan quyen EKS cluster-admin
+    impact_vi: Principal co the co quyen admin tren Kubernetes cluster.
+    first_action_vi: Xac minh actor co phai Terraform CI/CD da approve khong. Neu khong, thu hoi access policy ngay.
+
+  - id: aws.eks.audit_logging_disabled
+    source_type: cloudtrail
+    event_source: eks.amazonaws.com
+    event_names:
+      - UpdateClusterConfig
+    attribute_equals:
+      eks_audit_logging_disabled: true
+    severity: critical
+    title_vi: EKS control-plane audit logging bi tat hoac lam yeu
+    impact_vi: Mat visibility vao Kubernetes API activity nhu doc secret, sua RBAC hoac exec vao pod.
+    first_action_vi: Bat lai log type api/audit/authenticator neu an toan, xac minh actor, mo incident va dieu tra cac event quanh thoi diem thay doi.
+
+  - id: aws.cloudtrail.logging_changed
+    source_type: cloudtrail
+    event_source: cloudtrail.amazonaws.com
+    event_names:
+      - StopLogging
+      - DeleteTrail
+      - UpdateTrail
+      - PutEventSelectors
+      - DeleteEventDataStore
+      - UpdateEventDataStore
+    severity: critical
+    title_vi: CloudTrail bi dung hoac thay doi
+    impact_vi: Mat audit trail lam giam kha nang dieu tra su co.
+    first_action_vi: Bat lai logging neu an toan, xac minh actor, mo incident va dieu tra cac event quanh thoi diem thay doi.
+
+  - id: k8s.rbac.cluster_admin_binding
+    source_type: kubernetes_audit
+    verbs:
+      - create
+      - update
+      - patch
+    resources:
+      - clusterrolebindings
+      - rolebindings
+    request_object_contains:
+      roleRef.name: cluster-admin
+    severity: critical
+    title_vi: Tao hoac sua Kubernetes binding toi cluster-admin
+    impact_vi: Actor hoac subject co the co quyen quan tri toan cluster.
+    first_action_vi: Kiem tra subject duoc gan quyen, doi chieu change ticket, rollback binding neu khong hop le.
+
+  - id: k8s.secret_access_unapproved
+    source_type: kubernetes_audit
+    verbs:
+      - get
+      - list
+      - watch
+    resources:
+      - secrets
+    severity: high
+    title_vi: Doc Kubernetes Secret boi identity khong duoc phe duyet
+    impact_vi: Secret co the chua password, token, webhook URL hoac credential noi bo.
+    first_action_vi: Xac minh actor co nam allowlist/incident ticket khong. Neu khong, rotate secret lien quan va dieu tra auditID.
+
+  - id: k8s.pod_exec_production
+    source_type: kubernetes_audit
+    verbs:
+      - create
+    resources:
+      - pods
+    subresources:
+      - exec
+    namespace_prefixes:
+      - techx-
+    severity: high
+    title_vi: Exec vao production pod
+    impact_vi: Shell access truc tiep trong workload co the bypass deployment control va lam lo secret/env runtime.
+    first_action_vi: Xac minh incident ticket/on-call approval. Neu khong hop le, terminate session neu co the va dieu tra auditID, pod, namespace.
+
+  - id: k8s.privileged_workload_requested
+    source_type: kubernetes_audit
+    verbs:
+      - create
+      - update
+      - patch
+    resources:
+      - pods
+      - deployments
+      - statefulsets
+      - daemonsets
+      - jobs
+      - cronjobs
+    attribute_equals:
+      privileged_workload_requested: true
+    severity: critical
+    title_vi: Tao hoac sua workload co quyen privileged/host access
+    impact_vi: Workload co privileged, host namespace hoac hostPath co the compromise node va pha ranh gioi container.
+    first_action_vi: Doi chieu manifest voi change ticket. Neu khong hop le, rollback workload va dieu tra auditID, namespace, actor.
+
+  - id: k8s.production_resource_deleted
+    source_type: kubernetes_audit
+    verbs:
+      - delete
+      - deletecollection
+    resources:
+      - deployments
+      - statefulsets
+      - daemonsets
+      - services
+      - ingresses
+      - configmaps
+      - secrets
+    namespace_prefixes:
+      - techx-
+    severity: high
+    title_vi: Xoa resource production can review
+    impact_vi: Xoa workload/service/config trong production co the gay outage hoac mat cau hinh quan trong.
+    first_action_vi: Xac minh rollout/maintenance ticket. Neu khong hop le, rollback tu GitOps/backup va dieu tra auditID.

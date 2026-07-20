@@ -1,0 +1,27 @@
+{
+  "detail-type": "AWS API Call via CloudTrail",
+  "source": "aws.eks",
+  "account": "493499579600",
+  "region": "us-east-1",
+  "time": "2026-07-19T03:35:00Z",
+  "detail": {
+    "eventVersion": "1.10",
+    "userIdentity": {
+      "type": "IAMUser",
+      "arn": "arn:aws:iam::493499579600:user/human-operator"
+    },
+    "eventTime": "2026-07-19T03:35:00Z",
+    "eventSource": "eks.amazonaws.com",
+    "eventName": "CreateAccessEntry",
+    "awsRegion": "us-east-1",
+    "sourceIPAddress": "203.0.113.22",
+    "userAgent": "aws-cli/2.x",
+    "requestParameters": {
+      "name": "techx-tf2",
+      "clusterName": "techx-tf2",
+      "principalArn": "arn:aws:iam::493499579600:role/temp-admin"
+    },
+    "requestID": "request-id-create-access-entry",
+    "eventID": "event-id-create-access-entry"
+  }
+}

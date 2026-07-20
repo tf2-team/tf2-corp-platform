@@ -1,0 +1,26 @@
+{
+  "detail-type": "AWS API Call via CloudTrail",
+  "source": "aws.iam",
+  "account": "493499579600",
+  "region": "us-east-1",
+  "time": "2026-07-19T03:20:00Z",
+  "detail": {
+    "eventVersion": "1.10",
+    "userIdentity": {
+      "type": "IAMUser",
+      "arn": "arn:aws:iam::493499579600:user/human-operator"
+    },
+    "eventTime": "2026-07-19T03:20:00Z",
+    "eventSource": "iam.amazonaws.com",
+    "eventName": "AttachRolePolicy",
+    "awsRegion": "us-east-1",
+    "sourceIPAddress": "198.51.100.45",
+    "userAgent": "signin.amazonaws.com",
+    "requestParameters": {
+      "roleName": "prod-support-role",
+      "policyArn": "arn:aws:iam::493499579600:policy/DevTempFix"
+    },
+    "requestID": "request-id-custom-attach",
+    "eventID": "event-id-custom-attach"
+  }
+}

@@ -1,0 +1,33 @@
+{
+  "detail-type": "AWS API Call via CloudTrail",
+  "source": "aws.eks",
+  "account": "493499579600",
+  "region": "us-east-1",
+  "time": "2026-07-19T03:40:00Z",
+  "detail": {
+    "eventVersion": "1.10",
+    "userIdentity": {
+      "type": "IAMUser",
+      "arn": "arn:aws:iam::493499579600:user/human-operator"
+    },
+    "eventTime": "2026-07-19T03:40:00Z",
+    "eventSource": "eks.amazonaws.com",
+    "eventName": "UpdateClusterConfig",
+    "awsRegion": "us-east-1",
+    "sourceIPAddress": "203.0.113.23",
+    "userAgent": "aws-cli/2.x",
+    "requestParameters": {
+      "name": "techx-tf2",
+      "logging": {
+        "clusterLogging": [
+          {
+            "enabled": false,
+            "types": ["audit", "api"]
+          }
+        ]
+      }
+    },
+    "requestID": "request-id-disable-audit",
+    "eventID": "event-id-disable-audit"
+  }
+}

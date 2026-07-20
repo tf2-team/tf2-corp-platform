@@ -1,0 +1,26 @@
+{
+  "detail-type": "AWS API Call via CloudTrail",
+  "source": "aws.iam",
+  "account": "493499579600",
+  "region": "us-east-1",
+  "time": "2026-07-18T08:11:12Z",
+  "detail": {
+    "eventVersion": "1.10",
+    "userIdentity": {
+      "type": "AssumedRole",
+      "arn": "arn:aws:sts::493499579600:assumed-role/example-admin/session"
+    },
+    "eventTime": "2026-07-18T08:11:12Z",
+    "eventSource": "iam.amazonaws.com",
+    "eventName": "AttachRolePolicy",
+    "awsRegion": "us-east-1",
+    "sourceIPAddress": "203.0.113.11",
+    "userAgent": "aws-cli/2.x",
+    "requestParameters": {
+      "roleName": "example-role",
+      "policyArn": "arn:aws:iam::aws:policy/AdministratorAccess"
+    },
+    "requestID": "request-id-admin",
+    "eventID": "event-id-admin"
+  }
+}
