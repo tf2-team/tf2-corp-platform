@@ -1,3 +1,6 @@
+# Copyright The OpenTelemetry Authors
+# SPDX-License-Identifier: Apache-2.0
+
 version: 1
 source: Task/Task_mandate_11/MANDATE-11.1-dangerous-actions.md
 rules:

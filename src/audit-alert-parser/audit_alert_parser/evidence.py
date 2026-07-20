@@ -1,3 +1,8 @@
+#!/usr/bin/python
+
+# Copyright The OpenTelemetry Authors
+# SPDX-License-Identifier: Apache-2.0
+
 """Structured evidence record helpers."""
 
 from __future__ import annotations

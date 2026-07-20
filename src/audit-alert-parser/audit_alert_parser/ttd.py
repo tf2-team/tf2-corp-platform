@@ -1,3 +1,8 @@
+#!/usr/bin/python
+
+# Copyright The OpenTelemetry Authors
+# SPDX-License-Identifier: Apache-2.0
+
 """Time-to-detect helper functions."""
 
 from __future__ import annotations

@@ -1,3 +1,8 @@
+#!/usr/bin/python
+
+# Copyright The OpenTelemetry Authors
+# SPDX-License-Identifier: Apache-2.0
+
 """Rule matching based on the Mandate 11.1 dangerous-action baseline."""
 
 from __future__ import annotations

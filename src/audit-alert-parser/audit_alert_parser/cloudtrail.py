@@ -1,3 +1,8 @@
+#!/usr/bin/python
+
+# Copyright The OpenTelemetry Authors
+# SPDX-License-Identifier: Apache-2.0
+
 """CloudTrail event helpers for Mandate 11 audit detection."""
 
 from __future__ import annotations

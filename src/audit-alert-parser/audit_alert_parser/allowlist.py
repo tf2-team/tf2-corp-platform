@@ -1,3 +1,8 @@
+#!/usr/bin/python
+
+# Copyright The OpenTelemetry Authors
+# SPDX-License-Identifier: Apache-2.0
+
 """Allowlist-based noise reduction for Mandate 11.6.
 
 The allowlist runs only after a dangerous rule matched. This keeps normal

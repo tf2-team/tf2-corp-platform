@@ -1,3 +1,8 @@
+#!/usr/bin/python
+
+# Copyright The OpenTelemetry Authors
+# SPDX-License-Identifier: Apache-2.0
+
 """AWS Lambda entry point for the Mandate 11 audit alert parser."""
 
 from __future__ import annotations

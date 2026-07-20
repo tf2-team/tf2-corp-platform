@@ -1,3 +1,8 @@
+#!/usr/bin/python
+
+# Copyright The OpenTelemetry Authors
+# SPDX-License-Identifier: Apache-2.0
+
 from __future__ import annotations
 
 from audit_alert_parser.redaction import REDACTED, is_sensitive_key, redact, redact_text

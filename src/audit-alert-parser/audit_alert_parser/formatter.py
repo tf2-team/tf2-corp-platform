@@ -1,3 +1,8 @@
+#!/usr/bin/python
+
+# Copyright The OpenTelemetry Authors
+# SPDX-License-Identifier: Apache-2.0
+
 """Human-readable Vietnamese alert formatter for Mandate 11.3."""
 
 from __future__ import annotations
