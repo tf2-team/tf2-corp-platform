@@ -3,13 +3,14 @@
 # SPDX-License-Identifier: Apache-2.0
 
 
-FROM docker.io/library/python:3.12-alpine3.22@sha256:a190708a2dec1bd18b1decb539f8e8f5407abaa9bf39cacda583f7f8c11db322 AS build-venv
+FROM docker.io/library/python:3.12-alpine3.22 AS build-venv
 
 ENV PIP_DEFAULT_TIMEOUT=120 \
     PIP_RETRIES=10 \
     PIP_DISABLE_PIP_VERSION_CHECK=1
 
-RUN apk add --no-cache gcc g++ linux-headers
+RUN apk update && \
+    apk add gcc g++ linux-headers
 
 COPY ./src/llm/requirements.txt requirements.txt
 
@@ -17,7 +18,7 @@ RUN --mount=type=cache,id=techx-pip-cache,target=/root/.cache/pip,sharing=locked
     python -m venv venv && \
     venv/bin/pip install -r requirements.txt
 
-FROM docker.io/library/python:3.12-alpine3.22@sha256:a190708a2dec1bd18b1decb539f8e8f5407abaa9bf39cacda583f7f8c11db322
+FROM docker.io/library/python:3.12-alpine3.22
 
 COPY --from=build-venv /venv/ /venv/
 
