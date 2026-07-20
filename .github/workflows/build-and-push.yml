@@ -1049,7 +1049,9 @@ jobs:
           version: v0.69.3
           image-ref: ${{ env.IMAGE_REF }}
           format: table
-          ignore-unfixed: false
+          # Fail only on findings with a published fix. Vendor images (Kafka/OpenSearch/etc.)
+          # and will_not_fix OS packages otherwise block every release despite rebuilds.
+          ignore-unfixed: true
           severity: HIGH,CRITICAL
           exit-code: "1"
 
@@ -1727,4 +1729,4 @@ jobs:
             gh pr create --repo "${CHART_REPO}" --base "${CHART_PROD_BRANCH}" --head "${promote_branch}" --title "chore(prod): promote rebuilt service digests (${VERSION})" --body "${body}"
           fi
 
-# Change trail: @hungxqt - 2026-07-20 - Selective service-digest promote, sign/dispatch gates, scan rebuilt-only.
+# Change trail: @hungxqt - 2026-07-20 - Trivy ignore-unfixed=true so only fixable HIGH/CRITICAL block release

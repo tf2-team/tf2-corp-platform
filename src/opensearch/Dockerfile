@@ -1,9 +1,19 @@
 # Copyright The OpenTelemetry Authors
 # SPDX-License-Identifier: Apache-2.0
 
-FROM opensearchproject/opensearch:3.2.0@sha256:23297b8d8545e129dd58c254ed08d786dc552410ba772983ad2af31048d2f04b
+# 3.7.0 vendor base ships newer Amazon Linux packages for Trivy HIGH OS CVEs.
+FROM opensearchproject/opensearch:3.7.0@sha256:44ba7ea58a319adf61c33ab16873f9ef5dbb30b291a832d375172f0b2d24e3c9
 
 USER 0
+
+# Apply available OS security updates for Trivy HIGH/CRITICAL on the vendor base.
+RUN if command -v microdnf >/dev/null 2>&1; then \
+      microdnf upgrade -y && microdnf clean all; \
+    elif command -v yum >/dev/null 2>&1; then \
+      yum upgrade -y && yum clean all; \
+    elif command -v dnf >/dev/null 2>&1; then \
+      dnf upgrade -y && dnf clean all; \
+    fi
 
 # Remove plugins in dependency order - remove dependent plugins first
 # These plugins are not needed for basic log storage and retrieval in the demo
@@ -39,3 +49,4 @@ RUN rm -rf \
 # - opensearch-job-scheduler (task scheduling)
 
 USER 1000
+# Change trail: @hungxqt - 2026-07-20 - Bump OpenSearch base to 3.7.0 for Trivy HIGH OS packages

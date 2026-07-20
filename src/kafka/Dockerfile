@@ -2,10 +2,20 @@
 # SPDX-License-Identifier: Apache-2.0
 
 
-FROM apache/kafka:3.9.1@sha256:4ceccc577f03f51f6af8dbfda55194d0d892f4fa7913ffbded567ce3895622ed
+# 4.3.1 includes kafka-clients floor fixing CVE-2026-35554 and newer Jackson/Netty libs.
+FROM apache/kafka:4.3.1@sha256:77e3df9054047a88b520d0cc46e16696d3b22022e1d580aeccd2632df6532837
 
 USER root
 ARG OTEL_JAVA_AGENT_VERSION
+
+# Apply OS package security updates when the base is Alpine-based (Trivy OpenSSL/gnutls).
+RUN if command -v apk >/dev/null 2>&1; then \
+      apk upgrade --no-cache; \
+    elif command -v microdnf >/dev/null 2>&1; then \
+      microdnf upgrade -y && microdnf clean all; \
+    elif command -v apt-get >/dev/null 2>&1; then \
+      apt-get update && apt-get upgrade -y --no-install-recommends && rm -rf /var/lib/apt/lists/*; \
+    fi
 
 USER appuser
 
@@ -24,3 +34,4 @@ ENV KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR=1
 ENV KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR=1
 ENV KAFKA_OPTS="-javaagent:/tmp/opentelemetry-javaagent.jar -Dotel.jmx.target.system=kafka-broker"
 ENV CLUSTER_ID=ckjPoprWQzOf0-FuNkGfFQ
+# Change trail: @hungxqt - 2026-07-20 - Bump apache/kafka base to 4.3.1 for Trivy HIGH JARs

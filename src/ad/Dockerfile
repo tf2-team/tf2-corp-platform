@@ -25,6 +25,13 @@ FROM eclipse-temurin:21-jre@sha256:273396ed5998598ed1091e8d72711c2d36980a0e65103
 ARG OTEL_JAVA_AGENT_VERSION
 ARG _JAVA_OPTIONS
 
+# Apply OS security updates for Trivy HIGH/CRITICAL on the JRE base.
+RUN apt-get update \
+    && apt-get upgrade -y --no-install-recommends \
+    && rm -rf /var/lib/apt/lists/* \
+    # Temurin image ships /usr/bin/pebble (Go) with HIGH x/net and stdlib CVEs; not used by this service.
+    && rm -f /usr/bin/pebble
+
 WORKDIR /usr/src/app/
 
 RUN groupadd -g 10001 appgroup && \
@@ -40,3 +47,4 @@ USER 10001
 
 EXPOSE ${AD_PORT}
 ENTRYPOINT [ "./build/install/techx-corp-ad/bin/Ad" ]
+# Change trail: @hungxqt - 2026-07-20 - Remove pebble gobinary; Netty/jackson fixes via build.gradle

@@ -11,8 +11,12 @@ opentelemetry-exporter-otlp-proto-grpc==1.39.1
 
 # LLM orchestration
 boto3==1.38.46
-langgraph==0.3.34
-
+# Trivy HIGH: langchain-core CVE-2026-34070, langgraph-checkpoint CVE-2025-64439
+# langgraph 1.2.x requires langchain-core>=1.4.7 and langgraph-checkpoint>=4.1.0
+langgraph==1.2.9
+langchain-core==1.4.9
+langgraph-checkpoint==4.1.1
 
 # Valkey (for pending cart action tokens)
 valkey==6.1.0
+# Change trail: @hungxqt - 2026-07-20 - Bump langgraph stack for Trivy HIGH
