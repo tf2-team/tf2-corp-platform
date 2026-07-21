@@ -454,6 +454,8 @@ def _metric_group(metric: str) -> str:
         return "memory"
     if "disk" in metric:
         return "disk"
+    if "socket_io" in metric:
+        return "socket_io"
     if "request_rate" in metric:
         return "request_rate"
     return "default"

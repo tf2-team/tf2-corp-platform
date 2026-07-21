@@ -9,7 +9,7 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 
 from aiops.anomaly import V001AnomalyEngine, build_v001_anomaly_engine
-from aiops.anomaly.v001 import EwmaStlDetector, LogTemplateMetricBuilder, ServiceIsolationForestDetector
+from aiops.anomaly.v001 import EwmaStlDetector, LogTemplateMetricBuilder, ServiceIsolationForestDetector, _metric_group, _point_changed
 from aiops.api.app import run_static_pipeline
 from aiops.config import Settings, load_hyperparameters, load_runtime_config
 from aiops.pipeline.runtime import _log_final_root_cause_algorithm_scores
@@ -72,6 +72,17 @@ def graph_rca(config: RuntimeConfig) -> GraphTraversalRca:
 
 
 class V001AnomalyRcaTest(unittest.TestCase):
+    def test_cpu_millicores_metric_uses_cpu_thresholds(self):
+        self.assertEqual(_metric_group("cpu_millicores"), "cpu")
+
+    def test_cpu_millicores_ignores_small_low_baseline_change(self):
+        self.assertFalse(_point_changed(8.75, 8.0, min_relative=0.3, min_absolute=1.0))
+        self.assertFalse(_point_changed(8.25, 8.0, min_relative=0.3, min_absolute=1.0))
+        self.assertTrue(_point_changed(11.0, 8.0, min_relative=0.3, min_absolute=1.0))
+
+    def test_socket_io_metric_uses_socket_io_thresholds(self):
+        self.assertEqual(_metric_group("socket_io_bytes_per_second"), "socket_io")
+
     def test_detector_bucket_aggregation_matches_metric_type(self):
         series = prepare_detector_series(
             [
