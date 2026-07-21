@@ -32,6 +32,7 @@ from aiops.remediation import (
     RemediationFeatureExtractor,
 )
 from aiops.schemas import CandidateEvent, Incident, RemediationDecision, SignalQuality, VerificationResult
+from aiops.shared.series import prepare_detector_series
 from aiops.verification import VerificationEngine
 
 
@@ -242,7 +243,8 @@ class AiopsPipeline:
 
     def _run_v001_rca(self, metric_series: list[MetricSeries], incidents: list[Incident] | None = None) -> RcaResult:
         log_messages = self._log_messages(incidents or [])
-        if self.runtime_config is None or not self.rca_hyperparameters.get("enabled", self.runtime_config.rca.enabled) or (not metric_series and not log_messages):
+        detector_series = prepare_detector_series(metric_series)
+        if self.runtime_config is None or not self.rca_hyperparameters.get("enabled", self.runtime_config.rca.enabled) or (not detector_series and not log_messages):
             logger.info(
                 "AIOPS_BLOCK rca skipped enabled=%s metric_series=%s log_messages=%s",
                 self.rca_hyperparameters.get("enabled", None),
@@ -252,9 +254,9 @@ class AiopsPipeline:
             return RcaResult()
         config = self.rca_hyperparameters
         anomaly_engine = build_v001_anomaly_engine(config)
-        findings = anomaly_engine.evaluate(metric_series, logs=log_messages) if log_messages else anomaly_engine.evaluate(metric_series)
+        findings = anomaly_engine.evaluate(detector_series, logs=log_messages) if log_messages else anomaly_engine.evaluate(detector_series)
         rca_engine = V001RcaEngine(self.runtime_config, config["graph"], config["combined"])
-        result = rca_engine.rank(findings, metric_series, top_k=int(config["top_k"]))
+        result = rca_engine.rank(findings, detector_series, top_k=int(config["top_k"]))
         _log_final_root_cause_algorithm_scores(result, getattr(anomaly_engine, "last_algorithm_findings", findings))
         return result
 

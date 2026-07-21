@@ -13,16 +13,19 @@ receivers:
             - "http://*"
             - "https://*"
   httpcheck/frontend-proxy:
+    collection_interval: 1s
     targets:
       - endpoint: http://${env:FRONTEND_PROXY_ADDR}
   nginx:
     endpoint: http://${env:IMAGE_PROVIDER_HOST}:${env:IMAGE_PROVIDER_PORT}/status
-    collection_interval: 10s
+    collection_interval: 1s
   docker_stats:
     endpoint: unix:///var/run/docker.sock
+    collection_interval: 1s
     # https://github.com/open-telemetry/opentelemetry-collector-contrib/issues/44511
     api_version: "1.44"
   postgresql:
+    collection_interval: 1s
     endpoint: ${POSTGRES_HOST}:${POSTGRES_PORT}
     username: root
     password: ${POSTGRES_PASSWORD}
@@ -48,10 +51,20 @@ receivers:
   redis:
     endpoint: "valkey-cart:6379"
     username: "valkey"
-    collection_interval: 10s
+    collection_interval: 1s
+  kafkametrics:
+    brokers:
+      - kafka:9092
+    protocol_version: 2.0.0
+    collection_interval: 1s
+    scrapers:
+      - brokers
+      - topics
+      - consumers
   # Host metrics
   hostmetrics:
     root_path: /hostfs
+    collection_interval: 1s
     scrapers:
       cpu:
         metrics:
@@ -163,6 +176,7 @@ processors:
 
 connectors:
   spanmetrics:
+    metrics_flush_interval: 1s
 
 service:
   pipelines:
@@ -171,7 +185,7 @@ service:
       processors: [resourcedetection, memory_limiter, transform]
       exporters: [otlp, debug, spanmetrics]
     metrics:
-      receivers: [docker_stats, httpcheck/frontend-proxy, hostmetrics, nginx, otlp, postgresql, redis, spanmetrics]
+      receivers: [docker_stats, httpcheck/frontend-proxy, hostmetrics, kafkametrics, nginx, otlp, postgresql, redis, spanmetrics]
       processors: [resourcedetection, memory_limiter]
       exporters: [otlphttp/prometheus, debug]
     logs:
@@ -182,6 +196,7 @@ service:
     metrics:
       readers:
         - periodic:
+            interval: 1000
             exporter:
               otlp:
                 protocol: http/protobuf

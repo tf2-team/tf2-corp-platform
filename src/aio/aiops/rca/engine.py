@@ -18,7 +18,7 @@ class V001RcaEngine:
         self.rrf_k = combined_hyperparameters["rrf_k"]
         self.drift_min_points = int(combined_hyperparameters["drift_min_points"])
         self.drift_score_threshold = float(combined_hyperparameters["drift_score_threshold"])
-        self.detection_window_seconds = int(combined_hyperparameters.get("detection_window_seconds", 0)) or None
+        self.detection_window_seconds = int(combined_hyperparameters["detection_window_seconds"]) or None
         self.canonical_service_suffixes = tuple(combined_hyperparameters["canonical_service_suffixes"])
         self.metric_aliases = combined_hyperparameters["metric_aliases"]
         self.graph = GraphTraversalRca(

@@ -122,6 +122,8 @@ class ServiceIsolationForestDetector:
             if len(eligible) < 2:
                 continue
             rows = self._normalized_rows(self._rows(eligible))
+            if len(rows) < self.min_points:
+                continue
             scored = [
                 (score * 10.0, index)
                 for index in _tail_indexes(eligible[0], self.detection_window_seconds, self.min_points)
@@ -153,8 +155,9 @@ class ServiceIsolationForestDetector:
         return [-score for score in model.score_samples(scored_rows)]
 
     def _rows(self, metrics: list[MetricSeries]) -> list[list[float]]:
-        length = min(len(metric.points) for metric in metrics)
-        return [[metric.points[index].value for metric in metrics] for index in range(-length, 0)]
+        values_by_metric = [{point.timestamp: point.value for point in metric.points} for metric in metrics]
+        timestamps = sorted(set.intersection(*(set(values) for values in values_by_metric)))
+        return [[values[timestamp] for values in values_by_metric] for timestamp in timestamps]
 
     def _normalized_rows(self, rows: list[list[float]]) -> list[list[float]]:
         if not rows:
@@ -427,5 +430,5 @@ def build_v001_anomaly_engine(config: dict, **overrides) -> V001AnomalyEngine:
         robust_drift_threshold=float(anomaly["robust_drift_threshold"]),
         robust_drift_min_baseline_points=int(anomaly["robust_drift_min_baseline_points"]),
         suppress_cpu_robust_threshold=float(anomaly["suppress_cpu_robust_threshold"]),
-        detection_window_seconds=int(anomaly.get("detection_window_seconds", 0)) or None,
+        detection_window_seconds=int(anomaly["detection_window_seconds"]) or None,
     )

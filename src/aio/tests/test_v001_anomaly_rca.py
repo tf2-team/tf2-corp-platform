@@ -27,6 +27,15 @@ def metric(service: str, name: str, values: list[float]) -> MetricSeries:
     )
 
 
+def minute_metric(service: str, name: str, values: list[float]) -> MetricSeries:
+    return MetricSeries(
+        service=service,
+        metric=name,
+        signal_id=f"{service}_{name}",
+        points=[MetricPoint(timestamp=index * 60, value=value) for index, value in enumerate(values)],
+    )
+
+
 def rca_hyperparameters(**overrides):
     config = load_hyperparameters(Path("config/hyperparameters.json"))["rca"]
     return {**config, **overrides}
@@ -34,14 +43,20 @@ def rca_hyperparameters(**overrides):
 
 def anomaly_engine(**overrides) -> V001AnomalyEngine:
     config = rca_hyperparameters()
-    anomaly = {**config["anomaly"], "log_history_buckets": 8, "log_min_nonzero_buckets": 1}
-    config = {**config, "anomaly": anomaly, "min_points": overrides.pop("min_points", 8), **overrides}
+    min_points = overrides.pop("min_points", 8)
+    anomaly = {
+        **config["anomaly"],
+        "robust_drift_min_baseline_points": min_points,
+        "log_history_buckets": 8,
+        "log_min_nonzero_buckets": 1,
+    }
+    config = {**config, "anomaly": anomaly, "min_points": min_points, **overrides}
     return build_v001_anomaly_engine(config)
 
 
-def rca_engine(config: RuntimeConfig) -> V001RcaEngine:
+def rca_engine(config: RuntimeConfig, **combined_overrides) -> V001RcaEngine:
     hyperparameters = rca_hyperparameters()
-    return V001RcaEngine(config, hyperparameters["graph"], hyperparameters["combined"])
+    return V001RcaEngine(config, hyperparameters["graph"], {**hyperparameters["combined"], **combined_overrides})
 
 
 def graph_rca(config: RuntimeConfig) -> GraphTraversalRca:
@@ -103,23 +118,24 @@ class V001AnomalyRcaTest(unittest.TestCase):
 
         self.assertEqual(findings, [])
 
-    def test_v001_ignores_drift_that_recovered_before_detection_tail(self):
-        findings = anomaly_engine(detection_window_seconds=2).evaluate(
+    def test_v001_only_scores_detection_tail(self):
+        engine = anomaly_engine(min_points=30)
+        old_spike = [1.0] * 45
+        old_spike[10] = 200.0
+        tail_spike = [1.0] * 45
+        tail_spike[35] = 200.0
+
+        self.assertEqual(engine.evaluate([minute_metric("payment", "error_ratio_5m", old_spike)]), [])
+        self.assertEqual([(finding.service, finding.metric) for finding in engine.evaluate([minute_metric("payment", "error_ratio_5m", tail_spike)])], [("payment", "error_ratio_5m")])
+
+    def test_v001_ignores_short_drift_that_recovered_before_latest_point(self):
+        findings = anomaly_engine().evaluate(
             [
-                metric("payment", "cpu", [1, 1, 1, 1, 1, 20, 20, 1, 1, 1]),
+                metric("payment", "cpu", [1, 1, 1, 1, 1, 100, 100, 1, 1, 1]),
             ]
         )
 
         self.assertEqual(findings, [])
-
-    def test_v001_detects_drift_inside_detection_tail(self):
-        findings = anomaly_engine(detection_window_seconds=3).evaluate(
-            [
-                metric("payment", "error_ratio_5m", [0.001] * 10 + [10.0, 11.0]),
-            ]
-        )
-
-        self.assertEqual([(finding.service, finding.metric) for finding in findings], [("payment", "error_ratio_5m")])
 
     def test_isolation_forest_normalizes_rows_before_scoring(self):
         detector = ServiceIsolationForestDetector(score_threshold=4.0, min_points=8)
@@ -146,7 +162,7 @@ class V001AnomalyRcaTest(unittest.TestCase):
         engine = anomaly_engine()
 
         findings = engine._weighted_sum(
-            [AnomalyFinding(algorithm="isolation_forest", service="checkout", metric="cpu", signal_id="checkout_cpu", score=8.0, timestamp=1)]
+            [AnomalyFinding(algorithm="isolation_forest", service="checkout", metric="cpu", signal_id="checkout_cpu", score=10.0, timestamp=1)]
         )
 
         self.assertEqual([(finding.algorithm, finding.score) for finding in findings], [("weighted_sum", engine.weighted_score_threshold)])
@@ -394,7 +410,7 @@ class V001AnomalyRcaTest(unittest.TestCase):
             metric("checkout", "error_rate_5m", [0] * 330 + [10] * 30),
         ]
 
-        result = rca_engine(runtime_config).rank(findings, series, top_k=5)
+        result = rca_engine(runtime_config, drift_min_points=5).rank(findings, series, top_k=5)
 
         self.assertEqual(result.root_causes[0].service, "cart")
 

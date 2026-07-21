@@ -47,7 +47,7 @@ def configure_logging() -> None:
 
 def run_static_pipeline(request: PipelineRunRequest, settings: Settings | None = None) -> PipelineResult:
     settings = settings or Settings()
-    runtime_config = load_runtime_config(settings.runtime_config_path)
+    runtime_config = load_runtime_config(settings.runtime_config_path, settings.prometheus_registry_path)
     return run_pipeline_with_collector(
         StaticCollector(request.observations),
         settings,
@@ -58,18 +58,17 @@ def run_static_pipeline(request: PipelineRunRequest, settings: Settings | None =
 
 def run_live_pipeline(settings: Settings | None = None) -> PipelineResult:
     settings = settings or Settings()
-    runtime_config = load_runtime_config(settings.runtime_config_path)
-    hyperparameters = load_hyperparameters(settings.hyperparameters_path)
-    collector = PrometheusCollector(PrometheusClient(settings), runtime_config)
-    metric_series_config = hyperparameters["prometheus"]["metric_series"]
+    runtime_config = load_runtime_config(settings.runtime_config_path, settings.prometheus_registry_path)
+    collector = PrometheusCollector(
+        PrometheusClient(settings),
+        runtime_config,
+        cache_namespace=settings.prometheus_base_url,
+    )
     return run_pipeline_with_collector(
         collector,
         settings,
         runtime_config,
-        metric_series=collector.collect_metric_series(
-            lookback_seconds=int(metric_series_config["lookback_seconds"]),
-            step_seconds=int(metric_series_config["step_seconds"]),
-        ),
+        metric_series=collector.collect_metric_series(),
     )
 
 
@@ -197,7 +196,7 @@ def _configured_kubernetes(settings: Settings) -> bool:
 
 def readiness(settings: Settings) -> HealthResponse:
     try:
-        load_runtime_config(settings.runtime_config_path)
+        load_runtime_config(settings.runtime_config_path, settings.prometheus_registry_path)
         load_hyperparameters(settings.hyperparameters_path)
         load_qualification_schema(settings.qualification_schema_path)
         load_normalization_schema(settings.normalization_schema_path)

@@ -319,7 +319,7 @@ class E2EPipelineRegressionTest(unittest.TestCase):
             root = Path(tmp)
             write_actions(root / "actions.json")
             write_history(root / "history.json")
-            with patch("aiops.pipeline.runtime.V001AnomalyEngine", FakeAnomalyEngine), patch(
+            with patch("aiops.pipeline.runtime.build_v001_anomaly_engine", return_value=FakeAnomalyEngine()), patch(
                 "aiops.pipeline.runtime.V001RcaEngine", FakeRcaEngine
             ):
                 result = run_pipeline(

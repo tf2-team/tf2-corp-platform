@@ -15,7 +15,8 @@
           "product-catalog",
           "shipping",
           "payment",
-          "email"
+          "email",
+          "kafka"
         ]
       },
       {
@@ -202,53 +203,7 @@
       }
     ]
   },
-  "prometheus_queries": {
-    "checkout.bad_ratio.24h": "(sum(increase(rpc_server_duration_milliseconds_count{service_name=\"checkout\",rpc_method=\"PlaceOrder\",rpc_grpc_status_code!=\"0\"}[24h])) / clamp_min(sum(increase(rpc_server_duration_milliseconds_count{service_name=\"checkout\",rpc_method=\"PlaceOrder\"}[24h])), 1)) or vector(0)",
-    "checkout.payment_error_rate.5m": "(sum(rate(http_client_duration_milliseconds_count{service_name=\"checkout\",server_address=~\"payment.*\",http_response_status_code=~\"5..\"}[5m])) / clamp_min(sum(rate(http_client_duration_milliseconds_count{service_name=\"checkout\",server_address=~\"payment.*\"}[5m])), 1)) or vector(0)"
-  },
-  "prometheus_services": [
-    "checkout",
-    "payment",
-    "frontend-proxy",
-    "frontend",
-    "product-catalog",
-    "product-reviews",
-    "recommendation",
-    "ad",
-    "currency",
-    "cart",
-    "shipping",
-    "email",
-    "quote",
-    "fraud-detection"
-  ],
-  "signals": [
-    {
-      "id": "checkout_bad_ratio_24h",
-      "source": "prometheus",
-      "query_id": "checkout.bad_ratio.24h",
-      "unit": "ratio",
-      "window": "24h",
-      "flow": "checkout",
-      "service": "checkout",
-      "feature_role": "official_slo",
-      "required_labels": []
-    },
-    {
-      "id": "checkout_payment_error_rate_5m",
-      "source": "prometheus",
-      "query_id": "checkout.payment_error_rate.5m",
-      "unit": "ratio",
-      "window": "5m",
-      "flow": "checkout",
-      "service": "checkout",
-      "feature_role": "diagnostic",
-      "required_labels": [
-        "service",
-        "dependency"
-      ]
-    }
-  ],
+  "signals": [],
   "detectors": [
     {
       "id": "ops01_checkout_slo",
@@ -450,6 +405,16 @@
       "signal_id": "fraud_detection_error_rate_5m",
       "flow": "checkout",
       "service": "fraud-detection",
+      "severity": "SEV2",
+      "runbook_id": "RB-SERVICE-ERROR-RATE"
+    },
+    {
+      "id": "auto_accounting_error_rate",
+      "type": "threshold",
+      "enabled": false,
+      "signal_id": "accounting_error_rate_5m",
+      "flow": "checkout-async",
+      "service": "accounting",
       "severity": "SEV2",
       "runbook_id": "RB-SERVICE-ERROR-RATE"
     }

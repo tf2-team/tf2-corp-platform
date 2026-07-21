@@ -2,28 +2,28 @@
   "rca": {
     "enabled": true,
     "top_k": 5,
-    "min_points": 300,
-    "ewma_alpha": 0.3,
-    "ewma_z_threshold": 3.0,
+    "min_points": 30,
+    "ewma_alpha": 0.1,
+    "ewma_z_threshold": 4.0,
     "seasonal_period": 1,
-    "isolation_score_threshold": 4.0,
+    "isolation_score_threshold": 5.0,
     "anomaly": {
       "algorithm_weights": {
         "robust_drift": 0.8,
         "ewma_stl": 0.8,
         "isolation_forest": 0.2
       },
-      "weighted_score_threshold": 0.4,
+      "weighted_score_threshold": 1.0,
       "single_algorithm_min_normalized_score": 2.0,
-      "robust_drift_threshold": 3.0,
-      "robust_drift_min_baseline_points": 300,
-      "detection_window_seconds": 90,
-      "suppress_cpu_robust_threshold": 3.0,
+      "robust_drift_threshold": 4.0,
+      "robust_drift_min_baseline_points": 30,
+      "detection_window_seconds": 900,
+      "suppress_cpu_robust_threshold": 4.0,
       "drain3_config_path": "config/drain3.ini",
       "log_bucket_seconds": 60,
-      "log_correlation_window_seconds": 300,
-      "log_history_buckets": 60,
-      "log_min_nonzero_buckets": 2,
+      "log_correlation_window_seconds": 120,
+      "log_history_buckets": 45,
+      "log_min_nonzero_buckets": 3,
       "log_max_templates_per_service": 20,
       "log_max_events_per_evidence": 100
     },
@@ -34,9 +34,9 @@
     },
     "combined": {
       "rrf_k": 20,
-      "drift_min_points": 300,
-      "drift_score_threshold": 3.0,
-      "detection_window_seconds": 90,
+      "drift_min_points": 30,
+      "drift_score_threshold": 4.0,
+      "detection_window_seconds": 900,
       "canonical_service_suffixes": [],
       "metric_aliases": {},
       "ranker_weights": {
@@ -65,7 +65,7 @@
   },
   "detectors": {
     "thresholds": {
-      "ops01_checkout_slo": 0.06,
+      "ops01_checkout_slo": 0.01,
       "ops03_checkout_payment_dependency": 0.05,
       "auto_checkout_error_rate": 0.05,
       "auto_payment_error_rate": 0.05,
@@ -81,18 +81,13 @@
       "auto_email_error_rate": 0.05,
       "auto_quote_error_rate": 0.05,
       "auto_fraud_detection_error_rate": 0.05,
+      "auto_accounting_error_rate": 0.05,
       "ops04_checkout_latency_p95": 0.5,
       "ops05_cart_error_rate": 0.02,
       "ops06_product_catalog_cpu": 50.0
     },
     "confidences": {
       "ops03_checkout_payment_dependency": 0.8
-    }
-  },
-  "prometheus": {
-    "metric_series": {
-      "lookback_seconds": 3600,
-      "step_seconds": 1
     }
   },
   "correlation": {

@@ -101,7 +101,11 @@ endpoints fail the suite; they are not reported as successful skips.
 
 ## Prometheus E2E Acceptance Run Through Port-Forward
 
-The E2E runner reads allow-listed PromQL from `config/prometheus_e2e.json`,
+Query templates, metric choices, no-data semantics, and the one-second collection
+contract are documented in [`docs/prometheus-query-design.md`](docs/prometheus-query-design.md).
+
+The E2E runner reads allow-listed query IDs from `config/prometheus_e2e.json`
+and resolves their PromQL from `config/prometheus_queries.json`,
 collects real instant and range data through the Prometheus port-forward, and
 runs the complete incident, RCA, and remediation pipeline locally. It refuses
 to start unless `AIOPS_POLICY_MODE=dry-run`; it never constructs or calls the
@@ -126,7 +130,7 @@ acceptance run, activate an approved existing failure scenario such as
 run the command, and then turn the scenario off. The AIOps runner itself does
 not activate faults or execute remediation.
 
-To change metric names for another cluster, edit the tracked collection plan;
+To change metric names for another cluster, edit the canonical query registry;
 keep each query aggregated to exactly one Prometheus series. Observation signal
 IDs, query IDs, units, windows, and required labels are validated against
 `config/runtime.json` before any query runs.
