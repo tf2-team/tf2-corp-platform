@@ -4,7 +4,7 @@
     "one_second": {
       "step_seconds": 1,
       "lookback_seconds": 2700,
-      "detector_bucket_seconds": 30,
+      "detector_bucket_seconds": 60,
       "required_source_resolution_seconds": 1,
       "incremental": true,
       "max_concurrency": 8

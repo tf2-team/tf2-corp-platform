@@ -269,6 +269,9 @@ class V001AnomalyEngine:
         suppress_cpu_robust_threshold: float,
         suppress_latency_absolute_threshold_seconds: float,
         suppress_latency_relative_increase_ratio: float,
+        min_tail_anomaly_buckets: dict[str, int],
+        min_relative_change_ratio: dict[str, float],
+        min_absolute_change: dict[str, float],
         detection_window_seconds: int | None,
     ):
         self.algorithm_weights = algorithm_weights
@@ -278,6 +281,11 @@ class V001AnomalyEngine:
         self.suppress_cpu_robust_threshold = suppress_cpu_robust_threshold
         self.suppress_latency_absolute_threshold_seconds = suppress_latency_absolute_threshold_seconds
         self.suppress_latency_relative_increase_ratio = suppress_latency_relative_increase_ratio
+        self.min_points = min_points
+        self.min_tail_anomaly_buckets = min_tail_anomaly_buckets
+        self.min_relative_change_ratio = min_relative_change_ratio
+        self.min_absolute_change = min_absolute_change
+        self.detection_window_seconds = detection_window_seconds
         self.thresholds = {
             "robust_drift": robust_drift_threshold,
             "ewma_stl": ewma_z_threshold,
@@ -297,7 +305,7 @@ class V001AnomalyEngine:
 
     def evaluate(self, series: list[MetricSeries], logs: list[tuple[str, int, str]] | None = None) -> list[AnomalyFinding]:
         raw_metric_findings = [*self.robust_drift.evaluate(series), *self.ewma_stl.evaluate(series), *self.isolation_forest.evaluate(series)]
-        metric_findings = self._weighted_sum(raw_metric_findings)
+        metric_findings = self._significant_metric_findings(self._weighted_sum(raw_metric_findings), series)
         log_series = self.log_templates.build(logs or [])
         raw_log_findings = [*self.ewma_stl.evaluate(log_series), *self.isolation_forest.evaluate(log_series)]
         log_findings = self._correlated_log_findings(
@@ -306,6 +314,27 @@ class V001AnomalyEngine:
         )
         self.last_algorithm_findings = [*raw_metric_findings, *raw_log_findings]
         return self._suppress_busy_infra([*metric_findings, *log_findings], [*series, *log_series])
+
+    def _significant_metric_findings(self, findings: list[AnomalyFinding], series: list[MetricSeries]) -> list[AnomalyFinding]:
+        by_signal_id = {metric.signal_id: metric for metric in series}
+        return [finding for finding in findings if self._has_significant_tail_change(by_signal_id.get(finding.signal_id))]
+
+    def _has_significant_tail_change(self, metric: MetricSeries | None) -> bool:
+        if metric is None:
+            return True
+        indexes = list(_tail_indexes(metric, self.detection_window_seconds, self.min_points - 1))
+        if not indexes:
+            return False
+        baseline_values = [point.value for point in metric.points[: indexes[0]]]
+        if len(baseline_values) < 4:
+            return False
+        baseline = median(baseline_values)
+        group = _metric_group(metric.metric)
+        min_buckets = self.min_tail_anomaly_buckets[group]
+        min_relative = self.min_relative_change_ratio[group]
+        min_absolute = self.min_absolute_change[group]
+        count = sum(_point_changed(point.value, baseline, min_relative, min_absolute) for point in (metric.points[index] for index in indexes))
+        return count >= min_buckets
 
     def _correlated_log_findings(self, log_findings: list[AnomalyFinding], metric_findings: list[AnomalyFinding]) -> list[AnomalyFinding]:
         return [
@@ -414,6 +443,31 @@ def _is_hard_failure_metric(metric: str) -> bool:
     return "error_rate" in metric or "error_ratio" in metric or "ready_pods" in metric
 
 
+def _metric_group(metric: str) -> str:
+    if "error_rate" in metric or "error_ratio" in metric:
+        return "error"
+    if "latency" in metric:
+        return "latency"
+    if "cpu" in metric:
+        return "cpu"
+    if "memory" in metric:
+        return "memory"
+    if "disk" in metric:
+        return "disk"
+    if "request_rate" in metric:
+        return "request_rate"
+    return "default"
+
+
+def _point_changed(value: float, baseline: float, min_relative: float, min_absolute: float) -> bool:
+    delta = abs(value - baseline)
+    if delta < min_absolute:
+        return False
+    if baseline == 0:
+        return delta > 0
+    return delta / abs(baseline) >= min_relative
+
+
 def _request_rate_increased(series: list[MetricSeries], timestamp: int, threshold: float) -> bool:
     return any("request_rate" in metric.metric and _robust_score_at(metric, timestamp) >= threshold for metric in series)
 
@@ -483,5 +537,8 @@ def build_v001_anomaly_engine(config: dict, **overrides) -> V001AnomalyEngine:
         suppress_cpu_robust_threshold=float(anomaly["suppress_cpu_robust_threshold"]),
         suppress_latency_absolute_threshold_seconds=float(anomaly["suppress_latency_absolute_threshold_seconds"]),
         suppress_latency_relative_increase_ratio=float(anomaly["suppress_latency_relative_increase_ratio"]),
+        min_tail_anomaly_buckets={key: int(value) for key, value in anomaly["min_tail_anomaly_buckets"].items()},
+        min_relative_change_ratio={key: float(value) for key, value in anomaly["min_relative_change_ratio"].items()},
+        min_absolute_change={key: float(value) for key, value in anomaly["min_absolute_change"].items()},
         detection_window_seconds=int(anomaly["detection_window_seconds"]) or None,
     )

@@ -153,6 +153,24 @@ class V001AnomalyRcaTest(unittest.TestCase):
         self.assertEqual(engine.evaluate([minute_metric("payment", "error_ratio_5m", old_spike)]), [])
         self.assertEqual([(finding.service, finding.metric) for finding in engine.evaluate([minute_metric("payment", "error_ratio_5m", tail_spike)])], [("payment", "error_ratio_5m")])
 
+    def test_v001_drops_short_infra_spike_in_tail(self):
+        findings = anomaly_engine().evaluate(
+            [
+                metric("payment", "cpu_millicores", [100, 100, 100, 100, 100, 100, 100, 100, 300, 100, 100]),
+            ]
+        )
+
+        self.assertEqual(findings, [])
+
+    def test_v001_keeps_sustained_infra_change_in_tail(self):
+        findings = anomaly_engine().evaluate(
+            [
+                metric("payment", "cpu_millicores", [100, 100, 100, 100, 100, 100, 100, 100, 300, 300, 300]),
+            ]
+        )
+
+        self.assertEqual([(finding.service, finding.metric) for finding in findings], [("payment", "cpu_millicores")])
+
     def test_v001_ignores_short_drift_that_recovered_before_latest_point(self):
         findings = anomaly_engine().evaluate(
             [
@@ -198,6 +216,14 @@ class V001AnomalyRcaTest(unittest.TestCase):
         config = rca_hyperparameters()
         anomaly = dict(config["anomaly"])
         del anomaly["log_bucket_seconds"]
+
+        with self.assertRaises(KeyError):
+            build_v001_anomaly_engine({**config, "anomaly": anomaly})
+
+    def test_anomaly_builder_requires_tail_significance_hyperparameters(self):
+        config = rca_hyperparameters()
+        anomaly = dict(config["anomaly"])
+        del anomaly["min_tail_anomaly_buckets"]
 
         with self.assertRaises(KeyError):
             build_v001_anomaly_engine({**config, "anomaly": anomaly})
