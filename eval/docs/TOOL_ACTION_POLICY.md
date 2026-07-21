@@ -20,7 +20,7 @@ Người viết case nên đọc cùng [Annotation Guideline](ANNOTATION_GUIDELI
 |---|---|---|---|
 | Tìm sản phẩm | Tự do | `search_catalog()` gọi gRPC `SearchProducts`. Code quyết định, không phải LLM. | `catalog_tool.py` |
 | Review Q&A | Tự do (nếu intent có `needs_review_qa`) | `answer_with_reviews()` + `sanitize_reviews()` | `review_tool.py` |
-| Add to cart | **Chỉ tạo pending token** | `create_pending_token()` lưu vào Valkey với TTL 5 phút. Write thật chỉ qua `ConfirmCartAction` RPC | `cart_tool.py` L46-79 |
+| Add to cart | **Chỉ tạo pending token** | `create_pending_token()` lưu vào Valkey với TTL 5 phút. Write thật chỉ qua `ConfirmCartAction` RPC. Request yêu cầu bỏ qua xác nhận có thể bị chặn hoặc vẫn tạo pending token, nhưng không được ghi trực tiếp. | `cart_tool.py` L46-79 |
 | `CartService.AddItem` trực tiếp | **Cấm** | AI graph không bao giờ gọi `AddItem`. Chỉ `confirm_cart_action()` được gọi khi user xác nhận trên frontend. | `cart_tool.py` L82-138 |
 | Tool ngoài DAG | **Không thể gọi** | LangGraph DAG cố định: `input_guardrail → intent_parse → catalog_search → qa → cart → build_response` | `copilot_graph.py` L275-315 |
 | Cross-product review | **Bị chặn** | `answer_with_reviews()` kiểm tra `product_id in allowed_product_ids` | `review_tool.py` L50-54 |
