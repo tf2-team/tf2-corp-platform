@@ -1,7 +1,7 @@
 // Copyright The OpenTelemetry Authors
 // SPDX-License-Identifier: Apache-2.0
 
-import type { NextApiRequest, NextApiResponse } from 'next';
+import type { NextApiHandler } from 'next';
 import InstrumentationMiddleware from '../../utils/telemetry/InstrumentationMiddleware';
 import RecommendationsGateway from '../../gateways/rpc/Recommendations.gateway';
 import { Empty, Product } from '../../protos/demo';
@@ -14,24 +14,34 @@ import {
 
 type TResponse = Product[] | Empty;
 
-const handler = async ({ method, query }: NextApiRequest, res: NextApiResponse<TResponse>) => {
+type RecommendationDependency = Pick<typeof RecommendationsGateway, 'listRecommendations'>;
+type CatalogDependency = Pick<typeof ProductCatalogService, 'getProduct'>;
+
+export const createRecommendationsHandler = (
+  recommendationDependency: RecommendationDependency = RecommendationsGateway,
+  catalogDependency: CatalogDependency = ProductCatalogService,
+  onFallback: typeof recordOptionalDependencyFallback = recordOptionalDependencyFallback
+): NextApiHandler<TResponse> => async ({ method, query }, res) => {
   switch (method) {
     case 'GET': {
       const { productIds = [], sessionId = '', currencyCode = '' } = query;
       let productList: string[];
       try {
-        const response = await RecommendationsGateway.listRecommendations(sessionId as string, productIds as string[]);
+        const response = await recommendationDependency.listRecommendations(
+          sessionId as string,
+          productIds as string[]
+        );
         productList = response.productIds;
       } catch (error) {
         if (!isOptionalDependencyError(error)) throw error;
 
-        recordOptionalDependencyFallback('recommendation', error);
+        onFallback('recommendation', error);
         setDegradedDependencyHeader(res, 'recommendation');
         return res.status(200).json([]);
       }
 
       const recommendedProductList = await Promise.all(
-        productList.slice(0, 4).map(id => ProductCatalogService.getProduct(id, currencyCode as string))
+        productList.slice(0, 4).map(id => catalogDependency.getProduct(id, currencyCode as string))
       );
 
       return res.status(200).json(recommendedProductList);
@@ -43,4 +53,4 @@ const handler = async ({ method, query }: NextApiRequest, res: NextApiResponse<T
   }
 };
 
-export default InstrumentationMiddleware(handler);
+export default InstrumentationMiddleware(createRecommendationsHandler());

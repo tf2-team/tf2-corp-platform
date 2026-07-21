@@ -9,10 +9,12 @@ const { AD_ADDR = '' } = process.env;
 
 const client = new AdServiceClient(AD_ADDR, ChannelCredentials.createInsecure());
 
-const AdGateway = () => ({
+type AdClient = Pick<AdServiceClient, 'getAds'>;
+
+export const createAdGateway = (adClient: AdClient = client) => ({
   listAds(contextKeys: string[]) {
     return new Promise<AdResponse>((resolve, reject) =>
-      client.getAds(
+      adClient.getAds(
         { contextKeys: contextKeys },
         new Metadata(),
         { deadline: createOptionalDependencyDeadline() },
@@ -22,4 +24,4 @@ const AdGateway = () => ({
   },
 });
 
-export default AdGateway();
+export default createAdGateway();
