@@ -3,13 +3,14 @@
 # SPDX-License-Identifier: Apache-2.0
 
 
-FROM docker.io/library/python:3.12-alpine3.22@sha256:a190708a2dec1bd18b1decb539f8e8f5407abaa9bf39cacda583f7f8c11db322 AS build-venv
+FROM docker.io/library/python:3.12-alpine3.22 AS build-venv
 
 ENV PIP_DEFAULT_TIMEOUT=120 \
     PIP_RETRIES=10 \
     PIP_DISABLE_PIP_VERSION_CHECK=1
 
-RUN apk upgrade --no-cache && apk add --no-cache gcc g++ linux-headers
+RUN apk update && \
+    apk add gcc g++ linux-headers
 
 COPY ./src/recommendation/requirements.txt requirements.txt
 
@@ -20,9 +21,7 @@ RUN --mount=type=cache,id=techx-pip-cache,target=/root/.cache/pip,sharing=locked
 RUN --mount=type=cache,id=techx-pip-cache,target=/root/.cache/pip,sharing=locked \
     venv/bin/opentelemetry-bootstrap -a install
 
-FROM docker.io/library/python:3.12-alpine3.22@sha256:a190708a2dec1bd18b1decb539f8e8f5407abaa9bf39cacda583f7f8c11db322
-
-RUN apk upgrade --no-cache
+FROM docker.io/library/python:3.12-alpine3.22
 
 COPY --from=build-venv /venv/ /venv/
 
@@ -43,4 +42,3 @@ USER 10001
 
 EXPOSE ${RECOMMENDATION_PORT}
 ENTRYPOINT [ "/venv/bin/opentelemetry-instrument", "/venv/bin/python", "recommendation_server.py" ]
-# Change trail: @hungxqt - 2026-07-20 - Trivy HIGH/CRITICAL remediation (base upgrades, OS package updates, dep bumps)
