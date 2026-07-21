@@ -1,0 +1,5 @@
+# Delivery controls require review from the platform maintainers.
+/src/ @hungxqt
+/.github/workflows/ @hungxqt
+/docker-bake.hcl @hungxqt
+/CODEOWNERS @hungxqt

@@ -1,0 +1,12 @@
+
+Report Summary
+
+┌─────────────────────────────────────────┬────────┬─────────────────┐
+│                 Target                  │  Type  │ Vulnerabilities │
+├─────────────────────────────────────────┼────────┼─────────────────┤
+│ local/shipping:trivy-test (debian 13.6) │ debian │        0        │
+└─────────────────────────────────────────┴────────┴─────────────────┘
+Legend:
+- '-': Not scanned
+- '0': Clean (no security findings detected)
+

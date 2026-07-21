@@ -1,0 +1,408 @@
+
+Report Summary
+
+┌──────────────────────────────────────────────────────────────────────────────────┬────────────┬─────────────────┐
+│                                      Target                                      │    Type    │ Vulnerabilities │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┤
+│ local/load-generator:trivy-test (debian 12.15)                                   │   debian   │       59        │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┤
+│ usr/local/lib/python3.12/site-packages/playwright/driver/package/package.json    │  node-pkg  │        0        │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┤
+│ usr/local/lib/python3.12/site-packages/Flask_Login-0.6.3.dist-info/METADATA      │ python-pkg │        0        │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┤
+│ usr/local/lib/python3.12/site-packages/bidict-0.23.1.dist-info/METADATA          │ python-pkg │        0        │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┤
+│ usr/local/lib/python3.12/site-packages/blinker-1.9.0.dist-info/METADATA          │ python-pkg │        0        │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┤
+│ usr/local/lib/python3.12/site-packages/brotli-1.2.0.dist-info/METADATA           │ python-pkg │        0        │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┤
+│ usr/local/lib/python3.12/site-packages/certifi-2026.6.17.dist-info/METADATA      │ python-pkg │        0        │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┤
+│ usr/local/lib/python3.12/site-packages/charset_normalizer-3.4.9.dist-info/METAD- │ python-pkg │        0        │
+│ ATA                                                                              │            │                 │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┤
+│ usr/local/lib/python3.12/site-packages/click-8.4.2.dist-info/METADATA            │ python-pkg │        0        │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┤
+│ usr/local/lib/python3.12/site-packages/configargparse-1.7.5.dist-info/METADATA   │ python-pkg │        0        │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┤
+│ usr/local/lib/python3.12/site-packages/flask-3.1.2.dist-info/METADATA            │ python-pkg │        0        │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┤
+│ usr/local/lib/python3.12/site-packages/flask_cors-6.0.5.dist-info/METADATA       │ python-pkg │        0        │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┤
+│ usr/local/lib/python3.12/site-packages/gevent-25.9.1.dist-info/METADATA          │ python-pkg │        0        │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┤
+│ usr/local/lib/python3.12/site-packages/geventhttpclient-2.3.9.dist-info/METADATA │ python-pkg │        0        │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┤
+│ usr/local/lib/python3.12/site-packages/googleapis_common_protos-1.75.0.dist-inf- │ python-pkg │        0        │
+│ o/METADATA                                                                       │            │                 │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┤
+│ usr/local/lib/python3.12/site-packages/greenlet-3.5.3.dist-info/METADATA         │ python-pkg │        0        │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┤
+│ usr/local/lib/python3.12/site-packages/grpcio-1.82.1.dist-info/METADATA          │ python-pkg │        0        │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┤
+│ usr/local/lib/python3.12/site-packages/h11-0.16.0.dist-info/METADATA             │ python-pkg │        0        │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┤
+│ usr/local/lib/python3.12/site-packages/idna-3.18.dist-info/METADATA              │ python-pkg │        0        │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┤
+│ usr/local/lib/python3.12/site-packages/importlib_metadata-8.7.1.dist-info/METAD- │ python-pkg │        0        │
+│ ATA                                                                              │            │                 │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┤
+│ usr/local/lib/python3.12/site-packages/iniconfig-2.3.0.dist-info/METADATA        │ python-pkg │        0        │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┤
+│ usr/local/lib/python3.12/site-packages/itsdangerous-2.2.0.dist-info/METADATA     │ python-pkg │        0        │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┤
+│ usr/local/lib/python3.12/site-packages/jinja2-3.1.6.dist-info/METADATA           │ python-pkg │        0        │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┤
+│ usr/local/lib/python3.12/site-packages/locust-2.46.0.dist-info/METADATA          │ python-pkg │        0        │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┤
+│ usr/local/lib/python3.12/site-packages/locust_plugins-5.0.0.dist-info/METADATA   │ python-pkg │        0        │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┤
+│ usr/local/lib/python3.12/site-packages/markupsafe-3.0.3.dist-info/METADATA       │ python-pkg │        0        │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┤
+│ usr/local/lib/python3.12/site-packages/msgpack-1.2.1.dist-info/METADATA          │ python-pkg │        0        │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┤
+│ usr/local/lib/python3.12/site-packages/openfeature_hooks_opentelemetry-0.3.0.di- │ python-pkg │        0        │
+│ st-info/METADATA                                                                 │            │                 │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┤
+│ usr/local/lib/python3.12/site-packages/openfeature_provider_ofrep-0.2.0.dist-in- │ python-pkg │        0        │
+│ fo/METADATA                                                                      │            │                 │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┤
+│ usr/local/lib/python3.12/site-packages/openfeature_sdk-0.10.0.dist-info/METADATA │ python-pkg │        0        │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┤
+│ usr/local/lib/python3.12/site-packages/opentelemetry_api-1.39.1.dist-info/METAD- │ python-pkg │        0        │
+│ ATA                                                                              │            │                 │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┤
+│ usr/local/lib/python3.12/site-packages/opentelemetry_exporter_otlp_proto_common- │ python-pkg │        0        │
+│ -1.39.1.dist-info/METADATA                                                       │            │                 │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┤
+│ usr/local/lib/python3.12/site-packages/opentelemetry_exporter_otlp_proto_grpc-1- │ python-pkg │        0        │
+│ .39.1.dist-info/METADATA                                                         │            │                 │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┤
+│ usr/local/lib/python3.12/site-packages/opentelemetry_exporter_otlp_proto_http-1- │ python-pkg │        0        │
+│ .39.1.dist-info/METADATA                                                         │            │                 │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┤
+│ usr/local/lib/python3.12/site-packages/opentelemetry_instrumentation-0.60b1.dis- │ python-pkg │        0        │
+│ t-info/METADATA                                                                  │            │                 │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┤
+│ usr/local/lib/python3.12/site-packages/opentelemetry_instrumentation_jinja2-0.6- │ python-pkg │        0        │
+│ 0b1.dist-info/METADATA                                                           │            │                 │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┤
+│ usr/local/lib/python3.12/site-packages/opentelemetry_instrumentation_logging-0.- │ python-pkg │        0        │
+│ 60b1.dist-info/METADATA                                                          │            │                 │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┤
+│ usr/local/lib/python3.12/site-packages/opentelemetry_instrumentation_requests-0- │ python-pkg │        0        │
+│ .60b1.dist-info/METADATA                                                         │            │                 │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┤
+│ usr/local/lib/python3.12/site-packages/opentelemetry_instrumentation_system_met- │ python-pkg │        0        │
+│ rics-0.60b1.dist-info/METADATA                                                   │            │                 │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┤
+│ usr/local/lib/python3.12/site-packages/opentelemetry_instrumentation_urllib3-0.- │ python-pkg │        0        │
+│ 60b1.dist-info/METADATA                                                          │            │                 │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┤
+│ usr/local/lib/python3.12/site-packages/opentelemetry_proto-1.39.1.dist-info/MET- │ python-pkg │        0        │
+│ ADATA                                                                            │            │                 │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┤
+│ usr/local/lib/python3.12/site-packages/opentelemetry_sdk-1.39.1.dist-info/METAD- │ python-pkg │        0        │
+│ ATA                                                                              │            │                 │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┤
+│ usr/local/lib/python3.12/site-packages/opentelemetry_semantic_conventions-0.60b- │ python-pkg │        0        │
+│ 1.dist-info/METADATA                                                             │            │                 │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┤
+│ usr/local/lib/python3.12/site-packages/opentelemetry_util_http-0.60b1.dist-info- │ python-pkg │        0        │
+│ /METADATA                                                                        │            │                 │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┤
+│ usr/local/lib/python3.12/site-packages/packaging-26.2.dist-info/METADATA         │ python-pkg │        0        │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┤
+│ usr/local/lib/python3.12/site-packages/pip-25.0.1.dist-info/METADATA             │ python-pkg │        0        │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┤
+│ usr/local/lib/python3.12/site-packages/playwright-1.61.0.dist-info/METADATA      │ python-pkg │        0        │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┤
+│ usr/local/lib/python3.12/site-packages/pluggy-1.6.0.dist-info/METADATA           │ python-pkg │        0        │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┤
+│ usr/local/lib/python3.12/site-packages/protobuf-6.33.6.dist-info/METADATA        │ python-pkg │        0        │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┤
+│ usr/local/lib/python3.12/site-packages/psutil-7.2.2.dist-info/METADATA           │ python-pkg │        0        │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┤
+│ usr/local/lib/python3.12/site-packages/pyee-13.0.1.dist-info/METADATA            │ python-pkg │        0        │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┤
+│ usr/local/lib/python3.12/site-packages/pygments-2.20.0.dist-info/METADATA        │ python-pkg │        0        │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┤
+│ usr/local/lib/python3.12/site-packages/pytest-9.1.1.dist-info/METADATA           │ python-pkg │        0        │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┤
+│ usr/local/lib/python3.12/site-packages/python_engineio-4.13.3.dist-info/METADATA │ python-pkg │        0        │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┤
+│ usr/local/lib/python3.12/site-packages/python_json_logger-4.0.0.dist-info/METAD- │ python-pkg │        0        │
+│ ATA                                                                              │            │                 │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┤
+│ usr/local/lib/python3.12/site-packages/python_socketio-5.16.3.dist-info/METADATA │ python-pkg │        0        │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┤
+│ usr/local/lib/python3.12/site-packages/pyzmq-27.1.0.dist-info/METADATA           │ python-pkg │        0        │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┤
+│ usr/local/lib/python3.12/site-packages/requests-2.34.2.dist-info/METADATA        │ python-pkg │        0        │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┤
+│ usr/local/lib/python3.12/site-packages/simple_websocket-1.1.0.dist-info/METADATA │ python-pkg │        0        │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┤
+│ usr/local/lib/python3.12/site-packages/typing_extensions-4.16.0.dist-info/METAD- │ python-pkg │        0        │
+│ ATA                                                                              │            │                 │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┤
+│ usr/local/lib/python3.12/site-packages/urllib3-2.7.0.dist-info/METADATA          │ python-pkg │        0        │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┤
+│ usr/local/lib/python3.12/site-packages/websocket_client-1.9.0.dist-info/METADATA │ python-pkg │        0        │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┤
+│ usr/local/lib/python3.12/site-packages/werkzeug-3.1.8.dist-info/METADATA         │ python-pkg │        0        │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┤
+│ usr/local/lib/python3.12/site-packages/wrapt-1.17.3.dist-info/METADATA           │ python-pkg │        0        │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┤
+│ usr/local/lib/python3.12/site-packages/wsproto-1.3.2.dist-info/METADATA          │ python-pkg │        0        │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┤
+│ usr/local/lib/python3.12/site-packages/zipp-4.1.0.dist-info/METADATA             │ python-pkg │        0        │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┤
+│ usr/local/lib/python3.12/site-packages/zope_event-6.2.dist-info/METADATA         │ python-pkg │        0        │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┤
+│ usr/local/lib/python3.12/site-packages/zope_interface-8.5.dist-info/METADATA     │ python-pkg │        0        │
+└──────────────────────────────────────────────────────────────────────────────────┴────────────┴─────────────────┘
+Legend:
+- '-': Not scanned
+- '0': Clean (no security findings detected)
+
+
+local/load-generator:trivy-test (debian 12.15)
+==============================================
+Total: 59 (HIGH: 52, CRITICAL: 7)
+
+┌──────────────────┬────────────────┬──────────┬──────────────┬─────────────────────────┬───────────────┬──────────────────────────────────────────────────────────────┐
+│     Library      │ Vulnerability  │ Severity │    Status    │    Installed Version    │ Fixed Version │                            Title                             │
+├──────────────────┼────────────────┼──────────┼──────────────┼─────────────────────────┼───────────────┼──────────────────────────────────────────────────────────────┤
+│ bsdutils         │ CVE-2026-53615 │ HIGH     │ affected     │ 1:2.38.1-5+deb12u3      │               │ [Integer Overflow or Wraparound in                           │
+│                  │                │          │              │                         │               │ libblkid/src/partitions/dos.c]                               │
+│                  │                │          │              │                         │               │ https://avd.aquasec.com/nvd/cve-2026-53615                   │
+├──────────────────┼────────────────┤          ├──────────────┼─────────────────────────┼───────────────┼──────────────────────────────────────────────────────────────┤
+│ gzip             │ CVE-2026-41992 │          │ fix_deferred │ 1.12-1                  │               │ GNU gzip contains a global buffer overflow vulnerability in  │
+│                  │                │          │              │                         │               │ the LZH de...                                                │
+│                  │                │          │              │                         │               │ https://avd.aquasec.com/nvd/cve-2026-41992                   │
+├──────────────────┼────────────────┤          │              ├─────────────────────────┼───────────────┼──────────────────────────────────────────────────────────────┤
+│ libacl1          │ CVE-2026-54369 │          │              │ 2.3.1-3                 │               │ acl: Symlink traversal privilege escalation via libacl       │
+│                  │                │          │              │                         │               │ functions                                                    │
+│                  │                │          │              │                         │               │ https://avd.aquasec.com/nvd/cve-2026-54369                   │
+├──────────────────┼────────────────┤          ├──────────────┼─────────────────────────┼───────────────┼──────────────────────────────────────────────────────────────┤
+│ libblkid1        │ CVE-2026-53615 │          │ affected     │ 2.38.1-5+deb12u3        │               │ [Integer Overflow or Wraparound in                           │
+│                  │                │          │              │                         │               │ libblkid/src/partitions/dos.c]                               │
+│                  │                │          │              │                         │               │ https://avd.aquasec.com/nvd/cve-2026-53615                   │
+├──────────────────┼────────────────┤          │              ├─────────────────────────┼───────────────┼──────────────────────────────────────────────────────────────┤
+│ libcups2         │ CVE-2026-34980 │          │              │ 2.4.2-3+deb12u9         │               │ cups: OpenPrinting CUPS: Shared PostScript queue lets        │
+│                  │                │          │              │                         │               │ anonymous Print-Job requests reach `lp`...                   │
+│                  │                │          │              │                         │               │ https://avd.aquasec.com/nvd/cve-2026-34980                   │
+├──────────────────┼────────────────┤          ├──────────────┼─────────────────────────┼───────────────┼──────────────────────────────────────────────────────────────┤
+│ libexpat1        │ CVE-2025-59375 │          │ will_not_fix │ 2.5.0-1+deb12u2         │               │ firefox: thunderbird: expat: libexpat in Expat allows        │
+│                  │                │          │              │                         │               │ attackers to trigger large dynamic...                        │
+│                  │                │          │              │                         │               │ https://avd.aquasec.com/nvd/cve-2025-59375                   │
+│                  ├────────────────┤          ├──────────────┤                         ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                  │ CVE-2026-25210 │          │ affected     │                         │               │ libexpat: libexpat: Information disclosure and data          │
+│                  │                │          │              │                         │               │ integrity issues due to integer overflow...                  │
+│                  │                │          │              │                         │               │ https://avd.aquasec.com/nvd/cve-2026-25210                   │
+│                  ├────────────────┤          │              │                         ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                  │ CVE-2026-45186 │          │              │                         │               │ libexpat: denial of service via crafted XML input            │
+│                  │                │          │              │                         │               │ https://avd.aquasec.com/nvd/cve-2026-45186                   │
+│                  ├────────────────┤          │              │                         ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                  │ CVE-2026-56131 │          │              │                         │               │ libexpat before 2.8.2 lacks handler call depth tracking for  │
+│                  │                │          │              │                         │               │ calls to X...                                                │
+│                  │                │          │              │                         │               │ https://avd.aquasec.com/nvd/cve-2026-56131                   │
+│                  ├────────────────┤          │              │                         ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                  │ CVE-2026-56407 │          │              │                         │               │ libexpat before 2.8.2 has an integer overflow in doProlog    │
+│                  │                │          │              │                         │               │ that is rela...                                              │
+│                  │                │          │              │                         │               │ https://avd.aquasec.com/nvd/cve-2026-56407                   │
+│                  ├────────────────┤          │              │                         ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                  │ CVE-2026-56408 │          │              │                         │               │ libexpat before 2.8.2 has an integer overflow in copyString. │
+│                  │                │          │              │                         │               │ https://avd.aquasec.com/nvd/cve-2026-56408                   │
+├──────────────────┼────────────────┼──────────┼──────────────┼─────────────────────────┼───────────────┼──────────────────────────────────────────────────────────────┤
+│ libglib2.0-0     │ CVE-2026-58016 │ CRITICAL │ fix_deferred │ 2.74.6-2+deb12u9        │               │ glib: integer underflow in gio/gdbusintrospection.c via      │
+│                  │                │          │              │                         │               │ "g_dbus_node_info_new_for_xml"                               │
+│                  │                │          │              │                         │               │ https://avd.aquasec.com/nvd/cve-2026-58016                   │
+│                  ├────────────────┼──────────┤              │                         ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                  │ CVE-2026-58010 │ HIGH     │              │                         │               │ glib: buffer over-read in glib/gvariant-serialiser.c via     │
+│                  │                │          │              │                         │               │ gvs_tuple_is_normal()                                        │
+│                  │                │          │              │                         │               │ https://avd.aquasec.com/nvd/cve-2026-58010                   │
+│                  ├────────────────┤          │              │                         ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                  │ CVE-2026-58011 │          │              │                         │               │ glib: out-of-bounds read in                                  │
+│                  │                │          │              │                         │               │ glib/gdatetime.c:g_date_time_get_ymd via invalid GDateTime   │
+│                  │                │          │              │                         │               │ https://avd.aquasec.com/nvd/cve-2026-58011                   │
+│                  ├────────────────┤          │              │                         ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                  │ CVE-2026-58012 │          │              │                         │               │ glib: buffer over-read in g_regex_replace() via              │
+│                  │                │          │              │                         │               │ glib/gregex.c:string_append() and g_utf8_next_char()         │
+│                  │                │          │              │                         │               │ https://avd.aquasec.com/nvd/cve-2026-58012                   │
+│                  ├────────────────┤          │              │                         ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                  │ CVE-2026-58013 │          │              │                         │               │ glib: buffer over-read in glib/giochannel.c via              │
+│                  │                │          │              │                         │               │ "g_io_channel_read_line_backend"                             │
+│                  │                │          │              │                         │               │ https://avd.aquasec.com/nvd/cve-2026-58013                   │
+│                  ├────────────────┤          │              │                         ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                  │ CVE-2026-58014 │          │              │                         │               │ glib: off-by-one error in glib/gkeyfile.c via                │
+│                  │                │          │              │                         │               │ "g_key_file_get_locale_string_list"                          │
+│                  │                │          │              │                         │               │ https://avd.aquasec.com/nvd/cve-2026-58014                   │
+│                  ├────────────────┤          │              │                         ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                  │ CVE-2026-58015 │          │              │                         │               │ glib: path traversal in glib/gio/gdbusauthmechanismsha1.c    │
+│                  │                │          │              │                         │               │ via keyring_lookup_entry and mechanism_client_data_receive   │
+│                  │                │          │              │                         │               │ https://avd.aquasec.com/nvd/cve-2026-58015                   │
+├──────────────────┼────────────────┤          ├──────────────┼─────────────────────────┼───────────────┼──────────────────────────────────────────────────────────────┤
+│ libharfbuzz0b    │ CVE-2023-25193 │          │ affected     │ 6.0.0+dfsg-3            │               │ harfbuzz: allows attackers to trigger O(n^2) growth via      │
+│                  │                │          │              │                         │               │ consecutive marks                                            │
+│                  │                │          │              │                         │               │ https://avd.aquasec.com/nvd/cve-2023-25193                   │
+├──────────────────┼────────────────┤          │              ├─────────────────────────┼───────────────┼──────────────────────────────────────────────────────────────┤
+│ libmount1        │ CVE-2026-53615 │          │              │ 2.38.1-5+deb12u3        │               │ [Integer Overflow or Wraparound in                           │
+│                  │                │          │              │                         │               │ libblkid/src/partitions/dos.c]                               │
+│                  │                │          │              │                         │               │ https://avd.aquasec.com/nvd/cve-2026-53615                   │
+├──────────────────┼────────────────┤          │              ├─────────────────────────┼───────────────┼──────────────────────────────────────────────────────────────┤
+│ libncursesw6     │ CVE-2025-69720 │          │              │ 6.4-4                   │               │ ncurses: ncurses: Buffer overflow vulnerability may lead to  │
+│                  │                │          │              │                         │               │ arbitrary code execution.                                    │
+│                  │                │          │              │                         │               │ https://avd.aquasec.com/nvd/cve-2025-69720                   │
+├──────────────────┼────────────────┤          │              ├─────────────────────────┼───────────────┼──────────────────────────────────────────────────────────────┤
+│ libsmartcols1    │ CVE-2026-53615 │          │              │ 2.38.1-5+deb12u3        │               │ [Integer Overflow or Wraparound in                           │
+│                  │                │          │              │                         │               │ libblkid/src/partitions/dos.c]                               │
+│                  │                │          │              │                         │               │ https://avd.aquasec.com/nvd/cve-2026-53615                   │
+├──────────────────┼────────────────┼──────────┤              ├─────────────────────────┼───────────────┼──────────────────────────────────────────────────────────────┤
+│ libsqlite3-0     │ CVE-2025-7458  │ CRITICAL │              │ 3.40.1-2+deb12u2        │               │ sqlite: SQLite integer overflow                              │
+│                  │                │          │              │                         │               │ https://avd.aquasec.com/nvd/cve-2025-7458                    │
+├──────────────────┼────────────────┼──────────┤              ├─────────────────────────┼───────────────┼──────────────────────────────────────────────────────────────┤
+│ libtinfo6        │ CVE-2025-69720 │ HIGH     │              │ 6.4-4                   │               │ ncurses: ncurses: Buffer overflow vulnerability may lead to  │
+│                  │                │          │              │                         │               │ arbitrary code execution.                                    │
+│                  │                │          │              │                         │               │ https://avd.aquasec.com/nvd/cve-2025-69720                   │
+├──────────────────┼────────────────┤          │              ├─────────────────────────┼───────────────┼──────────────────────────────────────────────────────────────┤
+│ libuuid1         │ CVE-2026-53615 │          │              │ 2.38.1-5+deb12u3        │               │ [Integer Overflow or Wraparound in                           │
+│                  │                │          │              │                         │               │ libblkid/src/partitions/dos.c]                               │
+│                  │                │          │              │                         │               │ https://avd.aquasec.com/nvd/cve-2026-53615                   │
+├──────────────────┼────────────────┼──────────┼──────────────┼─────────────────────────┼───────────────┼──────────────────────────────────────────────────────────────┤
+│ libxml2          │ CVE-2026-6653  │ CRITICAL │ fix_deferred │ 2.9.14+dfsg-1.3~deb12u6 │               │ libxml2: mingw-libxml2: libxml2: Denial of Service via       │
+│                  │                │          │              │                         │               │ crafted XML input due to...                                  │
+│                  │                │          │              │                         │               │ https://avd.aquasec.com/nvd/cve-2026-6653                    │
+├──────────────────┼────────────────┼──────────┼──────────────┼─────────────────────────┼───────────────┼──────────────────────────────────────────────────────────────┤
+│ mount            │ CVE-2026-53615 │ HIGH     │ affected     │ 2.38.1-5+deb12u3        │               │ [Integer Overflow or Wraparound in                           │
+│                  │                │          │              │                         │               │ libblkid/src/partitions/dos.c]                               │
+│                  │                │          │              │                         │               │ https://avd.aquasec.com/nvd/cve-2026-53615                   │
+├──────────────────┼────────────────┤          │              ├─────────────────────────┼───────────────┼──────────────────────────────────────────────────────────────┤
+│ ncurses-base     │ CVE-2025-69720 │          │              │ 6.4-4                   │               │ ncurses: ncurses: Buffer overflow vulnerability may lead to  │
+│                  │                │          │              │                         │               │ arbitrary code execution.                                    │
+│                  │                │          │              │                         │               │ https://avd.aquasec.com/nvd/cve-2025-69720                   │
+├──────────────────┤                │          │              │                         ├───────────────┤                                                              │
+│ ncurses-bin      │                │          │              │                         │               │                                                              │
+│                  │                │          │              │                         │               │                                                              │
+│                  │                │          │              │                         │               │                                                              │
+├──────────────────┼────────────────┼──────────┤              ├─────────────────────────┼───────────────┼──────────────────────────────────────────────────────────────┤
+│ perl-base        │ CVE-2026-13221 │ CRITICAL │              │ 5.36.0-7+deb12u3        │               │ Perl versions through 5.43.9 produce silently incorrect      │
+│                  │                │          │              │                         │               │ regular expres ...                                           │
+│                  │                │          │              │                         │               │ https://avd.aquasec.com/nvd/cve-2026-13221                   │
+│                  ├────────────────┤          ├──────────────┤                         ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                  │ CVE-2026-42496 │          │ fix_deferred │                         │               │ perl-archive-tar: perl-archive-tar: Path traversal via       │
+│                  │                │          │              │                         │               │ crafted symlinks allows arbitrary file access                │
+│                  │                │          │              │                         │               │ https://avd.aquasec.com/nvd/cve-2026-42496                   │
+│                  ├────────────────┤          ├──────────────┤                         ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                  │ CVE-2026-8376  │          │ affected     │                         │               │ perl: Perl: Heap buffer overflow when compiling regular      │
+│                  │                │          │              │                         │               │ expressions on 32-bit builds...                              │
+│                  │                │          │              │                         │               │ https://avd.aquasec.com/nvd/cve-2026-8376                    │
+│                  ├────────────────┼──────────┼──────────────┤                         ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                  │ CVE-2026-42497 │ HIGH     │ fix_deferred │                         │               │ perl-Archive-Tar: perl-Archive-Tar: Arbitrary file           │
+│                  │                │          │              │                         │               │ modification via crafted hardlinks during archive extraction │
+│                  │                │          │              │                         │               │ https://avd.aquasec.com/nvd/cve-2026-42497                   │
+│                  ├────────────────┤          ├──────────────┤                         ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                  │ CVE-2026-48962 │          │ affected     │                         │               │ perl-IO-Compress: perl-IO-Compress: Arbitrary code execution │
+│                  │                │          │              │                         │               │ via attacker-controlled output glob                          │
+│                  │                │          │              │                         │               │ https://avd.aquasec.com/nvd/cve-2026-48962                   │
+│                  ├────────────────┤          │              │                         ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                  │ CVE-2026-57432 │          │              │                         │               │ Perl versions through 5.43.10 have an integer overflow in    │
+│                  │                │          │              │                         │               │ S_measure_st ...                                             │
+│                  │                │          │              │                         │               │ https://avd.aquasec.com/nvd/cve-2026-57432                   │
+│                  ├────────────────┤          ├──────────────┤                         ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                  │ CVE-2026-9538  │          │ fix_deferred │                         │               │ perl-Archive-Tar: perl-Archive-Tar: Denial of Service via    │
+│                  │                │          │              │                         │               │ crafted tar header with large entry...                       │
+│                  │                │          │              │                         │               │ https://avd.aquasec.com/nvd/cve-2026-9538                    │
+├──────────────────┼────────────────┤          ├──────────────┼─────────────────────────┼───────────────┼──────────────────────────────────────────────────────────────┤
+│ util-linux       │ CVE-2026-53615 │          │ affected     │ 2.38.1-5+deb12u3        │               │ [Integer Overflow or Wraparound in                           │
+│                  │                │          │              │                         │               │ libblkid/src/partitions/dos.c]                               │
+│                  │                │          │              │                         │               │ https://avd.aquasec.com/nvd/cve-2026-53615                   │
+├──────────────────┤                │          │              │                         ├───────────────┤                                                              │
+│ util-linux-extra │                │          │              │                         │               │                                                              │
+│                  │                │          │              │                         │               │                                                              │
+│                  │                │          │              │                         │               │                                                              │
+├──────────────────┼────────────────┤          ├──────────────┼─────────────────────────┼───────────────┼──────────────────────────────────────────────────────────────┤
+│ xserver-common   │ CVE-2023-5574  │          │ fix_deferred │ 2:21.1.7-3+deb12u12     │               │ xorg-x11-server: Use-after-free bug in DamageDestroy         │
+│                  │                │          │              │                         │               │ https://avd.aquasec.com/nvd/cve-2023-5574                    │
+│                  ├────────────────┤          ├──────────────┤                         ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                  │ CVE-2026-50256 │          │ affected     │                         │               │ xorg-x11-server: xorg-x11-server-Xwayland: xorg-x11-server:  │
+│                  │                │          │              │                         │               │ stack buffer overflow in font alias resolution due to...     │
+│                  │                │          │              │                         │               │ https://avd.aquasec.com/nvd/cve-2026-50256                   │
+│                  ├────────────────┤          │              │                         ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                  │ CVE-2026-50257 │          │              │                         │               │ xorg-x11-server: xorg-x11-server-Xwayland: xorg-x11-server:  │
+│                  │                │          │              │                         │               │ use-after-free in miSyncDestroyFence()                       │
+│                  │                │          │              │                         │               │ https://avd.aquasec.com/nvd/cve-2026-50257                   │
+│                  ├────────────────┤          │              │                         ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                  │ CVE-2026-50258 │          │              │                         │               │ xorg-x11-server: xorg-x11-server-Xwayland: xorg-x11-server:  │
+│                  │                │          │              │                         │               │ stack buffer overflow in XKB key types due to...             │
+│                  │                │          │              │                         │               │ https://avd.aquasec.com/nvd/cve-2026-50258                   │
+│                  ├────────────────┤          │              │                         ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                  │ CVE-2026-50259 │          │              │                         │               │ xorg-x11-server: xorg-x11-server-Xwayland: xorg-x11-server:  │
+│                  │                │          │              │                         │               │ stack buffer overflow in XKB SetMap request via mapWidths... │
+│                  │                │          │              │                         │               │ https://avd.aquasec.com/nvd/cve-2026-50259                   │
+│                  ├────────────────┤          │              │                         ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                  │ CVE-2026-50260 │          │              │                         │               │ xorg-x11-server: xorg-x11-server-Xwayland: xorg-x11-server:  │
+│                  │                │          │              │                         │               │ use-after-free in FreeCounter()                              │
+│                  │                │          │              │                         │               │ https://avd.aquasec.com/nvd/cve-2026-50260                   │
+│                  ├────────────────┤          │              │                         ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                  │ CVE-2026-50261 │          │              │                         │               │ xorg-x11-server: xorg-x11-server-Xwayland: xorg-x11-server:  │
+│                  │                │          │              │                         │               │ use-after-free in SyncChangeCounter()                        │
+│                  │                │          │              │                         │               │ https://avd.aquasec.com/nvd/cve-2026-50261                   │
+│                  ├────────────────┤          │              │                         ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                  │ CVE-2026-50264 │          │              │                         │               │ xorg-x11-server: xorg-x11-server-Xwayland: xorg-x11-server:  │
+│                  │                │          │              │                         │               │ out-of-bounds heap write in DRI2                             │
+│                  │                │          │              │                         │               │ DRIGetBuffers/DRIGetBuffersWithFormat                        │
+│                  │                │          │              │                         │               │ https://avd.aquasec.com/nvd/cve-2026-50264                   │
+│                  ├────────────────┤          │              │                         ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                  │ CVE-2026-55999 │          │              │                         │               │ xorg: X11: xserver: X.org: glamor Font Atlas Heap Buffer     │
+│                  │                │          │              │                         │               │ Overflow                                                     │
+│                  │                │          │              │                         │               │ https://avd.aquasec.com/nvd/cve-2026-55999                   │
+│                  ├────────────────┤          │              │                         ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                  │ CVE-2026-56000 │          │              │                         │               │ X.org: xorg-x11-server: GLX contextTags Use-After-Free in    │
+│                  │                │          │              │                         │               │ CommonMakeCurrent()                                          │
+│                  │                │          │              │                         │               │ https://avd.aquasec.com/nvd/cve-2026-56000                   │
+├──────────────────┼────────────────┤          ├──────────────┤                         ├───────────────┼──────────────────────────────────────────────────────────────┤
+│ xvfb             │ CVE-2023-5574  │          │ fix_deferred │                         │               │ xorg-x11-server: Use-after-free bug in DamageDestroy         │
+│                  │                │          │              │                         │               │ https://avd.aquasec.com/nvd/cve-2023-5574                    │
+│                  ├────────────────┤          ├──────────────┤                         ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                  │ CVE-2026-50256 │          │ affected     │                         │               │ xorg-x11-server: xorg-x11-server-Xwayland: xorg-x11-server:  │
+│                  │                │          │              │                         │               │ stack buffer overflow in font alias resolution due to...     │
+│                  │                │          │              │                         │               │ https://avd.aquasec.com/nvd/cve-2026-50256                   │
+│                  ├────────────────┤          │              │                         ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                  │ CVE-2026-50257 │          │              │                         │               │ xorg-x11-server: xorg-x11-server-Xwayland: xorg-x11-server:  │
+│                  │                │          │              │                         │               │ use-after-free in miSyncDestroyFence()                       │
+│                  │                │          │              │                         │               │ https://avd.aquasec.com/nvd/cve-2026-50257                   │
+│                  ├────────────────┤          │              │                         ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                  │ CVE-2026-50258 │          │              │                         │               │ xorg-x11-server: xorg-x11-server-Xwayland: xorg-x11-server:  │
+│                  │                │          │              │                         │               │ stack buffer overflow in XKB key types due to...             │
+│                  │                │          │              │                         │               │ https://avd.aquasec.com/nvd/cve-2026-50258                   │
+│                  ├────────────────┤          │              │                         ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                  │ CVE-2026-50259 │          │              │                         │               │ xorg-x11-server: xorg-x11-server-Xwayland: xorg-x11-server:  │
+│                  │                │          │              │                         │               │ stack buffer overflow in XKB SetMap request via mapWidths... │
+│                  │                │          │              │                         │               │ https://avd.aquasec.com/nvd/cve-2026-50259                   │
+│                  ├────────────────┤          │              │                         ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                  │ CVE-2026-50260 │          │              │                         │               │ xorg-x11-server: xorg-x11-server-Xwayland: xorg-x11-server:  │
+│                  │                │          │              │                         │               │ use-after-free in FreeCounter()                              │
+│                  │                │          │              │                         │               │ https://avd.aquasec.com/nvd/cve-2026-50260                   │
+│                  ├────────────────┤          │              │                         ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                  │ CVE-2026-50261 │          │              │                         │               │ xorg-x11-server: xorg-x11-server-Xwayland: xorg-x11-server:  │
+│                  │                │          │              │                         │               │ use-after-free in SyncChangeCounter()                        │
+│                  │                │          │              │                         │               │ https://avd.aquasec.com/nvd/cve-2026-50261                   │
+│                  ├────────────────┤          │              │                         ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                  │ CVE-2026-50264 │          │              │                         │               │ xorg-x11-server: xorg-x11-server-Xwayland: xorg-x11-server:  │
+│                  │                │          │              │                         │               │ out-of-bounds heap write in DRI2                             │
+│                  │                │          │              │                         │               │ DRIGetBuffers/DRIGetBuffersWithFormat                        │
+│                  │                │          │              │                         │               │ https://avd.aquasec.com/nvd/cve-2026-50264                   │
+│                  ├────────────────┤          │              │                         ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                  │ CVE-2026-55999 │          │              │                         │               │ xorg: X11: xserver: X.org: glamor Font Atlas Heap Buffer     │
+│                  │                │          │              │                         │               │ Overflow                                                     │
+│                  │                │          │              │                         │               │ https://avd.aquasec.com/nvd/cve-2026-55999                   │
+│                  ├────────────────┤          │              │                         ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                  │ CVE-2026-56000 │          │              │                         │               │ X.org: xorg-x11-server: GLX contextTags Use-After-Free in    │
+│                  │                │          │              │                         │               │ CommonMakeCurrent()                                          │
+│                  │                │          │              │                         │               │ https://avd.aquasec.com/nvd/cve-2026-56000                   │
+├──────────────────┼────────────────┼──────────┼──────────────┼─────────────────────────┼───────────────┼──────────────────────────────────────────────────────────────┤
+│ zlib1g           │ CVE-2023-45853 │ CRITICAL │ will_not_fix │ 1:1.2.13.dfsg-1         │               │ zlib: integer overflow and resultant heap-based buffer       │
+│                  │                │          │              │                         │               │ overflow in zipOpenNewFileInZip4_6                           │
+│                  │                │          │              │                         │               │ https://avd.aquasec.com/nvd/cve-2023-45853                   │
+└──────────────────┴────────────────┴──────────┴──────────────┴─────────────────────────┴───────────────┴──────────────────────────────────────────────────────────────┘

@@ -1,14 +1,28 @@
 # Copyright The OpenTelemetry Authors
 # SPDX-License-Identifier: Apache-2.0
 
-FROM opensearchproject/opensearch:3.2.0
+# 3.7.0 vendor base ships newer Amazon Linux packages for Trivy HIGH OS CVEs.
+FROM opensearchproject/opensearch:3.7.0@sha256:44ba7ea58a319adf61c33ab16873f9ef5dbb30b291a832d375172f0b2d24e3c9
 
 USER 0
+
+ADD --chmod=644 https://repo1.maven.org/maven2/com/fasterxml/jackson/core/jackson-databind/2.21.4/jackson-databind-2.21.4.jar /tmp/jackson-databind-2.21.4.jar
+ADD --chmod=644 https://repo1.maven.org/maven2/tools/jackson/core/jackson-databind/3.1.4/jackson-databind-3.1.4.jar /tmp/jackson-databind-3.1.4.jar
+
+# Apply available OS security updates for Trivy HIGH/CRITICAL on the vendor base.
+RUN if command -v microdnf >/dev/null 2>&1; then \
+      microdnf upgrade -y && microdnf clean all; \
+    elif command -v yum >/dev/null 2>&1; then \
+      yum upgrade -y && yum clean all; \
+    elif command -v dnf >/dev/null 2>&1; then \
+      dnf upgrade -y && dnf clean all; \
+    fi
 
 # Remove plugins in dependency order - remove dependent plugins first
 # These plugins are not needed for basic log storage and retrieval in the demo
 # Remove plugins in dependency order
 RUN rm -rf \
+    /usr/share/opensearch/plugins/opensearch-security \
     /usr/share/opensearch/plugins/opensearch-security-analytics \
     /usr/share/opensearch/plugins/opensearch-alerting \
     /usr/share/opensearch/plugins/opensearch-anomaly-detection \
@@ -32,10 +46,19 @@ RUN rm -rf \
     /usr/share/opensearch/plugins/opensearch-ubi \
     /usr/share/opensearch/plugins/query-insights
 
+RUN rm -f /usr/share/opensearch/lib/jackson-databind-*.jar \
+    /usr/share/opensearch/modules/ingest-geoip/jackson-databind-*.jar \
+    /usr/share/opensearch/plugins/opensearch-sql/jackson-databind-*.jar \
+    && cp /tmp/jackson-databind-2.21.4.jar /usr/share/opensearch/lib/ \
+    && cp /tmp/jackson-databind-2.21.4.jar /usr/share/opensearch/modules/ingest-geoip/ \
+    && cp /tmp/jackson-databind-2.21.4.jar /usr/share/opensearch/plugins/opensearch-sql/ \
+    && cp /tmp/jackson-databind-3.1.4.jar /usr/share/opensearch/lib/ \
+    && rm -f /tmp/jackson-databind-*.jar
+
 # Keep only these essential plugins:
-# - opensearch-security (authentication/authorization) - already disabled via env var
 # - opensearch-index-management (index lifecycle management)
 # - opensearch-sql (SQL query support for Grafana PPL queries)
 # - opensearch-job-scheduler (task scheduling)
 
 USER 1000
+# Change trail: @hungxqt - 2026-07-20 - Bump OpenSearch base to 3.7.0 for Trivy HIGH OS packages

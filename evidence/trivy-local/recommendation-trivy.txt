@@ -1,0 +1,110 @@
+
+Report Summary
+
+┌──────────────────────────────────────────────────────────────────────────────────┬────────────┬─────────────────┐
+│                                      Target                                      │    Type    │ Vulnerabilities │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┤
+│ local/recommendation:trivy-test (alpine 3.22.4)                                  │   alpine   │        0        │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┤
+│ usr/local/lib/python3.12/site-packages/pip-25.0.1.dist-info/METADATA             │ python-pkg │        0        │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┤
+│ venv/lib/python3.12/site-packages/cachebox-6.1.2.dist-info/METADATA              │ python-pkg │        0        │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┤
+│ venv/lib/python3.12/site-packages/googleapis_common_protos-1.75.0.dist-info/MET- │ python-pkg │        0        │
+│ ADATA                                                                            │            │                 │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┤
+│ venv/lib/python3.12/site-packages/grpcio-1.82.1.dist-info/METADATA               │ python-pkg │        0        │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┤
+│ venv/lib/python3.12/site-packages/grpcio_health_checking-1.71.0.dist-info/METAD- │ python-pkg │        0        │
+│ ATA                                                                              │            │                 │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┤
+│ venv/lib/python3.12/site-packages/importlib_metadata-8.7.1.dist-info/METADATA    │ python-pkg │        0        │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┤
+│ venv/lib/python3.12/site-packages/mmh3-5.2.1.dist-info/METADATA                  │ python-pkg │        0        │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┤
+│ venv/lib/python3.12/site-packages/openfeature_hooks_opentelemetry-0.3.0.dist-in- │ python-pkg │        0        │
+│ fo/METADATA                                                                      │            │                 │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┤
+│ venv/lib/python3.12/site-packages/openfeature_provider_flagd-0.2.3.dist-info/ME- │ python-pkg │        0        │
+│ TADATA                                                                           │            │                 │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┤
+│ venv/lib/python3.12/site-packages/openfeature_sdk-0.10.0.dist-info/METADATA      │ python-pkg │        0        │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┤
+│ venv/lib/python3.12/site-packages/opentelemetry_api-1.39.1.dist-info/METADATA    │ python-pkg │        0        │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┤
+│ venv/lib/python3.12/site-packages/opentelemetry_distro-0.60b1.dist-info/METADATA │ python-pkg │        0        │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┤
+│ venv/lib/python3.12/site-packages/opentelemetry_exporter_otlp_proto_common-1.39- │ python-pkg │        0        │
+│ .1.dist-info/METADATA                                                            │            │                 │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┤
+│ venv/lib/python3.12/site-packages/opentelemetry_exporter_otlp_proto_grpc-1.39.1- │ python-pkg │        0        │
+│ .dist-info/METADATA                                                              │            │                 │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┤
+│ venv/lib/python3.12/site-packages/opentelemetry_instrumentation-0.60b1.dist-inf- │ python-pkg │        0        │
+│ o/METADATA                                                                       │            │                 │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┤
+│ venv/lib/python3.12/site-packages/opentelemetry_instrumentation_asyncio-0.60b1.- │ python-pkg │        0        │
+│ dist-info/METADATA                                                               │            │                 │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┤
+│ venv/lib/python3.12/site-packages/opentelemetry_instrumentation_dbapi-0.60b1.di- │ python-pkg │        0        │
+│ st-info/METADATA                                                                 │            │                 │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┤
+│ venv/lib/python3.12/site-packages/opentelemetry_instrumentation_grpc-0.60b1.dis- │ python-pkg │        0        │
+│ t-info/METADATA                                                                  │            │                 │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┤
+│ venv/lib/python3.12/site-packages/opentelemetry_instrumentation_logging-0.60b1.- │ python-pkg │        0        │
+│ dist-info/METADATA                                                               │            │                 │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┤
+│ venv/lib/python3.12/site-packages/opentelemetry_instrumentation_sqlite3-0.60b1.- │ python-pkg │        0        │
+│ dist-info/METADATA                                                               │            │                 │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┤
+│ venv/lib/python3.12/site-packages/opentelemetry_instrumentation_system_metrics-- │ python-pkg │        0        │
+│ 0.60b1.dist-info/METADATA                                                        │            │                 │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┤
+│ venv/lib/python3.12/site-packages/opentelemetry_instrumentation_threading-0.60b- │ python-pkg │        0        │
+│ 1.dist-info/METADATA                                                             │            │                 │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┤
+│ venv/lib/python3.12/site-packages/opentelemetry_instrumentation_urllib-0.60b1.d- │ python-pkg │        0        │
+│ ist-info/METADATA                                                                │            │                 │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┤
+│ venv/lib/python3.12/site-packages/opentelemetry_instrumentation_wsgi-0.60b1.dis- │ python-pkg │        0        │
+│ t-info/METADATA                                                                  │            │                 │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┤
+│ venv/lib/python3.12/site-packages/opentelemetry_proto-1.39.1.dist-info/METADATA  │ python-pkg │        0        │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┤
+│ venv/lib/python3.12/site-packages/opentelemetry_sdk-1.39.1.dist-info/METADATA    │ python-pkg │        0        │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┤
+│ venv/lib/python3.12/site-packages/opentelemetry_semantic_conventions-0.60b1.dis- │ python-pkg │        0        │
+│ t-info/METADATA                                                                  │            │                 │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┤
+│ venv/lib/python3.12/site-packages/opentelemetry_util_http-0.60b1.dist-info/META- │ python-pkg │        0        │
+│ DATA                                                                             │            │                 │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┤
+│ venv/lib/python3.12/site-packages/packaging-26.2.dist-info/METADATA              │ python-pkg │        0        │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┤
+│ venv/lib/python3.12/site-packages/panzi_json_logic-1.0.1.dist-info/METADATA      │ python-pkg │        0        │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┤
+│ venv/lib/python3.12/site-packages/pip-25.0.1.dist-info/METADATA                  │ python-pkg │        0        │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┤
+│ venv/lib/python3.12/site-packages/protobuf-5.29.6.dist-info/METADATA             │ python-pkg │        0        │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┤
+│ venv/lib/python3.12/site-packages/psutil-7.0.0.dist-info/METADATA                │ python-pkg │        0        │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┤
+│ venv/lib/python3.12/site-packages/python_dotenv-1.2.1.dist-info/METADATA         │ python-pkg │        0        │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┤
+│ venv/lib/python3.12/site-packages/python_json_logger-4.0.0.dist-info/METADATA    │ python-pkg │        0        │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┤
+│ venv/lib/python3.12/site-packages/pyyaml-6.0.3.dist-info/METADATA                │ python-pkg │        0        │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┤
+│ venv/lib/python3.12/site-packages/semver-3.0.4.dist-info/METADATA                │ python-pkg │        0        │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┤
+│ venv/lib/python3.12/site-packages/typing_extensions-4.16.0.dist-info/METADATA    │ python-pkg │        0        │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┤
+│ venv/lib/python3.12/site-packages/wrapt-1.17.3.dist-info/METADATA                │ python-pkg │        0        │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┤
+│ venv/lib/python3.12/site-packages/zipp-4.1.0.dist-info/METADATA                  │ python-pkg │        0        │
+└──────────────────────────────────────────────────────────────────────────────────┴────────────┴─────────────────┘
+Legend:
+- '-': Not scanned
+- '0': Clean (no security findings detected)
+

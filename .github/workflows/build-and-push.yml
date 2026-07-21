@@ -4,17 +4,15 @@ name: Build and push images
 
 # Job graph: CI → prepare → AWS/ECR preflight (refine build/retag lists)
 #            → build matrix (changed services from source) || retag (unchanged from PREV_TAG)
-#            → verify ECR (all 23 under NEW_TAG)
+#            → verify ECR → security scans → sign/SBOM/attest
 #            → publish Mem0 FastEmbed artifact (build when mem0 bakes; else S3 retag)
 #            → release-ready → update-chart-dev (development) | create-chart-prod-pr (production)
 #
 # Global Helm tag contract: every release service must exist under the same NEW_TAG.
 # Unchanged services are retagged from PREV_TAG (not skipped); changed services bake from source.
 # mem0 is a normal matrix service; compose/bake catalog edits alone do not force full bake.
-# Dev: after release-ready, direct-push default.image.tag to chart repo values-dev.yaml
-#      on branch techx-dev-corp (requires secret CHART_REPO_TOKEN).
-# Prod: after release-ready, open a PR on the chart repo updating values-prod.yaml
-#       (requires secret CHART_REPO_TOKEN with Contents + Pull requests write).
+# Dev: after release-ready, direct-push only rebuilt services under service-digest/values-<service>.yaml.
+# Prod: after release-ready, open a PR containing only rebuilt service digests under service-digest/.
 
 on:
   push:
@@ -42,10 +40,15 @@ on:
           - development
           - production
       force_full_rebuild:
-        description: Bake all 23 services from source (ignore path-based selective rebuild)
+        description: Bake all 23 services from source (ignore selective rebuild; reason required)
         required: false
         type: boolean
-        default: true
+        default: false
+      full_rebuild_reason:
+        description: Required justification when force_full_rebuild=true
+        required: false
+        type: string
+        default: ""
       previous_tag:
         description: >
           When force_full_rebuild is false, runtime tag to retag unchanged services from
@@ -150,8 +153,8 @@ jobs:
         run: |
           set -euo pipefail
 
-          # Canonical release set (must match docker-bake.hcl group "release").
-          RELEASE_JSON='["accounting","ad","cart","checkout","currency","email","flagd-ui","fraud-detection","frontend","frontend-proxy","image-provider","kafka","llm","load-generator","mem0","opensearch","payment","product-catalog","product-reviews","quote","recommendation","shipping","shopping-copilot"]'
+          # Canonical release set (shared with PR CI / scripts/release_services.json).
+          RELEASE_JSON="$(jq -c '.' scripts/release_services.json)"
 
           mapfile -t RELEASE < <(printf '%s' "${RELEASE_JSON}" | jq -r '.[]')
 
@@ -291,6 +294,7 @@ jobs:
           SHA: ${{ github.sha }}
           BEFORE_SHA: ${{ github.event.before }}
           FORCE_FULL: ${{ inputs.force_full_rebuild }}
+          FULL_REBUILD_REASON: ${{ inputs.full_rebuild_reason }}
           PREVIOUS_TAG_INPUT: ${{ inputs.previous_tag }}
           SERVICES_JSON: ${{ steps.catalog.outputs.services }}
         run: |
@@ -376,7 +380,11 @@ jobs:
             MODE="full"
             REASON="git tag push"
           elif [[ "${EVENT_NAME}" == "workflow_dispatch" ]]; then
-            # workflow_dispatch: force_full_rebuild defaults true; boolean may be string.
+            # Full rebuild is exceptional and must leave an auditable justification.
+            if [[ "${FORCE_FULL}" != "false" && "${FORCE_FULL}" != "False" && -z "${FULL_REBUILD_REASON//[[:space:]]/}" ]]; then
+              echo "::error::full_rebuild_reason is required when force_full_rebuild=true"
+              exit 1
+            fi
             if [[ "${FORCE_FULL}" == "false" || "${FORCE_FULL}" == "False" ]]; then
               if [[ -n "${PREVIOUS_TAG_INPUT}" ]]; then
                 PREV_TAG="${PREVIOUS_TAG_INPUT}"
@@ -405,7 +413,7 @@ jobs:
               fi
             else
               MODE="full"
-              REASON="workflow_dispatch force_full_rebuild"
+              REASON="workflow_dispatch force_full_rebuild: ${FULL_REBUILD_REASON}"
             fi
           elif [[ "${EVENT_NAME}" == "push" ]]; then
             if is_zero_sha "${BEFORE_SHA:-}"; then
@@ -963,6 +971,280 @@ jobs:
           fi
           echo "All ${#SERVICES[@]} release images present for tag ${DEMO_VERSION}"
 
+  # Security gates run after images exist in the private registry and before any
+  # chart mutation. A failure here makes release-ready fail closed.
+  resolve-image-digests:
+    name: Resolve image digests
+    needs: [prepare, verify-ecr]
+    runs-on: ubuntu-latest
+    environment: ${{ needs.prepare.outputs.target_environment }}
+    permissions:
+      contents: read
+      id-token: write
+    outputs:
+      digest_map: ${{ steps.resolve.outputs.digest_map }}
+    env:
+      AWS_REGION: ${{ vars.AWS_REGION || 'us-east-1' }}
+    steps:
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@517a711dbcd0e402f90c77e7e2f81e849156e31d
+        with:
+          role-to-assume: ${{ vars.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+      - name: Resolve catalog digests
+        id: resolve
+        env:
+          IMAGE_NAME: ${{ vars.IMAGE_NAME }}
+          VERSION: ${{ needs.prepare.outputs.version }}
+          SERVICES_JSON: ${{ needs.prepare.outputs.services }}
+        run: |
+          set -euo pipefail
+          project="${IMAGE_NAME#*/}"
+          digest_map='{}'
+          while IFS= read -r service; do
+            digest="$(aws ecr describe-images --repository-name "${project}/${service}" --image-ids "imageTag=${VERSION}" --query 'imageDetails[0].imageDigest' --output text)"
+            [[ "${digest}" =~ ^sha256:[0-9a-f]{64}$ ]] || { echo "::error::Invalid digest for ${service}: ${digest}"; exit 1; }
+            digest_map="$(jq -c --arg service "${service}" --arg digest "${digest}" '. + {($service):$digest}' <<<"${digest_map}")"
+          done < <(jq -r '.[]' <<<"${SERVICES_JSON}")
+          echo "digest_map=${digest_map}" >> "${GITHUB_OUTPUT}"
+
+  trivy-image-scan:
+    name: Trivy image scan
+    needs: [prepare, preflight, verify-ecr]
+    # Selective rebuild: scan only services baked from source (retag reuses prior digests).
+    # Full rebuild or empty build list falls back to the full catalog.
+    if: >
+      always() &&
+      needs.prepare.result == 'success' &&
+      needs.preflight.result == 'success' &&
+      needs.verify-ecr.result == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    environment: ${{ needs.prepare.outputs.target_environment }}
+    permissions:
+      contents: read
+      id-token: write
+    strategy:
+      fail-fast: false
+      max-parallel: 8
+      matrix:
+        service: ${{ fromJson(needs.preflight.outputs.build_count != '0' && needs.preflight.outputs.build_services || needs.prepare.outputs.services) }}
+    env:
+      AWS_REGION: ${{ vars.AWS_REGION || 'us-east-1' }}
+      IMAGE_REF: ${{ vars.IMAGE_NAME }}/${{ matrix.service }}:${{ needs.prepare.outputs.version }}
+    steps:
+      - name: Configure AWS credentials (OIDC)
+        # aws-actions/configure-aws-credentials@v6.2.2
+        uses: aws-actions/configure-aws-credentials@517a711dbcd0e402f90c77e7e2f81e849156e31d
+        with:
+          role-to-assume: ${{ vars.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+      - name: Login to Amazon ECR
+        # aws-actions/amazon-ecr-login@v2.1.6
+        uses: aws-actions/amazon-ecr-login@d539f0932e70871a027e9d5a9d8fc38589180a64
+      - name: Block HIGH and CRITICAL vulnerabilities
+        # aquasecurity/trivy-action@v0.36.0
+        uses: aquasecurity/trivy-action@a9c7b0f06e461e9d4b4d1711f154ee024b8d7ab8
+        with:
+          version: v0.69.3
+          image-ref: ${{ env.IMAGE_REF }}
+          format: table
+          # Fail only on findings with a published fix. Vendor images (Kafka/OpenSearch/etc.)
+          # and will_not_fix OS packages otherwise block every release despite rebuilds.
+          ignore-unfixed: true
+          severity: HIGH,CRITICAL
+          exit-code: "1"
+
+  trivy-iac-scan:
+    name: Trivy IaC misconfiguration
+    needs: [prepare]
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
+      - name: Block HIGH and CRITICAL IaC misconfigurations
+        # aquasecurity/trivy-action@v0.36.0
+        uses: aquasecurity/trivy-action@a9c7b0f06e461e9d4b4d1711f154ee024b8d7ab8
+        with:
+          version: v0.69.3
+          scan-type: config
+          scan-ref: .
+          skip-dirs: node_modules
+          format: table
+          severity: HIGH,CRITICAL
+          exit-code: "1"
+
+  semgrep-sast:
+    name: Semgrep SAST
+    needs: [prepare]
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
+        with:
+          fetch-depth: 0
+      - name: Install pinned Semgrep
+        run: python3 -m pip install --disable-pip-version-check 'semgrep==1.136.0'
+      - name: Run blocking SAST rules
+        env:
+          BASELINE_COMMIT: ${{ github.event.before }}
+        run: |
+          set -euo pipefail
+          args=(scan --error --metrics=off --config p/ci --config p/owasp-top-ten)
+          if [[ -n "${BASELINE_COMMIT}" && ! "${BASELINE_COMMIT}" =~ ^0+$ ]] && git cat-file -e "${BASELINE_COMMIT}^{commit}"; then
+            args+=(--baseline-commit "${BASELINE_COMMIT}")
+          fi
+          semgrep "${args[@]}" src
+
+  trufflehog-secrets:
+    name: TruffleHog secrets
+    needs: [prepare]
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout complete history
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
+        with:
+          fetch-depth: 0
+      - name: Install pinned TruffleHog with checksum verification
+        env:
+          TRUFFLEHOG_VERSION: 3.90.8
+        run: |
+          set -euo pipefail
+          base="https://github.com/trufflesecurity/trufflehog/releases/download/v${TRUFFLEHOG_VERSION}"
+          archive="trufflehog_${TRUFFLEHOG_VERSION}_linux_amd64.tar.gz"
+          curl --fail --location --silent --show-error -o "/tmp/${archive}" "${base}/${archive}"
+          curl --fail --location --silent --show-error -o /tmp/trufflehog_checksums.txt "${base}/trufflehog_${TRUFFLEHOG_VERSION}_checksums.txt"
+          grep " ${archive}$" /tmp/trufflehog_checksums.txt | sed 's#  #  /tmp/#' | sha256sum --check --strict
+          tar -xzf "/tmp/${archive}" -C /tmp trufflehog
+          sudo install -m 0755 /tmp/trufflehog /usr/local/bin/trufflehog
+      - name: Scan repository history for verified secrets
+        run: trufflehog git "file://${GITHUB_WORKSPACE}" --fail --only-verified --no-update
+
+  sign-and-attest:
+    name: Sign and attest ${{ matrix.service }}
+    needs: [prepare, preflight, verify-ecr, trivy-image-scan, trivy-iac-scan, semgrep-sast, trufflehog-secrets]
+    # Sign digests that were (re)scanned this run; retag-only reuses prior signatures on full catalog scan.
+    if: >
+      always() &&
+      needs.prepare.result == 'success' &&
+      needs.preflight.result == 'success' &&
+      needs.verify-ecr.result == 'success' &&
+      needs.trivy-image-scan.result == 'success' &&
+      needs.trivy-iac-scan.result == 'success' &&
+      needs.semgrep-sast.result == 'success' &&
+      needs.trufflehog-secrets.result == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment: ${{ needs.prepare.outputs.target_environment }}
+    permissions:
+      contents: read
+      id-token: write
+      pull-requests: read
+    strategy:
+      fail-fast: false
+      max-parallel: 8
+      matrix:
+        service: ${{ fromJson(needs.preflight.outputs.build_count != '0' && needs.preflight.outputs.build_services || needs.prepare.outputs.services) }}
+    env:
+      AWS_REGION: ${{ vars.AWS_REGION || 'us-east-1' }}
+      COSIGN_KEY: ${{ vars.COSIGN_KMS_KEY || 'awskms:///alias/tf2-cosign-signing-key' }}
+      PROVENANCE_TYPE: https://techx-corp.dev/attestations/provenance/v1
+    steps:
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@517a711dbcd0e402f90c77e7e2f81e849156e31d
+        with:
+          role-to-assume: ${{ vars.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+      - name: Install Cosign
+        # sigstore/cosign-installer@v3.9.2
+        uses: sigstore/cosign-installer@d58896d6a1865668819e1d91763c7751a165e159
+      - name: Resolve immutable image reference
+        id: image
+        env:
+          IMAGE_NAME: ${{ vars.IMAGE_NAME }}
+          VERSION: ${{ needs.prepare.outputs.version }}
+          SERVICE: ${{ matrix.service }}
+        run: |
+          set -euo pipefail
+          project="${IMAGE_NAME#*/}"
+          digest="$(aws ecr describe-images --repository-name "${project}/${SERVICE}" --image-ids "imageTag=${VERSION}" --query 'imageDetails[0].imageDigest' --output text)"
+          [[ "${digest}" =~ ^sha256:[0-9a-f]{64}$ ]] || { echo "::error::Invalid digest: ${digest}"; exit 1; }
+          echo "ref=${IMAGE_NAME}/${SERVICE}@${digest}" >> "${GITHUB_OUTPUT}"
+      - name: Resolve merged PR approver
+        id: approval
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EVENT_NAME: ${{ github.event_name }}
+          REF: ${{ github.ref }}
+          ACTOR: ${{ github.actor }}
+        run: |
+          set -euo pipefail
+          pr_number="$(gh api "repos/${GITHUB_REPOSITORY}/commits/${GITHUB_SHA}/pulls" --jq 'map(select(.merged_at != null))[0].number // empty' || true)"
+          approver=""
+          if [[ -n "${pr_number}" ]]; then
+            approver="$(gh pr view "${pr_number}" --repo "${GITHUB_REPOSITORY}" --json reviews --jq '[.reviews[] | select(.state == "APPROVED")][-1].author.login // empty' || true)"
+          fi
+          if [[ -n "${pr_number}" && -n "${approver}" ]]; then
+            echo "Resolved PR #${pr_number} approved by ${approver}"
+          elif [[ "${EVENT_NAME}" == "workflow_dispatch" ]]; then
+            # Manual republish: Environment protection is the human gate.
+            pr_number="0"
+            approver="${ACTOR}"
+            echo "::warning::No approved merged PR for ${GITHUB_SHA}; recording workflow_dispatch actor=${ACTOR}"
+          elif [[ "${REF}" == refs/tags/v* ]]; then
+            pr_number="0"
+            approver="${ACTOR}"
+            echo "::warning::No approved merged PR for tag ${REF}; recording tag pusher actor=${ACTOR}"
+          else
+            echo "::error::No merged PR with APPROVED review for ${GITHUB_SHA}. Use an approved PR merge, a v* tag, or workflow_dispatch."
+            exit 1
+          fi
+          echo "pr_number=${pr_number}" >> "${GITHUB_OUTPUT}"
+          echo "approver=${approver}" >> "${GITHUB_OUTPUT}"
+      - name: Sign image digest
+        env:
+          IMAGE: ${{ steps.image.outputs.ref }}
+        run: cosign sign --yes --key "${COSIGN_KEY}" "${IMAGE}"
+      - name: Generate and attest CycloneDX SBOM
+        env:
+          IMAGE: ${{ steps.image.outputs.ref }}
+          SYFT_VERSION: 1.28.0
+        run: |
+          set -euo pipefail
+          base="https://github.com/anchore/syft/releases/download/v${SYFT_VERSION}"
+          archive="syft_${SYFT_VERSION}_linux_amd64.tar.gz"
+          curl --fail --location --silent --show-error -o "/tmp/${archive}" "${base}/${archive}"
+          curl --fail --location --silent --show-error -o /tmp/syft_checksums.txt "${base}/syft_${SYFT_VERSION}_checksums.txt"
+          grep " ${archive}$" /tmp/syft_checksums.txt | sed 's#  #  /tmp/#' | sha256sum --check --strict
+          tar -xzf "/tmp/${archive}" -C /tmp syft
+          /tmp/syft "${IMAGE}" -o cyclonedx-json=sbom.cdx.json
+          cosign attest --yes --predicate sbom.cdx.json --type cyclonedx --key "${COSIGN_KEY}" "${IMAGE}"
+      - name: Create metadata provenance and attest image
+        env:
+          IMAGE: ${{ steps.image.outputs.ref }}
+          PR_NUMBER: ${{ steps.approval.outputs.pr_number }}
+          PR_APPROVER: ${{ steps.approval.outputs.approver }}
+        run: |
+          set -euo pipefail
+          jq -n \
+            --arg commit "${GITHUB_SHA}" \
+            --argjson pr_number "${PR_NUMBER}" \
+            --arg pr_approved_by "${PR_APPROVER}" \
+            --arg signer "${COSIGN_KEY}" \
+            --arg workflow_run_url "${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}" \
+            '{schema_version:1,commit:$commit,pr_number:$pr_number,pr_approved_by:$pr_approved_by,signer:$signer,scans:{trivy_image:"pass",trivy_iac:"pass",semgrep:"pass",trufflehog:"pass"},sbom:{format:"cyclonedx",attested:true},workflow_run_url:$workflow_run_url}' \
+            > predicate.json
+          cosign attest --yes --predicate predicate.json --type "${PROVENANCE_TYPE}" --key "${COSIGN_KEY}" "${IMAGE}"
+
   # ---------------------------------------------------------------------------
   # 7. publish-mem0-fastembed-artifact — selective like the image matrix:
   #    rebuild from source when mem0 is in the build list; otherwise retag
@@ -1167,7 +1449,7 @@ jobs:
   release-ready:
     name: Release ready
     if: always()
-    needs: [ci, prepare, preflight, build, retag, verify-ecr, publish-mem0-fastembed-artifact]
+    needs: [ci, prepare, preflight, build, retag, verify-ecr, trivy-image-scan, trivy-iac-scan, semgrep-sast, trufflehog-secrets, sign-and-attest, publish-mem0-fastembed-artifact]
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -1180,6 +1462,11 @@ jobs:
           BUILD_RESULT: ${{ needs.build.result }}
           RETAG_RESULT: ${{ needs.retag.result }}
           VERIFY_RESULT: ${{ needs.verify-ecr.result }}
+          TRIVY_RESULT: ${{ needs.trivy-image-scan.result }}
+          TRIVY_IAC_RESULT: ${{ needs.trivy-iac-scan.result }}
+          SEMGREP_RESULT: ${{ needs.semgrep-sast.result }}
+          TRUFFLEHOG_RESULT: ${{ needs.trufflehog-secrets.result }}
+          SIGN_RESULT: ${{ needs.sign-and-attest.result }}
           MEM0_ARTIFACT_RESULT: ${{ needs.publish-mem0-fastembed-artifact.result }}
           VERSION: ${{ needs.prepare.outputs.version }}
           SHORT_SHA: ${{ needs.prepare.outputs.short_sha }}
@@ -1201,6 +1488,11 @@ jobs:
             echo "| build | \`${BUILD_RESULT}\` |"
             echo "| retag | \`${RETAG_RESULT}\` |"
             echo "| verify-ecr | \`${VERIFY_RESULT}\` |"
+            echo "| trivy-image-scan | \`${TRIVY_RESULT}\` |"
+            echo "| trivy-iac-scan | \`${TRIVY_IAC_RESULT}\` |"
+            echo "| semgrep-sast | \`${SEMGREP_RESULT}\` |"
+            echo "| trufflehog-secrets | \`${TRUFFLEHOG_RESULT}\` |"
+            echo "| sign-and-attest | \`${SIGN_RESULT}\` |"
             echo "| publish-mem0-fastembed-artifact | \`${MEM0_ARTIFACT_RESULT}\` |"
             echo ""
             echo "| Field | Value |"
@@ -1214,16 +1506,16 @@ jobs:
             echo "| Retag count | \`${RETAG_COUNT}\` |"
             echo ""
             if [[ "${TARGET_ENV}" == "development" ]]; then
-              echo "On success, **update-chart-dev** will direct-push \`default.image.tag\` to the chart repo."
+              echo "On success, **update-chart-dev** will direct-push rebuilt service digests under \`service-digest/\` on the chart repo."
             else
-              echo "On success, **create-chart-prod-pr** will open a chart PR for \`values-prod.yaml\` (merge still required)."
+              echo "On success, **create-chart-prod-pr** will open a chart PR for \`service-digest/\` overlays (merge still required)."
             fi
             echo "This workflow does **not** deploy Helm resources or merge production chart PRs."
           } >> "${GITHUB_STEP_SUMMARY}"
 
           FAILED=0
           # build/retag may be skipped when that side of the selective plan is empty.
-          for pair in "ci:${CI_RESULT}:strict" "prepare:${PREPARE_RESULT}:strict" "preflight:${PREFLIGHT_RESULT}:strict" "build:${BUILD_RESULT}:allow_skip" "retag:${RETAG_RESULT}:allow_skip" "verify-ecr:${VERIFY_RESULT}:strict" "publish-mem0-fastembed-artifact:${MEM0_ARTIFACT_RESULT}:strict"; do
+          for pair in "ci:${CI_RESULT}:strict" "prepare:${PREPARE_RESULT}:strict" "preflight:${PREFLIGHT_RESULT}:strict" "build:${BUILD_RESULT}:allow_skip" "retag:${RETAG_RESULT}:allow_skip" "verify-ecr:${VERIFY_RESULT}:strict" "trivy-image-scan:${TRIVY_RESULT}:strict" "trivy-iac-scan:${TRIVY_IAC_RESULT}:strict" "semgrep-sast:${SEMGREP_RESULT}:strict" "trufflehog-secrets:${TRUFFLEHOG_RESULT}:strict" "sign-and-attest:${SIGN_RESULT}:strict" "publish-mem0-fastembed-artifact:${MEM0_ARTIFACT_RESULT}:strict"; do
             name="${pair%%:*}"
             rest="${pair#*:}"
             result="${rest%%:*}"
@@ -1255,19 +1547,21 @@ jobs:
           echo "Release is ready (tag=${VERSION}, env=${TARGET_ENV}, mode=${MODE})."
 
   # ---------------------------------------------------------------------------
-  # 9. update-chart-dev — direct-push image tag to chart values-dev.yaml
+  # 9. update-chart-dev — direct-push rebuilt services' immutable digests
   #    Runs only after release-ready succeeds for the development environment.
   #    Requires repository secret CHART_REPO_TOKEN (contents:write on chart repo).
   # ---------------------------------------------------------------------------
   update-chart-dev:
-    name: Update chart values-dev tag
-    needs: [prepare, release-ready]
+    name: Update chart dev service digests
+    needs: [prepare, preflight, resolve-image-digests, release-ready]
     # always(): when selective publish skips empty build/retag, GHA would otherwise
     # cascade-skip this job even if release-ready succeeded. Gate on result + env.
     if: >
       always() &&
       needs.release-ready.result == 'success' &&
-      needs.prepare.outputs.target_environment == 'development'
+      needs.resolve-image-digests.result == 'success' &&
+      needs.prepare.outputs.target_environment == 'development' &&
+      needs.preflight.outputs.build_count != '0'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
@@ -1280,6 +1574,8 @@ jobs:
       SHORT_SHA: ${{ needs.prepare.outputs.short_sha }}
       PLATFORM_SHA: ${{ github.sha }}
       PLATFORM_RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+      BUILD_SERVICES_JSON: ${{ needs.preflight.outputs.build_services }}
+      DIGEST_MAP_JSON: ${{ needs.resolve-image-digests.outputs.digest_map }}
     steps:
       - name: Require CHART_REPO_TOKEN
         env:
@@ -1290,6 +1586,11 @@ jobs:
             echo "::error::Secret CHART_REPO_TOKEN is not set. Create a fine-grained PAT (or classic PAT) with contents:write on ${CHART_REPO}, add it as a repository secret, then re-run. See docs/CICD.md."
             exit 1
           fi
+
+      - name: Checkout platform digest updater
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
+        with:
+          path: platform
 
       - name: Checkout chart repository
         # actions/checkout@v7.0.0
@@ -1302,161 +1603,58 @@ jobs:
           # Fetch enough history for rebase retries against concurrent pushes.
           fetch-depth: 20
 
-      - name: Update default.image.tag and push
+      - name: Update rebuilt service digests and push
         working-directory: chart
         run: |
           set -euo pipefail
-
-          FILE="values-dev.yaml"
-          if [[ ! -f "${FILE}" ]]; then
-            echo "::error::${FILE} not found in ${CHART_REPO}@${CHART_BRANCH}"
-            exit 1
-          fi
-
-          # Precise in-place update of default.image.tag only (preserve comments/layout).
-          # Allow comments and sibling keys under default: before image: (values-prod
-          # may set terminationGracePeriodSeconds etc. above image).
-          python3 - <<'PY'
-          import os
-          import re
-          import sys
-          from pathlib import Path
-
-          path = Path("values-dev.yaml")
-          text = path.read_text(encoding="utf-8")
-          version = os.environ["VERSION"]
-
-          pattern = re.compile(
-              r"(^default:\n"
-              r"(?:[ \t].*\n)*?"
-              r"  image:\n"
-              r"(?:[ \t].*\n)*?"
-              r"    tag:\s*)\"[^\"]*\"",
-              re.MULTILINE,
-          )
-          match = pattern.search(text)
-          if not match:
-              print(
-                  "::error::Could not locate default.image.tag under default.image in values-dev.yaml",
-                  file=sys.stderr,
-              )
-              sys.exit(1)
-
-          current_match = re.search(r'tag:\s*"([^"]*)"', match.group(0))
-          current = current_match.group(1) if current_match else ""
-          print(f"current_tag={current}")
-          print(f"new_tag={version}")
-
-          if current == version:
-              Path(".tag-unchanged").write_text("1", encoding="utf-8")
-              print("Tag already up to date; no commit needed.")
-              sys.exit(0)
-
-          new_text, n = pattern.subn(rf'\1"{version}"', text, count=1)
-          if n != 1:
-              print(f"::error::Expected 1 replacement, got {n}", file=sys.stderr)
-              sys.exit(1)
-
-          path.write_text(new_text, encoding="utf-8")
-          print(f"Updated default.image.tag: {current} → {version}")
-          PY
-
-          if [[ -f .tag-unchanged ]]; then
-            {
-              echo "## Chart values-dev update"
-              echo ""
-              echo "No change: \`default.image.tag\` already \`${VERSION}\` on \`${CHART_REPO}@${CHART_BRANCH}\`."
-            } >> "${GITHUB_STEP_SUMMARY}"
-            exit 0
-          fi
-
+          python3 ../platform/scripts/update_chart_service_digests.py \
+            --directory . \
+            --subdir service-digest \
+            --services-json "${BUILD_SERVICES_JSON}" \
+            --digests-json "${DIGEST_MAP_JSON}"
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-
-          git add "${FILE}"
+          git add -- 'service-digest/values-*.yaml'
           if git diff --cached --quiet; then
-            echo "Working tree clean after update; nothing to commit."
+            echo "No rebuilt-service digest changed; nothing to push."
             exit 0
           fi
-
-          git commit -m "chore(dev): promote image tag to ${VERSION}" \
-            -m "Automated by platform build after release-ready." \
+          git commit -m "chore(dev): promote rebuilt service digests" \
             -m "Platform commit: ${PLATFORM_SHA}" \
             -m "Workflow: ${PLATFORM_RUN_URL}"
-
-          # checkout action already configured origin with CHART_REPO_TOKEN credentials.
-          # Retry push with rebase if another bot/human commit landed first.
-          ATTEMPTS=5
-          for attempt in $(seq 1 "${ATTEMPTS}"); do
+          for attempt in 1 2 3 4 5; do
             if git push origin "HEAD:${CHART_BRANCH}"; then
-              echo "Pushed default.image.tag=${VERSION} to ${CHART_REPO}@${CHART_BRANCH}"
-              {
-                echo "## Chart values-dev update"
-                echo ""
-                echo "| Field | Value |"
-                echo "|---|---|"
-                echo "| Repository | \`${CHART_REPO}\` |"
-                echo "| Branch | \`${CHART_BRANCH}\` |"
-                echo "| File | \`values-dev.yaml\` |"
-                echo "| Tag | \`${VERSION}\` |"
-                echo "| Mode | direct push |"
-                echo ""
-                echo "Argo CD (\`techx-corp-dev\`) will auto-sync after this commit lands."
-              } >> "${GITHUB_STEP_SUMMARY}"
+              echo "Selective service digests pushed to ${CHART_REPO}@${CHART_BRANCH} (service-digest/)"
               exit 0
             fi
-            echo "Push rejected (attempt ${attempt}/${ATTEMPTS}); pulling with rebase..."
             git fetch origin "${CHART_BRANCH}"
             git rebase "origin/${CHART_BRANCH}"
-
-            # Re-apply tag after rebase in case remote also touched values-dev.yaml.
-            python3 - <<'PY'
-          import os
-          import re
-          import sys
-          from pathlib import Path
-
-          path = Path("values-dev.yaml")
-          text = path.read_text(encoding="utf-8")
-          version = os.environ["VERSION"]
-          pattern = re.compile(
-              r"(^default:\n"
-              r"  image:\n"
-              r"    repository:[^\n]+\n"
-              r"(?:    #[^\n]*\n)*"
-              r"    tag:\s*)\"[^\"]*\"",
-              re.MULTILINE,
-          )
-          if not pattern.search(text):
-              print("::error::values-dev.yaml lost default.image.tag after rebase", file=sys.stderr)
-              sys.exit(1)
-          path.write_text(pattern.sub(rf'\1"{version}"', text, count=1), encoding="utf-8")
-          PY
-            git add "${FILE}"
-            if ! git diff --cached --quiet; then
-              # Keep a single promote commit on top after resolving concurrent updates.
-              git commit --amend --no-edit
-            fi
+            python3 ../platform/scripts/update_chart_service_digests.py \
+              --directory . --subdir service-digest \
+              --services-json "${BUILD_SERVICES_JSON}" --digests-json "${DIGEST_MAP_JSON}"
+            git add -- 'service-digest/values-*.yaml'
+            git commit --amend --no-edit
           done
-
-          echo "::error::Failed to push to ${CHART_REPO}@${CHART_BRANCH} after ${ATTEMPTS} attempts"
+          echo "::error::Failed to push selective digest update after 5 attempts"
           exit 1
 
   # ---------------------------------------------------------------------------
-  # 10. create-chart-prod-pr — open PR to update chart values-prod.yaml tag
+  # 10. create-chart-prod-pr — open PR for rebuilt services' immutable digests
   #    Runs only after release-ready succeeds for the production environment.
   #    Does not merge; human review remains the production deploy gate.
   #    Requires repository secret CHART_REPO_TOKEN (Contents + Pull requests write).
   # ---------------------------------------------------------------------------
   create-chart-prod-pr:
-    name: Create chart values-prod PR
-    needs: [prepare, release-ready]
+    name: Create chart production digest PR
+    needs: [prepare, preflight, resolve-image-digests, release-ready]
     # always(): when selective publish skips empty build/retag, GHA would otherwise
     # cascade-skip this job even if release-ready succeeded. Gate on result + env.
     if: >
       always() &&
       needs.release-ready.result == 'success' &&
-      needs.prepare.outputs.target_environment == 'production'
+      needs.resolve-image-digests.result == 'success' &&
+      needs.prepare.outputs.target_environment == 'production' &&
+      needs.preflight.outputs.build_count != '0'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
@@ -1470,6 +1668,8 @@ jobs:
       PLATFORM_SHA: ${{ github.sha }}
       PLATFORM_RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
       PLATFORM_REPO: ${{ github.repository }}
+      BUILD_SERVICES_JSON: ${{ needs.preflight.outputs.build_services }}
+      DIGEST_MAP_JSON: ${{ needs.resolve-image-digests.outputs.digest_map }}
     steps:
       - name: Require CHART_REPO_TOKEN
         env:
@@ -1481,6 +1681,11 @@ jobs:
             exit 1
           fi
 
+      - name: Checkout platform digest updater
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
+        with:
+          path: platform
+
       - name: Checkout chart repository
         # actions/checkout@v7.0.0
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
@@ -1491,205 +1696,37 @@ jobs:
           path: chart
           fetch-depth: 20
 
-      - name: Update values-prod tag, push branch, open PR
+      - name: Update rebuilt service digests and open production PR
         working-directory: chart
         env:
           GH_TOKEN: ${{ secrets.CHART_REPO_TOKEN }}
         run: |
           set -euo pipefail
-
-          FILE="values-prod.yaml"
-          if [[ ! -f "${FILE}" ]]; then
-            echo "::error::${FILE} not found in ${CHART_REPO}@${CHART_PROD_BRANCH}"
-            exit 1
-          fi
-
-          # Sanitize version for a valid git branch segment (e.g. v1.2.3 or sha-a1b2c3d).
-          SAFE_VERSION="$(printf '%s' "${VERSION}" | tr -c 'A-Za-z0-9._-' '-')"
-          PROMOTE_BRANCH="promote/prod-image-${SAFE_VERSION}"
-
-          # Precise in-place update of default.image.tag only (preserve comments/layout).
-          # Allow comments and sibling keys under default: before image: (values-prod
-          # may set terminationGracePeriodSeconds etc. above image).
-          python3 - <<'PY'
-          import os
-          import re
-          import sys
-          from pathlib import Path
-
-          path = Path("values-prod.yaml")
-          text = path.read_text(encoding="utf-8")
-          version = os.environ["VERSION"]
-
-          pattern = re.compile(
-              r"(^default:\n"
-              r"(?:[ \t].*\n)*?"
-              r"  image:\n"
-              r"(?:[ \t].*\n)*?"
-              r"    tag:\s*)\"[^\"]*\"",
-              re.MULTILINE,
-          )
-          match = pattern.search(text)
-          if not match:
-              print(
-                  "::error::Could not locate default.image.tag under default.image in values-prod.yaml",
-                  file=sys.stderr,
-              )
-              sys.exit(1)
-
-          current_match = re.search(r'tag:\s*"([^"]*)"', match.group(0))
-          current = current_match.group(1) if current_match else ""
-          print(f"current_tag={current}")
-          print(f"new_tag={version}")
-
-          if current == version:
-              Path(".tag-unchanged").write_text("1", encoding="utf-8")
-              print("Tag already up to date; no PR needed.")
-              sys.exit(0)
-
-          new_text, n = pattern.subn(rf'\1"{version}"', text, count=1)
-          if n != 1:
-              print(f"::error::Expected 1 replacement, got {n}", file=sys.stderr)
-              sys.exit(1)
-
-          path.write_text(new_text, encoding="utf-8")
-          Path(".previous-tag").write_text(current, encoding="utf-8")
-          print(f"Updated default.image.tag: {current} → {version}")
-          PY
-
-          if [[ -f .tag-unchanged ]]; then
-            {
-              echo "## Chart values-prod PR"
-              echo ""
-              echo "No change: \`default.image.tag\` already \`${VERSION}\` on \`${CHART_REPO}@${CHART_PROD_BRANCH}\`."
-              echo "Skipped branch push and PR creation."
-            } >> "${GITHUB_STEP_SUMMARY}"
-            exit 0
-          fi
-
-          PREVIOUS_TAG="unknown"
-          if [[ -f .previous-tag ]]; then
-            PREVIOUS_TAG="$(cat .previous-tag)"
-          fi
-
+          python3 ../platform/scripts/update_chart_service_digests.py \
+            --directory . \
+            --subdir service-digest \
+            --services-json "${BUILD_SERVICES_JSON}" \
+            --digests-json "${DIGEST_MAP_JSON}"
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-
-          git checkout -B "${PROMOTE_BRANCH}"
-
-          git add "${FILE}"
+          safe_version="$(printf '%s' "${VERSION}" | tr -c 'A-Za-z0-9._-' '-')"
+          promote_branch="promote/prod-digests-${safe_version}"
+          git checkout -B "${promote_branch}"
+          git add -- 'service-digest/values-*.yaml'
           if git diff --cached --quiet; then
-            echo "Working tree clean after update; nothing to commit."
+            echo "No rebuilt-service digest changed; no production PR required."
             exit 0
           fi
-
-          git commit -m "chore(prod): promote image tag to ${VERSION}" \
-            -m "Automated PR by platform build after release-ready." \
+          git commit -m "chore(prod): promote rebuilt service digests" \
             -m "Platform commit: ${PLATFORM_SHA}" \
             -m "Workflow: ${PLATFORM_RUN_URL}"
-
-          # Bot promote branches are disposable per tag; force refresh on re-runs.
-          git push --force origin "HEAD:${PROMOTE_BRANCH}"
-
-          PR_TITLE="chore(prod): promote image tag to ${VERSION}"
-          # Body file keeps YAML/script indentation out of the heredoc delimiter.
-          {
-            echo "## Summary"
-            echo ""
-            echo "Promote production Helm image tag after a successful platform image publish."
-            echo ""
-            echo "| Field | Value |"
-            echo "|---|---|"
-            echo "| File | \`${FILE}\` |"
-            echo "| Previous tag | \`${PREVIOUS_TAG}\` |"
-            echo "| New tag | \`${VERSION}\` |"
-            echo "| Base branch | \`${CHART_PROD_BRANCH}\` |"
-            echo "| Platform repo | \`${PLATFORM_REPO}\` |"
-            echo "| Platform commit | \`${PLATFORM_SHA}\` |"
-            echo "| Platform workflow | ${PLATFORM_RUN_URL} |"
-            echo ""
-            echo "## Notes"
-            echo ""
-            echo "* All **23** release images were built and verified in ECR before this PR was opened."
-            echo "* Merge this PR to let Argo CD Application \`techx-corp\` sync the new global tag."
-            echo "* Do **not** merge while a platform publish for this tag is still in progress (this job only runs after \`release-ready\`)."
-            echo ""
-            echo "## Validation after merge"
-            echo ""
-            echo '```cmd'
-            echo "argocd app wait techx-corp --sync --health --timeout 600"
-            echo '```'
-          } > /tmp/chart-prod-pr-body.md
-
-          # Idempotent: reuse an existing open PR for this head branch when present.
-          # Prefer owner:branch for --head so gh matches the chart repo owner reliably.
-          CHART_OWNER="${CHART_REPO%%/*}"
-          HEAD_REF="${CHART_OWNER}:${PROMOTE_BRANCH}"
-          EXISTING_URL="$(
-            gh pr list \
-              --repo "${CHART_REPO}" \
-              --head "${HEAD_REF}" \
-              --base "${CHART_PROD_BRANCH}" \
-              --state open \
-              --json url \
-              --jq '.[0].url // empty'
-          )"
-
-          MANUAL_PR_URL="https://github.com/${CHART_REPO}/compare/${CHART_PROD_BRANCH}...${PROMOTE_BRANCH}?expand=1"
-
-          if [[ -n "${EXISTING_URL}" ]]; then
-            echo "Updated existing PR: ${EXISTING_URL}"
-            if ! gh pr edit "${EXISTING_URL}" --repo "${CHART_REPO}" \
-              --title "${PR_TITLE}" \
-              --body-file /tmp/chart-prod-pr-body.md; then
-              echo "::error::Failed to update existing PR. Ensure CHART_REPO_TOKEN fine-grained PAT has Pull requests: Read and write on ${CHART_REPO}. Branch already pushed: ${PROMOTE_BRANCH}. Manual open: ${MANUAL_PR_URL}"
-              exit 1
-            fi
-            PR_URL="${EXISTING_URL}"
+          git push --force origin "HEAD:${promote_branch}"
+          body="Promote only rebuilt service digests under service-digest/ after security scans and attestations. Platform run: ${PLATFORM_RUN_URL}"
+          existing="$(gh pr list --repo "${CHART_REPO}" --head "${promote_branch}" --base "${CHART_PROD_BRANCH}" --state open --json url --jq '.[0].url // empty')"
+          if [[ -n "${existing}" ]]; then
+            gh pr edit "${existing}" --repo "${CHART_REPO}" --title "chore(prod): promote rebuilt service digests (${VERSION})" --body "${body}"
           else
-            set +e
-            PR_URL="$(
-              gh pr create \
-                --repo "${CHART_REPO}" \
-                --base "${CHART_PROD_BRANCH}" \
-                --head "${PROMOTE_BRANCH}" \
-                --title "${PR_TITLE}" \
-                --body-file /tmp/chart-prod-pr-body.md \
-                2> /tmp/gh-pr-create.err
-            )"
-            PR_CREATE_RC=$?
-            set -e
-            if [[ "${PR_CREATE_RC}" -ne 0 ]]; then
-              cat /tmp/gh-pr-create.err >&2 || true
-              {
-                echo "::error::Failed to create chart PR (often GraphQL: Resource not accessible by personal access token)."
-                echo "::error::Fix: regenerate/edit the fine-grained PAT used as CHART_REPO_TOKEN with repository permissions:"
-                echo "::error::  - Contents: Read and write"
-                echo "::error::  - Pull requests: Read and write"
-                echo "::error::Then update the platform repo secret CHART_REPO_TOKEN and re-run this job."
-                echo "::error::Branch already pushed: ${PROMOTE_BRANCH}"
-                echo "::error::Manual PR (until PAT is fixed): ${MANUAL_PR_URL}"
-              }
-              exit 1
-            fi
-            echo "Opened PR: ${PR_URL}"
+            gh pr create --repo "${CHART_REPO}" --base "${CHART_PROD_BRANCH}" --head "${promote_branch}" --title "chore(prod): promote rebuilt service digests (${VERSION})" --body "${body}"
           fi
 
-          {
-            echo "## Chart values-prod PR"
-            echo ""
-            echo "| Field | Value |"
-            echo "|---|---|"
-            echo "| Repository | \`${CHART_REPO}\` |"
-            echo "| Base branch | \`${CHART_PROD_BRANCH}\` |"
-            echo "| Head branch | \`${PROMOTE_BRANCH}\` |"
-            echo "| File | \`${FILE}\` |"
-            echo "| Previous tag | \`${PREVIOUS_TAG}\` |"
-            echo "| Tag | \`${VERSION}\` |"
-            echo "| Mode | pull request (no auto-merge) |"
-            echo "| PR | ${PR_URL} |"
-            echo ""
-            echo "Review and merge the PR to deploy. Argo CD (\`techx-corp\`) will sync after merge to \`${CHART_PROD_BRANCH}\`."
-          } >> "${GITHUB_STEP_SUMMARY}"
-
-# Change trail: @hungxqt - 2026-07-19 - Add shopping-copilot to 23-service release catalog and publish gates.
+# Change trail: @hungxqt - 2026-07-20 - Trivy ignore-unfixed=true so only fixable HIGH/CRITICAL block release
