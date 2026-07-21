@@ -65,6 +65,22 @@ class SelectivePublishWorkflowTests(unittest.TestCase):
             self.workflow,
         )
 
+    def test_requested_services_are_validated_and_audited(self) -> None:
+        self.assertIn("requested_services:", self.workflow)
+        self.assertIn("requested_services_reason:", self.workflow)
+        self.assertIn(
+            "requested_services_reason is required when requested_services is non-empty",
+            self.workflow,
+        )
+        self.assertIn("is not in the release catalog", self.workflow)
+        self.assertIn('BUILD_SET["${requested}"]=1', self.workflow)
+
+    def test_requested_services_cannot_expand_full_rebuild(self) -> None:
+        self.assertIn(
+            "requested_services cannot be combined with force_full_rebuild=true",
+            self.workflow,
+        )
+
 
 if __name__ == "__main__":
     unittest.main()
