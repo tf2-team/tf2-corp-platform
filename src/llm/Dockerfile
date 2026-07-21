@@ -21,6 +21,8 @@ FROM docker.io/library/python:3.12-alpine3.22@sha256:a190708a2dec1bd18b1decb539f
 
 RUN apk upgrade --no-cache
 
+ENV APP_PORT=8000
+
 COPY --from=build-venv /venv/ /venv/
 
 WORKDIR /app
@@ -36,6 +38,6 @@ RUN chown -R appuser:appgroup /app
 
 USER 10001
 
-EXPOSE ${LLM_PORT}
+EXPOSE 8000
 ENTRYPOINT [ "/venv/bin/python", "app.py" ]
-# Change trail: @hungxqt - 2026-07-20 - Trivy HIGH/CRITICAL remediation (base upgrades, OS package updates, dep bumps)
+# Change trail: @MinhKhoa2209 - 2026-07-22 - Use APP_PORT instead of Kubernetes-reserved service-link name.

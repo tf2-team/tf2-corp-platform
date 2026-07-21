@@ -10,7 +10,8 @@ COPY ./src/email/Gemfile.lock Gemfile.lock
 RUN apk upgrade --no-cache && \
     apk add --no-cache make gcc musl-dev gcompat zlib-dev && \
     bundle install && \
-    # Ensure default-gem paths also resolve to security-fixed versions for Trivy.
+    bundle check && \
+    # Keep scanner-visible default-gem paths aligned with the locked versions.
     gem install --no-document erb:6.0.6 zlib:3.2.3 net-imap:0.6.4.1 puma:8.0.2
 
 FROM docker.io/library/ruby:3.4.7-alpine3.22@sha256:2a968472f07d03fd9c9fdfe220881c18fc0b28eb4d514b36b2c2d23810d70b89
@@ -37,10 +38,10 @@ COPY --chown=appuser:appgroup ./src/email/Gemfile Gemfile
 COPY --chown=appuser:appgroup ./src/email/Gemfile.lock Gemfile.lock
 COPY --chown=appuser:appgroup ./src/email/email_server.rb email_server.rb
 
-RUN chown -R appuser:appgroup /email_server
+RUN chown -R appuser:appgroup /email_server && bundle check
 
 USER 10001
 
 EXPOSE ${EMAIL_PORT}
 ENTRYPOINT ["bundle", "exec", "ruby", "email_server.rb"]
-# Change trail: @hungxqt - 2026-07-20 - Force fixed default gems (erb/zlib/net-imap/puma) for Trivy
+# Change trail: @MinhKhoa2209 - 2026-07-22 - Align security-fixed default gems with Gemfile.lock.
