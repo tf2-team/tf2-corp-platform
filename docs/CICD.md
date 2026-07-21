@@ -128,8 +128,14 @@ CI uploads to `${MEM0_FASTEMBED_ARTIFACT_S3_URI}/${VERSION}/`. The chart compose
 | Input | Default | Purpose |
 |---|---|---|
 | `target_environment` | required | `development` or `production` |
+| `requested_services` | empty | Comma/space-separated release services for an explicit selective rebuild |
+| `requested_services_reason` | empty | Required and audited when `requested_services` is non-empty |
 | `force_full_rebuild` | `false` | Break-glass full-catalog build when true |
 | `full_rebuild_reason` | empty | Required and audited when `force_full_rebuild=true` |
+
+`requested_services` is validated against the release catalog and cannot be combined
+with `force_full_rebuild=true`. This is the operator path for rebuilding only artifacts
+that are missing a trustworthy signature or attestation without modifying service source.
 
 ### Environment mapping (Build & Push)
 

@@ -39,6 +39,16 @@ on:
         options:
           - development
           - production
+      requested_services:
+        description: Comma/space-separated release services to rebuild selectively
+        required: false
+        type: string
+        default: ""
+      requested_services_reason:
+        description: Required justification when requested_services is non-empty
+        required: false
+        type: string
+        default: ""
       force_full_rebuild:
         description: Bake all 23 services from source (ignore selective rebuild; reason required)
         required: false
@@ -285,6 +295,8 @@ jobs:
           BEFORE_SHA: ${{ github.event.before }}
           FORCE_FULL: ${{ inputs.force_full_rebuild }}
           FULL_REBUILD_REASON: ${{ inputs.full_rebuild_reason }}
+          REQUESTED_SERVICES: ${{ inputs.requested_services }}
+          REQUESTED_SERVICES_REASON: ${{ inputs.requested_services_reason }}
           SERVICES_JSON: ${{ steps.catalog.outputs.services }}
         run: |
           set -euo pipefail
@@ -373,8 +385,29 @@ jobs:
               echo "::error::full_rebuild_reason is required when force_full_rebuild=true"
               exit 1
             fi
+            if [[ "${FORCE_FULL}" != "false" && "${FORCE_FULL}" != "False" && -n "${REQUESTED_SERVICES//[[:space:],]/}" ]]; then
+              echo "::error::requested_services cannot be combined with force_full_rebuild=true"
+              exit 1
+            fi
             if [[ "${FORCE_FULL}" == "false" || "${FORCE_FULL}" == "False" ]]; then
-              if ! is_zero_sha "${BEFORE_SHA:-}" && git cat-file -e "${BEFORE_SHA}^{commit}" 2>/dev/null; then
+              if [[ -n "${REQUESTED_SERVICES//[[:space:],]/}" ]]; then
+                if [[ -z "${REQUESTED_SERVICES_REASON//[[:space:]]/}" ]]; then
+                  echo "::error::requested_services_reason is required when requested_services is non-empty"
+                  exit 1
+                fi
+                normalized="${REQUESTED_SERVICES//,/ }"
+                read -r -a requested_list <<< "${normalized}"
+                for requested in "${requested_list[@]}"; do
+                  if [[ -z "${IS_RELEASE[${requested}]+x}" ]]; then
+                    echo "::error::requested service '${requested}' is not in the release catalog"
+                    exit 1
+                  fi
+                  BUILD_SET["${requested}"]=1
+                  echo "Operator-requested service: ${requested}"
+                done
+                MODE="selective"
+                REASON="workflow_dispatch requested_services: ${REQUESTED_SERVICES_REASON}"
+              elif ! is_zero_sha "${BEFORE_SHA:-}" && git cat-file -e "${BEFORE_SHA}^{commit}" 2>/dev/null; then
                 classify_from_diff "${BEFORE_SHA}" "workflow_dispatch"
               elif git rev-parse --verify HEAD^ >/dev/null 2>&1; then
                 classify_from_diff "$(git rev-parse HEAD^)" "workflow_dispatch"
