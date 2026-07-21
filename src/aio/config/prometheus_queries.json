@@ -4,7 +4,7 @@
     "one_second": {
       "step_seconds": 1,
       "lookback_seconds": 2700,
-      "detector_bucket_seconds": 5,
+      "detector_bucket_seconds": 60,
       "required_source_resolution_seconds": 1,
       "incremental": true,
       "max_concurrency": 8
@@ -299,11 +299,11 @@
       "template_ids": ["red.grpc.p95_latency", "red.grpc.p99_latency", "red.grpc.error_ratio", "red.grpc.request_rate"]
     },
     {
-      "services": ["fraud-detection", "accounting"],
+      "services": ["fraud-detection"],
       "template_ids": ["red.consumer.p95_latency", "red.consumer.p99_latency", "red.consumer.error_ratio", "red.consumer.request_rate"]
     },
     {
-      "services": ["checkout", "payment", "frontend-proxy", "frontend", "product-catalog", "product-reviews", "recommendation", "ad", "currency", "cart", "shipping", "email", "quote", "fraud-detection", "accounting"],
+      "services": ["checkout", "payment", "frontend-proxy", "frontend", "product-catalog", "product-reviews", "recommendation", "ad", "currency", "cart", "shipping", "email", "quote", "fraud-detection"],
       "template_ids": ["resource.cpu_millicores", "resource.memory_usage_bytes", "resource.disk_io_bytes_per_second", "resource.socket_io_bytes_per_second", "resource.workload_ready_pods", "resource.workload_ready_ratio"]
     }
   ],

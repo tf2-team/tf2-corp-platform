@@ -178,6 +178,22 @@
         "dependencies": []
       },
       {
+        "name": "otel-collector",
+        "namespace": "techx-corp-prod",
+        "kind": "Deployment",
+        "owner": "platform-oncall",
+        "flow": "observability",
+        "dependencies": []
+      },
+      {
+        "name": "kafka",
+        "namespace": "external",
+        "kind": "StatefulSet",
+        "owner": "platform-oncall",
+        "flow": "platform",
+        "dependencies": []
+      },
+      {
         "name": "postgresql",
         "namespace": "external",
         "kind": "Database",
@@ -405,16 +421,6 @@
       "signal_id": "fraud_detection_error_rate_5m",
       "flow": "checkout",
       "service": "fraud-detection",
-      "severity": "SEV2",
-      "runbook_id": "RB-SERVICE-ERROR-RATE"
-    },
-    {
-      "id": "auto_accounting_error_rate",
-      "type": "threshold",
-      "enabled": false,
-      "signal_id": "accounting_error_rate_5m",
-      "flow": "checkout-async",
-      "service": "accounting",
       "severity": "SEV2",
       "runbook_id": "RB-SERVICE-ERROR-RATE"
     }
