@@ -237,7 +237,7 @@ class WebsiteUser(HttpUser):
     @task(2)
     def add_to_cart(self, user=""):
         if user == "":
-            user = str(uuid.uuid4())
+            user = str(uuid.uuid1())
         product = random.choice(products)
         quantity = random.choice([1, 2, 3, 4, 5, 10])
         with self.tracer.start_as_current_span("user_add_to_cart", context=Context(), attributes={"user.id": user, "product.id": product, "quantity": quantity}):
@@ -254,7 +254,7 @@ class WebsiteUser(HttpUser):
 
     @task(1)
     def checkout(self):
-        user = str(uuid.uuid4())
+        user = str(uuid.uuid1())
         with self.tracer.start_as_current_span("user_checkout_single", context=Context(), attributes={"user.id": user}):
             self.add_to_cart(user=user)
             checkout_person = random.choice(people)
@@ -264,7 +264,7 @@ class WebsiteUser(HttpUser):
 
     @task(1)
     def checkout_multi(self):
-        user = str(uuid.uuid4())
+        user = str(uuid.uuid1())
         item_count = random.choice([2, 3, 4])
         with self.tracer.start_as_current_span("user_checkout_multi", context=Context(),
                                             attributes={"user.id": user, "item.count": item_count}):
@@ -355,4 +355,4 @@ async def add_baggage_header(route: Route, request: Request):
     }
     await route.continue_(headers=headers)
 
-# Change trail: @hungxqt - 2026-07-20 - Use uuid4 for synthetic load-gen user IDs (avoid predictable uuid1)
+# Change trail: @hungxqt - 2026-07-19 - Fail-closed flagd integer reads to avoid OpenFeature UnboundLocalError under Locust.

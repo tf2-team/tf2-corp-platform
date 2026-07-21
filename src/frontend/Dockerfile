@@ -1,7 +1,7 @@
 # Copyright The OpenTelemetry Authors
 # SPDX-License-Identifier: Apache-2.0
 
-FROM docker.io/library/node:22-slim@sha256:6c74791e557ce11fc957704f6d4fe134a7bc8d6f5ca4403205b2966bd488f6b3 AS builder
+FROM docker.io/library/node:22-slim AS builder
 
 WORKDIR /app
 
@@ -20,6 +20,7 @@ COPY ./src/frontend/styles/ styles/
 COPY ./src/frontend/types/ types/
 
 COPY ./src/frontend/utils/enums/ utils/enums/
+COPY ./src/frontend/utils/resilience/ utils/resilience/
 COPY ./src/frontend/utils/telemetry/ utils/telemetry/
 COPY ./src/frontend/utils/imageLoader.js utils/imageLoader.js
 COPY ./src/frontend/utils/Request.ts utils/Request.ts
@@ -31,7 +32,7 @@ RUN npm run build
 
 # -----------------------------------------------------------------------------
 
-FROM docker.io/library/node:22-slim@sha256:6c74791e557ce11fc957704f6d4fe134a7bc8d6f5ca4403205b2966bd488f6b3 AS deps
+FROM docker.io/library/node:22-slim AS deps
 
 WORKDIR /app
 
@@ -42,7 +43,7 @@ RUN npm ci --omit=dev
 
 # -----------------------------------------------------------------------------
 
-FROM gcr.io/distroless/nodejs22-debian12:nonroot@sha256:13593b7570658e8477de39e2f4a1dd25db2f836d68a0ba771251572d23bb4f8e
+FROM gcr.io/distroless/nodejs22-debian12:nonroot
 
 WORKDIR /app
 
@@ -57,6 +58,4 @@ COPY ./src/frontend/utils/telemetry/Instrumentation.js Instrumentation.js
 
 EXPOSE ${FRONTEND_PORT}
 
-USER nonroot
 CMD ["--require=./Instrumentation.js", "server.js"]
-# Change trail: @hungxqt - 2026-07-20 - Explicit nonroot USER before CMD for Semgrep/CI container hardening
