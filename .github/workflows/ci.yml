@@ -29,7 +29,7 @@ jobs:
         # actions/setup-go@v6.5.0
         uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16
         with:
-          go-version: "1.24.x"
+          go-version: "1.25.x"
           cache-dependency-path: internal/tools/go.sum
 
       - name: Setup Node
@@ -47,6 +47,15 @@ jobs:
 
       - name: License headers
         run: make checklicense
+
+      - name: Enforce digest-pinned Dockerfile base images
+        run: python3 scripts/check_pinned_base_images.py
+
+      - name: Release catalog consistency
+        run: python3 scripts/check_release_catalog.py
+
+      - name: Secure delivery script tests
+        run: python3 scripts/test_secure_delivery_scripts.py
 
   unit-tests:
     name: Unit tests
@@ -79,7 +88,7 @@ jobs:
         # actions/setup-go@v6.5.0
         uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16
         with:
-          go-version: "1.24.x"
+          go-version: "1.25.x"
           cache-dependency-path: ${{ matrix.workdir }}/go.sum
 
       - name: Setup .NET
@@ -146,8 +155,8 @@ jobs:
         run: |
           set -euo pipefail
 
-          # Canonical release set (must match docker-bake.hcl group "release").
-          RELEASE_JSON='["accounting","ad","cart","checkout","currency","email","flagd-ui","fraud-detection","frontend","frontend-proxy","image-provider","kafka","llm","load-generator","mem0","opensearch","payment","product-catalog","product-reviews","quote","recommendation","shipping","shopping-copilot"]'
+          # Canonical release set (shared with publish / scripts/release_services.json).
+          RELEASE_JSON="$(jq -c '.' scripts/release_services.json)"
           mapfile -t RELEASE < <(printf '%s' "${RELEASE_JSON}" | jq -r '.[]')
           declare -A IS_RELEASE=()
           for s in "${RELEASE[@]}"; do
@@ -386,6 +395,72 @@ jobs:
 
           echo "PR image build gate passed (local bake only; nothing pushed to ECR)."
 
+  semgrep-sast:
+    name: Semgrep SAST
+    # Publish path re-runs SAST in build-and-push; skip on workflow_call to avoid duplicate cost.
+    if: github.event_name != 'workflow_call'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
+        with:
+          fetch-depth: 0
+      - name: Install pinned Semgrep
+        run: python3 -m pip install --disable-pip-version-check 'semgrep==1.136.0'
+      - name: Run blocking SAST rules
+        env:
+          BASELINE_COMMIT: ${{ github.event.pull_request.base.sha }}
+        run: >-
+          semgrep scan --error --metrics=off
+          --baseline-commit "${BASELINE_COMMIT}"
+          --config p/ci --config p/owasp-top-ten src
+
+  trufflehog-secrets:
+    name: TruffleHog secrets
+    if: github.event_name != 'workflow_call'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout complete history
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
+        with:
+          fetch-depth: 0
+      - name: Install pinned TruffleHog with checksum verification
+        env:
+          TRUFFLEHOG_VERSION: 3.90.8
+        run: |
+          set -euo pipefail
+          base="https://github.com/trufflesecurity/trufflehog/releases/download/v${TRUFFLEHOG_VERSION}"
+          archive="trufflehog_${TRUFFLEHOG_VERSION}_linux_amd64.tar.gz"
+          curl --fail --location --silent --show-error -o "/tmp/${archive}" "${base}/${archive}"
+          curl --fail --location --silent --show-error -o /tmp/trufflehog_checksums.txt "${base}/trufflehog_${TRUFFLEHOG_VERSION}_checksums.txt"
+          grep " ${archive}$" /tmp/trufflehog_checksums.txt | sed 's#  #  /tmp/#' | sha256sum --check --strict
+          tar -xzf "/tmp/${archive}" -C /tmp trufflehog
+          sudo install -m 0755 /tmp/trufflehog /usr/local/bin/trufflehog
+      - name: Scan repository history for verified secrets
+        run: trufflehog git "file://${GITHUB_WORKSPACE}" --fail --only-verified --no-update
+
+  trivy-iac-scan:
+    name: Trivy IaC misconfiguration
+    if: github.event_name != 'workflow_call'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
+      - name: Block HIGH and CRITICAL IaC misconfigurations
+        # aquasecurity/trivy-action@v0.36.0
+        uses: aquasecurity/trivy-action@a9c7b0f06e461e9d4b4d1711f154ee024b8d7ab8
+        with:
+          version: v0.69.3
+          scan-type: config
+          scan-ref: .
+          skip-dirs: node_modules
+          format: table
+          severity: HIGH,CRITICAL
+          exit-code: "1"
+
   product-reviews-tests:
     name: Product reviews tests
     runs-on: ubuntu-latest
@@ -407,7 +482,10 @@ jobs:
             src/ai-common/pyproject.toml
 
       - name: Install dependencies
-        run: python -m pip install -r src/product-reviews/requirements-dev.txt
+        run: |
+          python -m pip install --no-deps \
+            llm-guard==0.3.16 presidio-anonymizer==2.2.363
+          python -m pip install -r src/product-reviews/requirements-dev.txt
 
       - name: Validate spaCy model
         run: python -c "import spacy; spacy.load('en_core_web_lg')"
@@ -431,7 +509,6 @@ jobs:
           AI_GUARDRAIL_REQUIRE_MODEL: "true"
           PYTHONPATH: src/product-reviews
         run: python -c "import guardrails; guardrails.initialize_guardrails()"
-# Change trail: @hungxqt - 2026-07-19 - PR bake still clears cache; bake defaults moved to GHA type=gha.
 
   shopping-copilot-tests:
     name: Shopping copilot tests
@@ -453,9 +530,11 @@ jobs:
             src/shopping-copilot/requirements.txt
 
       - name: Install dependencies
-        run: >-
-          python -m pip install ./src/ai-common
-          -r src/shopping-copilot/requirements.txt pytest==9.1.1
+        run: |
+          python -m pip install --no-deps \
+            llm-guard==0.3.16 presidio-anonymizer==2.2.363
+          python -m pip install ./src/ai-common \
+            -r src/shopping-copilot/requirements.txt pytest==9.1.1
 
       - name: Run shopping copilot tests
         env:
@@ -466,4 +545,4 @@ jobs:
       - name: Validate shared guardrail dependency
         run: >-
           python -c "from llm_guard.input_scanners import PromptInjection; from techx_ai_common import guardrails"
-# Change trail: @hungxqt - 2026-07-17 - Align PR image classification with selective mem0 matrix build.
+# Change trail: @hungxqt - 2026-07-20 - Bump setup-go to 1.25.x to match checkout/product-catalog go.mod
