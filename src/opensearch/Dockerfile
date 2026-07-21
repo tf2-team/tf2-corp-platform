@@ -17,18 +17,18 @@ ADD --chmod=644 https://repo1.maven.org/maven2/tools/jackson/core/jackson-databi
 RUN echo "security update baseline: ${SECURITY_UPDATE_EPOCH}" >/dev/null \
     && if command -v microdnf >/dev/null 2>&1; then \
       microdnf clean all \
-      && microdnf makecache \
-      && microdnf upgrade -y glib2 libacl python3 python3-libs \
+      && microdnf --releasever=latest makecache \
+      && microdnf --releasever=latest upgrade -y glib2 libacl python3 python3-libs \
       && microdnf clean all; \
     elif command -v yum >/dev/null 2>&1; then \
       yum clean all \
-      && yum makecache \
-      && yum upgrade -y glib2 libacl python3 python3-libs \
+      && yum --releasever=latest makecache \
+      && yum --releasever=latest upgrade -y glib2 libacl python3 python3-libs \
       && yum clean all; \
     elif command -v dnf >/dev/null 2>&1; then \
       dnf clean all \
-      && dnf makecache \
-      && dnf upgrade -y glib2 libacl python3 python3-libs \
+      && dnf --releasever=latest makecache \
+      && dnf --releasever=latest upgrade -y glib2 libacl python3 python3-libs \
       && dnf clean all; \
     else \
       echo "No supported package manager found" >&2; \
