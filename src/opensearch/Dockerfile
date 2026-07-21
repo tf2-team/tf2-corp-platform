@@ -34,10 +34,10 @@ RUN echo "security update baseline: ${SECURITY_UPDATE_EPOCH}" >/dev/null \
       echo "No supported package manager found" >&2; \
       exit 1; \
     fi \
-    && rpm -q --whatprovides 'glib2 >= 2.82.2-770.amzn2023' \
-    && rpm -q --whatprovides 'libacl >= 2.4.0-1.amzn2023.0.1' \
-    && rpm -q --whatprovides 'python3 >= 3.9.25-1.amzn2023.0.8' \
-    && rpm -q --whatprovides 'python3-libs >= 3.9.25-1.amzn2023.0.8'
+    && rpm -q glib2-2.82.2-770.amzn2023 \
+    && rpm -q libacl-2.4.0-1.amzn2023.0.1 \
+    && rpm -q python3-3.9.25-1.amzn2023.0.8 \
+    && rpm -q python3-libs-3.9.25-1.amzn2023.0.8
 
 # Remove plugins in dependency order - remove dependent plugins first
 # These plugins are not needed for basic log storage and retrieval in the demo
