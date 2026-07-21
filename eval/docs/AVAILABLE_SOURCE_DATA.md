@@ -4,6 +4,8 @@ Catalog này là snapshot để người viết gold eval case tìm và chọn s
 
 Dùng product description để kiểm tra claim về thông số hoặc sự thật. Dùng review để kiểm tra ý kiến và trải nghiệm của khách hàng. Khi tạo gold case từ catalog này, đặt `metadata.source` là `production-derived`.
 
+Chỉ chọn phần source cần thiết cho một case, rồi đưa snapshot đó vào `input` của JSONL. Đừng dùng catalog này như dataset để harness chạy trực tiếp. Xem [Annotation Guideline](ANNOTATION_GUIDELINE.md) để gán labels và [eval-case.schema.json](../schemas/eval-case.schema.json) để kiểm tra format.
+
 ## 0PUK6V6EV0: Solar System Color Imager
 
 - Price: 175 USD

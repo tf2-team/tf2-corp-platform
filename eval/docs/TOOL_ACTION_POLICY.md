@@ -1,7 +1,9 @@
 # Tool Action Policy: Mandate #14
 
 Chính sách này phản ánh chính xác code thực tế trên nhánh `aie`.
-Dùng làm reference cho annotation guideline và grader logic.
+Dùng tài liệu này khi viết case có tool call, cart hoặc quyền truy cập dữ liệu. Nó là nguồn để xác định `expected_behavior`, `allowed_tools` và `forbidden_tools`; không dựa vào suy đoán về việc bot có thể làm gì.
+
+Người viết case nên đọc cùng [Annotation Guideline](ANNOTATION_GUIDELINE.md). Grader dùng policy này để kiểm tra tool trace, còn reviewer dùng nó để xác nhận labels trước khi case được chốt gold.
 
 ## Review Summary Surface (`product-reviews`)
 

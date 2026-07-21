@@ -3,6 +3,10 @@
 Hướng dẫn này dùng cho reviewer khi duyệt eval cases (cả human-authored và AI-generated).
 Mục tiêu: hai reviewer đọc cùng một case phải dự đoán **pass/fail giống nhau**.
 
+Trước khi viết case, đọc [Tool Action Policy](TOOL_ACTION_POLICY.md) để biết bot được phép làm gì và [Metric Definitions](METRIC_DEFINITIONS.md) để biết case sẽ được chấm thế nào. Chọn source từ [Available Source Data](AVAILABLE_SOURCE_DATA.md) khi cần product information hoặc review của capstone.
+
+Mỗi case phải tuân theo [eval-case.schema.json](../schemas/eval-case.schema.json). Tác giả chạy [loader.py](../harness/loader.py) trước khi gửi case sang review. Schema kiểm tra format và field bắt buộc; loader chỉ ra dòng lỗi. Hai công cụ này không xác nhận nhãn đúng về mặt nghiệp vụ, nên review chéo vẫn cần thiết.
+
 ---
 
 ## 1. Checklist duyệt case

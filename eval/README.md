@@ -23,6 +23,19 @@ cd eval && python -m unittest harness.test_loader
 python -m eval.run_eval --dataset eval/datasets/gold/copilot_v0.jsonl --output results/candidate --compare results/baseline results/candidate
 ```
 
+## Bắt đầu từ đâu?
+
+Trước khi viết hoặc chạy một gold case, đọc các tài liệu theo thứ tự sau. Mỗi file trả lời một câu hỏi khác nhau, nên không nên bỏ qua bước nào.
+
+1. [Tool Action Policy](docs/TOOL_ACTION_POLICY.md): bot được phép gọi công cụ nào và hành động nào phải bị chặn hoặc yêu cầu xác nhận.
+2. [Metric Definitions](docs/METRIC_DEFINITIONS.md): case sẽ được chấm theo những chỉ số nào và thế nào là đạt hoặc không đạt.
+3. [Annotation Guideline](docs/ANNOTATION_GUIDELINE.md): cách viết case, gán nhãn và review chéo.
+4. [Available Source Data](docs/AVAILABLE_SOURCE_DATA.md): chọn product information và review có sẵn trong capstone làm source cho case grounded, unanswerable hoặc hallucination.
+5. [Eval case schema](schemas/eval-case.schema.json): format bắt buộc của từng dòng JSONL. Schema giúp ngăn dataset thiếu field hoặc dùng sai enum.
+6. [Dataset loader](harness/loader.py): đọc JSONL và báo lỗi theo dòng. Chạy loader trước khi gửi case sang review để reviewer chỉ cần tập trung vào chất lượng nhãn.
+
+Catalog dữ liệu nguồn chỉ dùng để tham khảo. Gold dataset phải chứa snapshot nhỏ được chọn lọc, có labels và metadata riêng.
+
 ## Structure
 
 ```
