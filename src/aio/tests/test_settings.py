@@ -67,15 +67,20 @@ class SettingsTest(unittest.TestCase):
         config = load_hyperparameters(Path("config/hyperparameters.json"))
 
         self.assertEqual(config["rca"]["top_k"], 5)
+        self.assertEqual(config["rca"]["ewma_alpha"], 0.1)
+        self.assertEqual(config["rca"]["ewma_z_threshold"], 4.0)
+        self.assertEqual(config["rca"]["isolation_score_threshold"], 5.0)
         self.assertEqual(config["rca"]["anomaly"]["algorithm_weights"], {"robust_drift": 0.8, "ewma_stl": 0.8, "isolation_forest": 0.2})
-        self.assertEqual(config["rca"]["anomaly"]["weighted_score_threshold"], 0.4)
+        self.assertEqual(config["rca"]["anomaly"]["weighted_score_threshold"], 1.0)
         self.assertEqual(config["rca"]["anomaly"]["single_algorithm_min_normalized_score"], 2.0)
-        self.assertEqual(config["rca"]["anomaly"]["robust_drift_threshold"], 3.0)
-        self.assertEqual(config["rca"]["anomaly"]["robust_drift_min_baseline_points"], 4)
-        self.assertEqual(config["rca"]["anomaly"]["suppress_cpu_robust_threshold"], 3.0)
+        self.assertEqual(config["rca"]["anomaly"]["robust_drift_threshold"], 4.0)
+        self.assertEqual(config["rca"]["anomaly"]["robust_drift_min_baseline_points"], 30)
+        self.assertEqual(config["rca"]["anomaly"]["detection_window_seconds"], 900)
+        self.assertEqual(config["rca"]["anomaly"]["suppress_cpu_robust_threshold"], 4.0)
         self.assertEqual(config["rca"]["min_points"], 30)
-        self.assertEqual(config["rca"]["anomaly"]["log_history_buckets"], 60)
-        self.assertEqual(config["rca"]["anomaly"]["log_min_nonzero_buckets"], 2)
+        self.assertEqual(config["rca"]["anomaly"]["log_correlation_window_seconds"], 120)
+        self.assertEqual(config["rca"]["anomaly"]["log_history_buckets"], 45)
+        self.assertEqual(config["rca"]["anomaly"]["log_min_nonzero_buckets"], 3)
         self.assertEqual(config["rca"]["graph"]["damping"], 0.85)
         self.assertEqual(config["rca"]["graph"]["pagerank_weight"], 0.7)
         self.assertEqual(config["rca"]["graph"]["timestamp_weight"], 0.3)
@@ -86,8 +91,9 @@ class SettingsTest(unittest.TestCase):
             config["rca"]["combined"],
             {
                 "rrf_k": 20,
-                "drift_min_points": 5,
-                "drift_score_threshold": 3.0,
+                "drift_min_points": 30,
+                "drift_score_threshold": 4.0,
+                "detection_window_seconds": 900,
                 "canonical_service_suffixes": [],
                 "metric_aliases": {},
                 "ranker_weights": {"graph": 0.3, "earliest_drift": 0.5, "correlation": 0.1},
@@ -99,6 +105,7 @@ class SettingsTest(unittest.TestCase):
         self.assertEqual(config["detectors"]["thresholds"]["ops01_checkout_slo"], 0.01)
         profile = load_prometheus_query_registry(Path("config/prometheus_queries.json")).collection_profiles["one_second"]
         self.assertEqual(profile.step_seconds, 1)
+        self.assertEqual(profile.lookback_seconds, 2700)
         self.assertGreaterEqual(
             profile.lookback_seconds // profile.detector_bucket_seconds + 1,
             config["rca"]["min_points"],

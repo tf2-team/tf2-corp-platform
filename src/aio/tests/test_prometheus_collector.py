@@ -109,7 +109,7 @@ class PrometheusCollectorTest(unittest.TestCase):
 
         anomaly_signals = [signal for signal in config.signals if signal.source == "prometheus" and signal.feature_role == "anomaly_input"]
         self.assertEqual([item.signal_id for item in series], [signal.id for signal in anomaly_signals])
-        self.assertCountEqual(client.range_queries, [(config.prometheus_queries[signal.query_id], "1784197000", "1784203200", "1") for signal in anomaly_signals])
+        self.assertCountEqual(client.range_queries, [(config.prometheus_queries[signal.query_id], "1784200500", "1784203200", "1") for signal in anomaly_signals])
         self.assertTrue(all(len(item.points) == 8 for item in series))
         self.assertTrue(all(item.step_seconds == 1 for item in series))
         self.assertTrue(all(item.detector_bucket_seconds == 60 for item in series))

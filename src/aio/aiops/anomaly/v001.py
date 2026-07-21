@@ -24,11 +24,12 @@ except Exception:  # pragma: no cover - drain3 is optional until the env is refr
 
 
 class EwmaStlDetector:
-    def __init__(self, alpha: float, z_threshold: float, min_points: int, seasonal_period: int):
+    def __init__(self, alpha: float, z_threshold: float, min_points: int, seasonal_period: int, detection_window_seconds: int | None = None):
         self.alpha = alpha
         self.z_threshold = z_threshold
         self.min_points = min_points
         self.seasonal_period = seasonal_period
+        self.detection_window_seconds = detection_window_seconds
 
     def evaluate(self, series: list[MetricSeries]) -> list[AnomalyFinding]:
         findings: list[AnomalyFinding] = []
@@ -37,10 +38,14 @@ class EwmaStlDetector:
             if len(values) < self.min_points:
                 continue
             residuals = self._residuals(values)
-            baseline = residuals[: -1]
-            score = abs(residuals[-1] - mean(baseline)) / (stdev(baseline) or 1.0)
+            scored = []
+            for index in _tail_indexes(metric, self.detection_window_seconds, self.min_points - 1):
+                baseline = residuals[:index]
+                score = abs(residuals[index] - mean(baseline)) / (stdev(baseline) or 1.0)
+                scored.append((score, index))
+            score, index = max(scored, default=(0.0, 0))
             if score >= self.z_threshold:
-                findings.append(self._finding(metric, "ewma_stl", score, metric.points[-1].timestamp))
+                findings.append(self._finding(metric, "ewma_stl", score, metric.points[index].timestamp))
         return findings
 
     def _residuals(self, values: list[float]) -> list[float]:
@@ -67,10 +72,11 @@ class EwmaStlDetector:
 
 
 class RobustDriftDetector:
-    def __init__(self, score_threshold: float, min_points: int, min_baseline_points: int):
+    def __init__(self, score_threshold: float, min_points: int, min_baseline_points: int, detection_window_seconds: int | None = None):
         self.score_threshold = score_threshold
         self.min_points = min_points
         self.min_baseline_points = min_baseline_points
+        self.detection_window_seconds = detection_window_seconds
 
     def evaluate(self, series: list[MetricSeries]) -> list[AnomalyFinding]:
         findings: list[AnomalyFinding] = []
@@ -80,7 +86,7 @@ class RobustDriftDetector:
                 continue
             scored = [
                 (robust_score(values[:index], [values[index]]), index)
-                for index in range(self.min_baseline_points, len(values))
+                for index in _tail_indexes(metric, self.detection_window_seconds, self.min_baseline_points)
             ]
             score, index = max(scored, default=(0.0, 0))
             if score >= self.score_threshold:
@@ -98,9 +104,10 @@ class RobustDriftDetector:
 
 
 class ServiceIsolationForestDetector:
-    def __init__(self, score_threshold: float, min_points: int):
+    def __init__(self, score_threshold: float, min_points: int, detection_window_seconds: int | None = None):
         self.score_threshold = score_threshold
         self.min_points = min_points
+        self.detection_window_seconds = detection_window_seconds
 
     def evaluate(self, series: list[MetricSeries]) -> list[AnomalyFinding]:
         by_service: dict[str, list[MetricSeries]] = defaultdict(list)
@@ -117,13 +124,16 @@ class ServiceIsolationForestDetector:
             rows = self._normalized_rows(self._rows(eligible))
             if len(rows) < self.min_points:
                 continue
-            # ponytail: preserve existing threshold scale; recalibrate config if sklearn score is used directly.
-            scores = [score * 10.0 for score in self._scores(eligible)]
-            service_score = max(scores)
+            scored = [
+                (score * 10.0, index)
+                for index in _tail_indexes(eligible[0], self.detection_window_seconds, self.min_points)
+                for score in self._scores(rows[:index], [rows[index]])
+            ]
+            service_score, service_index = max(scored, default=(0.0, 0))
             if service_score < self.score_threshold:
                 continue
-            latest_values = rows[-1]
-            baseline_values = rows[-self.min_points : -1]
+            latest_values = rows[service_index]
+            baseline_values = rows[:service_index]
             baseline_center = [mean([row[index] for row in baseline_values]) for index in range(len(eligible))]
             top_metric = max(eligible, key=lambda metric: abs(latest_values[eligible.index(metric)] - baseline_center[eligible.index(metric)]))
             findings.append(
@@ -133,17 +143,16 @@ class ServiceIsolationForestDetector:
                     metric=top_metric.metric,
                     signal_id=top_metric.signal_id,
                     score=service_score,
-                    timestamp=top_metric.points[-1].timestamp,
+                    timestamp=top_metric.points[service_index].timestamp,
                 )
             )
         return findings
 
-    def _scores(self, metrics: list[MetricSeries]) -> list[float]:
+    def _scores(self, baseline_rows: list[list[float]], scored_rows: list[list[float]]) -> list[float]:
         from sklearn.ensemble import IsolationForest
 
-        rows = self._normalized_rows(self._rows(metrics))
-        model = IsolationForest(contamination="auto", random_state=0).fit(rows[:-1])
-        return [-score for score in model.score_samples([rows[-1]])]
+        model = IsolationForest(contamination="auto", random_state=0).fit(baseline_rows)
+        return [-score for score in model.score_samples(scored_rows)]
 
     def _rows(self, metrics: list[MetricSeries]) -> list[list[float]]:
         values_by_metric = [{point.timestamp: point.value for point in metric.points} for metric in metrics]
@@ -257,6 +266,7 @@ class V001AnomalyEngine:
         robust_drift_threshold: float = 3.0,
         robust_drift_min_baseline_points: int = 4,
         suppress_cpu_robust_threshold: float = 3.0,
+        detection_window_seconds: int | None = None,
     ):
         self.algorithm_weights = algorithm_weights
         self.weighted_score_threshold = weighted_score_threshold
@@ -268,9 +278,9 @@ class V001AnomalyEngine:
             "ewma_stl": ewma_z_threshold,
             "isolation_forest": isolation_score_threshold,
         }
-        self.robust_drift = RobustDriftDetector(robust_drift_threshold, min_points, robust_drift_min_baseline_points)
-        self.ewma_stl = EwmaStlDetector(ewma_alpha, ewma_z_threshold, min_points, seasonal_period)
-        self.isolation_forest = ServiceIsolationForestDetector(isolation_score_threshold, min_points)
+        self.robust_drift = RobustDriftDetector(robust_drift_threshold, min_points, robust_drift_min_baseline_points, detection_window_seconds)
+        self.ewma_stl = EwmaStlDetector(ewma_alpha, ewma_z_threshold, min_points, seasonal_period, detection_window_seconds)
+        self.isolation_forest = ServiceIsolationForestDetector(isolation_score_threshold, min_points, detection_window_seconds)
         self.log_templates = LogTemplateMetricBuilder(
             drain3_config_path,
             log_bucket_seconds,
@@ -389,6 +399,16 @@ def _latest_robust_score(metric: MetricSeries) -> float:
     return robust_score(values[:-1], [values[-1]]) if len(values) >= 5 else 0.0
 
 
+def _tail_indexes(metric: MetricSeries, detection_window_seconds: int | None, start: int) -> range:
+    if not metric.points:
+        return range(0)
+    if not detection_window_seconds:
+        return range(start, len(metric.points))
+    cutoff = metric.points[-1].timestamp - detection_window_seconds
+    first = next((index for index, point in enumerate(metric.points) if point.timestamp >= cutoff), len(metric.points))
+    return range(max(start, first), len(metric.points))
+
+
 def build_v001_anomaly_engine(config: dict, **overrides) -> V001AnomalyEngine:
     anomaly = config["anomaly"]
     config = {**config, **overrides}
@@ -410,4 +430,5 @@ def build_v001_anomaly_engine(config: dict, **overrides) -> V001AnomalyEngine:
         robust_drift_threshold=float(anomaly["robust_drift_threshold"]),
         robust_drift_min_baseline_points=int(anomaly["robust_drift_min_baseline_points"]),
         suppress_cpu_robust_threshold=float(anomaly["suppress_cpu_robust_threshold"]),
+        detection_window_seconds=int(anomaly["detection_window_seconds"]) or None,
     )

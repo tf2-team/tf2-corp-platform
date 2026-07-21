@@ -3,7 +3,7 @@
   "collection_profiles": {
     "one_second": {
       "step_seconds": 1,
-      "lookback_seconds": 6200,
+      "lookback_seconds": 2700,
       "detector_bucket_seconds": 60,
       "required_source_resolution_seconds": 1,
       "incremental": true,
