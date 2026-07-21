@@ -1,0 +1,6385 @@
+{
+  "schema_version": "1.0",
+  "dataset_root": "src/aio/dataset",
+  "generated_at": "2026-07-21",
+  "summary": {
+    "total_cases": 120,
+    "suite_counts": {
+      "RE2-SS": 90,
+      "RE3-SS": 30
+    },
+    "fault_count": 39,
+    "run_counts": {
+      "1": 39,
+      "2": 39,
+      "3": 39,
+      "4": 3
+    },
+    "root_cause_service_counts": {
+      "carts": 30,
+      "catalogue": 18,
+      "front-end": 9,
+      "orders": 27,
+      "payment": 18,
+      "user": 18
+    },
+    "metric_family_counts": {
+      "cpu": 15,
+      "disk": 15,
+      "error": 15,
+      "latency": 15,
+      "mem": 15,
+      "service_fault": 30,
+      "socket": 15
+    },
+    "normal_case_count": 0,
+    "anomaly_case_count": 120
+  },
+  "time_contract": {
+    "sample_interval_seconds": 1,
+    "samples_per_case": 1441,
+    "duration_seconds": 1440,
+    "pre_injection_seconds": 720,
+    "post_injection_seconds": 720,
+    "anomaly_window_definition": "anomaly starts at inject_time.txt and continues until the end of the case window"
+  },
+  "fault_label_mapping": {
+    "_cpu": {
+      "root_cause_metric_family": "cpu"
+    },
+    "_mem": {
+      "root_cause_metric_family": "mem"
+    },
+    "_disk": {
+      "root_cause_metric_family": "disk"
+    },
+    "_delay": {
+      "root_cause_metric_family": "latency"
+    },
+    "_loss": {
+      "root_cause_metric_family": "error"
+    },
+    "_socket": {
+      "root_cause_metric_family": "socket"
+    },
+    "_f1": {
+      "root_cause_metric_family": null,
+      "note": "service-level fault label"
+    },
+    "_f2": {
+      "root_cause_metric_family": null,
+      "note": "service-level fault label"
+    },
+    "_f3": {
+      "root_cause_metric_family": null,
+      "note": "service-level fault label"
+    },
+    "_f4": {
+      "root_cause_metric_family": null,
+      "note": "service-level fault label"
+    }
+  },
+  "file_contract": {
+    "simple_metrics.csv": "Per-second compact metric table used by the evaluation runner. Columns are time plus service_metric fields.",
+    "metrics.csv": "Per-second expanded metric table with raw metric names.",
+    "logs.csv": "Raw log records for the case window.",
+    "logts.csv": "RE2-SS log-template time series generated from logs.",
+    "traces.csv": "RE3-SS trace file when present; current files contain headers only.",
+    "inject_time.txt": "Unix timestamp for fault injection start.",
+    "cluster_info.json": "RE2-SS log template metadata and container mapping.",
+    "pod-node-*.csv": "RE2-SS pod-to-node placement snapshots."
+  },
+  "cases": [
+    {
+      "case_id": "RE2-SS/carts_cpu/1",
+      "suite": "RE2-SS",
+      "fault_name": "carts_cpu",
+      "run_id": "1",
+      "expected_incident": true,
+      "label_source": "folder_name_and_inject_time",
+      "root_cause_service": "carts",
+      "root_cause_metric_family": "cpu",
+      "fault_type": "cpu",
+      "anomaly_window": {
+        "start_timestamp": 1705596179,
+        "end_timestamp": 1705596899,
+        "pre_injection_seconds": 720,
+        "post_injection_seconds": 720
+      },
+      "data_window": {
+        "start_timestamp": 1705595459,
+        "end_timestamp": 1705596899,
+        "duration_seconds": 1440,
+        "sample_count": 1441,
+        "sample_interval_seconds": 1
+      },
+      "row_counts": {
+        "simple_metrics.csv": 1441,
+        "metrics.csv": 1441,
+        "logs.csv": 86592,
+        "logts.csv": 97,
+        "traces.csv": null,
+        "pod-node-1.csv": 15,
+        "pod-node-2.csv": 15
+      },
+      "column_counts": {
+        "simple_metrics.csv": 76,
+        "metrics.csv": 434,
+        "logs.csv": 7,
+        "logts.csv": 52,
+        "traces.csv": null,
+        "pod-node-1.csv": 2,
+        "pod-node-2.csv": 2
+      },
+      "files": [
+        "cluster_info.json",
+        "inject_time.txt",
+        "logs.csv",
+        "logts.csv",
+        "metrics.csv",
+        "metrics_postprocess.log",
+        "pod-node-1.csv",
+        "pod-node-2.csv",
+        "simple_metrics.csv"
+      ]
+    },
+    {
+      "case_id": "RE2-SS/carts_cpu/2",
+      "suite": "RE2-SS",
+      "fault_name": "carts_cpu",
+      "run_id": "2",
+      "expected_incident": true,
+      "label_source": "folder_name_and_inject_time",
+      "root_cause_service": "carts",
+      "root_cause_metric_family": "cpu",
+      "fault_type": "cpu",
+      "anomaly_window": {
+        "start_timestamp": 1705676689,
+        "end_timestamp": 1705677409,
+        "pre_injection_seconds": 720,
+        "post_injection_seconds": 720
+      },
+      "data_window": {
+        "start_timestamp": 1705675969,
+        "end_timestamp": 1705677409,
+        "duration_seconds": 1440,
+        "sample_count": 1441,
+        "sample_interval_seconds": 1
+      },
+      "row_counts": {
+        "simple_metrics.csv": 1441,
+        "metrics.csv": 1441,
+        "logs.csv": 86451,
+        "logts.csv": 97,
+        "traces.csv": null,
+        "pod-node-1.csv": 15,
+        "pod-node-2.csv": 15
+      },
+      "column_counts": {
+        "simple_metrics.csv": 79,
+        "metrics.csv": 441,
+        "logs.csv": 7,
+        "logts.csv": 62,
+        "traces.csv": null,
+        "pod-node-1.csv": 2,
+        "pod-node-2.csv": 2
+      },
+      "files": [
+        "cluster_info.json",
+        "inject_time.txt",
+        "logs.csv",
+        "logts.csv",
+        "metrics.csv",
+        "metrics_postprocess.log",
+        "pod-node-1.csv",
+        "pod-node-2.csv",
+        "simple_metrics.csv"
+      ]
+    },
+    {
+      "case_id": "RE2-SS/carts_cpu/3",
+      "suite": "RE2-SS",
+      "fault_name": "carts_cpu",
+      "run_id": "3",
+      "expected_incident": true,
+      "label_source": "folder_name_and_inject_time",
+      "root_cause_service": "carts",
+      "root_cause_metric_family": "cpu",
+      "fault_type": "cpu",
+      "anomaly_window": {
+        "start_timestamp": 1705678280,
+        "end_timestamp": 1705679000,
+        "pre_injection_seconds": 720,
+        "post_injection_seconds": 720
+      },
+      "data_window": {
+        "start_timestamp": 1705677560,
+        "end_timestamp": 1705679000,
+        "duration_seconds": 1440,
+        "sample_count": 1441,
+        "sample_interval_seconds": 1
+      },
+      "row_counts": {
+        "simple_metrics.csv": 1441,
+        "metrics.csv": 1441,
+        "logs.csv": 87020,
+        "logts.csv": 97,
+        "traces.csv": null,
+        "pod-node-1.csv": 15,
+        "pod-node-2.csv": 15
+      },
+      "column_counts": {
+        "simple_metrics.csv": 79,
+        "metrics.csv": 441,
+        "logs.csv": 7,
+        "logts.csv": 52,
+        "traces.csv": null,
+        "pod-node-1.csv": 2,
+        "pod-node-2.csv": 2
+      },
+      "files": [
+        "cluster_info.json",
+        "inject_time.txt",
+        "logs.csv",
+        "logts.csv",
+        "metrics.csv",
+        "metrics_postprocess.log",
+        "pod-node-1.csv",
+        "pod-node-2.csv",
+        "simple_metrics.csv"
+      ]
+    },
+    {
+      "case_id": "RE2-SS/carts_delay/1",
+      "suite": "RE2-SS",
+      "fault_name": "carts_delay",
+      "run_id": "1",
+      "expected_incident": true,
+      "label_source": "folder_name_and_inject_time",
+      "root_cause_service": "carts",
+      "root_cause_metric_family": "latency",
+      "fault_type": "delay",
+      "anomaly_window": {
+        "start_timestamp": 1705662624,
+        "end_timestamp": 1705663344,
+        "pre_injection_seconds": 720,
+        "post_injection_seconds": 720
+      },
+      "data_window": {
+        "start_timestamp": 1705661904,
+        "end_timestamp": 1705663344,
+        "duration_seconds": 1440,
+        "sample_count": 1441,
+        "sample_interval_seconds": 1
+      },
+      "row_counts": {
+        "simple_metrics.csv": 1441,
+        "metrics.csv": 1441,
+        "logs.csv": 83040,
+        "logts.csv": 97,
+        "traces.csv": null,
+        "pod-node-1.csv": 15,
+        "pod-node-2.csv": 15
+      },
+      "column_counts": {
+        "simple_metrics.csv": 80,
+        "metrics.csv": 442,
+        "logs.csv": 7,
+        "logts.csv": 53,
+        "traces.csv": null,
+        "pod-node-1.csv": 2,
+        "pod-node-2.csv": 2
+      },
+      "files": [
+        "cluster_info.json",
+        "inject_time.txt",
+        "logs.csv",
+        "logts.csv",
+        "metrics.csv",
+        "metrics_postprocess.log",
+        "pod-node-1.csv",
+        "pod-node-2.csv",
+        "simple_metrics.csv"
+      ]
+    },
+    {
+      "case_id": "RE2-SS/carts_delay/2",
+      "suite": "RE2-SS",
+      "fault_name": "carts_delay",
+      "run_id": "2",
+      "expected_incident": true,
+      "label_source": "folder_name_and_inject_time",
+      "root_cause_service": "carts",
+      "root_cause_metric_family": "latency",
+      "fault_type": "delay",
+      "anomaly_window": {
+        "start_timestamp": 1705725124,
+        "end_timestamp": 1705725844,
+        "pre_injection_seconds": 720,
+        "post_injection_seconds": 720
+      },
+      "data_window": {
+        "start_timestamp": 1705724404,
+        "end_timestamp": 1705725844,
+        "duration_seconds": 1440,
+        "sample_count": 1441,
+        "sample_interval_seconds": 1
+      },
+      "row_counts": {
+        "simple_metrics.csv": 1441,
+        "metrics.csv": 1441,
+        "logs.csv": 83145,
+        "logts.csv": 97,
+        "traces.csv": null,
+        "pod-node-1.csv": 15,
+        "pod-node-2.csv": 15
+      },
+      "column_counts": {
+        "simple_metrics.csv": 76,
+        "metrics.csv": 442,
+        "logs.csv": 7,
+        "logts.csv": 52,
+        "traces.csv": null,
+        "pod-node-1.csv": 2,
+        "pod-node-2.csv": 2
+      },
+      "files": [
+        "cluster_info.json",
+        "inject_time.txt",
+        "logs.csv",
+        "logts.csv",
+        "metrics.csv",
+        "metrics_postprocess.log",
+        "pod-node-1.csv",
+        "pod-node-2.csv",
+        "simple_metrics.csv"
+      ]
+    },
+    {
+      "case_id": "RE2-SS/carts_delay/3",
+      "suite": "RE2-SS",
+      "fault_name": "carts_delay",
+      "run_id": "3",
+      "expected_incident": true,
+      "label_source": "folder_name_and_inject_time",
+      "root_cause_service": "carts",
+      "root_cause_metric_family": "latency",
+      "fault_type": "delay",
+      "anomaly_window": {
+        "start_timestamp": 1705726713,
+        "end_timestamp": 1705727433,
+        "pre_injection_seconds": 720,
+        "post_injection_seconds": 720
+      },
+      "data_window": {
+        "start_timestamp": 1705725993,
+        "end_timestamp": 1705727433,
+        "duration_seconds": 1440,
+        "sample_count": 1441,
+        "sample_interval_seconds": 1
+      },
+      "row_counts": {
+        "simple_metrics.csv": 1441,
+        "metrics.csv": 1441,
+        "logs.csv": 82548,
+        "logts.csv": 97,
+        "traces.csv": null,
+        "pod-node-1.csv": 15,
+        "pod-node-2.csv": 15
+      },
+      "column_counts": {
+        "simple_metrics.csv": 76,
+        "metrics.csv": 442,
+        "logs.csv": 7,
+        "logts.csv": 52,
+        "traces.csv": null,
+        "pod-node-1.csv": 2,
+        "pod-node-2.csv": 2
+      },
+      "files": [
+        "cluster_info.json",
+        "inject_time.txt",
+        "logs.csv",
+        "logts.csv",
+        "metrics.csv",
+        "metrics_postprocess.log",
+        "pod-node-1.csv",
+        "pod-node-2.csv",
+        "simple_metrics.csv"
+      ]
+    },
+    {
+      "case_id": "RE2-SS/carts_disk/1",
+      "suite": "RE2-SS",
+      "fault_name": "carts_disk",
+      "run_id": "1",
+      "expected_incident": true,
+      "label_source": "folder_name_and_inject_time",
+      "root_cause_service": "carts",
+      "root_cause_metric_family": "disk",
+      "fault_type": "disk",
+      "anomaly_window": {
+        "start_timestamp": 1705817948,
+        "end_timestamp": 1705818668,
+        "pre_injection_seconds": 720,
+        "post_injection_seconds": 720
+      },
+      "data_window": {
+        "start_timestamp": 1705817228,
+        "end_timestamp": 1705818668,
+        "duration_seconds": 1440,
+        "sample_count": 1441,
+        "sample_interval_seconds": 1
+      },
+      "row_counts": {
+        "simple_metrics.csv": 1441,
+        "metrics.csv": 1441,
+        "logs.csv": 88166,
+        "logts.csv": 97,
+        "traces.csv": null,
+        "pod-node-1.csv": 15,
+        "pod-node-2.csv": 15
+      },
+      "column_counts": {
+        "simple_metrics.csv": 77,
+        "metrics.csv": 439,
+        "logs.csv": 7,
+        "logts.csv": 50,
+        "traces.csv": null,
+        "pod-node-1.csv": 2,
+        "pod-node-2.csv": 2
+      },
+      "files": [
+        "cluster_info.json",
+        "inject_time.txt",
+        "logs.csv",
+        "logts.csv",
+        "metrics.csv",
+        "metrics_postprocess.log",
+        "pod-node-1.csv",
+        "pod-node-2.csv",
+        "simple_metrics.csv"
+      ]
+    },
+    {
+      "case_id": "RE2-SS/carts_disk/2",
+      "suite": "RE2-SS",
+      "fault_name": "carts_disk",
+      "run_id": "2",
+      "expected_incident": true,
+      "label_source": "folder_name_and_inject_time",
+      "root_cause_service": "carts",
+      "root_cause_metric_family": "disk",
+      "fault_type": "disk",
+      "anomaly_window": {
+        "start_timestamp": 1705683324,
+        "end_timestamp": 1705684044,
+        "pre_injection_seconds": 720,
+        "post_injection_seconds": 720
+      },
+      "data_window": {
+        "start_timestamp": 1705682604,
+        "end_timestamp": 1705684044,
+        "duration_seconds": 1440,
+        "sample_count": 1441,
+        "sample_interval_seconds": 1
+      },
+      "row_counts": {
+        "simple_metrics.csv": 1441,
+        "metrics.csv": 1441,
+        "logs.csv": 87449,
+        "logts.csv": 97,
+        "traces.csv": null,
+        "pod-node-1.csv": 15,
+        "pod-node-2.csv": 15
+      },
+      "column_counts": {
+        "simple_metrics.csv": 75,
+        "metrics.csv": 437,
+        "logs.csv": 7,
+        "logts.csv": 52,
+        "traces.csv": null,
+        "pod-node-1.csv": 2,
+        "pod-node-2.csv": 2
+      },
+      "files": [
+        "cluster_info.json",
+        "inject_time.txt",
+        "logs.csv",
+        "logts.csv",
+        "metrics.csv",
+        "metrics_postprocess.log",
+        "pod-node-1.csv",
+        "pod-node-2.csv",
+        "simple_metrics.csv"
+      ]
+    },
+    {
+      "case_id": "RE2-SS/carts_disk/3",
+      "suite": "RE2-SS",
+      "fault_name": "carts_disk",
+      "run_id": "3",
+      "expected_incident": true,
+      "label_source": "folder_name_and_inject_time",
+      "root_cause_service": "carts",
+      "root_cause_metric_family": "disk",
+      "fault_type": "disk",
+      "anomaly_window": {
+        "start_timestamp": 1705720322,
+        "end_timestamp": 1705721042,
+        "pre_injection_seconds": 720,
+        "post_injection_seconds": 720
+      },
+      "data_window": {
+        "start_timestamp": 1705719602,
+        "end_timestamp": 1705721042,
+        "duration_seconds": 1440,
+        "sample_count": 1441,
+        "sample_interval_seconds": 1
+      },
+      "row_counts": {
+        "simple_metrics.csv": 1441,
+        "metrics.csv": 1441,
+        "logs.csv": 87197,
+        "logts.csv": 97,
+        "traces.csv": null,
+        "pod-node-1.csv": 15,
+        "pod-node-2.csv": 15
+      },
+      "column_counts": {
+        "simple_metrics.csv": 76,
+        "metrics.csv": 442,
+        "logs.csv": 7,
+        "logts.csv": 53,
+        "traces.csv": null,
+        "pod-node-1.csv": 2,
+        "pod-node-2.csv": 2
+      },
+      "files": [
+        "cluster_info.json",
+        "inject_time.txt",
+        "logs.csv",
+        "logts.csv",
+        "metrics.csv",
+        "metrics_postprocess.log",
+        "pod-node-1.csv",
+        "pod-node-2.csv",
+        "simple_metrics.csv"
+      ]
+    },
+    {
+      "case_id": "RE2-SS/carts_loss/1",
+      "suite": "RE2-SS",
+      "fault_name": "carts_loss",
+      "run_id": "1",
+      "expected_incident": true,
+      "label_source": "folder_name_and_inject_time",
+      "root_cause_service": "carts",
+      "root_cause_metric_family": "error",
+      "fault_type": "loss",
+      "anomaly_window": {
+        "start_timestamp": 1705664209,
+        "end_timestamp": 1705664929,
+        "pre_injection_seconds": 720,
+        "post_injection_seconds": 720
+      },
+      "data_window": {
+        "start_timestamp": 1705663489,
+        "end_timestamp": 1705664929,
+        "duration_seconds": 1440,
+        "sample_count": 1441,
+        "sample_interval_seconds": 1
+      },
+      "row_counts": {
+        "simple_metrics.csv": 1441,
+        "metrics.csv": 1441,
+        "logs.csv": 84486,
+        "logts.csv": 97,
+        "traces.csv": null,
+        "pod-node-1.csv": 15,
+        "pod-node-2.csv": 15
+      },
+      "column_counts": {
+        "simple_metrics.csv": 80,
+        "metrics.csv": 442,
+        "logs.csv": 7,
+        "logts.csv": 60,
+        "traces.csv": null,
+        "pod-node-1.csv": 2,
+        "pod-node-2.csv": 2
+      },
+      "files": [
+        "cluster_info.json",
+        "inject_time.txt",
+        "logs.csv",
+        "logts.csv",
+        "metrics.csv",
+        "metrics_postprocess.log",
+        "pod-node-1.csv",
+        "pod-node-2.csv",
+        "simple_metrics.csv"
+      ]
+    },
+    {
+      "case_id": "RE2-SS/carts_loss/2",
+      "suite": "RE2-SS",
+      "fault_name": "carts_loss",
+      "run_id": "2",
+      "expected_incident": true,
+      "label_source": "folder_name_and_inject_time",
+      "root_cause_service": "carts",
+      "root_cause_metric_family": "error",
+      "fault_type": "loss",
+      "anomaly_window": {
+        "start_timestamp": 1705728673,
+        "end_timestamp": 1705729393,
+        "pre_injection_seconds": 720,
+        "post_injection_seconds": 720
+      },
+      "data_window": {
+        "start_timestamp": 1705727953,
+        "end_timestamp": 1705729393,
+        "duration_seconds": 1440,
+        "sample_count": 1441,
+        "sample_interval_seconds": 1
+      },
+      "row_counts": {
+        "simple_metrics.csv": 1441,
+        "metrics.csv": 1441,
+        "logs.csv": 84873,
+        "logts.csv": 97,
+        "traces.csv": null,
+        "pod-node-1.csv": 15,
+        "pod-node-2.csv": 15
+      },
+      "column_counts": {
+        "simple_metrics.csv": 77,
+        "metrics.csv": 445,
+        "logs.csv": 7,
+        "logts.csv": 54,
+        "traces.csv": null,
+        "pod-node-1.csv": 2,
+        "pod-node-2.csv": 2
+      },
+      "files": [
+        "cluster_info.json",
+        "inject_time.txt",
+        "logs.csv",
+        "logts.csv",
+        "metrics.csv",
+        "metrics_postprocess.log",
+        "pod-node-1.csv",
+        "pod-node-2.csv",
+        "simple_metrics.csv"
+      ]
+    },
+    {
+      "case_id": "RE2-SS/carts_loss/3",
+      "suite": "RE2-SS",
+      "fault_name": "carts_loss",
+      "run_id": "3",
+      "expected_incident": true,
+      "label_source": "folder_name_and_inject_time",
+      "root_cause_service": "carts",
+      "root_cause_metric_family": "error",
+      "fault_type": "loss",
+      "anomaly_window": {
+        "start_timestamp": 1705730263,
+        "end_timestamp": 1705730983,
+        "pre_injection_seconds": 720,
+        "post_injection_seconds": 720
+      },
+      "data_window": {
+        "start_timestamp": 1705729543,
+        "end_timestamp": 1705730983,
+        "duration_seconds": 1440,
+        "sample_count": 1441,
+        "sample_interval_seconds": 1
+      },
+      "row_counts": {
+        "simple_metrics.csv": 1441,
+        "metrics.csv": 1441,
+        "logs.csv": 84331,
+        "logts.csv": 97,
+        "traces.csv": null,
+        "pod-node-1.csv": 15,
+        "pod-node-2.csv": 15
+      },
+      "column_counts": {
+        "simple_metrics.csv": 77,
+        "metrics.csv": 439,
+        "logs.csv": 7,
+        "logts.csv": 55,
+        "traces.csv": null,
+        "pod-node-1.csv": 2,
+        "pod-node-2.csv": 2
+      },
+      "files": [
+        "cluster_info.json",
+        "inject_time.txt",
+        "logs.csv",
+        "logts.csv",
+        "metrics.csv",
+        "metrics_postprocess.log",
+        "pod-node-1.csv",
+        "pod-node-2.csv",
+        "simple_metrics.csv"
+      ]
+    },
+    {
+      "case_id": "RE2-SS/carts_mem/1",
+      "suite": "RE2-SS",
+      "fault_name": "carts_mem",
+      "run_id": "1",
+      "expected_incident": true,
+      "label_source": "folder_name_and_inject_time",
+      "root_cause_service": "carts",
+      "root_cause_metric_family": "mem",
+      "fault_type": "mem",
+      "anomaly_window": {
+        "start_timestamp": 1705845578,
+        "end_timestamp": 1705846298,
+        "pre_injection_seconds": 720,
+        "post_injection_seconds": 720
+      },
+      "data_window": {
+        "start_timestamp": 1705844858,
+        "end_timestamp": 1705846298,
+        "duration_seconds": 1440,
+        "sample_count": 1441,
+        "sample_interval_seconds": 1
+      },
+      "row_counts": {
+        "simple_metrics.csv": 1441,
+        "metrics.csv": 1441,
+        "logs.csv": 87712,
+        "logts.csv": 97,
+        "traces.csv": null,
+        "pod-node-1.csv": 15,
+        "pod-node-2.csv": 15
+      },
+      "column_counts": {
+        "simple_metrics.csv": 77,
+        "metrics.csv": 439,
+        "logs.csv": 7,
+        "logts.csv": 53,
+        "traces.csv": null,
+        "pod-node-1.csv": 2,
+        "pod-node-2.csv": 2
+      },
+      "files": [
+        "cluster_info.json",
+        "inject_time.txt",
+        "logs.csv",
+        "logts.csv",
+        "metrics.csv",
+        "metrics_postprocess.log",
+        "pod-node-1.csv",
+        "pod-node-2.csv",
+        "simple_metrics.csv"
+      ]
+    },
+    {
+      "case_id": "RE2-SS/carts_mem/2",
+      "suite": "RE2-SS",
+      "fault_name": "carts_mem",
+      "run_id": "2",
+      "expected_incident": true,
+      "label_source": "folder_name_and_inject_time",
+      "root_cause_service": "carts",
+      "root_cause_metric_family": "mem",
+      "fault_type": "mem",
+      "anomaly_window": {
+        "start_timestamp": 1705679876,
+        "end_timestamp": 1705680596,
+        "pre_injection_seconds": 720,
+        "post_injection_seconds": 720
+      },
+      "data_window": {
+        "start_timestamp": 1705679156,
+        "end_timestamp": 1705680596,
+        "duration_seconds": 1440,
+        "sample_count": 1441,
+        "sample_interval_seconds": 1
+      },
+      "row_counts": {
+        "simple_metrics.csv": 1441,
+        "metrics.csv": 1441,
+        "logs.csv": 86086,
+        "logts.csv": 97,
+        "traces.csv": null,
+        "pod-node-1.csv": 15,
+        "pod-node-2.csv": 15
+      },
+      "column_counts": {
+        "simple_metrics.csv": 79,
+        "metrics.csv": 441,
+        "logs.csv": 7,
+        "logts.csv": 51,
+        "traces.csv": null,
+        "pod-node-1.csv": 2,
+        "pod-node-2.csv": 2
+      },
+      "files": [
+        "cluster_info.json",
+        "inject_time.txt",
+        "logs.csv",
+        "logts.csv",
+        "metrics.csv",
+        "metrics_postprocess.log",
+        "pod-node-1.csv",
+        "pod-node-2.csv",
+        "simple_metrics.csv"
+      ]
+    },
+    {
+      "case_id": "RE2-SS/carts_mem/3",
+      "suite": "RE2-SS",
+      "fault_name": "carts_mem",
+      "run_id": "3",
+      "expected_incident": true,
+      "label_source": "folder_name_and_inject_time",
+      "root_cause_service": "carts",
+      "root_cause_metric_family": "mem",
+      "fault_type": "mem",
+      "anomaly_window": {
+        "start_timestamp": 1705681731,
+        "end_timestamp": 1705682451,
+        "pre_injection_seconds": 720,
+        "post_injection_seconds": 720
+      },
+      "data_window": {
+        "start_timestamp": 1705681011,
+        "end_timestamp": 1705682451,
+        "duration_seconds": 1440,
+        "sample_count": 1441,
+        "sample_interval_seconds": 1
+      },
+      "row_counts": {
+        "simple_metrics.csv": 1441,
+        "metrics.csv": 1441,
+        "logs.csv": 86345,
+        "logts.csv": 97,
+        "traces.csv": null,
+        "pod-node-1.csv": 15,
+        "pod-node-2.csv": 15
+      },
+      "column_counts": {
+        "simple_metrics.csv": 75,
+        "metrics.csv": 437,
+        "logs.csv": 7,
+        "logts.csv": 52,
+        "traces.csv": null,
+        "pod-node-1.csv": 2,
+        "pod-node-2.csv": 2
+      },
+      "files": [
+        "cluster_info.json",
+        "inject_time.txt",
+        "logs.csv",
+        "logts.csv",
+        "metrics.csv",
+        "metrics_postprocess.log",
+        "pod-node-1.csv",
+        "pod-node-2.csv",
+        "simple_metrics.csv"
+      ]
+    },
+    {
+      "case_id": "RE2-SS/carts_socket/1",
+      "suite": "RE2-SS",
+      "fault_name": "carts_socket",
+      "run_id": "1",
+      "expected_incident": true,
+      "label_source": "folder_name_and_inject_time",
+      "root_cause_service": "carts",
+      "root_cause_metric_family": "socket",
+      "fault_type": "socket",
+      "anomaly_window": {
+        "start_timestamp": 1705632937,
+        "end_timestamp": 1705633657,
+        "pre_injection_seconds": 720,
+        "post_injection_seconds": 720
+      },
+      "data_window": {
+        "start_timestamp": 1705632217,
+        "end_timestamp": 1705633657,
+        "duration_seconds": 1440,
+        "sample_count": 1441,
+        "sample_interval_seconds": 1
+      },
+      "row_counts": {
+        "simple_metrics.csv": 1441,
+        "metrics.csv": 1441,
+        "logs.csv": 88689,
+        "logts.csv": 97,
+        "traces.csv": null,
+        "pod-node-1.csv": 15,
+        "pod-node-2.csv": 15
+      },
+      "column_counts": {
+        "simple_metrics.csv": 80,
+        "metrics.csv": 438,
+        "logs.csv": 7,
+        "logts.csv": 52,
+        "traces.csv": null,
+        "pod-node-1.csv": 2,
+        "pod-node-2.csv": 2
+      },
+      "files": [
+        "cluster_info.json",
+        "inject_time.txt",
+        "logs.csv",
+        "logts.csv",
+        "metrics.csv",
+        "metrics_postprocess.log",
+        "pod-node-1.csv",
+        "pod-node-2.csv",
+        "simple_metrics.csv"
+      ]
+    },
+    {
+      "case_id": "RE2-SS/carts_socket/2",
+      "suite": "RE2-SS",
+      "fault_name": "carts_socket",
+      "run_id": "2",
+      "expected_incident": true,
+      "label_source": "folder_name_and_inject_time",
+      "root_cause_service": "carts",
+      "root_cause_metric_family": "socket",
+      "fault_type": "socket",
+      "anomaly_window": {
+        "start_timestamp": 1705721929,
+        "end_timestamp": 1705722649,
+        "pre_injection_seconds": 720,
+        "post_injection_seconds": 720
+      },
+      "data_window": {
+        "start_timestamp": 1705721209,
+        "end_timestamp": 1705722649,
+        "duration_seconds": 1440,
+        "sample_count": 1441,
+        "sample_interval_seconds": 1
+      },
+      "row_counts": {
+        "simple_metrics.csv": 1441,
+        "metrics.csv": 1441,
+        "logs.csv": 86415,
+        "logts.csv": 97,
+        "traces.csv": null,
+        "pod-node-1.csv": 15,
+        "pod-node-2.csv": 15
+      },
+      "column_counts": {
+        "simple_metrics.csv": 76,
+        "metrics.csv": 442,
+        "logs.csv": 7,
+        "logts.csv": 52,
+        "traces.csv": null,
+        "pod-node-1.csv": 2,
+        "pod-node-2.csv": 2
+      },
+      "files": [
+        "cluster_info.json",
+        "inject_time.txt",
+        "logs.csv",
+        "logts.csv",
+        "metrics.csv",
+        "metrics_postprocess.log",
+        "pod-node-1.csv",
+        "pod-node-2.csv",
+        "simple_metrics.csv"
+      ]
+    },
+    {
+      "case_id": "RE2-SS/carts_socket/3",
+      "suite": "RE2-SS",
+      "fault_name": "carts_socket",
+      "run_id": "3",
+      "expected_incident": true,
+      "label_source": "folder_name_and_inject_time",
+      "root_cause_service": "carts",
+      "root_cause_metric_family": "socket",
+      "fault_type": "socket",
+      "anomaly_window": {
+        "start_timestamp": 1705723534,
+        "end_timestamp": 1705724254,
+        "pre_injection_seconds": 720,
+        "post_injection_seconds": 720
+      },
+      "data_window": {
+        "start_timestamp": 1705722814,
+        "end_timestamp": 1705724254,
+        "duration_seconds": 1440,
+        "sample_count": 1441,
+        "sample_interval_seconds": 1
+      },
+      "row_counts": {
+        "simple_metrics.csv": 1441,
+        "metrics.csv": 1441,
+        "logs.csv": 86090,
+        "logts.csv": 97,
+        "traces.csv": null,
+        "pod-node-1.csv": 15,
+        "pod-node-2.csv": 15
+      },
+      "column_counts": {
+        "simple_metrics.csv": 76,
+        "metrics.csv": 442,
+        "logs.csv": 7,
+        "logts.csv": 52,
+        "traces.csv": null,
+        "pod-node-1.csv": 2,
+        "pod-node-2.csv": 2
+      },
+      "files": [
+        "cluster_info.json",
+        "inject_time.txt",
+        "logs.csv",
+        "logts.csv",
+        "metrics.csv",
+        "metrics_postprocess.log",
+        "pod-node-1.csv",
+        "pod-node-2.csv",
+        "simple_metrics.csv"
+      ]
+    },
+    {
+      "case_id": "RE2-SS/catalogue_cpu/1",
+      "suite": "RE2-SS",
+      "fault_name": "catalogue_cpu",
+      "run_id": "1",
+      "expected_incident": true,
+      "label_source": "folder_name_and_inject_time",
+      "root_cause_service": "catalogue",
+      "root_cause_metric_family": "cpu",
+      "fault_type": "cpu",
+      "anomaly_window": {
+        "start_timestamp": 1705600751,
+        "end_timestamp": 1705601471,
+        "pre_injection_seconds": 720,
+        "post_injection_seconds": 720
+      },
+      "data_window": {
+        "start_timestamp": 1705600031,
+        "end_timestamp": 1705601471,
+        "duration_seconds": 1440,
+        "sample_count": 1441,
+        "sample_interval_seconds": 1
+      },
+      "row_counts": {
+        "simple_metrics.csv": 1441,
+        "metrics.csv": 1441,
+        "logs.csv": 78035,
+        "logts.csv": 97,
+        "traces.csv": null,
+        "pod-node-1.csv": 15,
+        "pod-node-2.csv": 15
+      },
+      "column_counts": {
+        "simple_metrics.csv": 76,
+        "metrics.csv": 434,
+        "logs.csv": 7,
+        "logts.csv": 62,
+        "traces.csv": null,
+        "pod-node-1.csv": 2,
+        "pod-node-2.csv": 2
+      },
+      "files": [
+        "cluster_info.json",
+        "inject_time.txt",
+        "logs.csv",
+        "logts.csv",
+        "metrics.csv",
+        "metrics_postprocess.log",
+        "pod-node-1.csv",
+        "pod-node-2.csv",
+        "simple_metrics.csv"
+      ]
+    },
+    {
+      "case_id": "RE2-SS/catalogue_cpu/2",
+      "suite": "RE2-SS",
+      "fault_name": "catalogue_cpu",
+      "run_id": "2",
+      "expected_incident": true,
+      "label_source": "folder_name_and_inject_time",
+      "root_cause_service": "catalogue",
+      "root_cause_metric_family": "cpu",
+      "fault_type": "cpu",
+      "anomaly_window": {
+        "start_timestamp": 1705697873,
+        "end_timestamp": 1705698593,
+        "pre_injection_seconds": 720,
+        "post_injection_seconds": 720
+      },
+      "data_window": {
+        "start_timestamp": 1705697153,
+        "end_timestamp": 1705698593,
+        "duration_seconds": 1440,
+        "sample_count": 1441,
+        "sample_interval_seconds": 1
+      },
+      "row_counts": {
+        "simple_metrics.csv": 1441,
+        "metrics.csv": 1441,
+        "logs.csv": 74548,
+        "logts.csv": 97,
+        "traces.csv": null,
+        "pod-node-1.csv": 15,
+        "pod-node-2.csv": 15
+      },
+      "column_counts": {
+        "simple_metrics.csv": 76,
+        "metrics.csv": 438,
+        "logs.csv": 7,
+        "logts.csv": 59,
+        "traces.csv": null,
+        "pod-node-1.csv": 2,
+        "pod-node-2.csv": 2
+      },
+      "files": [
+        "cluster_info.json",
+        "inject_time.txt",
+        "logs.csv",
+        "logts.csv",
+        "metrics.csv",
+        "metrics_postprocess.log",
+        "pod-node-1.csv",
+        "pod-node-2.csv",
+        "simple_metrics.csv"
+      ]
+    },
+    {
+      "case_id": "RE2-SS/catalogue_cpu/3",
+      "suite": "RE2-SS",
+      "fault_name": "catalogue_cpu",
+      "run_id": "3",
+      "expected_incident": true,
+      "label_source": "folder_name_and_inject_time",
+      "root_cause_service": "catalogue",
+      "root_cause_metric_family": "cpu",
+      "fault_type": "cpu",
+      "anomaly_window": {
+        "start_timestamp": 1705699341,
+        "end_timestamp": 1705700061,
+        "pre_injection_seconds": 720,
+        "post_injection_seconds": 720
+      },
+      "data_window": {
+        "start_timestamp": 1705698621,
+        "end_timestamp": 1705700061,
+        "duration_seconds": 1440,
+        "sample_count": 1441,
+        "sample_interval_seconds": 1
+      },
+      "row_counts": {
+        "simple_metrics.csv": 1441,
+        "metrics.csv": 1441,
+        "logs.csv": 87159,
+        "logts.csv": 97,
+        "traces.csv": null,
+        "pod-node-1.csv": 15,
+        "pod-node-2.csv": 15
+      },
+      "column_counts": {
+        "simple_metrics.csv": 76,
+        "metrics.csv": 438,
+        "logs.csv": 7,
+        "logts.csv": 50,
+        "traces.csv": null,
+        "pod-node-1.csv": 2,
+        "pod-node-2.csv": 2
+      },
+      "files": [
+        "cluster_info.json",
+        "inject_time.txt",
+        "logs.csv",
+        "logts.csv",
+        "metrics.csv",
+        "metrics_postprocess.log",
+        "pod-node-1.csv",
+        "pod-node-2.csv",
+        "simple_metrics.csv"
+      ]
+    },
+    {
+      "case_id": "RE2-SS/catalogue_delay/1",
+      "suite": "RE2-SS",
+      "fault_name": "catalogue_delay",
+      "run_id": "1",
+      "expected_incident": true,
+      "label_source": "folder_name_and_inject_time",
+      "root_cause_service": "catalogue",
+      "root_cause_metric_family": "latency",
+      "fault_type": "delay",
+      "anomaly_window": {
+        "start_timestamp": 1705640134,
+        "end_timestamp": 1705640854,
+        "pre_injection_seconds": 720,
+        "post_injection_seconds": 720
+      },
+      "data_window": {
+        "start_timestamp": 1705639414,
+        "end_timestamp": 1705640854,
+        "duration_seconds": 1440,
+        "sample_count": 1441,
+        "sample_interval_seconds": 1
+      },
+      "row_counts": {
+        "simple_metrics.csv": 1441,
+        "metrics.csv": 1441,
+        "logs.csv": 88601,
+        "logts.csv": 97,
+        "traces.csv": null,
+        "pod-node-1.csv": 15,
+        "pod-node-2.csv": 15
+      },
+      "column_counts": {
+        "simple_metrics.csv": 81,
+        "metrics.csv": 443,
+        "logs.csv": 7,
+        "logts.csv": 52,
+        "traces.csv": null,
+        "pod-node-1.csv": 2,
+        "pod-node-2.csv": 2
+      },
+      "files": [
+        "cluster_info.json",
+        "inject_time.txt",
+        "logs.csv",
+        "logts.csv",
+        "metrics.csv",
+        "metrics_postprocess.log",
+        "pod-node-1.csv",
+        "pod-node-2.csv",
+        "simple_metrics.csv"
+      ]
+    },
+    {
+      "case_id": "RE2-SS/catalogue_delay/2",
+      "suite": "RE2-SS",
+      "fault_name": "catalogue_delay",
+      "run_id": "2",
+      "expected_incident": true,
+      "label_source": "folder_name_and_inject_time",
+      "root_cause_service": "catalogue",
+      "root_cause_metric_family": "latency",
+      "fault_type": "delay",
+      "anomaly_window": {
+        "start_timestamp": 1705709883,
+        "end_timestamp": 1705710603,
+        "pre_injection_seconds": 720,
+        "post_injection_seconds": 720
+      },
+      "data_window": {
+        "start_timestamp": 1705709163,
+        "end_timestamp": 1705710603,
+        "duration_seconds": 1440,
+        "sample_count": 1441,
+        "sample_interval_seconds": 1
+      },
+      "row_counts": {
+        "simple_metrics.csv": 1441,
+        "metrics.csv": 1441,
+        "logs.csv": 84632,
+        "logts.csv": 97,
+        "traces.csv": null,
+        "pod-node-1.csv": 15,
+        "pod-node-2.csv": 15
+      },
+      "column_counts": {
+        "simple_metrics.csv": 76,
+        "metrics.csv": 438,
+        "logs.csv": 7,
+        "logts.csv": 50,
+        "traces.csv": null,
+        "pod-node-1.csv": 2,
+        "pod-node-2.csv": 2
+      },
+      "files": [
+        "cluster_info.json",
+        "inject_time.txt",
+        "logs.csv",
+        "logts.csv",
+        "metrics.csv",
+        "metrics_postprocess.log",
+        "pod-node-1.csv",
+        "pod-node-2.csv",
+        "simple_metrics.csv"
+      ]
+    },
+    {
+      "case_id": "RE2-SS/catalogue_delay/3",
+      "suite": "RE2-SS",
+      "fault_name": "catalogue_delay",
+      "run_id": "3",
+      "expected_incident": true,
+      "label_source": "folder_name_and_inject_time",
+      "root_cause_service": "catalogue",
+      "root_cause_metric_family": "latency",
+      "fault_type": "delay",
+      "anomaly_window": {
+        "start_timestamp": 1705711624,
+        "end_timestamp": 1705712344,
+        "pre_injection_seconds": 720,
+        "post_injection_seconds": 720
+      },
+      "data_window": {
+        "start_timestamp": 1705710904,
+        "end_timestamp": 1705712344,
+        "duration_seconds": 1440,
+        "sample_count": 1441,
+        "sample_interval_seconds": 1
+      },
+      "row_counts": {
+        "simple_metrics.csv": 1441,
+        "metrics.csv": 1441,
+        "logs.csv": 78812,
+        "logts.csv": 97,
+        "traces.csv": null,
+        "pod-node-1.csv": 15,
+        "pod-node-2.csv": 15
+      },
+      "column_counts": {
+        "simple_metrics.csv": 77,
+        "metrics.csv": 439,
+        "logs.csv": 7,
+        "logts.csv": 104,
+        "traces.csv": null,
+        "pod-node-1.csv": 2,
+        "pod-node-2.csv": 2
+      },
+      "files": [
+        "cluster_info.json",
+        "inject_time.txt",
+        "logs.csv",
+        "logts.csv",
+        "metrics.csv",
+        "metrics_postprocess.log",
+        "pod-node-1.csv",
+        "pod-node-2.csv",
+        "simple_metrics.csv"
+      ]
+    },
+    {
+      "case_id": "RE2-SS/catalogue_disk/1",
+      "suite": "RE2-SS",
+      "fault_name": "catalogue_disk",
+      "run_id": "1",
+      "expected_incident": true,
+      "label_source": "folder_name_and_inject_time",
+      "root_cause_service": "catalogue",
+      "root_cause_metric_family": "disk",
+      "fault_type": "disk",
+      "anomaly_window": {
+        "start_timestamp": 1705636944,
+        "end_timestamp": 1705637664,
+        "pre_injection_seconds": 720,
+        "post_injection_seconds": 720
+      },
+      "data_window": {
+        "start_timestamp": 1705636224,
+        "end_timestamp": 1705637664,
+        "duration_seconds": 1440,
+        "sample_count": 1441,
+        "sample_interval_seconds": 1
+      },
+      "row_counts": {
+        "simple_metrics.csv": 1441,
+        "metrics.csv": 1441,
+        "logs.csv": 84395,
+        "logts.csv": 97,
+        "traces.csv": null,
+        "pod-node-1.csv": 15,
+        "pod-node-2.csv": 15
+      },
+      "column_counts": {
+        "simple_metrics.csv": 81,
+        "metrics.csv": 443,
+        "logs.csv": 7,
+        "logts.csv": 52,
+        "traces.csv": null,
+        "pod-node-1.csv": 2,
+        "pod-node-2.csv": 2
+      },
+      "files": [
+        "cluster_info.json",
+        "inject_time.txt",
+        "logs.csv",
+        "logts.csv",
+        "metrics.csv",
+        "metrics_postprocess.log",
+        "pod-node-1.csv",
+        "pod-node-2.csv",
+        "simple_metrics.csv"
+      ]
+    },
+    {
+      "case_id": "RE2-SS/catalogue_disk/2",
+      "suite": "RE2-SS",
+      "fault_name": "catalogue_disk",
+      "run_id": "2",
+      "expected_incident": true,
+      "label_source": "folder_name_and_inject_time",
+      "root_cause_service": "catalogue",
+      "root_cause_metric_family": "disk",
+      "fault_type": "disk",
+      "anomaly_window": {
+        "start_timestamp": 1705704008,
+        "end_timestamp": 1705704728,
+        "pre_injection_seconds": 720,
+        "post_injection_seconds": 720
+      },
+      "data_window": {
+        "start_timestamp": 1705703288,
+        "end_timestamp": 1705704728,
+        "duration_seconds": 1440,
+        "sample_count": 1441,
+        "sample_interval_seconds": 1
+      },
+      "row_counts": {
+        "simple_metrics.csv": 1441,
+        "metrics.csv": 1441,
+        "logs.csv": 86517,
+        "logts.csv": 97,
+        "traces.csv": null,
+        "pod-node-1.csv": 15,
+        "pod-node-2.csv": 15
+      },
+      "column_counts": {
+        "simple_metrics.csv": 75,
+        "metrics.csv": 437,
+        "logs.csv": 7,
+        "logts.csv": 52,
+        "traces.csv": null,
+        "pod-node-1.csv": 2,
+        "pod-node-2.csv": 2
+      },
+      "files": [
+        "cluster_info.json",
+        "inject_time.txt",
+        "logs.csv",
+        "logts.csv",
+        "metrics.csv",
+        "metrics_postprocess.log",
+        "pod-node-1.csv",
+        "pod-node-2.csv",
+        "simple_metrics.csv"
+      ]
+    },
+    {
+      "case_id": "RE2-SS/catalogue_disk/3",
+      "suite": "RE2-SS",
+      "fault_name": "catalogue_disk",
+      "run_id": "3",
+      "expected_incident": true,
+      "label_source": "folder_name_and_inject_time",
+      "root_cause_service": "catalogue",
+      "root_cause_metric_family": "disk",
+      "fault_type": "disk",
+      "anomaly_window": {
+        "start_timestamp": 1705705477,
+        "end_timestamp": 1705706197,
+        "pre_injection_seconds": 720,
+        "post_injection_seconds": 720
+      },
+      "data_window": {
+        "start_timestamp": 1705704757,
+        "end_timestamp": 1705706197,
+        "duration_seconds": 1440,
+        "sample_count": 1441,
+        "sample_interval_seconds": 1
+      },
+      "row_counts": {
+        "simple_metrics.csv": 1441,
+        "metrics.csv": 1441,
+        "logs.csv": 86824,
+        "logts.csv": 97,
+        "traces.csv": null,
+        "pod-node-1.csv": 15,
+        "pod-node-2.csv": 15
+      },
+      "column_counts": {
+        "simple_metrics.csv": 75,
+        "metrics.csv": 437,
+        "logs.csv": 7,
+        "logts.csv": 54,
+        "traces.csv": null,
+        "pod-node-1.csv": 2,
+        "pod-node-2.csv": 2
+      },
+      "files": [
+        "cluster_info.json",
+        "inject_time.txt",
+        "logs.csv",
+        "logts.csv",
+        "metrics.csv",
+        "metrics_postprocess.log",
+        "pod-node-1.csv",
+        "pod-node-2.csv",
+        "simple_metrics.csv"
+      ]
+    },
+    {
+      "case_id": "RE2-SS/catalogue_loss/1",
+      "suite": "RE2-SS",
+      "fault_name": "catalogue_loss",
+      "run_id": "1",
+      "expected_incident": true,
+      "label_source": "folder_name_and_inject_time",
+      "root_cause_service": "catalogue",
+      "root_cause_metric_family": "error",
+      "fault_type": "loss",
+      "anomaly_window": {
+        "start_timestamp": 1705602312,
+        "end_timestamp": 1705603032,
+        "pre_injection_seconds": 720,
+        "post_injection_seconds": 720
+      },
+      "data_window": {
+        "start_timestamp": 1705601592,
+        "end_timestamp": 1705603032,
+        "duration_seconds": 1440,
+        "sample_count": 1441,
+        "sample_interval_seconds": 1
+      },
+      "row_counts": {
+        "simple_metrics.csv": 1441,
+        "metrics.csv": 1441,
+        "logs.csv": 57320,
+        "logts.csv": 97,
+        "traces.csv": null,
+        "pod-node-1.csv": 15,
+        "pod-node-2.csv": 15
+      },
+      "column_counts": {
+        "simple_metrics.csv": 77,
+        "metrics.csv": 435,
+        "logs.csv": 7,
+        "logts.csv": 108,
+        "traces.csv": null,
+        "pod-node-1.csv": 2,
+        "pod-node-2.csv": 2
+      },
+      "files": [
+        "cluster_info.json",
+        "inject_time.txt",
+        "logs.csv",
+        "logts.csv",
+        "metrics.csv",
+        "metrics_postprocess.log",
+        "pod-node-1.csv",
+        "pod-node-2.csv",
+        "simple_metrics.csv"
+      ]
+    },
+    {
+      "case_id": "RE2-SS/catalogue_loss/2",
+      "suite": "RE2-SS",
+      "fault_name": "catalogue_loss",
+      "run_id": "2",
+      "expected_incident": true,
+      "label_source": "folder_name_and_inject_time",
+      "root_cause_service": "catalogue",
+      "root_cause_metric_family": "error",
+      "fault_type": "loss",
+      "anomaly_window": {
+        "start_timestamp": 1705713092,
+        "end_timestamp": 1705713812,
+        "pre_injection_seconds": 720,
+        "post_injection_seconds": 720
+      },
+      "data_window": {
+        "start_timestamp": 1705712372,
+        "end_timestamp": 1705713812,
+        "duration_seconds": 1440,
+        "sample_count": 1441,
+        "sample_interval_seconds": 1
+      },
+      "row_counts": {
+        "simple_metrics.csv": 1441,
+        "metrics.csv": 1441,
+        "logs.csv": 60114,
+        "logts.csv": 97,
+        "traces.csv": null,
+        "pod-node-1.csv": 15,
+        "pod-node-2.csv": 15
+      },
+      "column_counts": {
+        "simple_metrics.csv": 77,
+        "metrics.csv": 439,
+        "logs.csv": 7,
+        "logts.csv": 113,
+        "traces.csv": null,
+        "pod-node-1.csv": 2,
+        "pod-node-2.csv": 2
+      },
+      "files": [
+        "cluster_info.json",
+        "inject_time.txt",
+        "logs.csv",
+        "logts.csv",
+        "metrics.csv",
+        "metrics_postprocess.log",
+        "pod-node-1.csv",
+        "pod-node-2.csv",
+        "simple_metrics.csv"
+      ]
+    },
+    {
+      "case_id": "RE2-SS/catalogue_loss/3",
+      "suite": "RE2-SS",
+      "fault_name": "catalogue_loss",
+      "run_id": "3",
+      "expected_incident": true,
+      "label_source": "folder_name_and_inject_time",
+      "root_cause_service": "catalogue",
+      "root_cause_metric_family": "error",
+      "fault_type": "loss",
+      "anomaly_window": {
+        "start_timestamp": 1705714561,
+        "end_timestamp": 1705715281,
+        "pre_injection_seconds": 720,
+        "post_injection_seconds": 720
+      },
+      "data_window": {
+        "start_timestamp": 1705713841,
+        "end_timestamp": 1705715281,
+        "duration_seconds": 1440,
+        "sample_count": 1441,
+        "sample_interval_seconds": 1
+      },
+      "row_counts": {
+        "simple_metrics.csv": 1441,
+        "metrics.csv": 1441,
+        "logs.csv": 61657,
+        "logts.csv": 96,
+        "traces.csv": null,
+        "pod-node-1.csv": 15,
+        "pod-node-2.csv": 15
+      },
+      "column_counts": {
+        "simple_metrics.csv": 77,
+        "metrics.csv": 439,
+        "logs.csv": 7,
+        "logts.csv": 111,
+        "traces.csv": null,
+        "pod-node-1.csv": 2,
+        "pod-node-2.csv": 2
+      },
+      "files": [
+        "cluster_info.json",
+        "inject_time.txt",
+        "logs.csv",
+        "logts.csv",
+        "metrics.csv",
+        "metrics_postprocess.log",
+        "pod-node-1.csv",
+        "pod-node-2.csv",
+        "simple_metrics.csv"
+      ]
+    },
+    {
+      "case_id": "RE2-SS/catalogue_mem/1",
+      "suite": "RE2-SS",
+      "fault_name": "catalogue_mem",
+      "run_id": "1",
+      "expected_incident": true,
+      "label_source": "folder_name_and_inject_time",
+      "root_cause_service": "catalogue",
+      "root_cause_metric_family": "mem",
+      "fault_type": "mem",
+      "anomaly_window": {
+        "start_timestamp": 1705819416,
+        "end_timestamp": 1705820136,
+        "pre_injection_seconds": 720,
+        "post_injection_seconds": 720
+      },
+      "data_window": {
+        "start_timestamp": 1705818696,
+        "end_timestamp": 1705820136,
+        "duration_seconds": 1440,
+        "sample_count": 1441,
+        "sample_interval_seconds": 1
+      },
+      "row_counts": {
+        "simple_metrics.csv": 1441,
+        "metrics.csv": 1441,
+        "logs.csv": 86527,
+        "logts.csv": 97,
+        "traces.csv": null,
+        "pod-node-1.csv": 15,
+        "pod-node-2.csv": 15
+      },
+      "column_counts": {
+        "simple_metrics.csv": 78,
+        "metrics.csv": 444,
+        "logs.csv": 7,
+        "logts.csv": 53,
+        "traces.csv": null,
+        "pod-node-1.csv": 2,
+        "pod-node-2.csv": 2
+      },
+      "files": [
+        "cluster_info.json",
+        "inject_time.txt",
+        "logs.csv",
+        "logts.csv",
+        "metrics.csv",
+        "metrics_postprocess.log",
+        "pod-node-1.csv",
+        "pod-node-2.csv",
+        "simple_metrics.csv"
+      ]
+    },
+    {
+      "case_id": "RE2-SS/catalogue_mem/2",
+      "suite": "RE2-SS",
+      "fault_name": "catalogue_mem",
+      "run_id": "2",
+      "expected_incident": true,
+      "label_source": "folder_name_and_inject_time",
+      "root_cause_service": "catalogue",
+      "root_cause_metric_family": "mem",
+      "fault_type": "mem",
+      "anomaly_window": {
+        "start_timestamp": 1705700811,
+        "end_timestamp": 1705701531,
+        "pre_injection_seconds": 720,
+        "post_injection_seconds": 720
+      },
+      "data_window": {
+        "start_timestamp": 1705700091,
+        "end_timestamp": 1705701531,
+        "duration_seconds": 1440,
+        "sample_count": 1441,
+        "sample_interval_seconds": 1
+      },
+      "row_counts": {
+        "simple_metrics.csv": 1441,
+        "metrics.csv": 1441,
+        "logs.csv": 86549,
+        "logts.csv": 97,
+        "traces.csv": null,
+        "pod-node-1.csv": 15,
+        "pod-node-2.csv": 15
+      },
+      "column_counts": {
+        "simple_metrics.csv": 76,
+        "metrics.csv": 438,
+        "logs.csv": 7,
+        "logts.csv": 53,
+        "traces.csv": null,
+        "pod-node-1.csv": 2,
+        "pod-node-2.csv": 2
+      },
+      "files": [
+        "cluster_info.json",
+        "inject_time.txt",
+        "logs.csv",
+        "logts.csv",
+        "metrics.csv",
+        "metrics_postprocess.log",
+        "pod-node-1.csv",
+        "pod-node-2.csv",
+        "simple_metrics.csv"
+      ]
+    },
+    {
+      "case_id": "RE2-SS/catalogue_mem/3",
+      "suite": "RE2-SS",
+      "fault_name": "catalogue_mem",
+      "run_id": "3",
+      "expected_incident": true,
+      "label_source": "folder_name_and_inject_time",
+      "root_cause_service": "catalogue",
+      "root_cause_metric_family": "mem",
+      "fault_type": "mem",
+      "anomaly_window": {
+        "start_timestamp": 1705702279,
+        "end_timestamp": 1705702999,
+        "pre_injection_seconds": 720,
+        "post_injection_seconds": 720
+      },
+      "data_window": {
+        "start_timestamp": 1705701559,
+        "end_timestamp": 1705702999,
+        "duration_seconds": 1440,
+        "sample_count": 1441,
+        "sample_interval_seconds": 1
+      },
+      "row_counts": {
+        "simple_metrics.csv": 1441,
+        "metrics.csv": 1441,
+        "logs.csv": 86063,
+        "logts.csv": 97,
+        "traces.csv": null,
+        "pod-node-1.csv": 15,
+        "pod-node-2.csv": 15
+      },
+      "column_counts": {
+        "simple_metrics.csv": 76,
+        "metrics.csv": 438,
+        "logs.csv": 7,
+        "logts.csv": 51,
+        "traces.csv": null,
+        "pod-node-1.csv": 2,
+        "pod-node-2.csv": 2
+      },
+      "files": [
+        "cluster_info.json",
+        "inject_time.txt",
+        "logs.csv",
+        "logts.csv",
+        "metrics.csv",
+        "metrics_postprocess.log",
+        "pod-node-1.csv",
+        "pod-node-2.csv",
+        "simple_metrics.csv"
+      ]
+    },
+    {
+      "case_id": "RE2-SS/catalogue_socket/1",
+      "suite": "RE2-SS",
+      "fault_name": "catalogue_socket",
+      "run_id": "1",
+      "expected_incident": true,
+      "label_source": "folder_name_and_inject_time",
+      "root_cause_service": "catalogue",
+      "root_cause_metric_family": "socket",
+      "fault_type": "socket",
+      "anomaly_window": {
+        "start_timestamp": 1705638535,
+        "end_timestamp": 1705639255,
+        "pre_injection_seconds": 720,
+        "post_injection_seconds": 720
+      },
+      "data_window": {
+        "start_timestamp": 1705637815,
+        "end_timestamp": 1705639255,
+        "duration_seconds": 1440,
+        "sample_count": 1441,
+        "sample_interval_seconds": 1
+      },
+      "row_counts": {
+        "simple_metrics.csv": 1441,
+        "metrics.csv": 1441,
+        "logs.csv": 89439,
+        "logts.csv": 97,
+        "traces.csv": null,
+        "pod-node-1.csv": 15,
+        "pod-node-2.csv": 15
+      },
+      "column_counts": {
+        "simple_metrics.csv": 81,
+        "metrics.csv": 443,
+        "logs.csv": 7,
+        "logts.csv": 52,
+        "traces.csv": null,
+        "pod-node-1.csv": 2,
+        "pod-node-2.csv": 2
+      },
+      "files": [
+        "cluster_info.json",
+        "inject_time.txt",
+        "logs.csv",
+        "logts.csv",
+        "metrics.csv",
+        "metrics_postprocess.log",
+        "pod-node-1.csv",
+        "pod-node-2.csv",
+        "simple_metrics.csv"
+      ]
+    },
+    {
+      "case_id": "RE2-SS/catalogue_socket/2",
+      "suite": "RE2-SS",
+      "fault_name": "catalogue_socket",
+      "run_id": "2",
+      "expected_incident": true,
+      "label_source": "folder_name_and_inject_time",
+      "root_cause_service": "catalogue",
+      "root_cause_metric_family": "socket",
+      "fault_type": "socket",
+      "anomaly_window": {
+        "start_timestamp": 1705706946,
+        "end_timestamp": 1705707666,
+        "pre_injection_seconds": 720,
+        "post_injection_seconds": 720
+      },
+      "data_window": {
+        "start_timestamp": 1705706226,
+        "end_timestamp": 1705707666,
+        "duration_seconds": 1440,
+        "sample_count": 1441,
+        "sample_interval_seconds": 1
+      },
+      "row_counts": {
+        "simple_metrics.csv": 1441,
+        "metrics.csv": 1441,
+        "logs.csv": 87798,
+        "logts.csv": 97,
+        "traces.csv": null,
+        "pod-node-1.csv": 15,
+        "pod-node-2.csv": 15
+      },
+      "column_counts": {
+        "simple_metrics.csv": 75,
+        "metrics.csv": 437,
+        "logs.csv": 7,
+        "logts.csv": 54,
+        "traces.csv": null,
+        "pod-node-1.csv": 2,
+        "pod-node-2.csv": 2
+      },
+      "files": [
+        "cluster_info.json",
+        "inject_time.txt",
+        "logs.csv",
+        "logts.csv",
+        "metrics.csv",
+        "metrics_postprocess.log",
+        "pod-node-1.csv",
+        "pod-node-2.csv",
+        "simple_metrics.csv"
+      ]
+    },
+    {
+      "case_id": "RE2-SS/catalogue_socket/3",
+      "suite": "RE2-SS",
+      "fault_name": "catalogue_socket",
+      "run_id": "3",
+      "expected_incident": true,
+      "label_source": "folder_name_and_inject_time",
+      "root_cause_service": "catalogue",
+      "root_cause_metric_family": "socket",
+      "fault_type": "socket",
+      "anomaly_window": {
+        "start_timestamp": 1705708414,
+        "end_timestamp": 1705709134,
+        "pre_injection_seconds": 720,
+        "post_injection_seconds": 720
+      },
+      "data_window": {
+        "start_timestamp": 1705707694,
+        "end_timestamp": 1705709134,
+        "duration_seconds": 1440,
+        "sample_count": 1441,
+        "sample_interval_seconds": 1
+      },
+      "row_counts": {
+        "simple_metrics.csv": 1441,
+        "metrics.csv": 1441,
+        "logs.csv": 86369,
+        "logts.csv": 97,
+        "traces.csv": null,
+        "pod-node-1.csv": 15,
+        "pod-node-2.csv": 15
+      },
+      "column_counts": {
+        "simple_metrics.csv": 76,
+        "metrics.csv": 438,
+        "logs.csv": 7,
+        "logts.csv": 52,
+        "traces.csv": null,
+        "pod-node-1.csv": 2,
+        "pod-node-2.csv": 2
+      },
+      "files": [
+        "cluster_info.json",
+        "inject_time.txt",
+        "logs.csv",
+        "logts.csv",
+        "metrics.csv",
+        "metrics_postprocess.log",
+        "pod-node-1.csv",
+        "pod-node-2.csv",
+        "simple_metrics.csv"
+      ]
+    },
+    {
+      "case_id": "RE2-SS/orders_cpu/1",
+      "suite": "RE2-SS",
+      "fault_name": "orders_cpu",
+      "run_id": "1",
+      "expected_incident": true,
+      "label_source": "folder_name_and_inject_time",
+      "root_cause_service": "orders",
+      "root_cause_metric_family": "cpu",
+      "fault_type": "cpu",
+      "anomaly_window": {
+        "start_timestamp": 1705605431,
+        "end_timestamp": 1705606151,
+        "pre_injection_seconds": 720,
+        "post_injection_seconds": 720
+      },
+      "data_window": {
+        "start_timestamp": 1705604711,
+        "end_timestamp": 1705606151,
+        "duration_seconds": 1440,
+        "sample_count": 1441,
+        "sample_interval_seconds": 1
+      },
+      "row_counts": {
+        "simple_metrics.csv": 1441,
+        "metrics.csv": 1441,
+        "logs.csv": 86534,
+        "logts.csv": 97,
+        "traces.csv": null,
+        "pod-node-1.csv": 15,
+        "pod-node-2.csv": 15
+      },
+      "column_counts": {
+        "simple_metrics.csv": 78,
+        "metrics.csv": 436,
+        "logs.csv": 7,
+        "logts.csv": 51,
+        "traces.csv": null,
+        "pod-node-1.csv": 2,
+        "pod-node-2.csv": 2
+      },
+      "files": [
+        "cluster_info.json",
+        "inject_time.txt",
+        "logs.csv",
+        "logts.csv",
+        "metrics.csv",
+        "metrics_postprocess.log",
+        "pod-node-1.csv",
+        "pod-node-2.csv",
+        "simple_metrics.csv"
+      ]
+    },
+    {
+      "case_id": "RE2-SS/orders_cpu/2",
+      "suite": "RE2-SS",
+      "fault_name": "orders_cpu",
+      "run_id": "2",
+      "expected_incident": true,
+      "label_source": "folder_name_and_inject_time",
+      "root_cause_service": "orders",
+      "root_cause_metric_family": "cpu",
+      "fault_type": "cpu",
+      "anomaly_window": {
+        "start_timestamp": 1705731846,
+        "end_timestamp": 1705732566,
+        "pre_injection_seconds": 720,
+        "post_injection_seconds": 720
+      },
+      "data_window": {
+        "start_timestamp": 1705731126,
+        "end_timestamp": 1705732566,
+        "duration_seconds": 1440,
+        "sample_count": 1441,
+        "sample_interval_seconds": 1
+      },
+      "row_counts": {
+        "simple_metrics.csv": 1441,
+        "metrics.csv": 1441,
+        "logs.csv": 86433,
+        "logts.csv": 97,
+        "traces.csv": null,
+        "pod-node-1.csv": 15,
+        "pod-node-2.csv": 15
+      },
+      "column_counts": {
+        "simple_metrics.csv": 78,
+        "metrics.csv": 444,
+        "logs.csv": 7,
+        "logts.csv": 52,
+        "traces.csv": null,
+        "pod-node-1.csv": 2,
+        "pod-node-2.csv": 2
+      },
+      "files": [
+        "cluster_info.json",
+        "inject_time.txt",
+        "logs.csv",
+        "logts.csv",
+        "metrics.csv",
+        "metrics_postprocess.log",
+        "pod-node-1.csv",
+        "pod-node-2.csv",
+        "simple_metrics.csv"
+      ]
+    },
+    {
+      "case_id": "RE2-SS/orders_cpu/3",
+      "suite": "RE2-SS",
+      "fault_name": "orders_cpu",
+      "run_id": "3",
+      "expected_incident": true,
+      "label_source": "folder_name_and_inject_time",
+      "root_cause_service": "orders",
+      "root_cause_metric_family": "cpu",
+      "fault_type": "cpu",
+      "anomaly_window": {
+        "start_timestamp": 1705733437,
+        "end_timestamp": 1705734157,
+        "pre_injection_seconds": 720,
+        "post_injection_seconds": 720
+      },
+      "data_window": {
+        "start_timestamp": 1705732717,
+        "end_timestamp": 1705734157,
+        "duration_seconds": 1440,
+        "sample_count": 1441,
+        "sample_interval_seconds": 1
+      },
+      "row_counts": {
+        "simple_metrics.csv": 1441,
+        "metrics.csv": 1441,
+        "logs.csv": 86788,
+        "logts.csv": 97,
+        "traces.csv": null,
+        "pod-node-1.csv": 15,
+        "pod-node-2.csv": 15
+      },
+      "column_counts": {
+        "simple_metrics.csv": 78,
+        "metrics.csv": 444,
+        "logs.csv": 7,
+        "logts.csv": 51,
+        "traces.csv": null,
+        "pod-node-1.csv": 2,
+        "pod-node-2.csv": 2
+      },
+      "files": [
+        "cluster_info.json",
+        "inject_time.txt",
+        "logs.csv",
+        "logts.csv",
+        "metrics.csv",
+        "metrics_postprocess.log",
+        "pod-node-1.csv",
+        "pod-node-2.csv",
+        "simple_metrics.csv"
+      ]
+    },
+    {
+      "case_id": "RE2-SS/orders_delay/1",
+      "suite": "RE2-SS",
+      "fault_name": "orders_delay",
+      "run_id": "1",
+      "expected_incident": true,
+      "label_source": "folder_name_and_inject_time",
+      "root_cause_service": "orders",
+      "root_cause_metric_family": "latency",
+      "fault_type": "delay",
+      "anomaly_window": {
+        "start_timestamp": 1705644992,
+        "end_timestamp": 1705645712,
+        "pre_injection_seconds": 720,
+        "post_injection_seconds": 720
+      },
+      "data_window": {
+        "start_timestamp": 1705644272,
+        "end_timestamp": 1705645712,
+        "duration_seconds": 1440,
+        "sample_count": 1441,
+        "sample_interval_seconds": 1
+      },
+      "row_counts": {
+        "simple_metrics.csv": 1441,
+        "metrics.csv": 1441,
+        "logs.csv": 88610,
+        "logts.csv": 97,
+        "traces.csv": null,
+        "pod-node-1.csv": 15,
+        "pod-node-2.csv": 15
+      },
+      "column_counts": {
+        "simple_metrics.csv": 81,
+        "metrics.csv": 443,
+        "logs.csv": 7,
+        "logts.csv": 53,
+        "traces.csv": null,
+        "pod-node-1.csv": 2,
+        "pod-node-2.csv": 2
+      },
+      "files": [
+        "cluster_info.json",
+        "inject_time.txt",
+        "logs.csv",
+        "logts.csv",
+        "metrics.csv",
+        "metrics_postprocess.log",
+        "pod-node-1.csv",
+        "pod-node-2.csv",
+        "simple_metrics.csv"
+      ]
+    },
+    {
+      "case_id": "RE2-SS/orders_delay/2",
+      "suite": "RE2-SS",
+      "fault_name": "orders_delay",
+      "run_id": "2",
+      "expected_incident": true,
+      "label_source": "folder_name_and_inject_time",
+      "root_cause_service": "orders",
+      "root_cause_metric_family": "latency",
+      "fault_type": "delay",
+      "anomaly_window": {
+        "start_timestamp": 1705743799,
+        "end_timestamp": 1705744519,
+        "pre_injection_seconds": 720,
+        "post_injection_seconds": 720
+      },
+      "data_window": {
+        "start_timestamp": 1705743079,
+        "end_timestamp": 1705744519,
+        "duration_seconds": 1440,
+        "sample_count": 1441,
+        "sample_interval_seconds": 1
+      },
+      "row_counts": {
+        "simple_metrics.csv": 1441,
+        "metrics.csv": 1441,
+        "logs.csv": 86736,
+        "logts.csv": 97,
+        "traces.csv": null,
+        "pod-node-1.csv": 15,
+        "pod-node-2.csv": 15
+      },
+      "column_counts": {
+        "simple_metrics.csv": 75,
+        "metrics.csv": 437,
+        "logs.csv": 7,
+        "logts.csv": 55,
+        "traces.csv": null,
+        "pod-node-1.csv": 2,
+        "pod-node-2.csv": 2
+      },
+      "files": [
+        "cluster_info.json",
+        "inject_time.txt",
+        "logs.csv",
+        "logts.csv",
+        "metrics.csv",
+        "metrics_postprocess.log",
+        "pod-node-1.csv",
+        "pod-node-2.csv",
+        "simple_metrics.csv"
+      ]
+    },
+    {
+      "case_id": "RE2-SS/orders_delay/3",
+      "suite": "RE2-SS",
+      "fault_name": "orders_delay",
+      "run_id": "3",
+      "expected_incident": true,
+      "label_source": "folder_name_and_inject_time",
+      "root_cause_service": "orders",
+      "root_cause_metric_family": "latency",
+      "fault_type": "delay",
+      "anomaly_window": {
+        "start_timestamp": 1705745388,
+        "end_timestamp": 1705746108,
+        "pre_injection_seconds": 720,
+        "post_injection_seconds": 720
+      },
+      "data_window": {
+        "start_timestamp": 1705744668,
+        "end_timestamp": 1705746108,
+        "duration_seconds": 1440,
+        "sample_count": 1441,
+        "sample_interval_seconds": 1
+      },
+      "row_counts": {
+        "simple_metrics.csv": 1441,
+        "metrics.csv": 1441,
+        "logs.csv": 85819,
+        "logts.csv": 97,
+        "traces.csv": null,
+        "pod-node-1.csv": 15,
+        "pod-node-2.csv": 15
+      },
+      "column_counts": {
+        "simple_metrics.csv": 75,
+        "metrics.csv": 437,
+        "logs.csv": 7,
+        "logts.csv": 55,
+        "traces.csv": null,
+        "pod-node-1.csv": 2,
+        "pod-node-2.csv": 2
+      },
+      "files": [
+        "cluster_info.json",
+        "inject_time.txt",
+        "logs.csv",
+        "logts.csv",
+        "metrics.csv",
+        "metrics_postprocess.log",
+        "pod-node-1.csv",
+        "pod-node-2.csv",
+        "simple_metrics.csv"
+      ]
+    },
+    {
+      "case_id": "RE2-SS/orders_disk/1",
+      "suite": "RE2-SS",
+      "fault_name": "orders_disk",
+      "run_id": "1",
+      "expected_incident": true,
+      "label_source": "folder_name_and_inject_time",
+      "root_cause_service": "orders",
+      "root_cause_metric_family": "disk",
+      "fault_type": "disk",
+      "anomaly_window": {
+        "start_timestamp": 1705822351,
+        "end_timestamp": 1705823071,
+        "pre_injection_seconds": 720,
+        "post_injection_seconds": 720
+      },
+      "data_window": {
+        "start_timestamp": 1705821631,
+        "end_timestamp": 1705823071,
+        "duration_seconds": 1440,
+        "sample_count": 1441,
+        "sample_interval_seconds": 1
+      },
+      "row_counts": {
+        "simple_metrics.csv": 1441,
+        "metrics.csv": 1441,
+        "logs.csv": 70374,
+        "logts.csv": 97,
+        "traces.csv": null,
+        "pod-node-1.csv": 15,
+        "pod-node-2.csv": 15
+      },
+      "column_counts": {
+        "simple_metrics.csv": 80,
+        "metrics.csv": 450,
+        "logs.csv": 7,
+        "logts.csv": 575,
+        "traces.csv": null,
+        "pod-node-1.csv": 2,
+        "pod-node-2.csv": 2
+      },
+      "files": [
+        "cluster_info.json",
+        "inject_time.txt",
+        "logs.csv",
+        "logts.csv",
+        "metrics.csv",
+        "metrics_postprocess.log",
+        "pod-node-1.csv",
+        "pod-node-2.csv",
+        "simple_metrics.csv"
+      ]
+    },
+    {
+      "case_id": "RE2-SS/orders_disk/2",
+      "suite": "RE2-SS",
+      "fault_name": "orders_disk",
+      "run_id": "2",
+      "expected_incident": true,
+      "label_source": "folder_name_and_inject_time",
+      "root_cause_service": "orders",
+      "root_cause_metric_family": "disk",
+      "fault_type": "disk",
+      "anomaly_window": {
+        "start_timestamp": 1705823480,
+        "end_timestamp": 1705824200,
+        "pre_injection_seconds": 720,
+        "post_injection_seconds": 720
+      },
+      "data_window": {
+        "start_timestamp": 1705822760,
+        "end_timestamp": 1705824200,
+        "duration_seconds": 1440,
+        "sample_count": 1441,
+        "sample_interval_seconds": 1
+      },
+      "row_counts": {
+        "simple_metrics.csv": 1441,
+        "metrics.csv": 1441,
+        "logs.csv": 87603,
+        "logts.csv": 97,
+        "traces.csv": null,
+        "pod-node-1.csv": 15,
+        "pod-node-2.csv": 15
+      },
+      "column_counts": {
+        "simple_metrics.csv": 77,
+        "metrics.csv": 439,
+        "logs.csv": 7,
+        "logts.csv": 100,
+        "traces.csv": null,
+        "pod-node-1.csv": 2,
+        "pod-node-2.csv": 2
+      },
+      "files": [
+        "cluster_info.json",
+        "inject_time.txt",
+        "logs.csv",
+        "logts.csv",
+        "metrics.csv",
+        "metrics_postprocess.log",
+        "pod-node-1.csv",
+        "pod-node-2.csv",
+        "simple_metrics.csv"
+      ]
+    },
+    {
+      "case_id": "RE2-SS/orders_disk/3",
+      "suite": "RE2-SS",
+      "fault_name": "orders_disk",
+      "run_id": "3",
+      "expected_incident": true,
+      "label_source": "folder_name_and_inject_time",
+      "root_cause_service": "orders",
+      "root_cause_metric_family": "disk",
+      "fault_type": "disk",
+      "anomaly_window": {
+        "start_timestamp": 1705848483,
+        "end_timestamp": 1705849203,
+        "pre_injection_seconds": 720,
+        "post_injection_seconds": 720
+      },
+      "data_window": {
+        "start_timestamp": 1705847763,
+        "end_timestamp": 1705849203,
+        "duration_seconds": 1440,
+        "sample_count": 1441,
+        "sample_interval_seconds": 1
+      },
+      "row_counts": {
+        "simple_metrics.csv": 1441,
+        "metrics.csv": 1441,
+        "logs.csv": 86528,
+        "logts.csv": 97,
+        "traces.csv": null,
+        "pod-node-1.csv": 15,
+        "pod-node-2.csv": 15
+      },
+      "column_counts": {
+        "simple_metrics.csv": 79,
+        "metrics.csv": 445,
+        "logs.csv": 7,
+        "logts.csv": 54,
+        "traces.csv": null,
+        "pod-node-1.csv": 2,
+        "pod-node-2.csv": 2
+      },
+      "files": [
+        "cluster_info.json",
+        "inject_time.txt",
+        "logs.csv",
+        "logts.csv",
+        "metrics.csv",
+        "metrics_postprocess.log",
+        "pod-node-1.csv",
+        "pod-node-2.csv",
+        "simple_metrics.csv"
+      ]
+    },
+    {
+      "case_id": "RE2-SS/orders_loss/1",
+      "suite": "RE2-SS",
+      "fault_name": "orders_loss",
+      "run_id": "1",
+      "expected_incident": true,
+      "label_source": "folder_name_and_inject_time",
+      "root_cause_service": "orders",
+      "root_cause_metric_family": "error",
+      "fault_type": "loss",
+      "anomaly_window": {
+        "start_timestamp": 1705607010,
+        "end_timestamp": 1705607730,
+        "pre_injection_seconds": 720,
+        "post_injection_seconds": 720
+      },
+      "data_window": {
+        "start_timestamp": 1705606290,
+        "end_timestamp": 1705607730,
+        "duration_seconds": 1440,
+        "sample_count": 1441,
+        "sample_interval_seconds": 1
+      },
+      "row_counts": {
+        "simple_metrics.csv": 1441,
+        "metrics.csv": 1441,
+        "logs.csv": 89230,
+        "logts.csv": 96,
+        "traces.csv": null,
+        "pod-node-1.csv": 15,
+        "pod-node-2.csv": 15
+      },
+      "column_counts": {
+        "simple_metrics.csv": 78,
+        "metrics.csv": 436,
+        "logs.csv": 7,
+        "logts.csv": 67,
+        "traces.csv": null,
+        "pod-node-1.csv": 2,
+        "pod-node-2.csv": 2
+      },
+      "files": [
+        "cluster_info.json",
+        "inject_time.txt",
+        "logs.csv",
+        "logts.csv",
+        "metrics.csv",
+        "metrics_postprocess.log",
+        "pod-node-1.csv",
+        "pod-node-2.csv",
+        "simple_metrics.csv"
+      ]
+    },
+    {
+      "case_id": "RE2-SS/orders_loss/2",
+      "suite": "RE2-SS",
+      "fault_name": "orders_loss",
+      "run_id": "2",
+      "expected_incident": true,
+      "label_source": "folder_name_and_inject_time",
+      "root_cause_service": "orders",
+      "root_cause_metric_family": "error",
+      "fault_type": "loss",
+      "anomaly_window": {
+        "start_timestamp": 1705746979,
+        "end_timestamp": 1705747699,
+        "pre_injection_seconds": 720,
+        "post_injection_seconds": 720
+      },
+      "data_window": {
+        "start_timestamp": 1705746259,
+        "end_timestamp": 1705747699,
+        "duration_seconds": 1440,
+        "sample_count": 1441,
+        "sample_interval_seconds": 1
+      },
+      "row_counts": {
+        "simple_metrics.csv": 1441,
+        "metrics.csv": 1441,
+        "logs.csv": 87652,
+        "logts.csv": 97,
+        "traces.csv": null,
+        "pod-node-1.csv": 15,
+        "pod-node-2.csv": 15
+      },
+      "column_counts": {
+        "simple_metrics.csv": 77,
+        "metrics.csv": 439,
+        "logs.csv": 7,
+        "logts.csv": 56,
+        "traces.csv": null,
+        "pod-node-1.csv": 2,
+        "pod-node-2.csv": 2
+      },
+      "files": [
+        "cluster_info.json",
+        "inject_time.txt",
+        "logs.csv",
+        "logts.csv",
+        "metrics.csv",
+        "metrics_postprocess.log",
+        "pod-node-1.csv",
+        "pod-node-2.csv",
+        "simple_metrics.csv"
+      ]
+    },
+    {
+      "case_id": "RE2-SS/orders_loss/3",
+      "suite": "RE2-SS",
+      "fault_name": "orders_loss",
+      "run_id": "3",
+      "expected_incident": true,
+      "label_source": "folder_name_and_inject_time",
+      "root_cause_service": "orders",
+      "root_cause_metric_family": "error",
+      "fault_type": "loss",
+      "anomaly_window": {
+        "start_timestamp": 1705748572,
+        "end_timestamp": 1705749292,
+        "pre_injection_seconds": 720,
+        "post_injection_seconds": 720
+      },
+      "data_window": {
+        "start_timestamp": 1705747852,
+        "end_timestamp": 1705749292,
+        "duration_seconds": 1440,
+        "sample_count": 1441,
+        "sample_interval_seconds": 1
+      },
+      "row_counts": {
+        "simple_metrics.csv": 1441,
+        "metrics.csv": 1441,
+        "logs.csv": 88243,
+        "logts.csv": 97,
+        "traces.csv": null,
+        "pod-node-1.csv": 15,
+        "pod-node-2.csv": 15
+      },
+      "column_counts": {
+        "simple_metrics.csv": 77,
+        "metrics.csv": 439,
+        "logs.csv": 7,
+        "logts.csv": 56,
+        "traces.csv": null,
+        "pod-node-1.csv": 2,
+        "pod-node-2.csv": 2
+      },
+      "files": [
+        "cluster_info.json",
+        "inject_time.txt",
+        "logs.csv",
+        "logts.csv",
+        "metrics.csv",
+        "metrics_postprocess.log",
+        "pod-node-1.csv",
+        "pod-node-2.csv",
+        "simple_metrics.csv"
+      ]
+    },
+    {
+      "case_id": "RE2-SS/orders_mem/1",
+      "suite": "RE2-SS",
+      "fault_name": "orders_mem",
+      "run_id": "1",
+      "expected_incident": true,
+      "label_source": "folder_name_and_inject_time",
+      "root_cause_service": "orders",
+      "root_cause_metric_family": "mem",
+      "fault_type": "mem",
+      "anomaly_window": {
+        "start_timestamp": 1705820883,
+        "end_timestamp": 1705821603,
+        "pre_injection_seconds": 720,
+        "post_injection_seconds": 720
+      },
+      "data_window": {
+        "start_timestamp": 1705820163,
+        "end_timestamp": 1705821603,
+        "duration_seconds": 1440,
+        "sample_count": 1441,
+        "sample_interval_seconds": 1
+      },
+      "row_counts": {
+        "simple_metrics.csv": 1441,
+        "metrics.csv": 1441,
+        "logs.csv": 86192,
+        "logts.csv": 97,
+        "traces.csv": null,
+        "pod-node-1.csv": 15,
+        "pod-node-2.csv": 15
+      },
+      "column_counts": {
+        "simple_metrics.csv": 80,
+        "metrics.csv": 450,
+        "logs.csv": 7,
+        "logts.csv": 65,
+        "traces.csv": null,
+        "pod-node-1.csv": 2,
+        "pod-node-2.csv": 2
+      },
+      "files": [
+        "cluster_info.json",
+        "inject_time.txt",
+        "logs.csv",
+        "logts.csv",
+        "metrics.csv",
+        "metrics_postprocess.log",
+        "pod-node-1.csv",
+        "pod-node-2.csv",
+        "simple_metrics.csv"
+      ]
+    },
+    {
+      "case_id": "RE2-SS/orders_mem/2",
+      "suite": "RE2-SS",
+      "fault_name": "orders_mem",
+      "run_id": "2",
+      "expected_incident": true,
+      "label_source": "folder_name_and_inject_time",
+      "root_cause_service": "orders",
+      "root_cause_metric_family": "mem",
+      "fault_type": "mem",
+      "anomaly_window": {
+        "start_timestamp": 1705735025,
+        "end_timestamp": 1705735745,
+        "pre_injection_seconds": 720,
+        "post_injection_seconds": 720
+      },
+      "data_window": {
+        "start_timestamp": 1705734305,
+        "end_timestamp": 1705735745,
+        "duration_seconds": 1440,
+        "sample_count": 1441,
+        "sample_interval_seconds": 1
+      },
+      "row_counts": {
+        "simple_metrics.csv": 1441,
+        "metrics.csv": 1441,
+        "logs.csv": 86626,
+        "logts.csv": 97,
+        "traces.csv": null,
+        "pod-node-1.csv": 15,
+        "pod-node-2.csv": 15
+      },
+      "column_counts": {
+        "simple_metrics.csv": 78,
+        "metrics.csv": 444,
+        "logs.csv": 7,
+        "logts.csv": 65,
+        "traces.csv": null,
+        "pod-node-1.csv": 2,
+        "pod-node-2.csv": 2
+      },
+      "files": [
+        "cluster_info.json",
+        "inject_time.txt",
+        "logs.csv",
+        "logts.csv",
+        "metrics.csv",
+        "metrics_postprocess.log",
+        "pod-node-1.csv",
+        "pod-node-2.csv",
+        "simple_metrics.csv"
+      ]
+    },
+    {
+      "case_id": "RE2-SS/orders_mem/3",
+      "suite": "RE2-SS",
+      "fault_name": "orders_mem",
+      "run_id": "3",
+      "expected_incident": true,
+      "label_source": "folder_name_and_inject_time",
+      "root_cause_service": "orders",
+      "root_cause_metric_family": "mem",
+      "fault_type": "mem",
+      "anomaly_window": {
+        "start_timestamp": 1705736994,
+        "end_timestamp": 1705737714,
+        "pre_injection_seconds": 720,
+        "post_injection_seconds": 720
+      },
+      "data_window": {
+        "start_timestamp": 1705736274,
+        "end_timestamp": 1705737714,
+        "duration_seconds": 1440,
+        "sample_count": 1441,
+        "sample_interval_seconds": 1
+      },
+      "row_counts": {
+        "simple_metrics.csv": 1441,
+        "metrics.csv": 1441,
+        "logs.csv": 86519,
+        "logts.csv": 97,
+        "traces.csv": null,
+        "pod-node-1.csv": 15,
+        "pod-node-2.csv": 15
+      },
+      "column_counts": {
+        "simple_metrics.csv": 75,
+        "metrics.csv": 437,
+        "logs.csv": 7,
+        "logts.csv": 52,
+        "traces.csv": null,
+        "pod-node-1.csv": 2,
+        "pod-node-2.csv": 2
+      },
+      "files": [
+        "cluster_info.json",
+        "inject_time.txt",
+        "logs.csv",
+        "logts.csv",
+        "metrics.csv",
+        "metrics_postprocess.log",
+        "pod-node-1.csv",
+        "pod-node-2.csv",
+        "simple_metrics.csv"
+      ]
+    },
+    {
+      "case_id": "RE2-SS/orders_socket/1",
+      "suite": "RE2-SS",
+      "fault_name": "orders_socket",
+      "run_id": "1",
+      "expected_incident": true,
+      "label_source": "folder_name_and_inject_time",
+      "root_cause_service": "orders",
+      "root_cause_metric_family": "socket",
+      "fault_type": "socket",
+      "anomaly_window": {
+        "start_timestamp": 1705643392,
+        "end_timestamp": 1705644112,
+        "pre_injection_seconds": 720,
+        "post_injection_seconds": 720
+      },
+      "data_window": {
+        "start_timestamp": 1705642672,
+        "end_timestamp": 1705644112,
+        "duration_seconds": 1440,
+        "sample_count": 1441,
+        "sample_interval_seconds": 1
+      },
+      "row_counts": {
+        "simple_metrics.csv": 1441,
+        "metrics.csv": 1441,
+        "logs.csv": 89905,
+        "logts.csv": 97,
+        "traces.csv": null,
+        "pod-node-1.csv": 15,
+        "pod-node-2.csv": 15
+      },
+      "column_counts": {
+        "simple_metrics.csv": 81,
+        "metrics.csv": 443,
+        "logs.csv": 7,
+        "logts.csv": 72,
+        "traces.csv": null,
+        "pod-node-1.csv": 2,
+        "pod-node-2.csv": 2
+      },
+      "files": [
+        "cluster_info.json",
+        "inject_time.txt",
+        "logs.csv",
+        "logts.csv",
+        "metrics.csv",
+        "metrics_postprocess.log",
+        "pod-node-1.csv",
+        "pod-node-2.csv",
+        "simple_metrics.csv"
+      ]
+    },
+    {
+      "case_id": "RE2-SS/orders_socket/2",
+      "suite": "RE2-SS",
+      "fault_name": "orders_socket",
+      "run_id": "2",
+      "expected_incident": true,
+      "label_source": "folder_name_and_inject_time",
+      "root_cause_service": "orders",
+      "root_cause_metric_family": "socket",
+      "fault_type": "socket",
+      "anomaly_window": {
+        "start_timestamp": 1705740236,
+        "end_timestamp": 1705740956,
+        "pre_injection_seconds": 720,
+        "post_injection_seconds": 720
+      },
+      "data_window": {
+        "start_timestamp": 1705739516,
+        "end_timestamp": 1705740956,
+        "duration_seconds": 1440,
+        "sample_count": 1441,
+        "sample_interval_seconds": 1
+      },
+      "row_counts": {
+        "simple_metrics.csv": 1441,
+        "metrics.csv": 1441,
+        "logs.csv": 86799,
+        "logts.csv": 97,
+        "traces.csv": null,
+        "pod-node-1.csv": 15,
+        "pod-node-2.csv": 15
+      },
+      "column_counts": {
+        "simple_metrics.csv": 77,
+        "metrics.csv": 439,
+        "logs.csv": 7,
+        "logts.csv": 52,
+        "traces.csv": null,
+        "pod-node-1.csv": 2,
+        "pod-node-2.csv": 2
+      },
+      "files": [
+        "cluster_info.json",
+        "inject_time.txt",
+        "logs.csv",
+        "logts.csv",
+        "metrics.csv",
+        "metrics_postprocess.log",
+        "pod-node-1.csv",
+        "pod-node-2.csv",
+        "simple_metrics.csv"
+      ]
+    },
+    {
+      "case_id": "RE2-SS/orders_socket/3",
+      "suite": "RE2-SS",
+      "fault_name": "orders_socket",
+      "run_id": "3",
+      "expected_incident": true,
+      "label_source": "folder_name_and_inject_time",
+      "root_cause_service": "orders",
+      "root_cause_metric_family": "socket",
+      "fault_type": "socket",
+      "anomaly_window": {
+        "start_timestamp": 1705741830,
+        "end_timestamp": 1705742550,
+        "pre_injection_seconds": 720,
+        "post_injection_seconds": 720
+      },
+      "data_window": {
+        "start_timestamp": 1705741110,
+        "end_timestamp": 1705742550,
+        "duration_seconds": 1440,
+        "sample_count": 1441,
+        "sample_interval_seconds": 1
+      },
+      "row_counts": {
+        "simple_metrics.csv": 1441,
+        "metrics.csv": 1441,
+        "logs.csv": 86124,
+        "logts.csv": 96,
+        "traces.csv": null,
+        "pod-node-1.csv": 15,
+        "pod-node-2.csv": 15
+      },
+      "column_counts": {
+        "simple_metrics.csv": 78,
+        "metrics.csv": 440,
+        "logs.csv": 7,
+        "logts.csv": 62,
+        "traces.csv": null,
+        "pod-node-1.csv": 2,
+        "pod-node-2.csv": 2
+      },
+      "files": [
+        "cluster_info.json",
+        "inject_time.txt",
+        "logs.csv",
+        "logts.csv",
+        "metrics.csv",
+        "metrics_postprocess.log",
+        "pod-node-1.csv",
+        "pod-node-2.csv",
+        "simple_metrics.csv"
+      ]
+    },
+    {
+      "case_id": "RE2-SS/payment_cpu/1",
+      "suite": "RE2-SS",
+      "fault_name": "payment_cpu",
+      "run_id": "1",
+      "expected_incident": true,
+      "label_source": "folder_name_and_inject_time",
+      "root_cause_service": "payment",
+      "root_cause_metric_family": "cpu",
+      "fault_type": "cpu",
+      "anomaly_window": {
+        "start_timestamp": 1705610176,
+        "end_timestamp": 1705610896,
+        "pre_injection_seconds": 720,
+        "post_injection_seconds": 720
+      },
+      "data_window": {
+        "start_timestamp": 1705609456,
+        "end_timestamp": 1705610896,
+        "duration_seconds": 1440,
+        "sample_count": 1441,
+        "sample_interval_seconds": 1
+      },
+      "row_counts": {
+        "simple_metrics.csv": 1441,
+        "metrics.csv": 1441,
+        "logs.csv": 86881,
+        "logts.csv": 97,
+        "traces.csv": null,
+        "pod-node-1.csv": 15,
+        "pod-node-2.csv": 15
+      },
+      "column_counts": {
+        "simple_metrics.csv": 78,
+        "metrics.csv": 436,
+        "logs.csv": 7,
+        "logts.csv": 53,
+        "traces.csv": null,
+        "pod-node-1.csv": 2,
+        "pod-node-2.csv": 2
+      },
+      "files": [
+        "cluster_info.json",
+        "inject_time.txt",
+        "logs.csv",
+        "logts.csv",
+        "metrics.csv",
+        "metrics_postprocess.log",
+        "pod-node-1.csv",
+        "pod-node-2.csv",
+        "simple_metrics.csv"
+      ]
+    },
+    {
+      "case_id": "RE2-SS/payment_cpu/2",
+      "suite": "RE2-SS",
+      "fault_name": "payment_cpu",
+      "run_id": "2",
+      "expected_incident": true,
+      "label_source": "folder_name_and_inject_time",
+      "root_cause_service": "payment",
+      "root_cause_metric_family": "cpu",
+      "fault_type": "cpu",
+      "anomaly_window": {
+        "start_timestamp": 1705753762,
+        "end_timestamp": 1705754482,
+        "pre_injection_seconds": 720,
+        "post_injection_seconds": 720
+      },
+      "data_window": {
+        "start_timestamp": 1705753042,
+        "end_timestamp": 1705754482,
+        "duration_seconds": 1440,
+        "sample_count": 1441,
+        "sample_interval_seconds": 1
+      },
+      "row_counts": {
+        "simple_metrics.csv": 1441,
+        "metrics.csv": 1441,
+        "logs.csv": 86332,
+        "logts.csv": 97,
+        "traces.csv": null,
+        "pod-node-1.csv": 15,
+        "pod-node-2.csv": 15
+      },
+      "column_counts": {
+        "simple_metrics.csv": 77,
+        "metrics.csv": 439,
+        "logs.csv": 7,
+        "logts.csv": 52,
+        "traces.csv": null,
+        "pod-node-1.csv": 2,
+        "pod-node-2.csv": 2
+      },
+      "files": [
+        "cluster_info.json",
+        "inject_time.txt",
+        "logs.csv",
+        "logts.csv",
+        "metrics.csv",
+        "metrics_postprocess.log",
+        "pod-node-1.csv",
+        "pod-node-2.csv",
+        "simple_metrics.csv"
+      ]
+    },
+    {
+      "case_id": "RE2-SS/payment_cpu/3",
+      "suite": "RE2-SS",
+      "fault_name": "payment_cpu",
+      "run_id": "3",
+      "expected_incident": true,
+      "label_source": "folder_name_and_inject_time",
+      "root_cause_service": "payment",
+      "root_cause_metric_family": "cpu",
+      "fault_type": "cpu",
+      "anomaly_window": {
+        "start_timestamp": 1705755357,
+        "end_timestamp": 1705756077,
+        "pre_injection_seconds": 720,
+        "post_injection_seconds": 720
+      },
+      "data_window": {
+        "start_timestamp": 1705754637,
+        "end_timestamp": 1705756077,
+        "duration_seconds": 1440,
+        "sample_count": 1441,
+        "sample_interval_seconds": 1
+      },
+      "row_counts": {
+        "simple_metrics.csv": 1441,
+        "metrics.csv": 1441,
+        "logs.csv": 86912,
+        "logts.csv": 97,
+        "traces.csv": null,
+        "pod-node-1.csv": 15,
+        "pod-node-2.csv": 15
+      },
+      "column_counts": {
+        "simple_metrics.csv": 77,
+        "metrics.csv": 439,
+        "logs.csv": 7,
+        "logts.csv": 52,
+        "traces.csv": null,
+        "pod-node-1.csv": 2,
+        "pod-node-2.csv": 2
+      },
+      "files": [
+        "cluster_info.json",
+        "inject_time.txt",
+        "logs.csv",
+        "logts.csv",
+        "metrics.csv",
+        "metrics_postprocess.log",
+        "pod-node-1.csv",
+        "pod-node-2.csv",
+        "simple_metrics.csv"
+      ]
+    },
+    {
+      "case_id": "RE2-SS/payment_delay/1",
+      "suite": "RE2-SS",
+      "fault_name": "payment_delay",
+      "run_id": "1",
+      "expected_incident": true,
+      "label_source": "folder_name_and_inject_time",
+      "root_cause_service": "payment",
+      "root_cause_metric_family": "latency",
+      "fault_type": "delay",
+      "anomaly_window": {
+        "start_timestamp": 1705650625,
+        "end_timestamp": 1705651345,
+        "pre_injection_seconds": 720,
+        "post_injection_seconds": 720
+      },
+      "data_window": {
+        "start_timestamp": 1705649905,
+        "end_timestamp": 1705651345,
+        "duration_seconds": 1440,
+        "sample_count": 1441,
+        "sample_interval_seconds": 1
+      },
+      "row_counts": {
+        "simple_metrics.csv": 1441,
+        "metrics.csv": 1441,
+        "logs.csv": 86312,
+        "logts.csv": 97,
+        "traces.csv": null,
+        "pod-node-1.csv": 15,
+        "pod-node-2.csv": 15
+      },
+      "column_counts": {
+        "simple_metrics.csv": 82,
+        "metrics.csv": 448,
+        "logs.csv": 7,
+        "logts.csv": 53,
+        "traces.csv": null,
+        "pod-node-1.csv": 2,
+        "pod-node-2.csv": 2
+      },
+      "files": [
+        "cluster_info.json",
+        "inject_time.txt",
+        "logs.csv",
+        "logts.csv",
+        "metrics.csv",
+        "metrics_postprocess.log",
+        "pod-node-1.csv",
+        "pod-node-2.csv",
+        "simple_metrics.csv"
+      ]
+    },
+    {
+      "case_id": "RE2-SS/payment_delay/2",
+      "suite": "RE2-SS",
+      "fault_name": "payment_delay",
+      "run_id": "2",
+      "expected_incident": true,
+      "label_source": "folder_name_and_inject_time",
+      "root_cause_service": "payment",
+      "root_cause_metric_family": "latency",
+      "fault_type": "delay",
+      "anomaly_window": {
+        "start_timestamp": 1705766874,
+        "end_timestamp": 1705767594,
+        "pre_injection_seconds": 720,
+        "post_injection_seconds": 720
+      },
+      "data_window": {
+        "start_timestamp": 1705766154,
+        "end_timestamp": 1705767594,
+        "duration_seconds": 1440,
+        "sample_count": 1441,
+        "sample_interval_seconds": 1
+      },
+      "row_counts": {
+        "simple_metrics.csv": 1441,
+        "metrics.csv": 1441,
+        "logs.csv": 87147,
+        "logts.csv": 97,
+        "traces.csv": null,
+        "pod-node-1.csv": 15,
+        "pod-node-2.csv": 15
+      },
+      "column_counts": {
+        "simple_metrics.csv": 77,
+        "metrics.csv": 439,
+        "logs.csv": 7,
+        "logts.csv": 53,
+        "traces.csv": null,
+        "pod-node-1.csv": 2,
+        "pod-node-2.csv": 2
+      },
+      "files": [
+        "cluster_info.json",
+        "inject_time.txt",
+        "logs.csv",
+        "logts.csv",
+        "metrics.csv",
+        "metrics_postprocess.log",
+        "pod-node-1.csv",
+        "pod-node-2.csv",
+        "simple_metrics.csv"
+      ]
+    },
+    {
+      "case_id": "RE2-SS/payment_delay/3",
+      "suite": "RE2-SS",
+      "fault_name": "payment_delay",
+      "run_id": "3",
+      "expected_incident": true,
+      "label_source": "folder_name_and_inject_time",
+      "root_cause_service": "payment",
+      "root_cause_metric_family": "latency",
+      "fault_type": "delay",
+      "anomaly_window": {
+        "start_timestamp": 1705768845,
+        "end_timestamp": 1705769565,
+        "pre_injection_seconds": 720,
+        "post_injection_seconds": 720
+      },
+      "data_window": {
+        "start_timestamp": 1705768125,
+        "end_timestamp": 1705769565,
+        "duration_seconds": 1440,
+        "sample_count": 1441,
+        "sample_interval_seconds": 1
+      },
+      "row_counts": {
+        "simple_metrics.csv": 1441,
+        "metrics.csv": 1441,
+        "logs.csv": 86799,
+        "logts.csv": 96,
+        "traces.csv": null,
+        "pod-node-1.csv": 15,
+        "pod-node-2.csv": 15
+      },
+      "column_counts": {
+        "simple_metrics.csv": 75,
+        "metrics.csv": 437,
+        "logs.csv": 7,
+        "logts.csv": 52,
+        "traces.csv": null,
+        "pod-node-1.csv": 2,
+        "pod-node-2.csv": 2
+      },
+      "files": [
+        "cluster_info.json",
+        "inject_time.txt",
+        "logs.csv",
+        "logts.csv",
+        "metrics.csv",
+        "metrics_postprocess.log",
+        "pod-node-1.csv",
+        "pod-node-2.csv",
+        "simple_metrics.csv"
+      ]
+    },
+    {
+      "case_id": "RE2-SS/payment_disk/1",
+      "suite": "RE2-SS",
+      "fault_name": "payment_disk",
+      "run_id": "1",
+      "expected_incident": true,
+      "label_source": "folder_name_and_inject_time",
+      "root_cause_service": "payment",
+      "root_cause_metric_family": "disk",
+      "fault_type": "disk",
+      "anomaly_window": {
+        "start_timestamp": 1705647420,
+        "end_timestamp": 1705648140,
+        "pre_injection_seconds": 720,
+        "post_injection_seconds": 720
+      },
+      "data_window": {
+        "start_timestamp": 1705646700,
+        "end_timestamp": 1705648140,
+        "duration_seconds": 1440,
+        "sample_count": 1441,
+        "sample_interval_seconds": 1
+      },
+      "row_counts": {
+        "simple_metrics.csv": 1441,
+        "metrics.csv": 1441,
+        "logs.csv": 89666,
+        "logts.csv": 96,
+        "traces.csv": null,
+        "pod-node-1.csv": 15,
+        "pod-node-2.csv": 15
+      },
+      "column_counts": {
+        "simple_metrics.csv": 82,
+        "metrics.csv": 448,
+        "logs.csv": 7,
+        "logts.csv": 56,
+        "traces.csv": null,
+        "pod-node-1.csv": 2,
+        "pod-node-2.csv": 2
+      },
+      "files": [
+        "cluster_info.json",
+        "inject_time.txt",
+        "logs.csv",
+        "logts.csv",
+        "metrics.csv",
+        "metrics_postprocess.log",
+        "pod-node-1.csv",
+        "pod-node-2.csv",
+        "simple_metrics.csv"
+      ]
+    },
+    {
+      "case_id": "RE2-SS/payment_disk/2",
+      "suite": "RE2-SS",
+      "fault_name": "payment_disk",
+      "run_id": "2",
+      "expected_incident": true,
+      "label_source": "folder_name_and_inject_time",
+      "root_cause_service": "payment",
+      "root_cause_metric_family": "disk",
+      "fault_type": "disk",
+      "anomaly_window": {
+        "start_timestamp": 1705760513,
+        "end_timestamp": 1705761233,
+        "pre_injection_seconds": 720,
+        "post_injection_seconds": 720
+      },
+      "data_window": {
+        "start_timestamp": 1705759793,
+        "end_timestamp": 1705761233,
+        "duration_seconds": 1440,
+        "sample_count": 1441,
+        "sample_interval_seconds": 1
+      },
+      "row_counts": {
+        "simple_metrics.csv": 1441,
+        "metrics.csv": 1441,
+        "logs.csv": 86728,
+        "logts.csv": 97,
+        "traces.csv": null,
+        "pod-node-1.csv": 15,
+        "pod-node-2.csv": 15
+      },
+      "column_counts": {
+        "simple_metrics.csv": 77,
+        "metrics.csv": 439,
+        "logs.csv": 7,
+        "logts.csv": 53,
+        "traces.csv": null,
+        "pod-node-1.csv": 2,
+        "pod-node-2.csv": 2
+      },
+      "files": [
+        "cluster_info.json",
+        "inject_time.txt",
+        "logs.csv",
+        "logts.csv",
+        "metrics.csv",
+        "metrics_postprocess.log",
+        "pod-node-1.csv",
+        "pod-node-2.csv",
+        "simple_metrics.csv"
+      ]
+    },
+    {
+      "case_id": "RE2-SS/payment_disk/3",
+      "suite": "RE2-SS",
+      "fault_name": "payment_disk",
+      "run_id": "3",
+      "expected_incident": true,
+      "label_source": "folder_name_and_inject_time",
+      "root_cause_service": "payment",
+      "root_cause_metric_family": "disk",
+      "fault_type": "disk",
+      "anomaly_window": {
+        "start_timestamp": 1705762102,
+        "end_timestamp": 1705762822,
+        "pre_injection_seconds": 720,
+        "post_injection_seconds": 720
+      },
+      "data_window": {
+        "start_timestamp": 1705761382,
+        "end_timestamp": 1705762822,
+        "duration_seconds": 1440,
+        "sample_count": 1441,
+        "sample_interval_seconds": 1
+      },
+      "row_counts": {
+        "simple_metrics.csv": 1441,
+        "metrics.csv": 1441,
+        "logs.csv": 86149,
+        "logts.csv": 97,
+        "traces.csv": null,
+        "pod-node-1.csv": 15,
+        "pod-node-2.csv": 15
+      },
+      "column_counts": {
+        "simple_metrics.csv": 77,
+        "metrics.csv": 439,
+        "logs.csv": 7,
+        "logts.csv": 54,
+        "traces.csv": null,
+        "pod-node-1.csv": 2,
+        "pod-node-2.csv": 2
+      },
+      "files": [
+        "cluster_info.json",
+        "inject_time.txt",
+        "logs.csv",
+        "logts.csv",
+        "metrics.csv",
+        "metrics_postprocess.log",
+        "pod-node-1.csv",
+        "pod-node-2.csv",
+        "simple_metrics.csv"
+      ]
+    },
+    {
+      "case_id": "RE2-SS/payment_loss/1",
+      "suite": "RE2-SS",
+      "fault_name": "payment_loss",
+      "run_id": "1",
+      "expected_incident": true,
+      "label_source": "folder_name_and_inject_time",
+      "root_cause_service": "payment",
+      "root_cause_metric_family": "error",
+      "fault_type": "loss",
+      "anomaly_window": {
+        "start_timestamp": 1705611754,
+        "end_timestamp": 1705612474,
+        "pre_injection_seconds": 720,
+        "post_injection_seconds": 720
+      },
+      "data_window": {
+        "start_timestamp": 1705611034,
+        "end_timestamp": 1705612474,
+        "duration_seconds": 1440,
+        "sample_count": 1441,
+        "sample_interval_seconds": 1
+      },
+      "row_counts": {
+        "simple_metrics.csv": 1441,
+        "metrics.csv": 1441,
+        "logs.csv": 92962,
+        "logts.csv": 97,
+        "traces.csv": null,
+        "pod-node-1.csv": 15,
+        "pod-node-2.csv": 15
+      },
+      "column_counts": {
+        "simple_metrics.csv": 79,
+        "metrics.csv": 437,
+        "logs.csv": 7,
+        "logts.csv": 71,
+        "traces.csv": null,
+        "pod-node-1.csv": 2,
+        "pod-node-2.csv": 2
+      },
+      "files": [
+        "cluster_info.json",
+        "inject_time.txt",
+        "logs.csv",
+        "logts.csv",
+        "metrics.csv",
+        "metrics_postprocess.log",
+        "pod-node-1.csv",
+        "pod-node-2.csv",
+        "simple_metrics.csv"
+      ]
+    },
+    {
+      "case_id": "RE2-SS/payment_loss/2",
+      "suite": "RE2-SS",
+      "fault_name": "payment_loss",
+      "run_id": "2",
+      "expected_incident": true,
+      "label_source": "folder_name_and_inject_time",
+      "root_cause_service": "payment",
+      "root_cause_metric_family": "error",
+      "fault_type": "loss",
+      "anomaly_window": {
+        "start_timestamp": 1705770439,
+        "end_timestamp": 1705771159,
+        "pre_injection_seconds": 720,
+        "post_injection_seconds": 720
+      },
+      "data_window": {
+        "start_timestamp": 1705769719,
+        "end_timestamp": 1705771159,
+        "duration_seconds": 1440,
+        "sample_count": 1441,
+        "sample_interval_seconds": 1
+      },
+      "row_counts": {
+        "simple_metrics.csv": 1441,
+        "metrics.csv": 1441,
+        "logs.csv": 91375,
+        "logts.csv": 97,
+        "traces.csv": null,
+        "pod-node-1.csv": 15,
+        "pod-node-2.csv": 15
+      },
+      "column_counts": {
+        "simple_metrics.csv": 77,
+        "metrics.csv": 439,
+        "logs.csv": 7,
+        "logts.csv": 57,
+        "traces.csv": null,
+        "pod-node-1.csv": 2,
+        "pod-node-2.csv": 2
+      },
+      "files": [
+        "cluster_info.json",
+        "inject_time.txt",
+        "logs.csv",
+        "logts.csv",
+        "metrics.csv",
+        "metrics_postprocess.log",
+        "pod-node-1.csv",
+        "pod-node-2.csv",
+        "simple_metrics.csv"
+      ]
+    },
+    {
+      "case_id": "RE2-SS/payment_loss/3",
+      "suite": "RE2-SS",
+      "fault_name": "payment_loss",
+      "run_id": "3",
+      "expected_incident": true,
+      "label_source": "folder_name_and_inject_time",
+      "root_cause_service": "payment",
+      "root_cause_metric_family": "error",
+      "fault_type": "loss",
+      "anomaly_window": {
+        "start_timestamp": 1705773928,
+        "end_timestamp": 1705774648,
+        "pre_injection_seconds": 720,
+        "post_injection_seconds": 720
+      },
+      "data_window": {
+        "start_timestamp": 1705773208,
+        "end_timestamp": 1705774648,
+        "duration_seconds": 1440,
+        "sample_count": 1441,
+        "sample_interval_seconds": 1
+      },
+      "row_counts": {
+        "simple_metrics.csv": 1441,
+        "metrics.csv": 1441,
+        "logs.csv": 91786,
+        "logts.csv": 97,
+        "traces.csv": null,
+        "pod-node-1.csv": 15,
+        "pod-node-2.csv": 15
+      },
+      "column_counts": {
+        "simple_metrics.csv": 77,
+        "metrics.csv": 439,
+        "logs.csv": 7,
+        "logts.csv": 63,
+        "traces.csv": null,
+        "pod-node-1.csv": 2,
+        "pod-node-2.csv": 2
+      },
+      "files": [
+        "cluster_info.json",
+        "inject_time.txt",
+        "logs.csv",
+        "logts.csv",
+        "metrics.csv",
+        "metrics_postprocess.log",
+        "pod-node-1.csv",
+        "pod-node-2.csv",
+        "simple_metrics.csv"
+      ]
+    },
+    {
+      "case_id": "RE2-SS/payment_mem/1",
+      "suite": "RE2-SS",
+      "fault_name": "payment_mem",
+      "run_id": "1",
+      "expected_incident": true,
+      "label_source": "folder_name_and_inject_time",
+      "root_cause_service": "payment",
+      "root_cause_metric_family": "mem",
+      "fault_type": "mem",
+      "anomaly_window": {
+        "start_timestamp": 1705824978,
+        "end_timestamp": 1705825698,
+        "pre_injection_seconds": 720,
+        "post_injection_seconds": 720
+      },
+      "data_window": {
+        "start_timestamp": 1705824258,
+        "end_timestamp": 1705825698,
+        "duration_seconds": 1440,
+        "sample_count": 1441,
+        "sample_interval_seconds": 1
+      },
+      "row_counts": {
+        "simple_metrics.csv": 1441,
+        "metrics.csv": 1441,
+        "logs.csv": 87090,
+        "logts.csv": 97,
+        "traces.csv": null,
+        "pod-node-1.csv": 15,
+        "pod-node-2.csv": 15
+      },
+      "column_counts": {
+        "simple_metrics.csv": 78,
+        "metrics.csv": 444,
+        "logs.csv": 7,
+        "logts.csv": 86,
+        "traces.csv": null,
+        "pod-node-1.csv": 2,
+        "pod-node-2.csv": 2
+      },
+      "files": [
+        "cluster_info.json",
+        "inject_time.txt",
+        "logs.csv",
+        "logts.csv",
+        "metrics.csv",
+        "metrics_postprocess.log",
+        "pod-node-1.csv",
+        "pod-node-2.csv",
+        "simple_metrics.csv"
+      ]
+    },
+    {
+      "case_id": "RE2-SS/payment_mem/2",
+      "suite": "RE2-SS",
+      "fault_name": "payment_mem",
+      "run_id": "2",
+      "expected_incident": true,
+      "label_source": "folder_name_and_inject_time",
+      "root_cause_service": "payment",
+      "root_cause_metric_family": "mem",
+      "fault_type": "mem",
+      "anomaly_window": {
+        "start_timestamp": 1705756954,
+        "end_timestamp": 1705757674,
+        "pre_injection_seconds": 720,
+        "post_injection_seconds": 720
+      },
+      "data_window": {
+        "start_timestamp": 1705756234,
+        "end_timestamp": 1705757674,
+        "duration_seconds": 1440,
+        "sample_count": 1441,
+        "sample_interval_seconds": 1
+      },
+      "row_counts": {
+        "simple_metrics.csv": 1441,
+        "metrics.csv": 1441,
+        "logs.csv": 86218,
+        "logts.csv": 97,
+        "traces.csv": null,
+        "pod-node-1.csv": 15,
+        "pod-node-2.csv": 15
+      },
+      "column_counts": {
+        "simple_metrics.csv": 77,
+        "metrics.csv": 439,
+        "logs.csv": 7,
+        "logts.csv": 53,
+        "traces.csv": null,
+        "pod-node-1.csv": 2,
+        "pod-node-2.csv": 2
+      },
+      "files": [
+        "cluster_info.json",
+        "inject_time.txt",
+        "logs.csv",
+        "logts.csv",
+        "metrics.csv",
+        "metrics_postprocess.log",
+        "pod-node-1.csv",
+        "pod-node-2.csv",
+        "simple_metrics.csv"
+      ]
+    },
+    {
+      "case_id": "RE2-SS/payment_mem/3",
+      "suite": "RE2-SS",
+      "fault_name": "payment_mem",
+      "run_id": "3",
+      "expected_incident": true,
+      "label_source": "folder_name_and_inject_time",
+      "root_cause_service": "payment",
+      "root_cause_metric_family": "mem",
+      "fault_type": "mem",
+      "anomaly_window": {
+        "start_timestamp": 1705758542,
+        "end_timestamp": 1705759262,
+        "pre_injection_seconds": 720,
+        "post_injection_seconds": 720
+      },
+      "data_window": {
+        "start_timestamp": 1705757822,
+        "end_timestamp": 1705759262,
+        "duration_seconds": 1440,
+        "sample_count": 1441,
+        "sample_interval_seconds": 1
+      },
+      "row_counts": {
+        "simple_metrics.csv": 1441,
+        "metrics.csv": 1441,
+        "logs.csv": 87217,
+        "logts.csv": 97,
+        "traces.csv": null,
+        "pod-node-1.csv": 15,
+        "pod-node-2.csv": 15
+      },
+      "column_counts": {
+        "simple_metrics.csv": 77,
+        "metrics.csv": 439,
+        "logs.csv": 7,
+        "logts.csv": 65,
+        "traces.csv": null,
+        "pod-node-1.csv": 2,
+        "pod-node-2.csv": 2
+      },
+      "files": [
+        "cluster_info.json",
+        "inject_time.txt",
+        "logs.csv",
+        "logts.csv",
+        "metrics.csv",
+        "metrics_postprocess.log",
+        "pod-node-1.csv",
+        "pod-node-2.csv",
+        "simple_metrics.csv"
+      ]
+    },
+    {
+      "case_id": "RE2-SS/payment_socket/1",
+      "suite": "RE2-SS",
+      "fault_name": "payment_socket",
+      "run_id": "1",
+      "expected_incident": true,
+      "label_source": "folder_name_and_inject_time",
+      "root_cause_service": "payment",
+      "root_cause_metric_family": "socket",
+      "fault_type": "socket",
+      "anomaly_window": {
+        "start_timestamp": 1705649020,
+        "end_timestamp": 1705649740,
+        "pre_injection_seconds": 720,
+        "post_injection_seconds": 720
+      },
+      "data_window": {
+        "start_timestamp": 1705648300,
+        "end_timestamp": 1705649740,
+        "duration_seconds": 1440,
+        "sample_count": 1441,
+        "sample_interval_seconds": 1
+      },
+      "row_counts": {
+        "simple_metrics.csv": 1441,
+        "metrics.csv": 1441,
+        "logs.csv": 85811,
+        "logts.csv": 97,
+        "traces.csv": null,
+        "pod-node-1.csv": 15,
+        "pod-node-2.csv": 15
+      },
+      "column_counts": {
+        "simple_metrics.csv": 82,
+        "metrics.csv": 448,
+        "logs.csv": 7,
+        "logts.csv": 54,
+        "traces.csv": null,
+        "pod-node-1.csv": 2,
+        "pod-node-2.csv": 2
+      },
+      "files": [
+        "cluster_info.json",
+        "inject_time.txt",
+        "logs.csv",
+        "logts.csv",
+        "metrics.csv",
+        "metrics_postprocess.log",
+        "pod-node-1.csv",
+        "pod-node-2.csv",
+        "simple_metrics.csv"
+      ]
+    },
+    {
+      "case_id": "RE2-SS/payment_socket/2",
+      "suite": "RE2-SS",
+      "fault_name": "payment_socket",
+      "run_id": "2",
+      "expected_incident": true,
+      "label_source": "folder_name_and_inject_time",
+      "root_cause_service": "payment",
+      "root_cause_metric_family": "socket",
+      "fault_type": "socket",
+      "anomaly_window": {
+        "start_timestamp": 1705763692,
+        "end_timestamp": 1705764412,
+        "pre_injection_seconds": 720,
+        "post_injection_seconds": 720
+      },
+      "data_window": {
+        "start_timestamp": 1705762972,
+        "end_timestamp": 1705764412,
+        "duration_seconds": 1440,
+        "sample_count": 1441,
+        "sample_interval_seconds": 1
+      },
+      "row_counts": {
+        "simple_metrics.csv": 1441,
+        "metrics.csv": 1441,
+        "logs.csv": 86579,
+        "logts.csv": 97,
+        "traces.csv": null,
+        "pod-node-1.csv": 15,
+        "pod-node-2.csv": 15
+      },
+      "column_counts": {
+        "simple_metrics.csv": 77,
+        "metrics.csv": 439,
+        "logs.csv": 7,
+        "logts.csv": 53,
+        "traces.csv": null,
+        "pod-node-1.csv": 2,
+        "pod-node-2.csv": 2
+      },
+      "files": [
+        "cluster_info.json",
+        "inject_time.txt",
+        "logs.csv",
+        "logts.csv",
+        "metrics.csv",
+        "metrics_postprocess.log",
+        "pod-node-1.csv",
+        "pod-node-2.csv",
+        "simple_metrics.csv"
+      ]
+    },
+    {
+      "case_id": "RE2-SS/payment_socket/3",
+      "suite": "RE2-SS",
+      "fault_name": "payment_socket",
+      "run_id": "3",
+      "expected_incident": true,
+      "label_source": "folder_name_and_inject_time",
+      "root_cause_service": "payment",
+      "root_cause_metric_family": "socket",
+      "fault_type": "socket",
+      "anomaly_window": {
+        "start_timestamp": 1705765284,
+        "end_timestamp": 1705766004,
+        "pre_injection_seconds": 720,
+        "post_injection_seconds": 720
+      },
+      "data_window": {
+        "start_timestamp": 1705764564,
+        "end_timestamp": 1705766004,
+        "duration_seconds": 1440,
+        "sample_count": 1441,
+        "sample_interval_seconds": 1
+      },
+      "row_counts": {
+        "simple_metrics.csv": 1441,
+        "metrics.csv": 1441,
+        "logs.csv": 87216,
+        "logts.csv": 97,
+        "traces.csv": null,
+        "pod-node-1.csv": 15,
+        "pod-node-2.csv": 15
+      },
+      "column_counts": {
+        "simple_metrics.csv": 77,
+        "metrics.csv": 439,
+        "logs.csv": 7,
+        "logts.csv": 52,
+        "traces.csv": null,
+        "pod-node-1.csv": 2,
+        "pod-node-2.csv": 2
+      },
+      "files": [
+        "cluster_info.json",
+        "inject_time.txt",
+        "logs.csv",
+        "logts.csv",
+        "metrics.csv",
+        "metrics_postprocess.log",
+        "pod-node-1.csv",
+        "pod-node-2.csv",
+        "simple_metrics.csv"
+      ]
+    },
+    {
+      "case_id": "RE2-SS/user_cpu/1",
+      "suite": "RE2-SS",
+      "fault_name": "user_cpu",
+      "run_id": "1",
+      "expected_incident": true,
+      "label_source": "folder_name_and_inject_time",
+      "root_cause_service": "user",
+      "root_cause_metric_family": "cpu",
+      "fault_type": "cpu",
+      "anomaly_window": {
+        "start_timestamp": 1705614889,
+        "end_timestamp": 1705615609,
+        "pre_injection_seconds": 720,
+        "post_injection_seconds": 720
+      },
+      "data_window": {
+        "start_timestamp": 1705614169,
+        "end_timestamp": 1705615609,
+        "duration_seconds": 1440,
+        "sample_count": 1441,
+        "sample_interval_seconds": 1
+      },
+      "row_counts": {
+        "simple_metrics.csv": 1441,
+        "metrics.csv": 1441,
+        "logs.csv": 77384,
+        "logts.csv": 97,
+        "traces.csv": null,
+        "pod-node-1.csv": 15,
+        "pod-node-2.csv": 15
+      },
+      "column_counts": {
+        "simple_metrics.csv": 79,
+        "metrics.csv": 437,
+        "logs.csv": 7,
+        "logts.csv": 62,
+        "traces.csv": null,
+        "pod-node-1.csv": 2,
+        "pod-node-2.csv": 2
+      },
+      "files": [
+        "cluster_info.json",
+        "inject_time.txt",
+        "logs.csv",
+        "logts.csv",
+        "metrics.csv",
+        "metrics_postprocess.log",
+        "pod-node-1.csv",
+        "pod-node-2.csv",
+        "simple_metrics.csv"
+      ]
+    },
+    {
+      "case_id": "RE2-SS/user_cpu/2",
+      "suite": "RE2-SS",
+      "fault_name": "user_cpu",
+      "run_id": "2",
+      "expected_incident": true,
+      "label_source": "folder_name_and_inject_time",
+      "root_cause_service": "user",
+      "root_cause_metric_family": "cpu",
+      "fault_type": "cpu",
+      "anomaly_window": {
+        "start_timestamp": 1705778631,
+        "end_timestamp": 1705779351,
+        "pre_injection_seconds": 720,
+        "post_injection_seconds": 720
+      },
+      "data_window": {
+        "start_timestamp": 1705777911,
+        "end_timestamp": 1705779351,
+        "duration_seconds": 1440,
+        "sample_count": 1441,
+        "sample_interval_seconds": 1
+      },
+      "row_counts": {
+        "simple_metrics.csv": 1441,
+        "metrics.csv": 1441,
+        "logs.csv": 76709,
+        "logts.csv": 97,
+        "traces.csv": null,
+        "pod-node-1.csv": 15,
+        "pod-node-2.csv": 15
+      },
+      "column_counts": {
+        "simple_metrics.csv": 77,
+        "metrics.csv": 439,
+        "logs.csv": 7,
+        "logts.csv": 61,
+        "traces.csv": null,
+        "pod-node-1.csv": 2,
+        "pod-node-2.csv": 2
+      },
+      "files": [
+        "cluster_info.json",
+        "inject_time.txt",
+        "logs.csv",
+        "logts.csv",
+        "metrics.csv",
+        "metrics_postprocess.log",
+        "pod-node-1.csv",
+        "pod-node-2.csv",
+        "simple_metrics.csv"
+      ]
+    },
+    {
+      "case_id": "RE2-SS/user_cpu/3",
+      "suite": "RE2-SS",
+      "fault_name": "user_cpu",
+      "run_id": "3",
+      "expected_incident": true,
+      "label_source": "folder_name_and_inject_time",
+      "root_cause_service": "user",
+      "root_cause_metric_family": "cpu",
+      "fault_type": "cpu",
+      "anomaly_window": {
+        "start_timestamp": 1705780240,
+        "end_timestamp": 1705780960,
+        "pre_injection_seconds": 720,
+        "post_injection_seconds": 720
+      },
+      "data_window": {
+        "start_timestamp": 1705779520,
+        "end_timestamp": 1705780960,
+        "duration_seconds": 1440,
+        "sample_count": 1441,
+        "sample_interval_seconds": 1
+      },
+      "row_counts": {
+        "simple_metrics.csv": 1441,
+        "metrics.csv": 1441,
+        "logs.csv": 86263,
+        "logts.csv": 97,
+        "traces.csv": null,
+        "pod-node-1.csv": 15,
+        "pod-node-2.csv": 15
+      },
+      "column_counts": {
+        "simple_metrics.csv": 77,
+        "metrics.csv": 439,
+        "logs.csv": 7,
+        "logts.csv": 51,
+        "traces.csv": null,
+        "pod-node-1.csv": 2,
+        "pod-node-2.csv": 2
+      },
+      "files": [
+        "cluster_info.json",
+        "inject_time.txt",
+        "logs.csv",
+        "logts.csv",
+        "metrics.csv",
+        "metrics_postprocess.log",
+        "pod-node-1.csv",
+        "pod-node-2.csv",
+        "simple_metrics.csv"
+      ]
+    },
+    {
+      "case_id": "RE2-SS/user_delay/1",
+      "suite": "RE2-SS",
+      "fault_name": "user_delay",
+      "run_id": "1",
+      "expected_incident": true,
+      "label_source": "folder_name_and_inject_time",
+      "root_cause_service": "user",
+      "root_cause_metric_family": "latency",
+      "fault_type": "delay",
+      "anomaly_window": {
+        "start_timestamp": 1705656234,
+        "end_timestamp": 1705656954,
+        "pre_injection_seconds": 720,
+        "post_injection_seconds": 720
+      },
+      "data_window": {
+        "start_timestamp": 1705655514,
+        "end_timestamp": 1705656954,
+        "duration_seconds": 1440,
+        "sample_count": 1441,
+        "sample_interval_seconds": 1
+      },
+      "row_counts": {
+        "simple_metrics.csv": 1441,
+        "metrics.csv": 1441,
+        "logs.csv": 81553,
+        "logts.csv": 97,
+        "traces.csv": null,
+        "pod-node-1.csv": 15,
+        "pod-node-2.csv": 15
+      },
+      "column_counts": {
+        "simple_metrics.csv": 83,
+        "metrics.csv": 453,
+        "logs.csv": 7,
+        "logts.csv": 53,
+        "traces.csv": null,
+        "pod-node-1.csv": 2,
+        "pod-node-2.csv": 2
+      },
+      "files": [
+        "cluster_info.json",
+        "inject_time.txt",
+        "logs.csv",
+        "logts.csv",
+        "metrics.csv",
+        "metrics_postprocess.log",
+        "pod-node-1.csv",
+        "pod-node-2.csv",
+        "simple_metrics.csv"
+      ]
+    },
+    {
+      "case_id": "RE2-SS/user_delay/2",
+      "suite": "RE2-SS",
+      "fault_name": "user_delay",
+      "run_id": "2",
+      "expected_incident": true,
+      "label_source": "folder_name_and_inject_time",
+      "root_cause_service": "user",
+      "root_cause_metric_family": "latency",
+      "fault_type": "delay",
+      "anomaly_window": {
+        "start_timestamp": 1705792232,
+        "end_timestamp": 1705792952,
+        "pre_injection_seconds": 720,
+        "post_injection_seconds": 720
+      },
+      "data_window": {
+        "start_timestamp": 1705791512,
+        "end_timestamp": 1705792952,
+        "duration_seconds": 1440,
+        "sample_count": 1441,
+        "sample_interval_seconds": 1
+      },
+      "row_counts": {
+        "simple_metrics.csv": 1441,
+        "metrics.csv": 1441,
+        "logs.csv": 84386,
+        "logts.csv": 97,
+        "traces.csv": null,
+        "pod-node-1.csv": 15,
+        "pod-node-2.csv": 15
+      },
+      "column_counts": {
+        "simple_metrics.csv": 76,
+        "metrics.csv": 442,
+        "logs.csv": 7,
+        "logts.csv": 54,
+        "traces.csv": null,
+        "pod-node-1.csv": 2,
+        "pod-node-2.csv": 2
+      },
+      "files": [
+        "cluster_info.json",
+        "inject_time.txt",
+        "logs.csv",
+        "logts.csv",
+        "metrics.csv",
+        "metrics_postprocess.log",
+        "pod-node-1.csv",
+        "pod-node-2.csv",
+        "simple_metrics.csv"
+      ]
+    },
+    {
+      "case_id": "RE2-SS/user_delay/3",
+      "suite": "RE2-SS",
+      "fault_name": "user_delay",
+      "run_id": "3",
+      "expected_incident": true,
+      "label_source": "folder_name_and_inject_time",
+      "root_cause_service": "user",
+      "root_cause_metric_family": "latency",
+      "fault_type": "delay",
+      "anomaly_window": {
+        "start_timestamp": 1705793827,
+        "end_timestamp": 1705794547,
+        "pre_injection_seconds": 720,
+        "post_injection_seconds": 720
+      },
+      "data_window": {
+        "start_timestamp": 1705793107,
+        "end_timestamp": 1705794547,
+        "duration_seconds": 1440,
+        "sample_count": 1441,
+        "sample_interval_seconds": 1
+      },
+      "row_counts": {
+        "simple_metrics.csv": 1441,
+        "metrics.csv": 1441,
+        "logs.csv": 83728,
+        "logts.csv": 97,
+        "traces.csv": null,
+        "pod-node-1.csv": 15,
+        "pod-node-2.csv": 15
+      },
+      "column_counts": {
+        "simple_metrics.csv": 76,
+        "metrics.csv": 442,
+        "logs.csv": 7,
+        "logts.csv": 54,
+        "traces.csv": null,
+        "pod-node-1.csv": 2,
+        "pod-node-2.csv": 2
+      },
+      "files": [
+        "cluster_info.json",
+        "inject_time.txt",
+        "logs.csv",
+        "logts.csv",
+        "metrics.csv",
+        "metrics_postprocess.log",
+        "pod-node-1.csv",
+        "pod-node-2.csv",
+        "simple_metrics.csv"
+      ]
+    },
+    {
+      "case_id": "RE2-SS/user_disk/1",
+      "suite": "RE2-SS",
+      "fault_name": "user_disk",
+      "run_id": "1",
+      "expected_incident": true,
+      "label_source": "folder_name_and_inject_time",
+      "root_cause_service": "user",
+      "root_cause_metric_family": "disk",
+      "fault_type": "disk",
+      "anomaly_window": {
+        "start_timestamp": 1705653041,
+        "end_timestamp": 1705653761,
+        "pre_injection_seconds": 720,
+        "post_injection_seconds": 720
+      },
+      "data_window": {
+        "start_timestamp": 1705652321,
+        "end_timestamp": 1705653761,
+        "duration_seconds": 1440,
+        "sample_count": 1441,
+        "sample_interval_seconds": 1
+      },
+      "row_counts": {
+        "simple_metrics.csv": 1441,
+        "metrics.csv": 1441,
+        "logs.csv": 78709,
+        "logts.csv": 97,
+        "traces.csv": null,
+        "pod-node-1.csv": 15,
+        "pod-node-2.csv": 15
+      },
+      "column_counts": {
+        "simple_metrics.csv": 83,
+        "metrics.csv": 453,
+        "logs.csv": 7,
+        "logts.csv": 106,
+        "traces.csv": null,
+        "pod-node-1.csv": 2,
+        "pod-node-2.csv": 2
+      },
+      "files": [
+        "cluster_info.json",
+        "inject_time.txt",
+        "logs.csv",
+        "logts.csv",
+        "metrics.csv",
+        "metrics_postprocess.log",
+        "pod-node-1.csv",
+        "pod-node-2.csv",
+        "simple_metrics.csv"
+      ]
+    },
+    {
+      "case_id": "RE2-SS/user_disk/2",
+      "suite": "RE2-SS",
+      "fault_name": "user_disk",
+      "run_id": "2",
+      "expected_incident": true,
+      "label_source": "folder_name_and_inject_time",
+      "root_cause_service": "user",
+      "root_cause_metric_family": "disk",
+      "fault_type": "disk",
+      "anomaly_window": {
+        "start_timestamp": 1705785441,
+        "end_timestamp": 1705786161,
+        "pre_injection_seconds": 720,
+        "post_injection_seconds": 720
+      },
+      "data_window": {
+        "start_timestamp": 1705784721,
+        "end_timestamp": 1705786161,
+        "duration_seconds": 1440,
+        "sample_count": 1441,
+        "sample_interval_seconds": 1
+      },
+      "row_counts": {
+        "simple_metrics.csv": 1441,
+        "metrics.csv": 1441,
+        "logs.csv": 86487,
+        "logts.csv": 97,
+        "traces.csv": null,
+        "pod-node-1.csv": 15,
+        "pod-node-2.csv": 15
+      },
+      "column_counts": {
+        "simple_metrics.csv": 75,
+        "metrics.csv": 437,
+        "logs.csv": 7,
+        "logts.csv": 58,
+        "traces.csv": null,
+        "pod-node-1.csv": 2,
+        "pod-node-2.csv": 2
+      },
+      "files": [
+        "cluster_info.json",
+        "inject_time.txt",
+        "logs.csv",
+        "logts.csv",
+        "metrics.csv",
+        "metrics_postprocess.log",
+        "pod-node-1.csv",
+        "pod-node-2.csv",
+        "simple_metrics.csv"
+      ]
+    },
+    {
+      "case_id": "RE2-SS/user_disk/3",
+      "suite": "RE2-SS",
+      "fault_name": "user_disk",
+      "run_id": "3",
+      "expected_incident": true,
+      "label_source": "folder_name_and_inject_time",
+      "root_cause_service": "user",
+      "root_cause_metric_family": "disk",
+      "fault_type": "disk",
+      "anomaly_window": {
+        "start_timestamp": 1705787036,
+        "end_timestamp": 1705787756,
+        "pre_injection_seconds": 720,
+        "post_injection_seconds": 720
+      },
+      "data_window": {
+        "start_timestamp": 1705786316,
+        "end_timestamp": 1705787756,
+        "duration_seconds": 1440,
+        "sample_count": 1441,
+        "sample_interval_seconds": 1
+      },
+      "row_counts": {
+        "simple_metrics.csv": 1441,
+        "metrics.csv": 1441,
+        "logs.csv": 86663,
+        "logts.csv": 97,
+        "traces.csv": null,
+        "pod-node-1.csv": 15,
+        "pod-node-2.csv": 15
+      },
+      "column_counts": {
+        "simple_metrics.csv": 75,
+        "metrics.csv": 437,
+        "logs.csv": 7,
+        "logts.csv": 57,
+        "traces.csv": null,
+        "pod-node-1.csv": 2,
+        "pod-node-2.csv": 2
+      },
+      "files": [
+        "cluster_info.json",
+        "inject_time.txt",
+        "logs.csv",
+        "logts.csv",
+        "metrics.csv",
+        "metrics_postprocess.log",
+        "pod-node-1.csv",
+        "pod-node-2.csv",
+        "simple_metrics.csv"
+      ]
+    },
+    {
+      "case_id": "RE2-SS/user_loss/1",
+      "suite": "RE2-SS",
+      "fault_name": "user_loss",
+      "run_id": "1",
+      "expected_incident": true,
+      "label_source": "folder_name_and_inject_time",
+      "root_cause_service": "user",
+      "root_cause_metric_family": "error",
+      "fault_type": "loss",
+      "anomaly_window": {
+        "start_timestamp": 1705616460,
+        "end_timestamp": 1705617180,
+        "pre_injection_seconds": 720,
+        "post_injection_seconds": 720
+      },
+      "data_window": {
+        "start_timestamp": 1705615740,
+        "end_timestamp": 1705617180,
+        "duration_seconds": 1440,
+        "sample_count": 1441,
+        "sample_interval_seconds": 1
+      },
+      "row_counts": {
+        "simple_metrics.csv": 1441,
+        "metrics.csv": 1441,
+        "logs.csv": 53507,
+        "logts.csv": 96,
+        "traces.csv": null,
+        "pod-node-1.csv": 15,
+        "pod-node-2.csv": 15
+      },
+      "column_counts": {
+        "simple_metrics.csv": 80,
+        "metrics.csv": 438,
+        "logs.csv": 7,
+        "logts.csv": 109,
+        "traces.csv": null,
+        "pod-node-1.csv": 2,
+        "pod-node-2.csv": 2
+      },
+      "files": [
+        "cluster_info.json",
+        "inject_time.txt",
+        "logs.csv",
+        "logts.csv",
+        "metrics.csv",
+        "metrics_postprocess.log",
+        "pod-node-1.csv",
+        "pod-node-2.csv",
+        "simple_metrics.csv"
+      ]
+    },
+    {
+      "case_id": "RE2-SS/user_loss/2",
+      "suite": "RE2-SS",
+      "fault_name": "user_loss",
+      "run_id": "2",
+      "expected_incident": true,
+      "label_source": "folder_name_and_inject_time",
+      "root_cause_service": "user",
+      "root_cause_metric_family": "error",
+      "fault_type": "loss",
+      "anomaly_window": {
+        "start_timestamp": 1705795419,
+        "end_timestamp": 1705796139,
+        "pre_injection_seconds": 720,
+        "post_injection_seconds": 720
+      },
+      "data_window": {
+        "start_timestamp": 1705794699,
+        "end_timestamp": 1705796139,
+        "duration_seconds": 1440,
+        "sample_count": 1441,
+        "sample_interval_seconds": 1
+      },
+      "row_counts": {
+        "simple_metrics.csv": 1441,
+        "metrics.csv": 1441,
+        "logs.csv": 59052,
+        "logts.csv": 97,
+        "traces.csv": null,
+        "pod-node-1.csv": 15,
+        "pod-node-2.csv": 15
+      },
+      "column_counts": {
+        "simple_metrics.csv": 79,
+        "metrics.csv": 445,
+        "logs.csv": 7,
+        "logts.csv": 113,
+        "traces.csv": null,
+        "pod-node-1.csv": 2,
+        "pod-node-2.csv": 2
+      },
+      "files": [
+        "cluster_info.json",
+        "inject_time.txt",
+        "logs.csv",
+        "logts.csv",
+        "metrics.csv",
+        "metrics_postprocess.log",
+        "pod-node-1.csv",
+        "pod-node-2.csv",
+        "simple_metrics.csv"
+      ]
+    },
+    {
+      "case_id": "RE2-SS/user_loss/3",
+      "suite": "RE2-SS",
+      "fault_name": "user_loss",
+      "run_id": "3",
+      "expected_incident": true,
+      "label_source": "folder_name_and_inject_time",
+      "root_cause_service": "user",
+      "root_cause_metric_family": "error",
+      "fault_type": "loss",
+      "anomaly_window": {
+        "start_timestamp": 1705796990,
+        "end_timestamp": 1705797710,
+        "pre_injection_seconds": 720,
+        "post_injection_seconds": 720
+      },
+      "data_window": {
+        "start_timestamp": 1705796270,
+        "end_timestamp": 1705797710,
+        "duration_seconds": 1440,
+        "sample_count": 1441,
+        "sample_interval_seconds": 1
+      },
+      "row_counts": {
+        "simple_metrics.csv": 1441,
+        "metrics.csv": 1441,
+        "logs.csv": 66602,
+        "logts.csv": 97,
+        "traces.csv": null,
+        "pod-node-1.csv": 15,
+        "pod-node-2.csv": 15
+      },
+      "column_counts": {
+        "simple_metrics.csv": 79,
+        "metrics.csv": 445,
+        "logs.csv": 7,
+        "logts.csv": 110,
+        "traces.csv": null,
+        "pod-node-1.csv": 2,
+        "pod-node-2.csv": 2
+      },
+      "files": [
+        "cluster_info.json",
+        "inject_time.txt",
+        "logs.csv",
+        "logts.csv",
+        "metrics.csv",
+        "metrics_postprocess.log",
+        "pod-node-1.csv",
+        "pod-node-2.csv",
+        "simple_metrics.csv"
+      ]
+    },
+    {
+      "case_id": "RE2-SS/user_mem/1",
+      "suite": "RE2-SS",
+      "fault_name": "user_mem",
+      "run_id": "1",
+      "expected_incident": true,
+      "label_source": "folder_name_and_inject_time",
+      "root_cause_service": "user",
+      "root_cause_metric_family": "mem",
+      "fault_type": "mem",
+      "anomaly_window": {
+        "start_timestamp": 1705826446,
+        "end_timestamp": 1705827166,
+        "pre_injection_seconds": 720,
+        "post_injection_seconds": 720
+      },
+      "data_window": {
+        "start_timestamp": 1705825726,
+        "end_timestamp": 1705827166,
+        "duration_seconds": 1440,
+        "sample_count": 1441,
+        "sample_interval_seconds": 1
+      },
+      "row_counts": {
+        "simple_metrics.csv": 1441,
+        "metrics.csv": 1441,
+        "logs.csv": 87131,
+        "logts.csv": 97,
+        "traces.csv": null,
+        "pod-node-1.csv": 15,
+        "pod-node-2.csv": 15
+      },
+      "column_counts": {
+        "simple_metrics.csv": 78,
+        "metrics.csv": 444,
+        "logs.csv": 7,
+        "logts.csv": 52,
+        "traces.csv": null,
+        "pod-node-1.csv": 2,
+        "pod-node-2.csv": 2
+      },
+      "files": [
+        "cluster_info.json",
+        "inject_time.txt",
+        "logs.csv",
+        "logts.csv",
+        "metrics.csv",
+        "metrics_postprocess.log",
+        "pod-node-1.csv",
+        "pod-node-2.csv",
+        "simple_metrics.csv"
+      ]
+    },
+    {
+      "case_id": "RE2-SS/user_mem/2",
+      "suite": "RE2-SS",
+      "fault_name": "user_mem",
+      "run_id": "2",
+      "expected_incident": true,
+      "label_source": "folder_name_and_inject_time",
+      "root_cause_service": "user",
+      "root_cause_metric_family": "mem",
+      "fault_type": "mem",
+      "anomaly_window": {
+        "start_timestamp": 1705782233,
+        "end_timestamp": 1705782953,
+        "pre_injection_seconds": 720,
+        "post_injection_seconds": 720
+      },
+      "data_window": {
+        "start_timestamp": 1705781513,
+        "end_timestamp": 1705782953,
+        "duration_seconds": 1440,
+        "sample_count": 1441,
+        "sample_interval_seconds": 1
+      },
+      "row_counts": {
+        "simple_metrics.csv": 1441,
+        "metrics.csv": 1441,
+        "logs.csv": 85960,
+        "logts.csv": 97,
+        "traces.csv": null,
+        "pod-node-1.csv": 15,
+        "pod-node-2.csv": 15
+      },
+      "column_counts": {
+        "simple_metrics.csv": 75,
+        "metrics.csv": 437,
+        "logs.csv": 7,
+        "logts.csv": 57,
+        "traces.csv": null,
+        "pod-node-1.csv": 2,
+        "pod-node-2.csv": 2
+      },
+      "files": [
+        "cluster_info.json",
+        "inject_time.txt",
+        "logs.csv",
+        "logts.csv",
+        "metrics.csv",
+        "metrics_postprocess.log",
+        "pod-node-1.csv",
+        "pod-node-2.csv",
+        "simple_metrics.csv"
+      ]
+    },
+    {
+      "case_id": "RE2-SS/user_mem/3",
+      "suite": "RE2-SS",
+      "fault_name": "user_mem",
+      "run_id": "3",
+      "expected_incident": true,
+      "label_source": "folder_name_and_inject_time",
+      "root_cause_service": "user",
+      "root_cause_metric_family": "mem",
+      "fault_type": "mem",
+      "anomaly_window": {
+        "start_timestamp": 1705783825,
+        "end_timestamp": 1705784545,
+        "pre_injection_seconds": 720,
+        "post_injection_seconds": 720
+      },
+      "data_window": {
+        "start_timestamp": 1705783105,
+        "end_timestamp": 1705784545,
+        "duration_seconds": 1440,
+        "sample_count": 1441,
+        "sample_interval_seconds": 1
+      },
+      "row_counts": {
+        "simple_metrics.csv": 1441,
+        "metrics.csv": 1441,
+        "logs.csv": 85809,
+        "logts.csv": 97,
+        "traces.csv": null,
+        "pod-node-1.csv": 15,
+        "pod-node-2.csv": 15
+      },
+      "column_counts": {
+        "simple_metrics.csv": 75,
+        "metrics.csv": 437,
+        "logs.csv": 7,
+        "logts.csv": 53,
+        "traces.csv": null,
+        "pod-node-1.csv": 2,
+        "pod-node-2.csv": 2
+      },
+      "files": [
+        "cluster_info.json",
+        "inject_time.txt",
+        "logs.csv",
+        "logts.csv",
+        "metrics.csv",
+        "metrics_postprocess.log",
+        "pod-node-1.csv",
+        "pod-node-2.csv",
+        "simple_metrics.csv"
+      ]
+    },
+    {
+      "case_id": "RE2-SS/user_socket/1",
+      "suite": "RE2-SS",
+      "fault_name": "user_socket",
+      "run_id": "1",
+      "expected_incident": true,
+      "label_source": "folder_name_and_inject_time",
+      "root_cause_service": "user",
+      "root_cause_metric_family": "socket",
+      "fault_type": "socket",
+      "anomaly_window": {
+        "start_timestamp": 1705654636,
+        "end_timestamp": 1705655356,
+        "pre_injection_seconds": 720,
+        "post_injection_seconds": 720
+      },
+      "data_window": {
+        "start_timestamp": 1705653916,
+        "end_timestamp": 1705655356,
+        "duration_seconds": 1440,
+        "sample_count": 1441,
+        "sample_interval_seconds": 1
+      },
+      "row_counts": {
+        "simple_metrics.csv": 1441,
+        "metrics.csv": 1441,
+        "logs.csv": 84250,
+        "logts.csv": 97,
+        "traces.csv": null,
+        "pod-node-1.csv": 15,
+        "pod-node-2.csv": 15
+      },
+      "column_counts": {
+        "simple_metrics.csv": 83,
+        "metrics.csv": 453,
+        "logs.csv": 7,
+        "logts.csv": 60,
+        "traces.csv": null,
+        "pod-node-1.csv": 2,
+        "pod-node-2.csv": 2
+      },
+      "files": [
+        "cluster_info.json",
+        "inject_time.txt",
+        "logs.csv",
+        "logts.csv",
+        "metrics.csv",
+        "metrics_postprocess.log",
+        "pod-node-1.csv",
+        "pod-node-2.csv",
+        "simple_metrics.csv"
+      ]
+    },
+    {
+      "case_id": "RE2-SS/user_socket/2",
+      "suite": "RE2-SS",
+      "fault_name": "user_socket",
+      "run_id": "2",
+      "expected_incident": true,
+      "label_source": "folder_name_and_inject_time",
+      "root_cause_service": "user",
+      "root_cause_metric_family": "socket",
+      "fault_type": "socket",
+      "anomaly_window": {
+        "start_timestamp": 1705788652,
+        "end_timestamp": 1705789372,
+        "pre_injection_seconds": 720,
+        "post_injection_seconds": 720
+      },
+      "data_window": {
+        "start_timestamp": 1705787932,
+        "end_timestamp": 1705789372,
+        "duration_seconds": 1440,
+        "sample_count": 1441,
+        "sample_interval_seconds": 1
+      },
+      "row_counts": {
+        "simple_metrics.csv": 1441,
+        "metrics.csv": 1441,
+        "logs.csv": 85726,
+        "logts.csv": 97,
+        "traces.csv": null,
+        "pod-node-1.csv": 15,
+        "pod-node-2.csv": 15
+      },
+      "column_counts": {
+        "simple_metrics.csv": 75,
+        "metrics.csv": 437,
+        "logs.csv": 7,
+        "logts.csv": 55,
+        "traces.csv": null,
+        "pod-node-1.csv": 2,
+        "pod-node-2.csv": 2
+      },
+      "files": [
+        "cluster_info.json",
+        "inject_time.txt",
+        "logs.csv",
+        "logts.csv",
+        "metrics.csv",
+        "metrics_postprocess.log",
+        "pod-node-1.csv",
+        "pod-node-2.csv",
+        "simple_metrics.csv"
+      ]
+    },
+    {
+      "case_id": "RE2-SS/user_socket/3",
+      "suite": "RE2-SS",
+      "fault_name": "user_socket",
+      "run_id": "3",
+      "expected_incident": true,
+      "label_source": "folder_name_and_inject_time",
+      "root_cause_service": "user",
+      "root_cause_metric_family": "socket",
+      "fault_type": "socket",
+      "anomaly_window": {
+        "start_timestamp": 1705790633,
+        "end_timestamp": 1705791353,
+        "pre_injection_seconds": 720,
+        "post_injection_seconds": 720
+      },
+      "data_window": {
+        "start_timestamp": 1705789913,
+        "end_timestamp": 1705791353,
+        "duration_seconds": 1440,
+        "sample_count": 1441,
+        "sample_interval_seconds": 1
+      },
+      "row_counts": {
+        "simple_metrics.csv": 1441,
+        "metrics.csv": 1441,
+        "logs.csv": 86412,
+        "logts.csv": 97,
+        "traces.csv": null,
+        "pod-node-1.csv": 15,
+        "pod-node-2.csv": 15
+      },
+      "column_counts": {
+        "simple_metrics.csv": 78,
+        "metrics.csv": 450,
+        "logs.csv": 7,
+        "logts.csv": 51,
+        "traces.csv": null,
+        "pod-node-1.csv": 2,
+        "pod-node-2.csv": 2
+      },
+      "files": [
+        "cluster_info.json",
+        "inject_time.txt",
+        "logs.csv",
+        "logts.csv",
+        "metrics.csv",
+        "metrics_postprocess.log",
+        "pod-node-1.csv",
+        "pod-node-2.csv",
+        "simple_metrics.csv"
+      ]
+    },
+    {
+      "case_id": "RE3-SS/carts_f1/1",
+      "suite": "RE3-SS",
+      "fault_name": "carts_f1",
+      "run_id": "1",
+      "expected_incident": true,
+      "label_source": "folder_name_and_inject_time",
+      "root_cause_service": "carts",
+      "root_cause_metric_family": null,
+      "fault_type": "f1",
+      "anomaly_window": {
+        "start_timestamp": 1732243203,
+        "end_timestamp": 1732243923,
+        "pre_injection_seconds": 720,
+        "post_injection_seconds": 720
+      },
+      "data_window": {
+        "start_timestamp": 1732242483,
+        "end_timestamp": 1732243923,
+        "duration_seconds": 1440,
+        "sample_count": 1441,
+        "sample_interval_seconds": 1
+      },
+      "row_counts": {
+        "simple_metrics.csv": 1441,
+        "metrics.csv": 1441,
+        "logs.csv": 84665,
+        "logts.csv": null,
+        "traces.csv": null,
+        "pod-node-1.csv": null,
+        "pod-node-2.csv": null
+      },
+      "column_counts": {
+        "simple_metrics.csv": 81,
+        "metrics.csv": 438,
+        "logs.csv": 6,
+        "logts.csv": null,
+        "traces.csv": null,
+        "pod-node-1.csv": null,
+        "pod-node-2.csv": null
+      },
+      "files": [
+        "inject_time.txt",
+        "logs.csv",
+        "metrics.csv",
+        "metrics.png",
+        "metrics_postprocess.log",
+        "root_cause.txt",
+        "simple_metrics.csv"
+      ]
+    },
+    {
+      "case_id": "RE3-SS/carts_f1/2",
+      "suite": "RE3-SS",
+      "fault_name": "carts_f1",
+      "run_id": "2",
+      "expected_incident": true,
+      "label_source": "folder_name_and_inject_time",
+      "root_cause_service": "carts",
+      "root_cause_metric_family": null,
+      "fault_type": "f1",
+      "anomaly_window": {
+        "start_timestamp": 1732254135,
+        "end_timestamp": 1732254855,
+        "pre_injection_seconds": 720,
+        "post_injection_seconds": 720
+      },
+      "data_window": {
+        "start_timestamp": 1732253415,
+        "end_timestamp": 1732254855,
+        "duration_seconds": 1440,
+        "sample_count": 1441,
+        "sample_interval_seconds": 1
+      },
+      "row_counts": {
+        "simple_metrics.csv": 1441,
+        "metrics.csv": 1441,
+        "logs.csv": 85307,
+        "logts.csv": null,
+        "traces.csv": null,
+        "pod-node-1.csv": null,
+        "pod-node-2.csv": null
+      },
+      "column_counts": {
+        "simple_metrics.csv": 82,
+        "metrics.csv": 439,
+        "logs.csv": 6,
+        "logts.csv": null,
+        "traces.csv": null,
+        "pod-node-1.csv": null,
+        "pod-node-2.csv": null
+      },
+      "files": [
+        "inject_time.txt",
+        "logs.csv",
+        "metrics.csv",
+        "metrics.png",
+        "metrics_postprocess.log",
+        "root_cause.txt",
+        "simple_metrics.csv"
+      ]
+    },
+    {
+      "case_id": "RE3-SS/carts_f1/3",
+      "suite": "RE3-SS",
+      "fault_name": "carts_f1",
+      "run_id": "3",
+      "expected_incident": true,
+      "label_source": "folder_name_and_inject_time",
+      "root_cause_service": "carts",
+      "root_cause_metric_family": null,
+      "fault_type": "f1",
+      "anomaly_window": {
+        "start_timestamp": 1732386836,
+        "end_timestamp": 1732387556,
+        "pre_injection_seconds": 720,
+        "post_injection_seconds": 720
+      },
+      "data_window": {
+        "start_timestamp": 1732386116,
+        "end_timestamp": 1732387556,
+        "duration_seconds": 1440,
+        "sample_count": 1441,
+        "sample_interval_seconds": 1
+      },
+      "row_counts": {
+        "simple_metrics.csv": 1441,
+        "metrics.csv": 1441,
+        "logs.csv": 85155,
+        "logts.csv": null,
+        "traces.csv": 0,
+        "pod-node-1.csv": null,
+        "pod-node-2.csv": null
+      },
+      "column_counts": {
+        "simple_metrics.csv": 108,
+        "metrics.csv": 551,
+        "logs.csv": 6,
+        "logts.csv": null,
+        "traces.csv": 11,
+        "pod-node-1.csv": null,
+        "pod-node-2.csv": null
+      },
+      "files": [
+        "inject_time.txt",
+        "logs.csv",
+        "metrics.csv",
+        "metrics.png",
+        "metrics_postprocess.log",
+        "simple_metrics.csv",
+        "traces.csv"
+      ]
+    },
+    {
+      "case_id": "RE3-SS/carts_f1/4",
+      "suite": "RE3-SS",
+      "fault_name": "carts_f1",
+      "run_id": "4",
+      "expected_incident": true,
+      "label_source": "folder_name_and_inject_time",
+      "root_cause_service": "carts",
+      "root_cause_metric_family": null,
+      "fault_type": "f1",
+      "anomaly_window": {
+        "start_timestamp": 1732452160,
+        "end_timestamp": 1732452880,
+        "pre_injection_seconds": 720,
+        "post_injection_seconds": 720
+      },
+      "data_window": {
+        "start_timestamp": 1732451440,
+        "end_timestamp": 1732452880,
+        "duration_seconds": 1440,
+        "sample_count": 1441,
+        "sample_interval_seconds": 1
+      },
+      "row_counts": {
+        "simple_metrics.csv": 1441,
+        "metrics.csv": 1441,
+        "logs.csv": 85849,
+        "logts.csv": null,
+        "traces.csv": null,
+        "pod-node-1.csv": null,
+        "pod-node-2.csv": null
+      },
+      "column_counts": {
+        "simple_metrics.csv": 87,
+        "metrics.csv": 468,
+        "logs.csv": 6,
+        "logts.csv": null,
+        "traces.csv": null,
+        "pod-node-1.csv": null,
+        "pod-node-2.csv": null
+      },
+      "files": [
+        "inject_time.txt",
+        "logs.csv",
+        "metrics.csv",
+        "metrics.png",
+        "metrics_postprocess.log",
+        "simple_metrics.csv"
+      ]
+    },
+    {
+      "case_id": "RE3-SS/carts_f3/1",
+      "suite": "RE3-SS",
+      "fault_name": "carts_f3",
+      "run_id": "1",
+      "expected_incident": true,
+      "label_source": "folder_name_and_inject_time",
+      "root_cause_service": "carts",
+      "root_cause_metric_family": null,
+      "fault_type": "f3",
+      "anomaly_window": {
+        "start_timestamp": 1732244765,
+        "end_timestamp": 1732245485,
+        "pre_injection_seconds": 720,
+        "post_injection_seconds": 720
+      },
+      "data_window": {
+        "start_timestamp": 1732244045,
+        "end_timestamp": 1732245485,
+        "duration_seconds": 1440,
+        "sample_count": 1441,
+        "sample_interval_seconds": 1
+      },
+      "row_counts": {
+        "simple_metrics.csv": 1441,
+        "metrics.csv": 1441,
+        "logs.csv": 84162,
+        "logts.csv": null,
+        "traces.csv": null,
+        "pod-node-1.csv": null,
+        "pod-node-2.csv": null
+      },
+      "column_counts": {
+        "simple_metrics.csv": 81,
+        "metrics.csv": 438,
+        "logs.csv": 6,
+        "logts.csv": null,
+        "traces.csv": null,
+        "pod-node-1.csv": null,
+        "pod-node-2.csv": null
+      },
+      "files": [
+        "inject_time.txt",
+        "logs.csv",
+        "metrics.csv",
+        "metrics.png",
+        "metrics_postprocess.log",
+        "root_cause.txt",
+        "simple_metrics.csv"
+      ]
+    },
+    {
+      "case_id": "RE3-SS/carts_f3/2",
+      "suite": "RE3-SS",
+      "fault_name": "carts_f3",
+      "run_id": "2",
+      "expected_incident": true,
+      "label_source": "folder_name_and_inject_time",
+      "root_cause_service": "carts",
+      "root_cause_metric_family": null,
+      "fault_type": "f3",
+      "anomaly_window": {
+        "start_timestamp": 1732255694,
+        "end_timestamp": 1732256414,
+        "pre_injection_seconds": 720,
+        "post_injection_seconds": 720
+      },
+      "data_window": {
+        "start_timestamp": 1732254974,
+        "end_timestamp": 1732256414,
+        "duration_seconds": 1440,
+        "sample_count": 1441,
+        "sample_interval_seconds": 1
+      },
+      "row_counts": {
+        "simple_metrics.csv": 1441,
+        "metrics.csv": 1441,
+        "logs.csv": 84442,
+        "logts.csv": null,
+        "traces.csv": null,
+        "pod-node-1.csv": null,
+        "pod-node-2.csv": null
+      },
+      "column_counts": {
+        "simple_metrics.csv": 82,
+        "metrics.csv": 439,
+        "logs.csv": 6,
+        "logts.csv": null,
+        "traces.csv": null,
+        "pod-node-1.csv": null,
+        "pod-node-2.csv": null
+      },
+      "files": [
+        "inject_time.txt",
+        "logs.csv",
+        "metrics.csv",
+        "metrics.png",
+        "metrics_postprocess.log",
+        "root_cause.txt",
+        "simple_metrics.csv"
+      ]
+    },
+    {
+      "case_id": "RE3-SS/carts_f3/3",
+      "suite": "RE3-SS",
+      "fault_name": "carts_f3",
+      "run_id": "3",
+      "expected_incident": true,
+      "label_source": "folder_name_and_inject_time",
+      "root_cause_service": "carts",
+      "root_cause_metric_family": null,
+      "fault_type": "f3",
+      "anomaly_window": {
+        "start_timestamp": 1732388394,
+        "end_timestamp": 1732389114,
+        "pre_injection_seconds": 720,
+        "post_injection_seconds": 720
+      },
+      "data_window": {
+        "start_timestamp": 1732387674,
+        "end_timestamp": 1732389114,
+        "duration_seconds": 1440,
+        "sample_count": 1441,
+        "sample_interval_seconds": 1
+      },
+      "row_counts": {
+        "simple_metrics.csv": 1441,
+        "metrics.csv": 1441,
+        "logs.csv": 84960,
+        "logts.csv": null,
+        "traces.csv": 0,
+        "pod-node-1.csv": null,
+        "pod-node-2.csv": null
+      },
+      "column_counts": {
+        "simple_metrics.csv": 86,
+        "metrics.csv": 463,
+        "logs.csv": 6,
+        "logts.csv": null,
+        "traces.csv": 11,
+        "pod-node-1.csv": null,
+        "pod-node-2.csv": null
+      },
+      "files": [
+        "inject_time.txt",
+        "logs.csv",
+        "metrics.csv",
+        "metrics.png",
+        "metrics_postprocess.log",
+        "simple_metrics.csv",
+        "traces.csv"
+      ]
+    },
+    {
+      "case_id": "RE3-SS/carts_f3/4",
+      "suite": "RE3-SS",
+      "fault_name": "carts_f3",
+      "run_id": "4",
+      "expected_incident": true,
+      "label_source": "folder_name_and_inject_time",
+      "root_cause_service": "carts",
+      "root_cause_metric_family": null,
+      "fault_type": "f3",
+      "anomaly_window": {
+        "start_timestamp": 1732453719,
+        "end_timestamp": 1732454439,
+        "pre_injection_seconds": 720,
+        "post_injection_seconds": 720
+      },
+      "data_window": {
+        "start_timestamp": 1732452999,
+        "end_timestamp": 1732454439,
+        "duration_seconds": 1440,
+        "sample_count": 1441,
+        "sample_interval_seconds": 1
+      },
+      "row_counts": {
+        "simple_metrics.csv": 1441,
+        "metrics.csv": 1441,
+        "logs.csv": 85649,
+        "logts.csv": null,
+        "traces.csv": null,
+        "pod-node-1.csv": null,
+        "pod-node-2.csv": null
+      },
+      "column_counts": {
+        "simple_metrics.csv": 87,
+        "metrics.csv": 468,
+        "logs.csv": 6,
+        "logts.csv": null,
+        "traces.csv": null,
+        "pod-node-1.csv": null,
+        "pod-node-2.csv": null
+      },
+      "files": [
+        "inject_time.txt",
+        "logs.csv",
+        "metrics.csv",
+        "metrics.png",
+        "metrics_postprocess.log",
+        "simple_metrics.csv"
+      ]
+    },
+    {
+      "case_id": "RE3-SS/carts_f4/1",
+      "suite": "RE3-SS",
+      "fault_name": "carts_f4",
+      "run_id": "1",
+      "expected_incident": true,
+      "label_source": "folder_name_and_inject_time",
+      "root_cause_service": "carts",
+      "root_cause_metric_family": null,
+      "fault_type": "f4",
+      "anomaly_window": {
+        "start_timestamp": 1732246326,
+        "end_timestamp": 1732247046,
+        "pre_injection_seconds": 720,
+        "post_injection_seconds": 720
+      },
+      "data_window": {
+        "start_timestamp": 1732245606,
+        "end_timestamp": 1732247046,
+        "duration_seconds": 1440,
+        "sample_count": 1441,
+        "sample_interval_seconds": 1
+      },
+      "row_counts": {
+        "simple_metrics.csv": 1441,
+        "metrics.csv": 1441,
+        "logs.csv": 84024,
+        "logts.csv": null,
+        "traces.csv": null,
+        "pod-node-1.csv": null,
+        "pod-node-2.csv": null
+      },
+      "column_counts": {
+        "simple_metrics.csv": 81,
+        "metrics.csv": 438,
+        "logs.csv": 6,
+        "logts.csv": null,
+        "traces.csv": null,
+        "pod-node-1.csv": null,
+        "pod-node-2.csv": null
+      },
+      "files": [
+        "inject_time.txt",
+        "logs.csv",
+        "metrics.csv",
+        "metrics.png",
+        "metrics_postprocess.log",
+        "simple_metrics.csv"
+      ]
+    },
+    {
+      "case_id": "RE3-SS/carts_f4/2",
+      "suite": "RE3-SS",
+      "fault_name": "carts_f4",
+      "run_id": "2",
+      "expected_incident": true,
+      "label_source": "folder_name_and_inject_time",
+      "root_cause_service": "carts",
+      "root_cause_metric_family": null,
+      "fault_type": "f4",
+      "anomaly_window": {
+        "start_timestamp": 1732257253,
+        "end_timestamp": 1732257973,
+        "pre_injection_seconds": 720,
+        "post_injection_seconds": 720
+      },
+      "data_window": {
+        "start_timestamp": 1732256533,
+        "end_timestamp": 1732257973,
+        "duration_seconds": 1440,
+        "sample_count": 1441,
+        "sample_interval_seconds": 1
+      },
+      "row_counts": {
+        "simple_metrics.csv": 1441,
+        "metrics.csv": 1441,
+        "logs.csv": 84555,
+        "logts.csv": null,
+        "traces.csv": null,
+        "pod-node-1.csv": null,
+        "pod-node-2.csv": null
+      },
+      "column_counts": {
+        "simple_metrics.csv": 82,
+        "metrics.csv": 439,
+        "logs.csv": 6,
+        "logts.csv": null,
+        "traces.csv": null,
+        "pod-node-1.csv": null,
+        "pod-node-2.csv": null
+      },
+      "files": [
+        "inject_time.txt",
+        "logs.csv",
+        "metrics.csv",
+        "metrics.png",
+        "metrics_postprocess.log",
+        "simple_metrics.csv"
+      ]
+    },
+    {
+      "case_id": "RE3-SS/carts_f4/3",
+      "suite": "RE3-SS",
+      "fault_name": "carts_f4",
+      "run_id": "3",
+      "expected_incident": true,
+      "label_source": "folder_name_and_inject_time",
+      "root_cause_service": "carts",
+      "root_cause_metric_family": null,
+      "fault_type": "f4",
+      "anomaly_window": {
+        "start_timestamp": 1732389953,
+        "end_timestamp": 1732390673,
+        "pre_injection_seconds": 720,
+        "post_injection_seconds": 720
+      },
+      "data_window": {
+        "start_timestamp": 1732389233,
+        "end_timestamp": 1732390673,
+        "duration_seconds": 1440,
+        "sample_count": 1441,
+        "sample_interval_seconds": 1
+      },
+      "row_counts": {
+        "simple_metrics.csv": 1441,
+        "metrics.csv": 1441,
+        "logs.csv": 83802,
+        "logts.csv": null,
+        "traces.csv": 0,
+        "pod-node-1.csv": null,
+        "pod-node-2.csv": null
+      },
+      "column_counts": {
+        "simple_metrics.csv": 86,
+        "metrics.csv": 463,
+        "logs.csv": 6,
+        "logts.csv": null,
+        "traces.csv": 11,
+        "pod-node-1.csv": null,
+        "pod-node-2.csv": null
+      },
+      "files": [
+        "inject_time.txt",
+        "logs.csv",
+        "metrics.csv",
+        "metrics.png",
+        "metrics_postprocess.log",
+        "simple_metrics.csv",
+        "traces.csv"
+      ]
+    },
+    {
+      "case_id": "RE3-SS/carts_f4/4",
+      "suite": "RE3-SS",
+      "fault_name": "carts_f4",
+      "run_id": "4",
+      "expected_incident": true,
+      "label_source": "folder_name_and_inject_time",
+      "root_cause_service": "carts",
+      "root_cause_metric_family": null,
+      "fault_type": "f4",
+      "anomaly_window": {
+        "start_timestamp": 1732455278,
+        "end_timestamp": 1732455998,
+        "pre_injection_seconds": 720,
+        "post_injection_seconds": 720
+      },
+      "data_window": {
+        "start_timestamp": 1732454558,
+        "end_timestamp": 1732455998,
+        "duration_seconds": 1440,
+        "sample_count": 1441,
+        "sample_interval_seconds": 1
+      },
+      "row_counts": {
+        "simple_metrics.csv": 1441,
+        "metrics.csv": 1441,
+        "logs.csv": 84925,
+        "logts.csv": null,
+        "traces.csv": null,
+        "pod-node-1.csv": null,
+        "pod-node-2.csv": null
+      },
+      "column_counts": {
+        "simple_metrics.csv": 87,
+        "metrics.csv": 468,
+        "logs.csv": 6,
+        "logts.csv": null,
+        "traces.csv": null,
+        "pod-node-1.csv": null,
+        "pod-node-2.csv": null
+      },
+      "files": [
+        "inject_time.txt",
+        "logs.csv",
+        "metrics.csv",
+        "metrics.png",
+        "metrics_postprocess.log",
+        "simple_metrics.csv"
+      ]
+    },
+    {
+      "case_id": "RE3-SS/front-end_f1/1",
+      "suite": "RE3-SS",
+      "fault_name": "front-end_f1",
+      "run_id": "1",
+      "expected_incident": true,
+      "label_source": "folder_name_and_inject_time",
+      "root_cause_service": "front-end",
+      "root_cause_metric_family": null,
+      "fault_type": "f1",
+      "anomaly_window": {
+        "start_timestamp": 1732247889,
+        "end_timestamp": 1732248609,
+        "pre_injection_seconds": 720,
+        "post_injection_seconds": 720
+      },
+      "data_window": {
+        "start_timestamp": 1732247169,
+        "end_timestamp": 1732248609,
+        "duration_seconds": 1440,
+        "sample_count": 1441,
+        "sample_interval_seconds": 1
+      },
+      "row_counts": {
+        "simple_metrics.csv": 1441,
+        "metrics.csv": 1441,
+        "logs.csv": 85513,
+        "logts.csv": null,
+        "traces.csv": null,
+        "pod-node-1.csv": null,
+        "pod-node-2.csv": null
+      },
+      "column_counts": {
+        "simple_metrics.csv": 81,
+        "metrics.csv": 438,
+        "logs.csv": 6,
+        "logts.csv": null,
+        "traces.csv": null,
+        "pod-node-1.csv": null,
+        "pod-node-2.csv": null
+      },
+      "files": [
+        "inject_time.txt",
+        "logs.csv",
+        "metrics.csv",
+        "metrics.png",
+        "metrics_postprocess.log",
+        "root_cause.txt",
+        "simple_metrics.csv"
+      ]
+    },
+    {
+      "case_id": "RE3-SS/front-end_f1/2",
+      "suite": "RE3-SS",
+      "fault_name": "front-end_f1",
+      "run_id": "2",
+      "expected_incident": true,
+      "label_source": "folder_name_and_inject_time",
+      "root_cause_service": "front-end",
+      "root_cause_metric_family": null,
+      "fault_type": "f1",
+      "anomaly_window": {
+        "start_timestamp": 1732258812,
+        "end_timestamp": 1732259532,
+        "pre_injection_seconds": 720,
+        "post_injection_seconds": 720
+      },
+      "data_window": {
+        "start_timestamp": 1732258092,
+        "end_timestamp": 1732259532,
+        "duration_seconds": 1440,
+        "sample_count": 1441,
+        "sample_interval_seconds": 1
+      },
+      "row_counts": {
+        "simple_metrics.csv": 1441,
+        "metrics.csv": 1441,
+        "logs.csv": 85886,
+        "logts.csv": null,
+        "traces.csv": null,
+        "pod-node-1.csv": null,
+        "pod-node-2.csv": null
+      },
+      "column_counts": {
+        "simple_metrics.csv": 82,
+        "metrics.csv": 439,
+        "logs.csv": 6,
+        "logts.csv": null,
+        "traces.csv": null,
+        "pod-node-1.csv": null,
+        "pod-node-2.csv": null
+      },
+      "files": [
+        "inject_time.txt",
+        "logs.csv",
+        "metrics.csv",
+        "metrics.png",
+        "metrics_postprocess.log",
+        "root_cause.txt",
+        "simple_metrics.csv"
+      ]
+    },
+    {
+      "case_id": "RE3-SS/front-end_f1/3",
+      "suite": "RE3-SS",
+      "fault_name": "front-end_f1",
+      "run_id": "3",
+      "expected_incident": true,
+      "label_source": "folder_name_and_inject_time",
+      "root_cause_service": "front-end",
+      "root_cause_metric_family": null,
+      "fault_type": "f1",
+      "anomaly_window": {
+        "start_timestamp": 1732391511,
+        "end_timestamp": 1732392231,
+        "pre_injection_seconds": 720,
+        "post_injection_seconds": 720
+      },
+      "data_window": {
+        "start_timestamp": 1732390791,
+        "end_timestamp": 1732392231,
+        "duration_seconds": 1440,
+        "sample_count": 1441,
+        "sample_interval_seconds": 1
+      },
+      "row_counts": {
+        "simple_metrics.csv": 1441,
+        "metrics.csv": 1441,
+        "logs.csv": 85171,
+        "logts.csv": null,
+        "traces.csv": 0,
+        "pod-node-1.csv": null,
+        "pod-node-2.csv": null
+      },
+      "column_counts": {
+        "simple_metrics.csv": 85,
+        "metrics.csv": 458,
+        "logs.csv": 6,
+        "logts.csv": null,
+        "traces.csv": 11,
+        "pod-node-1.csv": null,
+        "pod-node-2.csv": null
+      },
+      "files": [
+        "inject_time.txt",
+        "logs.csv",
+        "metrics.csv",
+        "metrics.png",
+        "metrics_postprocess.log",
+        "simple_metrics.csv",
+        "traces.csv"
+      ]
+    },
+    {
+      "case_id": "RE3-SS/front-end_f2/1",
+      "suite": "RE3-SS",
+      "fault_name": "front-end_f2",
+      "run_id": "1",
+      "expected_incident": true,
+      "label_source": "folder_name_and_inject_time",
+      "root_cause_service": "front-end",
+      "root_cause_metric_family": null,
+      "fault_type": "f2",
+      "anomaly_window": {
+        "start_timestamp": 1732249439,
+        "end_timestamp": 1732250159,
+        "pre_injection_seconds": 720,
+        "post_injection_seconds": 720
+      },
+      "data_window": {
+        "start_timestamp": 1732248719,
+        "end_timestamp": 1732250159,
+        "duration_seconds": 1440,
+        "sample_count": 1441,
+        "sample_interval_seconds": 1
+      },
+      "row_counts": {
+        "simple_metrics.csv": 1441,
+        "metrics.csv": 1441,
+        "logs.csv": 86519,
+        "logts.csv": null,
+        "traces.csv": null,
+        "pod-node-1.csv": null,
+        "pod-node-2.csv": null
+      },
+      "column_counts": {
+        "simple_metrics.csv": 81,
+        "metrics.csv": 438,
+        "logs.csv": 6,
+        "logts.csv": null,
+        "traces.csv": null,
+        "pod-node-1.csv": null,
+        "pod-node-2.csv": null
+      },
+      "files": [
+        "inject_time.txt",
+        "logs.csv",
+        "metrics.csv",
+        "metrics.png",
+        "metrics_postprocess.log",
+        "root_cause.txt",
+        "simple_metrics.csv"
+      ]
+    },
+    {
+      "case_id": "RE3-SS/front-end_f2/2",
+      "suite": "RE3-SS",
+      "fault_name": "front-end_f2",
+      "run_id": "2",
+      "expected_incident": true,
+      "label_source": "folder_name_and_inject_time",
+      "root_cause_service": "front-end",
+      "root_cause_metric_family": null,
+      "fault_type": "f2",
+      "anomaly_window": {
+        "start_timestamp": 1732260362,
+        "end_timestamp": 1732261082,
+        "pre_injection_seconds": 720,
+        "post_injection_seconds": 720
+      },
+      "data_window": {
+        "start_timestamp": 1732259642,
+        "end_timestamp": 1732261082,
+        "duration_seconds": 1440,
+        "sample_count": 1441,
+        "sample_interval_seconds": 1
+      },
+      "row_counts": {
+        "simple_metrics.csv": 1441,
+        "metrics.csv": 1441,
+        "logs.csv": 86678,
+        "logts.csv": null,
+        "traces.csv": null,
+        "pod-node-1.csv": null,
+        "pod-node-2.csv": null
+      },
+      "column_counts": {
+        "simple_metrics.csv": 82,
+        "metrics.csv": 439,
+        "logs.csv": 6,
+        "logts.csv": null,
+        "traces.csv": null,
+        "pod-node-1.csv": null,
+        "pod-node-2.csv": null
+      },
+      "files": [
+        "inject_time.txt",
+        "logs.csv",
+        "metrics.csv",
+        "metrics.png",
+        "metrics_postprocess.log",
+        "root_cause.txt",
+        "simple_metrics.csv"
+      ]
+    },
+    {
+      "case_id": "RE3-SS/front-end_f2/3",
+      "suite": "RE3-SS",
+      "fault_name": "front-end_f2",
+      "run_id": "3",
+      "expected_incident": true,
+      "label_source": "folder_name_and_inject_time",
+      "root_cause_service": "front-end",
+      "root_cause_metric_family": null,
+      "fault_type": "f2",
+      "anomaly_window": {
+        "start_timestamp": 1732393062,
+        "end_timestamp": 1732393782,
+        "pre_injection_seconds": 720,
+        "post_injection_seconds": 720
+      },
+      "data_window": {
+        "start_timestamp": 1732392342,
+        "end_timestamp": 1732393782,
+        "duration_seconds": 1440,
+        "sample_count": 1441,
+        "sample_interval_seconds": 1
+      },
+      "row_counts": {
+        "simple_metrics.csv": 1441,
+        "metrics.csv": 1441,
+        "logs.csv": 87396,
+        "logts.csv": null,
+        "traces.csv": 0,
+        "pod-node-1.csv": null,
+        "pod-node-2.csv": null
+      },
+      "column_counts": {
+        "simple_metrics.csv": 85,
+        "metrics.csv": 458,
+        "logs.csv": 6,
+        "logts.csv": null,
+        "traces.csv": 11,
+        "pod-node-1.csv": null,
+        "pod-node-2.csv": null
+      },
+      "files": [
+        "inject_time.txt",
+        "logs.csv",
+        "metrics.csv",
+        "metrics.png",
+        "metrics_postprocess.log",
+        "simple_metrics.csv",
+        "traces.csv"
+      ]
+    },
+    {
+      "case_id": "RE3-SS/front-end_f3/1",
+      "suite": "RE3-SS",
+      "fault_name": "front-end_f3",
+      "run_id": "1",
+      "expected_incident": true,
+      "label_source": "folder_name_and_inject_time",
+      "root_cause_service": "front-end",
+      "root_cause_metric_family": null,
+      "fault_type": "f3",
+      "anomaly_window": {
+        "start_timestamp": 1732349836,
+        "end_timestamp": 1732350556,
+        "pre_injection_seconds": 720,
+        "post_injection_seconds": 720
+      },
+      "data_window": {
+        "start_timestamp": 1732349116,
+        "end_timestamp": 1732350556,
+        "duration_seconds": 1440,
+        "sample_count": 1441,
+        "sample_interval_seconds": 1
+      },
+      "row_counts": {
+        "simple_metrics.csv": 1441,
+        "metrics.csv": 1441,
+        "logs.csv": 46800,
+        "logts.csv": null,
+        "traces.csv": 0,
+        "pod-node-1.csv": null,
+        "pod-node-2.csv": null
+      },
+      "column_counts": {
+        "simple_metrics.csv": 82,
+        "metrics.csv": 443,
+        "logs.csv": 6,
+        "logts.csv": null,
+        "traces.csv": 11,
+        "pod-node-1.csv": null,
+        "pod-node-2.csv": null
+      },
+      "files": [
+        "inject_time.txt",
+        "logs.csv",
+        "metrics.csv",
+        "metrics.png",
+        "metrics_postprocess.log",
+        "simple_metrics.csv",
+        "traces.csv"
+      ]
+    },
+    {
+      "case_id": "RE3-SS/front-end_f3/2",
+      "suite": "RE3-SS",
+      "fault_name": "front-end_f3",
+      "run_id": "2",
+      "expected_incident": true,
+      "label_source": "folder_name_and_inject_time",
+      "root_cause_service": "front-end",
+      "root_cause_metric_family": null,
+      "fault_type": "f3",
+      "anomaly_window": {
+        "start_timestamp": 1732351388,
+        "end_timestamp": 1732352108,
+        "pre_injection_seconds": 720,
+        "post_injection_seconds": 720
+      },
+      "data_window": {
+        "start_timestamp": 1732350668,
+        "end_timestamp": 1732352108,
+        "duration_seconds": 1440,
+        "sample_count": 1441,
+        "sample_interval_seconds": 1
+      },
+      "row_counts": {
+        "simple_metrics.csv": 1441,
+        "metrics.csv": 1441,
+        "logs.csv": 47848,
+        "logts.csv": null,
+        "traces.csv": 0,
+        "pod-node-1.csv": null,
+        "pod-node-2.csv": null
+      },
+      "column_counts": {
+        "simple_metrics.csv": 81,
+        "metrics.csv": 438,
+        "logs.csv": 6,
+        "logts.csv": null,
+        "traces.csv": 11,
+        "pod-node-1.csv": null,
+        "pod-node-2.csv": null
+      },
+      "files": [
+        "inject_time.txt",
+        "logs.csv",
+        "metrics.csv",
+        "metrics.png",
+        "metrics_postprocess.log",
+        "simple_metrics.csv",
+        "traces.csv"
+      ]
+    },
+    {
+      "case_id": "RE3-SS/front-end_f3/3",
+      "suite": "RE3-SS",
+      "fault_name": "front-end_f3",
+      "run_id": "3",
+      "expected_incident": true,
+      "label_source": "folder_name_and_inject_time",
+      "root_cause_service": "front-end",
+      "root_cause_metric_family": null,
+      "fault_type": "f3",
+      "anomaly_window": {
+        "start_timestamp": 1732394612,
+        "end_timestamp": 1732395332,
+        "pre_injection_seconds": 720,
+        "post_injection_seconds": 720
+      },
+      "data_window": {
+        "start_timestamp": 1732393892,
+        "end_timestamp": 1732395332,
+        "duration_seconds": 1440,
+        "sample_count": 1441,
+        "sample_interval_seconds": 1
+      },
+      "row_counts": {
+        "simple_metrics.csv": 1441,
+        "metrics.csv": 1441,
+        "logs.csv": 48110,
+        "logts.csv": null,
+        "traces.csv": 0,
+        "pod-node-1.csv": null,
+        "pod-node-2.csv": null
+      },
+      "column_counts": {
+        "simple_metrics.csv": 85,
+        "metrics.csv": 458,
+        "logs.csv": 6,
+        "logts.csv": null,
+        "traces.csv": 11,
+        "pod-node-1.csv": null,
+        "pod-node-2.csv": null
+      },
+      "files": [
+        "inject_time.txt",
+        "logs.csv",
+        "metrics.csv",
+        "metrics.png",
+        "metrics_postprocess.log",
+        "simple_metrics.csv",
+        "traces.csv"
+      ]
+    },
+    {
+      "case_id": "RE3-SS/orders_f1/1",
+      "suite": "RE3-SS",
+      "fault_name": "orders_f1",
+      "run_id": "1",
+      "expected_incident": true,
+      "label_source": "folder_name_and_inject_time",
+      "root_cause_service": "orders",
+      "root_cause_metric_family": null,
+      "fault_type": "f1",
+      "anomaly_window": {
+        "start_timestamp": 1732352938,
+        "end_timestamp": 1732353658,
+        "pre_injection_seconds": 720,
+        "post_injection_seconds": 720
+      },
+      "data_window": {
+        "start_timestamp": 1732352218,
+        "end_timestamp": 1732353658,
+        "duration_seconds": 1440,
+        "sample_count": 1441,
+        "sample_interval_seconds": 1
+      },
+      "row_counts": {
+        "simple_metrics.csv": 1441,
+        "metrics.csv": 1441,
+        "logs.csv": 79207,
+        "logts.csv": null,
+        "traces.csv": 0,
+        "pod-node-1.csv": null,
+        "pod-node-2.csv": null
+      },
+      "column_counts": {
+        "simple_metrics.csv": 83,
+        "metrics.csv": 448,
+        "logs.csv": 6,
+        "logts.csv": null,
+        "traces.csv": 11,
+        "pod-node-1.csv": null,
+        "pod-node-2.csv": null
+      },
+      "files": [
+        "inject_time.txt",
+        "logs.csv",
+        "metrics.csv",
+        "metrics.png",
+        "metrics_postprocess.log",
+        "simple_metrics.csv",
+        "traces.csv"
+      ]
+    },
+    {
+      "case_id": "RE3-SS/orders_f1/2",
+      "suite": "RE3-SS",
+      "fault_name": "orders_f1",
+      "run_id": "2",
+      "expected_incident": true,
+      "label_source": "folder_name_and_inject_time",
+      "root_cause_service": "orders",
+      "root_cause_metric_family": null,
+      "fault_type": "f1",
+      "anomaly_window": {
+        "start_timestamp": 1732354496,
+        "end_timestamp": 1732355216,
+        "pre_injection_seconds": 720,
+        "post_injection_seconds": 720
+      },
+      "data_window": {
+        "start_timestamp": 1732353776,
+        "end_timestamp": 1732355216,
+        "duration_seconds": 1440,
+        "sample_count": 1441,
+        "sample_interval_seconds": 1
+      },
+      "row_counts": {
+        "simple_metrics.csv": 1441,
+        "metrics.csv": 1441,
+        "logs.csv": 78873,
+        "logts.csv": null,
+        "traces.csv": 0,
+        "pod-node-1.csv": null,
+        "pod-node-2.csv": null
+      },
+      "column_counts": {
+        "simple_metrics.csv": 82,
+        "metrics.csv": 443,
+        "logs.csv": 6,
+        "logts.csv": null,
+        "traces.csv": 11,
+        "pod-node-1.csv": null,
+        "pod-node-2.csv": null
+      },
+      "files": [
+        "inject_time.txt",
+        "logs.csv",
+        "metrics.csv",
+        "metrics.png",
+        "metrics_postprocess.log",
+        "simple_metrics.csv",
+        "traces.csv"
+      ]
+    },
+    {
+      "case_id": "RE3-SS/orders_f1/3",
+      "suite": "RE3-SS",
+      "fault_name": "orders_f1",
+      "run_id": "3",
+      "expected_incident": true,
+      "label_source": "folder_name_and_inject_time",
+      "root_cause_service": "orders",
+      "root_cause_metric_family": null,
+      "fault_type": "f1",
+      "anomaly_window": {
+        "start_timestamp": 1732396164,
+        "end_timestamp": 1732396884,
+        "pre_injection_seconds": 720,
+        "post_injection_seconds": 720
+      },
+      "data_window": {
+        "start_timestamp": 1732395444,
+        "end_timestamp": 1732396884,
+        "duration_seconds": 1440,
+        "sample_count": 1441,
+        "sample_interval_seconds": 1
+      },
+      "row_counts": {
+        "simple_metrics.csv": 1441,
+        "metrics.csv": 1441,
+        "logs.csv": 78278,
+        "logts.csv": null,
+        "traces.csv": 0,
+        "pod-node-1.csv": null,
+        "pod-node-2.csv": null
+      },
+      "column_counts": {
+        "simple_metrics.csv": 85,
+        "metrics.csv": 458,
+        "logs.csv": 6,
+        "logts.csv": null,
+        "traces.csv": 11,
+        "pod-node-1.csv": null,
+        "pod-node-2.csv": null
+      },
+      "files": [
+        "inject_time.txt",
+        "logs.csv",
+        "metrics.csv",
+        "metrics.png",
+        "metrics_postprocess.log",
+        "simple_metrics.csv",
+        "traces.csv"
+      ]
+    },
+    {
+      "case_id": "RE3-SS/orders_f3/1",
+      "suite": "RE3-SS",
+      "fault_name": "orders_f3",
+      "run_id": "1",
+      "expected_incident": true,
+      "label_source": "folder_name_and_inject_time",
+      "root_cause_service": "orders",
+      "root_cause_metric_family": null,
+      "fault_type": "f3",
+      "anomaly_window": {
+        "start_timestamp": 1732356055,
+        "end_timestamp": 1732356775,
+        "pre_injection_seconds": 720,
+        "post_injection_seconds": 720
+      },
+      "data_window": {
+        "start_timestamp": 1732355335,
+        "end_timestamp": 1732356775,
+        "duration_seconds": 1440,
+        "sample_count": 1441,
+        "sample_interval_seconds": 1
+      },
+      "row_counts": {
+        "simple_metrics.csv": 1441,
+        "metrics.csv": 1441,
+        "logs.csv": 79514,
+        "logts.csv": null,
+        "traces.csv": null,
+        "pod-node-1.csv": null,
+        "pod-node-2.csv": null
+      },
+      "column_counts": {
+        "simple_metrics.csv": 82,
+        "metrics.csv": 443,
+        "logs.csv": 6,
+        "logts.csv": null,
+        "traces.csv": null,
+        "pod-node-1.csv": null,
+        "pod-node-2.csv": null
+      },
+      "files": [
+        "inject_time.txt",
+        "logs.csv",
+        "metrics.csv",
+        "metrics.png",
+        "metrics_postprocess.log",
+        "simple_metrics.csv"
+      ]
+    },
+    {
+      "case_id": "RE3-SS/orders_f3/2",
+      "suite": "RE3-SS",
+      "fault_name": "orders_f3",
+      "run_id": "2",
+      "expected_incident": true,
+      "label_source": "folder_name_and_inject_time",
+      "root_cause_service": "orders",
+      "root_cause_metric_family": null,
+      "fault_type": "f3",
+      "anomaly_window": {
+        "start_timestamp": 1732357613,
+        "end_timestamp": 1732358333,
+        "pre_injection_seconds": 720,
+        "post_injection_seconds": 720
+      },
+      "data_window": {
+        "start_timestamp": 1732356893,
+        "end_timestamp": 1732358333,
+        "duration_seconds": 1440,
+        "sample_count": 1441,
+        "sample_interval_seconds": 1
+      },
+      "row_counts": {
+        "simple_metrics.csv": 1441,
+        "metrics.csv": 1441,
+        "logs.csv": 79798,
+        "logts.csv": null,
+        "traces.csv": null,
+        "pod-node-1.csv": null,
+        "pod-node-2.csv": null
+      },
+      "column_counts": {
+        "simple_metrics.csv": 82,
+        "metrics.csv": 443,
+        "logs.csv": 6,
+        "logts.csv": null,
+        "traces.csv": null,
+        "pod-node-1.csv": null,
+        "pod-node-2.csv": null
+      },
+      "files": [
+        "inject_time.txt",
+        "logs.csv",
+        "metrics.csv",
+        "metrics.png",
+        "metrics_postprocess.log",
+        "simple_metrics.csv"
+      ]
+    },
+    {
+      "case_id": "RE3-SS/orders_f3/3",
+      "suite": "RE3-SS",
+      "fault_name": "orders_f3",
+      "run_id": "3",
+      "expected_incident": true,
+      "label_source": "folder_name_and_inject_time",
+      "root_cause_service": "orders",
+      "root_cause_metric_family": null,
+      "fault_type": "f3",
+      "anomaly_window": {
+        "start_timestamp": 1732397724,
+        "end_timestamp": 1732398444,
+        "pre_injection_seconds": 720,
+        "post_injection_seconds": 720
+      },
+      "data_window": {
+        "start_timestamp": 1732397004,
+        "end_timestamp": 1732398444,
+        "duration_seconds": 1440,
+        "sample_count": 1441,
+        "sample_interval_seconds": 1
+      },
+      "row_counts": {
+        "simple_metrics.csv": 1441,
+        "metrics.csv": 1441,
+        "logs.csv": 79882,
+        "logts.csv": null,
+        "traces.csv": 0,
+        "pod-node-1.csv": null,
+        "pod-node-2.csv": null
+      },
+      "column_counts": {
+        "simple_metrics.csv": 84,
+        "metrics.csv": 453,
+        "logs.csv": 6,
+        "logts.csv": null,
+        "traces.csv": 11,
+        "pod-node-1.csv": null,
+        "pod-node-2.csv": null
+      },
+      "files": [
+        "inject_time.txt",
+        "logs.csv",
+        "metrics.csv",
+        "metrics.png",
+        "metrics_postprocess.log",
+        "simple_metrics.csv",
+        "traces.csv"
+      ]
+    },
+    {
+      "case_id": "RE3-SS/orders_f4/1",
+      "suite": "RE3-SS",
+      "fault_name": "orders_f4",
+      "run_id": "1",
+      "expected_incident": true,
+      "label_source": "folder_name_and_inject_time",
+      "root_cause_service": "orders",
+      "root_cause_metric_family": null,
+      "fault_type": "f4",
+      "anomaly_window": {
+        "start_timestamp": 1732359171,
+        "end_timestamp": 1732359891,
+        "pre_injection_seconds": 720,
+        "post_injection_seconds": 720
+      },
+      "data_window": {
+        "start_timestamp": 1732358451,
+        "end_timestamp": 1732359891,
+        "duration_seconds": 1440,
+        "sample_count": 1441,
+        "sample_interval_seconds": 1
+      },
+      "row_counts": {
+        "simple_metrics.csv": 1441,
+        "metrics.csv": 1441,
+        "logs.csv": 51906,
+        "logts.csv": null,
+        "traces.csv": null,
+        "pod-node-1.csv": null,
+        "pod-node-2.csv": null
+      },
+      "column_counts": {
+        "simple_metrics.csv": 82,
+        "metrics.csv": 443,
+        "logs.csv": 6,
+        "logts.csv": null,
+        "traces.csv": null,
+        "pod-node-1.csv": null,
+        "pod-node-2.csv": null
+      },
+      "files": [
+        "inject_time.txt",
+        "logs.csv",
+        "metrics.csv",
+        "metrics.png",
+        "metrics_postprocess.log",
+        "simple_metrics.csv"
+      ]
+    },
+    {
+      "case_id": "RE3-SS/orders_f4/2",
+      "suite": "RE3-SS",
+      "fault_name": "orders_f4",
+      "run_id": "2",
+      "expected_incident": true,
+      "label_source": "folder_name_and_inject_time",
+      "root_cause_service": "orders",
+      "root_cause_metric_family": null,
+      "fault_type": "f4",
+      "anomaly_window": {
+        "start_timestamp": 1732360730,
+        "end_timestamp": 1732361450,
+        "pre_injection_seconds": 720,
+        "post_injection_seconds": 720
+      },
+      "data_window": {
+        "start_timestamp": 1732360010,
+        "end_timestamp": 1732361450,
+        "duration_seconds": 1440,
+        "sample_count": 1441,
+        "sample_interval_seconds": 1
+      },
+      "row_counts": {
+        "simple_metrics.csv": 1441,
+        "metrics.csv": 1441,
+        "logs.csv": 41777,
+        "logts.csv": null,
+        "traces.csv": null,
+        "pod-node-1.csv": null,
+        "pod-node-2.csv": null
+      },
+      "column_counts": {
+        "simple_metrics.csv": 82,
+        "metrics.csv": 443,
+        "logs.csv": 6,
+        "logts.csv": null,
+        "traces.csv": null,
+        "pod-node-1.csv": null,
+        "pod-node-2.csv": null
+      },
+      "files": [
+        "inject_time.txt",
+        "logs.csv",
+        "metrics.csv",
+        "metrics.png",
+        "metrics_postprocess.log",
+        "simple_metrics.csv"
+      ]
+    },
+    {
+      "case_id": "RE3-SS/orders_f4/3",
+      "suite": "RE3-SS",
+      "fault_name": "orders_f4",
+      "run_id": "3",
+      "expected_incident": true,
+      "label_source": "folder_name_and_inject_time",
+      "root_cause_service": "orders",
+      "root_cause_metric_family": null,
+      "fault_type": "f4",
+      "anomaly_window": {
+        "start_timestamp": 1732399286,
+        "end_timestamp": 1732400006,
+        "pre_injection_seconds": 720,
+        "post_injection_seconds": 720
+      },
+      "data_window": {
+        "start_timestamp": 1732398566,
+        "end_timestamp": 1732400006,
+        "duration_seconds": 1440,
+        "sample_count": 1441,
+        "sample_interval_seconds": 1
+      },
+      "row_counts": {
+        "simple_metrics.csv": 1441,
+        "metrics.csv": 1441,
+        "logs.csv": 51587,
+        "logts.csv": null,
+        "traces.csv": 0,
+        "pod-node-1.csv": null,
+        "pod-node-2.csv": null
+      },
+      "column_counts": {
+        "simple_metrics.csv": 85,
+        "metrics.csv": 458,
+        "logs.csv": 6,
+        "logts.csv": null,
+        "traces.csv": 11,
+        "pod-node-1.csv": null,
+        "pod-node-2.csv": null
+      },
+      "files": [
+        "inject_time.txt",
+        "logs.csv",
+        "metrics.csv",
+        "metrics.png",
+        "metrics_postprocess.log",
+        "simple_metrics.csv",
+        "traces.csv"
+      ]
+    }
+  ]
+}
