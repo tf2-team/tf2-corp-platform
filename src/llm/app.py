@@ -222,5 +222,8 @@ if __name__ == '__main__':
 
     print("OpenAI API server starting on http://localhost:8000")
     print("Set your OpenAI base URL to: http://localhost:8000/v1")
-    app.run(host='0.0.0.0', port=8000, debug=True)
+    app.run(
+        host=os.environ.get("LLM_HOST", "0.0.0.0"),
+        port=int(os.environ.get("LLM_PORT", "8000")),
+    )
 # Change trail: @hungxqt - 2026-07-15 - Dual-read local- LLM flags with BTC keys.
