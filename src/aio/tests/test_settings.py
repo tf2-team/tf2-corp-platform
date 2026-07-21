@@ -77,6 +77,8 @@ class SettingsTest(unittest.TestCase):
         self.assertEqual(config["rca"]["anomaly"]["robust_drift_min_baseline_points"], 30)
         self.assertEqual(config["rca"]["anomaly"]["detection_window_seconds"], 900)
         self.assertEqual(config["rca"]["anomaly"]["suppress_cpu_robust_threshold"], 4.0)
+        self.assertEqual(config["rca"]["anomaly"]["suppress_latency_absolute_threshold_seconds"], 0.5)
+        self.assertEqual(config["rca"]["anomaly"]["suppress_latency_relative_increase_ratio"], 0.25)
         self.assertEqual(config["rca"]["min_points"], 30)
         self.assertEqual(config["rca"]["anomaly"]["log_correlation_window_seconds"], 120)
         self.assertEqual(config["rca"]["anomaly"]["log_history_buckets"], 45)

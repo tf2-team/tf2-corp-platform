@@ -174,6 +174,34 @@ class V001AnomalyRcaTest(unittest.TestCase):
         self.assertEqual(rows[-1], [20.0, 20000.0])
         self.assertEqual(detector._normalized_rows(rows)[-1], [1.0, 1.0])
 
+    def test_isolation_forest_scores_tail_with_one_model_fit(self):
+        detector = ServiceIsolationForestDetector(score_threshold=1.0, min_points=5)
+        calls = []
+
+        def scores(baseline_rows, scored_rows):
+            calls.append((len(baseline_rows), len(scored_rows)))
+            return [0.2] * len(scored_rows)
+
+        detector._scores = scores
+
+        findings = detector.evaluate(
+            [
+                metric("checkout", "cpu", [1, 1, 1, 1, 1, 10, 10, 10]),
+                metric("checkout", "memory", [1, 1, 1, 1, 1, 10, 10, 10]),
+            ]
+        )
+
+        self.assertEqual(calls, [(5, 3)])
+        self.assertEqual(findings[0].algorithm, "isolation_forest")
+
+    def test_anomaly_builder_requires_configured_log_hyperparameters(self):
+        config = rca_hyperparameters()
+        anomaly = dict(config["anomaly"])
+        del anomaly["log_bucket_seconds"]
+
+        with self.assertRaises(KeyError):
+            build_v001_anomaly_engine({**config, "anomaly": anomaly})
+
     def test_weighted_sum_ignores_weak_single_algorithm_without_corroboration(self):
         engine = anomaly_engine()
 
@@ -217,6 +245,47 @@ class V001AnomalyRcaTest(unittest.TestCase):
         ]
 
         self.assertEqual(engine._suppress_busy_cpu(findings, series), [])
+
+    def test_busy_cpu_suppress_uses_finding_timestamp(self):
+        engine = anomaly_engine()
+        findings = [
+            AnomalyFinding(algorithm="weighted_sum", service="checkout", metric="cpu_millicores", signal_id="checkout_cpu_millicores", score=0.5, timestamp=5)
+        ]
+        series = [
+            metric("checkout", "request_rate_5m", [10, 10, 10, 10, 10, 100, 10, 10]),
+            metric("checkout", "p95_latency_5m", [1, 1, 1, 1, 1, 1, 1, 1]),
+            metric("checkout", "error_rate_5m", [0, 0, 0, 0, 0, 0, 0, 0]),
+        ]
+
+        self.assertEqual(engine._suppress_busy_cpu(findings, series), [])
+
+    def test_traffic_driven_latency_and_infra_without_hard_failure_are_suppressed(self):
+        engine = anomaly_engine()
+        findings = [
+            AnomalyFinding(algorithm="weighted_sum", service="checkout", metric="cpu_millicores", signal_id="checkout_cpu_millicores", score=0.5, timestamp=7),
+            AnomalyFinding(algorithm="weighted_sum", service="checkout", metric="p95_latency_5m", signal_id="checkout_p95_latency_5m", score=0.5, timestamp=7),
+        ]
+        series = [
+            metric("checkout", "request_rate_5m", [10, 10, 10, 10, 10, 10, 10, 100]),
+            metric("checkout", "cpu_millicores", [1, 1, 1, 1, 1, 1, 1, 10]),
+            metric("checkout", "p95_latency_5m", [0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.2]),
+            metric("checkout", "error_rate_5m", [0, 0, 0, 0, 0, 0, 0, 0]),
+        ]
+
+        self.assertEqual(engine._suppress_busy_infra(findings, series), [])
+
+    def test_latency_above_slo_is_kept_when_traffic_increases(self):
+        engine = anomaly_engine()
+        findings = [
+            AnomalyFinding(algorithm="weighted_sum", service="checkout", metric="p95_latency_5m", signal_id="checkout_p95_latency_5m", score=0.5, timestamp=7)
+        ]
+        series = [
+            metric("checkout", "request_rate_5m", [10, 10, 10, 10, 10, 10, 10, 100]),
+            metric("checkout", "p95_latency_5m", [0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 1.0]),
+            metric("checkout", "error_rate_5m", [0, 0, 0, 0, 0, 0, 0, 0]),
+        ]
+
+        self.assertEqual(engine._suppress_busy_infra(findings, series), findings)
 
     def test_busy_disk_without_failure_signal_is_suppressed(self):
         engine = anomaly_engine()
@@ -278,7 +347,7 @@ class V001AnomalyRcaTest(unittest.TestCase):
 
         self.assertEqual([finding.metric for finding in engine._suppress_busy_cpu(findings, series)], ["log_template_count_abc"])
 
-    def test_memory_growth_is_kept_as_early_oom_signal(self):
+    def test_memory_growth_without_failure_signal_is_suppressed(self):
         engine = anomaly_engine()
         findings = [
             AnomalyFinding(
@@ -294,6 +363,25 @@ class V001AnomalyRcaTest(unittest.TestCase):
             metric("checkout", "request_rate_5m", [10, 10, 10, 10, 10, 10, 10, 100]),
             metric("checkout", "p95_latency_5m", [1, 1, 1, 1, 1, 1, 1, 1]),
             metric("checkout", "error_rate_5m", [0, 0, 0, 0, 0, 0, 0, 0]),
+        ]
+
+        self.assertEqual(engine._suppress_busy_cpu(findings, series), [])
+
+    def test_oom_signal_is_kept(self):
+        engine = anomaly_engine()
+        findings = [
+            AnomalyFinding(
+                algorithm="weighted_sum",
+                service="checkout",
+                metric="oom_kills",
+                signal_id="checkout_oom_kills",
+                score=0.5,
+                timestamp=7,
+            )
+        ]
+        series = [
+            metric("checkout", "request_rate_5m", [10, 10, 10, 10, 10, 10, 10, 100]),
+            metric("checkout", "oom_kills", [0, 0, 0, 0, 0, 0, 0, 1]),
         ]
 
         self.assertEqual(engine._suppress_busy_cpu(findings, series), findings)
@@ -343,7 +431,7 @@ class V001AnomalyRcaTest(unittest.TestCase):
         result_anomalies = [(finding.algorithm, finding.service, finding.metric) for finding in result.anomalies]
         self.assertTrue(all((finding.algorithm, finding.service, finding.metric) in result_anomalies for finding in findings))
         self.assertEqual(result.root_causes[0].service, "payment")
-        self.assertIn("latency", result.root_causes[0].root_cause_metrics)
+        self.assertEqual(result.root_causes[0].root_cause_metrics, ["error"])
         self.assertFalse(any("robust_score=" in item for item in result.root_causes[0].evidence))
         self.assertTrue(any("weighted_rrf_score=" in item for item in result.root_causes[0].evidence))
 
@@ -416,13 +504,96 @@ class V001AnomalyRcaTest(unittest.TestCase):
     def test_rca_returns_top_k_root_causes(self):
         runtime_config = load_runtime_config(Path("config/runtime.json"))
         findings = [
-            AnomalyFinding(algorithm="weighted_sum", service="product-catalog", metric="request_rate_5m", signal_id="product_catalog_request_rate_5m", score=0.65, timestamp=1),
-            AnomalyFinding(algorithm="weighted_sum", service="product-reviews", metric="request_rate_5m", signal_id="product_reviews_request_rate_5m", score=0.64, timestamp=1),
+            AnomalyFinding(algorithm="weighted_sum", service="product-catalog", metric="error_rate_5m", signal_id="product_catalog_error_rate_5m", score=0.65, timestamp=1),
+            AnomalyFinding(algorithm="weighted_sum", service="product-reviews", metric="error_rate_5m", signal_id="product_reviews_error_rate_5m", score=0.64, timestamp=1),
         ]
 
         result = rca_engine(runtime_config).rank(findings, [], top_k=5)
 
         self.assertEqual([candidate.service for candidate in result.root_causes], ["product-catalog", "product-reviews"])
+
+    def test_rca_keeps_request_rate_and_latency_as_context_not_root_cause_metrics(self):
+        runtime_config = load_runtime_config(Path("config/runtime.json"))
+        findings = [
+            AnomalyFinding(algorithm="weighted_sum", service="checkout", metric="request_rate_5m", signal_id="checkout_request_rate_5m", score=1.0, timestamp=1),
+            AnomalyFinding(algorithm="weighted_sum", service="checkout", metric="p95_latency_5m", signal_id="checkout_p95_latency_5m", score=1.0, timestamp=1),
+            AnomalyFinding(algorithm="weighted_sum", service="checkout", metric="error_rate_5m", signal_id="checkout_error_rate_5m", score=1.0, timestamp=1),
+        ]
+
+        result = rca_engine(runtime_config).rank(findings, [], top_k=5)
+
+        self.assertEqual(result.root_causes[0].root_cause_metrics, ["error_rate_5m"])
+
+    def test_rca_does_not_use_context_metrics_for_ranking(self):
+        runtime_config = load_runtime_config(Path("config/runtime.json"))
+        findings = [
+            AnomalyFinding(algorithm="weighted_sum", service="checkout", metric="request_rate_5m", signal_id="checkout_request_rate_5m", score=99.0, timestamp=5),
+            AnomalyFinding(algorithm="weighted_sum", service="checkout", metric="cpu_millicores", signal_id="checkout_cpu_millicores", score=0.1, timestamp=5),
+            AnomalyFinding(algorithm="weighted_sum", service="payment", metric="error_rate_5m", signal_id="payment_error_rate_5m", score=1.0, timestamp=5),
+        ]
+        series = [
+            metric("checkout", "request_rate_5m", [1, 1, 1, 1, 1, 10]),
+            metric("checkout", "cpu_millicores", [1, 1, 1, 1, 1, 10]),
+            metric("payment", "error_rate_5m", [0, 10, 0, 10, 0, 10]),
+        ]
+
+        result = rca_engine(runtime_config, ranker_weights={"graph": 0.0, "earliest_drift": 0.0, "correlation": 1.0}).rank(findings, series, top_k=5)
+
+        self.assertEqual(result.root_causes[0].service, "payment")
+
+    def test_rca_drops_busy_infra_when_traffic_increases_without_failure(self):
+        runtime_config = load_runtime_config(Path("config/runtime.json"))
+        findings = [
+            AnomalyFinding(algorithm="weighted_sum", service="checkout", metric="cpu_millicores", signal_id="checkout_cpu_millicores", score=1.0, timestamp=5)
+        ]
+        series = [
+            metric("checkout", "request_rate_5m", [1, 1, 1, 1, 1, 10]),
+            metric("checkout", "cpu_millicores", [1, 1, 1, 1, 1, 10]),
+            metric("checkout", "error_rate_5m", [0, 0, 0, 0, 0, 0]),
+            metric("checkout", "p95_latency_5m", [1, 1, 1, 1, 1, 1]),
+        ]
+
+        result = rca_engine(runtime_config).rank(findings, series, top_k=5)
+
+        self.assertEqual(result.root_causes, [])
+
+    def test_rca_keeps_infra_when_traffic_increases_with_failure_signal(self):
+        runtime_config = load_runtime_config(Path("config/runtime.json"))
+        findings = [
+            AnomalyFinding(algorithm="weighted_sum", service="checkout", metric="cpu_millicores", signal_id="checkout_cpu_millicores", score=1.0, timestamp=5),
+            AnomalyFinding(algorithm="weighted_sum", service="checkout", metric="error_rate_5m", signal_id="checkout_error_rate_5m", score=1.0, timestamp=5),
+        ]
+        series = [
+            metric("checkout", "request_rate_5m", [1, 1, 1, 1, 1, 10]),
+            metric("checkout", "cpu_millicores", [1, 1, 1, 1, 1, 10]),
+            metric("checkout", "error_rate_5m", [0, 0, 0, 0, 0, 10]),
+        ]
+
+        result = rca_engine(runtime_config).rank(findings, series, top_k=5)
+
+        self.assertEqual(result.root_causes[0].root_cause_metrics, ["error_rate_5m", "cpu_millicores"])
+
+    def test_rca_prioritizes_error_rate_over_infra_metrics(self):
+        runtime_config = load_runtime_config(Path("config/runtime.json"))
+        findings = [
+            AnomalyFinding(algorithm="weighted_sum", service="checkout", metric="cpu_millicores", signal_id="checkout_cpu_millicores", score=99.0, timestamp=5),
+            AnomalyFinding(algorithm="weighted_sum", service="checkout", metric="error_rate_5m", signal_id="checkout_error_rate_5m", score=1.0, timestamp=5),
+        ]
+
+        result = rca_engine(runtime_config).rank(findings, [], top_k=5)
+
+        self.assertEqual(result.root_causes[0].root_cause_metrics[:2], ["error_rate_5m", "cpu_millicores"])
+
+    def test_rca_drops_context_only_root_cause_candidates(self):
+        runtime_config = load_runtime_config(Path("config/runtime.json"))
+        findings = [
+            AnomalyFinding(algorithm="weighted_sum", service="checkout", metric="request_rate_5m", signal_id="checkout_request_rate_5m", score=1.0, timestamp=1),
+            AnomalyFinding(algorithm="weighted_sum", service="checkout", metric="p95_latency_5m", signal_id="checkout_p95_latency_5m", score=1.0, timestamp=1),
+        ]
+
+        result = rca_engine(runtime_config).rank(findings, [], top_k=5)
+
+        self.assertEqual(result.root_causes, [])
 
     def test_rca_prefers_dependency_that_drifted_before_checkout(self):
         runtime_config = load_runtime_config(Path("config/runtime.json"))

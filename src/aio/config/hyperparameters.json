@@ -19,6 +19,8 @@
       "robust_drift_min_baseline_points": 30,
       "detection_window_seconds": 900,
       "suppress_cpu_robust_threshold": 4.0,
+      "suppress_latency_absolute_threshold_seconds": 0.5,
+      "suppress_latency_relative_increase_ratio": 0.25,
       "drain3_config_path": "config/drain3.ini",
       "log_bucket_seconds": 60,
       "log_correlation_window_seconds": 120,

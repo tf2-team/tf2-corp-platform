@@ -10,7 +10,7 @@ from pathlib import Path
 import re
 import warnings
 
-from aiops.anomaly.stats import mean, robust_score, stdev
+from aiops.anomaly.stats import mean, median, robust_score, stdev
 from aiops.schemas import AnomalyFinding, MetricSeries
 
 os.environ.setdefault("MPLCONFIGDIR", "/tmp")
@@ -124,11 +124,12 @@ class ServiceIsolationForestDetector:
             rows = self._normalized_rows(self._rows(eligible))
             if len(rows) < self.min_points:
                 continue
-            scored = [
-                (score * 10.0, index)
-                for index in _tail_indexes(eligible[0], self.detection_window_seconds, self.min_points)
-                for score in self._scores(rows[:index], [rows[index]])
-            ]
+            tail_indexes = list(_tail_indexes(eligible[0], self.detection_window_seconds, self.min_points))
+            if not tail_indexes:
+                continue
+            baseline_rows = rows[: tail_indexes[0]]
+            tail_rows = [rows[index] for index in tail_indexes]
+            scored = [(score * 10.0, index) for score, index in zip(self._scores(baseline_rows, tail_rows), tail_indexes)]
             service_score, service_index = max(scored, default=(0.0, 0))
             if service_score < self.score_threshold:
                 continue
@@ -256,23 +257,27 @@ class V001AnomalyEngine:
         seasonal_period: int,
         algorithm_weights: dict[str, float],
         weighted_score_threshold: float,
-        drain3_config_path: str | Path = "config/drain3.ini",
-        log_bucket_seconds: int = 60,
-        log_history_buckets: int | None = None,
-        log_max_templates_per_service: int = 20,
-        log_min_nonzero_buckets: int = 2,
-        log_correlation_window_seconds: int = 300,
-        single_algorithm_min_normalized_score: float = 2.0,
-        robust_drift_threshold: float = 3.0,
-        robust_drift_min_baseline_points: int = 4,
-        suppress_cpu_robust_threshold: float = 3.0,
-        detection_window_seconds: int | None = None,
+        drain3_config_path: str | Path,
+        log_bucket_seconds: int,
+        log_history_buckets: int,
+        log_max_templates_per_service: int,
+        log_min_nonzero_buckets: int,
+        log_correlation_window_seconds: int,
+        single_algorithm_min_normalized_score: float,
+        robust_drift_threshold: float,
+        robust_drift_min_baseline_points: int,
+        suppress_cpu_robust_threshold: float,
+        suppress_latency_absolute_threshold_seconds: float,
+        suppress_latency_relative_increase_ratio: float,
+        detection_window_seconds: int | None,
     ):
         self.algorithm_weights = algorithm_weights
         self.weighted_score_threshold = weighted_score_threshold
         self.single_algorithm_min_normalized_score = single_algorithm_min_normalized_score
         self.log_correlation_window_seconds = log_correlation_window_seconds
         self.suppress_cpu_robust_threshold = suppress_cpu_robust_threshold
+        self.suppress_latency_absolute_threshold_seconds = suppress_latency_absolute_threshold_seconds
+        self.suppress_latency_relative_increase_ratio = suppress_latency_relative_increase_ratio
         self.thresholds = {
             "robust_drift": robust_drift_threshold,
             "ewma_stl": ewma_z_threshold,
@@ -284,7 +289,7 @@ class V001AnomalyEngine:
         self.log_templates = LogTemplateMetricBuilder(
             drain3_config_path,
             log_bucket_seconds,
-            log_history_buckets or min_points,
+            log_history_buckets,
             log_max_templates_per_service,
             log_min_nonzero_buckets,
         )
@@ -348,16 +353,31 @@ class V001AnomalyEngine:
 
         filtered = []
         for finding in findings:
+            if _is_latency_metric(finding.metric):
+                service_series = by_service_series[finding.service]
+                if _request_rate_increased(service_series, finding.timestamp, self.suppress_cpu_robust_threshold) and not _hard_failure_increased(
+                    service_series, finding.timestamp, self.suppress_cpu_robust_threshold
+                ):
+                    value = _value_at(_series_for_metric(service_series, finding.metric), finding.timestamp)
+                    if value <= self.suppress_latency_absolute_threshold_seconds or _relative_increase(
+                        _series_for_metric(service_series, finding.metric), finding.timestamp
+                    ) <= self.suppress_latency_relative_increase_ratio:
+                        continue
+                filtered.append(finding)
+                continue
             if not _is_busy_infra_metric(finding.metric):
                 filtered.append(finding)
                 continue
             service_findings = by_service_findings[finding.service]
             service_series = by_service_series[finding.service]
-            has_failure_or_memory = any(_is_failure_metric(item.metric) or _is_memory_metric(item.metric) for item in service_findings)
+            has_failure_or_oom = any(
+                item.timestamp == finding.timestamp and (_is_hard_failure_metric(item.metric) or _is_oom_metric(item.metric))
+                for item in service_findings
+            )
             if (
-                has_failure_or_memory
-                or not _request_rate_increased(service_series, self.suppress_cpu_robust_threshold)
-                or _failure_metric_increased(service_series, self.suppress_cpu_robust_threshold)
+                has_failure_or_oom
+                or not _request_rate_increased(service_series, finding.timestamp, self.suppress_cpu_robust_threshold)
+                or _hard_failure_increased(service_series, finding.timestamp, self.suppress_cpu_robust_threshold)
             ):
                 filtered.append(finding)
         return filtered
@@ -375,28 +395,59 @@ def _is_disk_metric(metric: str) -> bool:
 
 
 def _is_busy_infra_metric(metric: str) -> bool:
-    return _is_cpu_metric(metric) or _is_disk_metric(metric)
+    return _is_cpu_metric(metric) or _is_disk_metric(metric) or _is_memory_metric(metric)
 
 
 def _is_memory_metric(metric: str) -> bool:
-    return "memory" in metric or "oom" in metric
+    return "memory" in metric
 
 
-def _is_failure_metric(metric: str) -> bool:
-    return "latency" in metric or "error_rate" in metric or "ready_pods" in metric
+def _is_oom_metric(metric: str) -> bool:
+    return "oom" in metric
 
 
-def _request_rate_increased(series: list[MetricSeries], threshold: float) -> bool:
-    return any("request_rate" in metric.metric and _latest_robust_score(metric) >= threshold for metric in series)
+def _is_latency_metric(metric: str) -> bool:
+    return "latency" in metric
 
 
-def _failure_metric_increased(series: list[MetricSeries], threshold: float) -> bool:
-    return any(_is_failure_metric(metric.metric) and _latest_robust_score(metric) >= threshold for metric in series)
+def _is_hard_failure_metric(metric: str) -> bool:
+    return "error_rate" in metric or "error_ratio" in metric or "ready_pods" in metric
 
 
-def _latest_robust_score(metric: MetricSeries) -> float:
+def _request_rate_increased(series: list[MetricSeries], timestamp: int, threshold: float) -> bool:
+    return any("request_rate" in metric.metric and _robust_score_at(metric, timestamp) >= threshold for metric in series)
+
+
+def _hard_failure_increased(series: list[MetricSeries], timestamp: int, threshold: float) -> bool:
+    return any((_is_hard_failure_metric(metric.metric) or _is_oom_metric(metric.metric)) and _robust_score_at(metric, timestamp) >= threshold for metric in series)
+
+
+def _series_for_metric(series: list[MetricSeries], metric: str) -> MetricSeries | None:
+    return next((item for item in series if item.metric == metric), None)
+
+
+def _value_at(metric: MetricSeries | None, timestamp: int) -> float:
+    if metric is None or not metric.points:
+        return 0.0
+    index = next((index for index, point in enumerate(metric.points) if point.timestamp >= timestamp), len(metric.points) - 1)
+    return metric.points[index].value
+
+
+def _relative_increase(metric: MetricSeries | None, timestamp: int) -> float:
+    if metric is None:
+        return 0.0
     values = [point.value for point in metric.points]
-    return robust_score(values[:-1], [values[-1]]) if len(values) >= 5 else 0.0
+    index = next((index for index, point in enumerate(metric.points) if point.timestamp >= timestamp), len(metric.points) - 1)
+    if index < 4:
+        return 0.0
+    baseline = median(values[:index])
+    return (values[index] - baseline) / baseline if baseline > 0 else 0.0
+
+
+def _robust_score_at(metric: MetricSeries, timestamp: int) -> float:
+    values = [point.value for point in metric.points]
+    index = next((index for index, point in enumerate(metric.points) if point.timestamp >= timestamp), len(metric.points) - 1)
+    return robust_score(values[:index], [values[index]]) if index >= 4 else 0.0
 
 
 def _tail_indexes(metric: MetricSeries, detection_window_seconds: int | None, start: int) -> range:
@@ -420,15 +471,17 @@ def build_v001_anomaly_engine(config: dict, **overrides) -> V001AnomalyEngine:
         seasonal_period=int(config["seasonal_period"]),
         algorithm_weights=anomaly["algorithm_weights"],
         weighted_score_threshold=float(anomaly["weighted_score_threshold"]),
-        drain3_config_path=anomaly.get("drain3_config_path", "config/drain3.ini"),
-        log_bucket_seconds=int(anomaly.get("log_bucket_seconds", 60)),
-        log_history_buckets=int(anomaly.get("log_history_buckets", config["min_points"])),
-        log_max_templates_per_service=int(anomaly.get("log_max_templates_per_service", 20)),
-        log_min_nonzero_buckets=int(anomaly.get("log_min_nonzero_buckets", 2)),
-        log_correlation_window_seconds=int(anomaly.get("log_correlation_window_seconds", 300)),
+        drain3_config_path=anomaly["drain3_config_path"],
+        log_bucket_seconds=int(anomaly["log_bucket_seconds"]),
+        log_history_buckets=int(anomaly["log_history_buckets"]),
+        log_max_templates_per_service=int(anomaly["log_max_templates_per_service"]),
+        log_min_nonzero_buckets=int(anomaly["log_min_nonzero_buckets"]),
+        log_correlation_window_seconds=int(anomaly["log_correlation_window_seconds"]),
         single_algorithm_min_normalized_score=float(anomaly["single_algorithm_min_normalized_score"]),
         robust_drift_threshold=float(anomaly["robust_drift_threshold"]),
         robust_drift_min_baseline_points=int(anomaly["robust_drift_min_baseline_points"]),
         suppress_cpu_robust_threshold=float(anomaly["suppress_cpu_robust_threshold"]),
+        suppress_latency_absolute_threshold_seconds=float(anomaly["suppress_latency_absolute_threshold_seconds"]),
+        suppress_latency_relative_increase_ratio=float(anomaly["suppress_latency_relative_increase_ratio"]),
         detection_window_seconds=int(anomaly["detection_window_seconds"]) or None,
     )
