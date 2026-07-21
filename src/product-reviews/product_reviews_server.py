@@ -46,6 +46,7 @@ from techx_ai_common.contracts import GuardrailAction, ResponseStatus
 from techx_ai_common import guardrails
 from techx_ai_common.bedrock import converse_text, is_bedrock_provider
 from techx_ai_common.grounding import generate_grounded_summary, validate_grounded_summary
+from techx_ai_common.retrieval import retrieve_relevant_reviews
 
 llm_host = None
 llm_port = None
@@ -208,8 +209,7 @@ def is_review_related(question: str) -> bool:
     
     normalized_q = remove_accents(question_lower)
     keywords = [
-        "review", "rating", "comment", "feedback", "opinion", 
-        "danh gia", "nhan xet", "binh luan", "y kien", "phan hoi"
+        "review", "rating", "comment", "feedback", "opinion"
     ]
     for kw in keywords:
         if kw in normalized_q:
@@ -224,6 +224,7 @@ def _get_bedrock_response(request_product_id, question, system_prompt, span):
             safe_reviews = guardrails.sanitize_reviews(
                 request_product_id, fetch_product_reviews(product_id=request_product_id)
             )
+            safe_reviews = retrieve_relevant_reviews(safe_reviews, question)
             span.set_attribute("app.safe_reviews.count", len(safe_reviews.reviews))
             if not safe_reviews.reviews:
                 candidate_text = ABSTAIN_MESSAGE
@@ -416,6 +417,7 @@ def get_ai_assistant_response(request_product_id, question):
                     safe_reviews = guardrails.sanitize_reviews(
                         function_args.get("product_id"), raw_reviews
                     )
+                    safe_reviews = retrieve_relevant_reviews(safe_reviews, question)
                     span.set_attribute("app.safe_reviews.count", len(safe_reviews.reviews))
                     function_response = json.dumps(
                         [{"source_id": r.source_id, "text": r.text, "score": str(r.score)} for r in safe_reviews.reviews]
@@ -446,6 +448,7 @@ def get_ai_assistant_response(request_product_id, question):
             logger.info("Model did not call fetch_product_reviews for review-related question. Fetching reviews directly.")
             raw_reviews = fetch_product_reviews(product_id=request_product_id)
             safe_reviews = guardrails.sanitize_reviews(request_product_id, raw_reviews)
+            safe_reviews = retrieve_relevant_reviews(safe_reviews, question)
             span.set_attribute("app.safe_reviews.count", len(safe_reviews.reviews))
 
         llm_inaccurate_response = check_feature_flag("llmInaccurateResponse")
