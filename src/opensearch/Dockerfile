@@ -8,7 +8,7 @@ USER 0
 
 # Rotate when rebuilding the secure-delivery baseline so package-manager security
 # updates are not silently restored from an older BuildKit cache layer.
-ARG SECURITY_UPDATE_EPOCH=2026-07-21-cve-refresh-1
+ARG SECURITY_UPDATE_EPOCH=2026-07-21-cve-refresh-2
 
 ADD --chmod=644 https://repo1.maven.org/maven2/com/fasterxml/jackson/core/jackson-databind/2.21.4/jackson-databind-2.21.4.jar /tmp/jackson-databind-2.21.4.jar
 ADD --chmod=644 https://repo1.maven.org/maven2/tools/jackson/core/jackson-databind/3.1.4/jackson-databind-3.1.4.jar /tmp/jackson-databind-3.1.4.jar
@@ -16,12 +16,28 @@ ADD --chmod=644 https://repo1.maven.org/maven2/tools/jackson/core/jackson-databi
 # Apply available OS security updates for Trivy HIGH/CRITICAL on the vendor base.
 RUN echo "security update baseline: ${SECURITY_UPDATE_EPOCH}" >/dev/null \
     && if command -v microdnf >/dev/null 2>&1; then \
-      microdnf upgrade -y && microdnf clean all; \
+      microdnf clean all \
+      && microdnf makecache \
+      && microdnf upgrade -y glib2 libacl python3 python3-libs \
+      && microdnf clean all; \
     elif command -v yum >/dev/null 2>&1; then \
-      yum upgrade -y && yum clean all; \
+      yum clean all \
+      && yum makecache \
+      && yum upgrade -y glib2 libacl python3 python3-libs \
+      && yum clean all; \
     elif command -v dnf >/dev/null 2>&1; then \
-      dnf upgrade -y && dnf clean all; \
-    fi
+      dnf clean all \
+      && dnf makecache \
+      && dnf upgrade -y glib2 libacl python3 python3-libs \
+      && dnf clean all; \
+    else \
+      echo "No supported package manager found" >&2; \
+      exit 1; \
+    fi \
+    && rpm -q --whatprovides 'glib2 >= 2.82.2-770.amzn2023' \
+    && rpm -q --whatprovides 'libacl >= 2.4.0-1.amzn2023.0.1' \
+    && rpm -q --whatprovides 'python3 >= 3.9.25-1.amzn2023.0.8' \
+    && rpm -q --whatprovides 'python3-libs >= 3.9.25-1.amzn2023.0.8'
 
 # Remove plugins in dependency order - remove dependent plugins first
 # These plugins are not needed for basic log storage and retrieval in the demo

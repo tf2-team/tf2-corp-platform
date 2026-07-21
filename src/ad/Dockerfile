@@ -37,7 +37,9 @@ WORKDIR /usr/src/app/
 RUN groupadd -g 10001 appgroup && \
     useradd -r -u 10001 -g appgroup appuser
 
-COPY --from=builder --chown=appuser:appgroup /usr/src/app/ ./
+COPY --from=builder --chown=appuser:appgroup \
+    /usr/src/app/build/install/techx-corp-ad/ \
+    /usr/src/app/build/install/techx-corp-ad/
 ADD --chmod=644 --chown=appuser:appgroup https://github.com/open-telemetry/opentelemetry-java-instrumentation/releases/download/v$OTEL_JAVA_AGENT_VERSION/opentelemetry-javaagent.jar /usr/src/app/opentelemetry-javaagent.jar
 ENV JAVA_TOOL_OPTIONS=-javaagent:/usr/src/app/opentelemetry-javaagent.jar
 
