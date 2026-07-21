@@ -6,11 +6,16 @@ FROM opensearchproject/opensearch:3.7.0@sha256:44ba7ea58a319adf61c33ab16873f9ef5
 
 USER 0
 
+# Rotate when rebuilding the secure-delivery baseline so package-manager security
+# updates are not silently restored from an older BuildKit cache layer.
+ARG SECURITY_UPDATE_EPOCH=2026-07-21
+
 ADD --chmod=644 https://repo1.maven.org/maven2/com/fasterxml/jackson/core/jackson-databind/2.21.4/jackson-databind-2.21.4.jar /tmp/jackson-databind-2.21.4.jar
 ADD --chmod=644 https://repo1.maven.org/maven2/tools/jackson/core/jackson-databind/3.1.4/jackson-databind-3.1.4.jar /tmp/jackson-databind-3.1.4.jar
 
 # Apply available OS security updates for Trivy HIGH/CRITICAL on the vendor base.
-RUN if command -v microdnf >/dev/null 2>&1; then \
+RUN echo "security update baseline: ${SECURITY_UPDATE_EPOCH}" >/dev/null \
+    && if command -v microdnf >/dev/null 2>&1; then \
       microdnf upgrade -y && microdnf clean all; \
     elif command -v yum >/dev/null 2>&1; then \
       yum upgrade -y && yum clean all; \

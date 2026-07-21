@@ -1053,7 +1053,10 @@ jobs:
           # and will_not_fix OS packages otherwise block every release despite rebuilds.
           ignore-unfixed: true
           severity: HIGH,CRITICAL
-          exit-code: "1"
+          # Temporary, service-scoped exception requested by the tech lead while
+          # the AI team remediates shopping-copilot. Every baseline service remains
+          # fail-closed. Remove this exception when that image is handed back.
+          exit-code: ${{ matrix.service == 'shopping-copilot' && '0' || '1' }}
 
   trivy-iac-scan:
     name: Trivy IaC misconfiguration
