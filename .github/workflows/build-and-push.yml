@@ -2,14 +2,14 @@
 # SPDX-License-Identifier: Apache-2.0
 name: Build and push images
 
-# Job graph: CI → prepare → AWS/ECR preflight (refine build/retag lists)
-#            → build matrix (changed services from source) || retag (unchanged from PREV_TAG)
+# Job graph: CI → prepare → AWS/ECR preflight
+#            → build matrix (BUILD_SET only)
 #            → verify ECR → security scans → sign/SBOM/attest
-#            → publish Mem0 FastEmbed artifact (build when mem0 bakes; else S3 retag)
+#            → publish Mem0 FastEmbed artifact (only when mem0 is in BUILD_SET)
 #            → release-ready → update-chart-dev (development) | create-chart-prod-pr (production)
 #
-# Global Helm tag contract: every release service must exist under the same NEW_TAG.
-# Unchanged services are retagged from PREV_TAG (not skipped); changed services bake from source.
+# Immutable digest contract: unchanged services keep their existing digest overlays.
+# Only BUILD_SET is built, scanned, signed, attested, resolved, and promoted.
 # mem0 is a normal matrix service; compose/bake catalog edits alone do not force full bake.
 # Dev: after release-ready, direct-push only rebuilt services under service-digest/values-<service>.yaml.
 # Prod: after release-ready, open a PR containing only rebuilt service digests under service-digest/.
@@ -18,7 +18,7 @@ on:
   push:
     branches: [main, techx-dev-corp]
     # Branch pushes: only when image-affecting paths change.
-    # Selective bake+retag still produces the full 23-image set under one global tag.
+    # A path-filtered run publishes only services selected into BUILD_SET.
     # Tag pushes (v*) and workflow_dispatch always run (no path filter on those entry points).
     paths:
       - "src/**"
@@ -49,13 +49,6 @@ on:
         required: false
         type: string
         default: ""
-      previous_tag:
-        description: >
-          When force_full_rebuild is false, runtime tag to retag unchanged services from
-          (e.g. sha-a1b2c3d or v1.2.3). Leave empty to derive sha-<before> from git history.
-        required: false
-        type: string
-        default: ""
 
 # Mapping:
 #   main / tags v*   → production  → ECR techx-corp
@@ -65,7 +58,7 @@ concurrency:
   # Environment-scoped so prod/dev publishes do not cancel each other.
   # yamllint disable-line rule:line-length
   group: build-push-${{ github.event_name == 'workflow_dispatch' && inputs.target_environment || (startsWith(github.ref, 'refs/tags/v') && 'production' || (github.ref == 'refs/heads/main' && 'production' || 'development')) }}
-  # Do not cancel a running publish: a partial global tag set is unsafe for Helm promotion.
+  # Do not cancel a running publish: every selected digest must finish its security gates.
   cancel-in-progress: false
 
 permissions:
@@ -80,7 +73,7 @@ jobs:
     uses: ./.github/workflows/ci.yml
 
   # ---------------------------------------------------------------------------
-  # 2. prepare — resolve env/tag/matrix; validate bake catalog; classify build/retag
+  # 2. prepare — resolve env/tag/matrix; validate bake catalog; classify BUILD_SET
   # ---------------------------------------------------------------------------
   prepare:
     name: Prepare
@@ -93,12 +86,9 @@ jobs:
       short_sha: ${{ steps.resolve.outputs.short_sha }}
       services: ${{ steps.catalog.outputs.services }}
       service_count: ${{ steps.catalog.outputs.service_count }}
-      prev_tag: ${{ steps.classify.outputs.prev_tag }}
       mode: ${{ steps.classify.outputs.mode }}
       build_services: ${{ steps.classify.outputs.build_services }}
-      retag_services: ${{ steps.classify.outputs.retag_services }}
       build_count: ${{ steps.classify.outputs.build_count }}
-      retag_count: ${{ steps.classify.outputs.retag_count }}
     steps:
       - name: Checkout
         # actions/checkout@v7.0.0
@@ -286,7 +276,7 @@ jobs:
           echo "Catalog OK: ${#RELEASE[@]} release = ${#COMPOSE_SORTED[@]} compose builds"
           echo "Release services: ${RELEASE[*]}"
 
-      - name: Classify build vs retag services
+      - name: Classify services into BUILD_SET
         id: classify
         env:
           EVENT_NAME: ${{ github.event_name }}
@@ -295,7 +285,6 @@ jobs:
           BEFORE_SHA: ${{ github.event.before }}
           FORCE_FULL: ${{ inputs.force_full_rebuild }}
           FULL_REBUILD_REASON: ${{ inputs.full_rebuild_reason }}
-          PREVIOUS_TAG_INPUT: ${{ inputs.previous_tag }}
           SERVICES_JSON: ${{ steps.catalog.outputs.services }}
         run: |
           set -euo pipefail
@@ -306,9 +295,8 @@ jobs:
             IS_RELEASE["${s}"]=1
           done
 
-          MODE="full"
-          PREV_TAG=""
-          REASON="default full rebuild"
+          MODE="none"
+          REASON="no release service changes"
           declare -A BUILD_SET=()
 
           is_zero_sha() {
@@ -318,27 +306,24 @@ jobs:
 
           classify_from_diff() {
             # Sets MODE, REASON, BUILD_SET from git diff BASE_SHA..SHA.
-            # Caller must set PREV_TAG before or after; this function does not clear it.
             local base_sha="$1"
             local why_prefix="$2"
             if ! git cat-file -e "${base_sha}^{commit}" 2>/dev/null; then
-              MODE="full"
-              REASON="${why_prefix}: base SHA ${base_sha} not in fetch history"
-              return 0
+              echo "::error::${why_prefix}: base SHA ${base_sha} not in fetch history"
+              exit 1
             fi
             mapfile -t CHANGED < <(git diff --name-only "${base_sha}" "${SHA}" | sort -u)
             if [[ "${#CHANGED[@]}" -eq 0 ]]; then
-              MODE="selective"
-              REASON="${why_prefix}: no file diff (retag all from PREV_TAG)"
+              MODE="none"
+              REASON="${why_prefix}: no file diff"
               return 0
             fi
             local FULL_TRIGGER=0
             for f in "${CHANGED[@]}"; do
               case "${f}" in
                 # Shared contracts that can affect every image. Compose/bake catalog
-                # edits alone do NOT force full bake: new services (e.g. mem0) use the
-                # matrix build path, and unchanged services retag from PREV_TAG.
-                # Preflight moves any service missing PREV_TAG into the build list.
+                # edits alone do NOT force full bake: service source paths remain the
+                # authoritative selective input.
                 # Operators can still force_full_rebuild for platform/bake-wide changes.
                 pb/*|buildkitd.toml|.env|.gitmodules)
                   FULL_TRIGGER=1
@@ -369,9 +354,12 @@ jobs:
             if [[ "${FULL_TRIGGER}" -eq 1 ]]; then
               MODE="full"
               REASON="${why_prefix}: shared/global image path changed"
-            else
+            elif [[ "${#BUILD_SET[@]}" -gt 0 ]]; then
               MODE="selective"
               REASON="${why_prefix}: path-based selective rebuild"
+            else
+              MODE="none"
+              REASON="${why_prefix}: no release service changes"
             fi
           }
 
@@ -386,30 +374,13 @@ jobs:
               exit 1
             fi
             if [[ "${FORCE_FULL}" == "false" || "${FORCE_FULL}" == "False" ]]; then
-              if [[ -n "${PREVIOUS_TAG_INPUT}" ]]; then
-                PREV_TAG="${PREVIOUS_TAG_INPUT}"
-              elif ! is_zero_sha "${BEFORE_SHA:-}"; then
-                PREV_TAG="sha-$(printf '%s' "${BEFORE_SHA}" | cut -c1-7)"
+              if ! is_zero_sha "${BEFORE_SHA:-}" && git cat-file -e "${BEFORE_SHA}^{commit}" 2>/dev/null; then
+                classify_from_diff "${BEFORE_SHA}" "workflow_dispatch"
               elif git rev-parse --verify HEAD^ >/dev/null 2>&1; then
-                PREV_TAG="sha-$(git rev-parse --short=7 HEAD^)"
+                classify_from_diff "$(git rev-parse HEAD^)" "workflow_dispatch"
               else
-                PREV_TAG=""
-              fi
-
-              if [[ -z "${PREV_TAG}" ]]; then
-                MODE="full"
-                REASON="workflow_dispatch selective requested but no previous_tag / parent commit"
-              else
-                # Prefer path classification vs parent commit when available.
-                if ! is_zero_sha "${BEFORE_SHA:-}" && git cat-file -e "${BEFORE_SHA}^{commit}" 2>/dev/null; then
-                  classify_from_diff "${BEFORE_SHA}" "workflow_dispatch"
-                elif git rev-parse --verify HEAD^ >/dev/null 2>&1; then
-                  classify_from_diff "$(git rev-parse HEAD^)" "workflow_dispatch"
-                else
-                  # No diff base: retag all from PREV_TAG (no source rebuild).
-                  MODE="selective"
-                  REASON="workflow_dispatch selective retag-all (no diff base)"
-                fi
+                echo "::error::workflow_dispatch selective mode requires a parent commit for classification"
+                exit 1
               fi
             else
               MODE="full"
@@ -420,7 +391,6 @@ jobs:
               MODE="full"
               REASON="push with empty/zero before SHA (first commit or force)"
             else
-              PREV_TAG="sha-$(printf '%s' "${BEFORE_SHA}" | cut -c1-7)"
               classify_from_diff "${BEFORE_SHA}" "push"
             fi
           else
@@ -429,26 +399,14 @@ jobs:
           fi
 
           BUILD_LIST=()
-          RETAG_LIST=()
-
           if [[ "${MODE}" == "full" ]]; then
             BUILD_LIST=("${RELEASE[@]}")
-            RETAG_LIST=()
-            # Full bake does not retag; drop PREV_TAG so preflight skips retag existence checks.
-            PREV_TAG=""
-          else
-            # selective: BUILD_SET may be empty → retag all (e.g. only non-release src/* changed)
+          elif [[ "${MODE}" == "selective" ]]; then
             for s in "${RELEASE[@]}"; do
               if [[ -n "${BUILD_SET[${s}]+x}" ]]; then
                 BUILD_LIST+=("${s}")
-              else
-                RETAG_LIST+=("${s}")
               fi
             done
-            if [[ -z "${PREV_TAG}" ]]; then
-              echo "::error::Selective mode requires PREV_TAG"
-              exit 1
-            fi
           fi
 
           if [[ "${#BUILD_LIST[@]}" -eq 0 ]]; then
@@ -456,35 +414,17 @@ jobs:
           else
             BUILD_JSON="$(printf '%s\n' "${BUILD_LIST[@]}" | jq -Rsc 'split("\n") | map(select(length>0))')"
           fi
-          if [[ "${#RETAG_LIST[@]}" -eq 0 ]]; then
-            RETAG_JSON='[]'
-          else
-            RETAG_JSON="$(printf '%s\n' "${RETAG_LIST[@]}" | jq -Rsc 'split("\n") | map(select(length>0))')"
-          fi
           BUILD_COUNT="$(printf '%s' "${BUILD_JSON}" | jq 'length')"
-          RETAG_COUNT="$(printf '%s' "${RETAG_JSON}" | jq 'length')"
-
-          # Invariants: disjoint union of release set.
-          UNION_COUNT="$(jq -n --argjson b "${BUILD_JSON}" --argjson r "${RETAG_JSON}" '($b + $r) | unique | length')"
-          OVERLAP="$(jq -n --argjson b "${BUILD_JSON}" --argjson r "${RETAG_JSON}" '($b - ($b - $r)) | length')"
-          if [[ "${UNION_COUNT}" -ne "${#RELEASE[@]}" || "${OVERLAP}" -ne 0 ]]; then
-            echo "::error::build/retag classification invalid: union=${UNION_COUNT} overlap=${OVERLAP} release=${#RELEASE[@]}"
-            echo "build=${BUILD_JSON}"
-            echo "retag=${RETAG_JSON}"
-            exit 1
-          fi
-          if [[ $((BUILD_COUNT + RETAG_COUNT)) -ne "${#RELEASE[@]}" ]]; then
-            echo "::error::build_count+retag_count != release count"
+          UNIQUE_COUNT="$(printf '%s' "${BUILD_JSON}" | jq 'unique | length')"
+          if [[ "${UNIQUE_COUNT}" -ne "${BUILD_COUNT}" || "${BUILD_COUNT}" -gt "${#RELEASE[@]}" ]]; then
+            echo "::error::BUILD_SET is invalid: count=${BUILD_COUNT} unique=${UNIQUE_COUNT} release=${#RELEASE[@]}"
             exit 1
           fi
 
           {
             echo "mode=${MODE}"
-            echo "prev_tag=${PREV_TAG}"
             echo "build_services=${BUILD_JSON}"
-            echo "retag_services=${RETAG_JSON}"
             echo "build_count=${BUILD_COUNT}"
-            echo "retag_count=${RETAG_COUNT}"
           } >> "${GITHUB_OUTPUT}"
 
           {
@@ -495,35 +435,23 @@ jobs:
             echo "| Mode | \`${MODE}\` |"
             echo "| Reason | ${REASON} |"
             echo "| NEW_TAG | (prepare version output) |"
-            echo "| PREV_TAG | \`${PREV_TAG:-none}\` |"
-            echo "| Build from source | ${BUILD_COUNT} |"
-            echo "| Retag from PREV_TAG | ${RETAG_COUNT} |"
+            echo "| BUILD_SET count | ${BUILD_COUNT} |"
             echo ""
-            echo "### Build list"
+            echo "### BUILD_SET"
             echo ""
             if [[ "${BUILD_COUNT}" -eq 0 ]]; then
               echo "_none_"
             else
               printf '%s\n' "${BUILD_LIST[@]}" | sed 's/^/- /'
             fi
-            echo ""
-            echo "### Retag list"
-            echo ""
-            if [[ "${RETAG_COUNT}" -eq 0 ]]; then
-              echo "_none_"
-            else
-              printf '%s\n' "${RETAG_LIST[@]}" | sed 's/^/- /'
-            fi
           } >> "${GITHUB_STEP_SUMMARY}"
 
           echo "mode=${MODE} reason=${REASON}"
-          echo "prev_tag=${PREV_TAG:-none}"
-          echo "build_count=${BUILD_COUNT} retag_count=${RETAG_COUNT}"
+          echo "build_count=${BUILD_COUNT}"
           echo "build_services=${BUILD_JSON}"
-          echo "retag_services=${RETAG_JSON}"
 
   # ---------------------------------------------------------------------------
-  # 3. preflight — OIDC + ECR repository checks; refine retag list if PREV_TAG missing
+  # 3. preflight — OIDC + ECR repository checks for BUILD_SET
   # ---------------------------------------------------------------------------
   preflight:
     name: AWS/ECR preflight
@@ -535,11 +463,8 @@ jobs:
       contents: read
       id-token: write
     outputs:
-      build_services: ${{ steps.refine.outputs.build_services }}
-      retag_services: ${{ steps.refine.outputs.retag_services }}
-      build_count: ${{ steps.refine.outputs.build_count }}
-      retag_count: ${{ steps.refine.outputs.retag_count }}
-      prev_tag: ${{ steps.refine.outputs.prev_tag }}
+      build_services: ${{ steps.selected.outputs.build_services }}
+      build_count: ${{ steps.selected.outputs.build_count }}
     env:
       AWS_REGION: ${{ vars.AWS_REGION || 'us-east-1' }}
     steps:
@@ -568,10 +493,10 @@ jobs:
           role-to-assume: ${{ vars.AWS_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
 
-      - name: Verify ECR repositories for release catalog
+      - name: Verify ECR repositories for BUILD_SET
         env:
           IMAGE_NAME: ${{ vars.IMAGE_NAME }}
-          SERVICES_JSON: ${{ needs.prepare.outputs.services }}
+          SERVICES_JSON: ${{ needs.prepare.outputs.build_services }}
         run: |
           set -euo pipefail
           # IMAGE_NAME = REGISTRY/PROJECT (e.g. 123.dkr.ecr.region.amazonaws.com/techx-dev-corp)
@@ -597,95 +522,17 @@ jobs:
             printf '  - %s\n' "${MISSING[@]}"
             exit 1
           fi
-          echo "All ${#SERVICES[@]} ECR repositories exist under project ${PROJECT}"
+          echo "All ${#SERVICES[@]} BUILD_SET repositories exist under project ${PROJECT}"
 
-      - name: Refine build/retag lists against PREV_TAG in ECR
-        id: refine
+      - name: Expose validated BUILD_SET
+        id: selected
         env:
-          IMAGE_NAME: ${{ vars.IMAGE_NAME }}
-          PREV_TAG: ${{ needs.prepare.outputs.prev_tag }}
-          MODE: ${{ needs.prepare.outputs.mode }}
-          BUILD_JSON: ${{ needs.prepare.outputs.build_services }}
-          RETAG_JSON: ${{ needs.prepare.outputs.retag_services }}
-          SERVICES_JSON: ${{ needs.prepare.outputs.services }}
+          BUILD_SERVICES: ${{ needs.prepare.outputs.build_services }}
+          BUILD_COUNT: ${{ needs.prepare.outputs.build_count }}
         run: |
           set -euo pipefail
-          PROJECT="${IMAGE_NAME#*/}"
-
-          mapfile -t BUILD_LIST < <(printf '%s' "${BUILD_JSON}" | jq -r '.[]?')
-          mapfile -t RETAG_LIST < <(printf '%s' "${RETAG_JSON}" | jq -r '.[]?')
-          # jq -r on empty array yields no lines; mapfile may leave empty array.
-
-          MOVED=()
-          KEPT_RETAG=()
-
-          if [[ "${MODE}" == "selective" && -n "${PREV_TAG}" && "${#RETAG_LIST[@]}" -gt 0 ]]; then
-            for svc in "${RETAG_LIST[@]}"; do
-              REPO="${PROJECT}/${svc}"
-              if aws ecr describe-images \
-                --repository-name "${REPO}" \
-                --image-ids "imageTag=${PREV_TAG}" \
-                --region "${AWS_REGION}" \
-                --output json >/dev/null 2>&1; then
-                KEPT_RETAG+=("${svc}")
-                echo "OK retag source ${REPO}:${PREV_TAG}"
-              else
-                BUILD_LIST+=("${svc}")
-                MOVED+=("${svc}")
-                echo "Missing ${REPO}:${PREV_TAG} → move to build-from-source"
-              fi
-            done
-            if [[ "${#KEPT_RETAG[@]}" -eq 0 ]]; then
-              RETAG_LIST=()
-            else
-              RETAG_LIST=("${KEPT_RETAG[@]}")
-            fi
-          fi
-
-          # De-dupe lists while preserving order
-          if [[ "${#BUILD_LIST[@]}" -eq 0 ]]; then
-            BUILD_JSON_OUT='[]'
-          else
-            BUILD_JSON_OUT="$(printf '%s\n' "${BUILD_LIST[@]}" | awk 'NF && !seen[$0]++' | jq -Rsc 'split("\n") | map(select(length>0))')"
-          fi
-          if [[ "${#RETAG_LIST[@]}" -eq 0 ]]; then
-            RETAG_JSON_OUT='[]'
-          else
-            RETAG_JSON_OUT="$(printf '%s\n' "${RETAG_LIST[@]}" | awk 'NF && !seen[$0]++' | jq -Rsc 'split("\n") | map(select(length>0))')"
-          fi
-          BUILD_COUNT="$(printf '%s' "${BUILD_JSON_OUT}" | jq 'length')"
-          RETAG_COUNT="$(printf '%s' "${RETAG_JSON_OUT}" | jq 'length')"
-          SERVICE_COUNT="$(printf '%s' "${SERVICES_JSON}" | jq 'length')"
-
-          if [[ $((BUILD_COUNT + RETAG_COUNT)) -ne "${SERVICE_COUNT}" ]]; then
-            echo "::error::Refined build+retag (${BUILD_COUNT}+${RETAG_COUNT}) != service_count ${SERVICE_COUNT}"
-            exit 1
-          fi
-
-          {
-            echo "build_services=${BUILD_JSON_OUT}"
-            echo "retag_services=${RETAG_JSON_OUT}"
-            echo "build_count=${BUILD_COUNT}"
-            echo "retag_count=${RETAG_COUNT}"
-            echo "prev_tag=${PREV_TAG}"
-          } >> "${GITHUB_OUTPUT}"
-
-          {
-            echo "## Preflight refine"
-            echo ""
-            echo "| Field | Value |"
-            echo "|---|---|"
-            echo "| Mode | \`${MODE}\` |"
-            echo "| PREV_TAG | \`${PREV_TAG:-none}\` |"
-            echo "| Build (final) | ${BUILD_COUNT} |"
-            echo "| Retag (final) | ${RETAG_COUNT} |"
-            if [[ "${#MOVED[@]}" -gt 0 ]]; then
-              echo ""
-              echo "Moved to build (missing PREV_TAG): ${MOVED[*]}"
-            fi
-          } >> "${GITHUB_STEP_SUMMARY}"
-
-          echo "Final build_count=${BUILD_COUNT} retag_count=${RETAG_COUNT}"
+          echo "build_services=${BUILD_SERVICES}" >> "${GITHUB_OUTPUT}"
+          echo "build_count=${BUILD_COUNT}" >> "${GITHUB_OUTPUT}"
 
   # ---------------------------------------------------------------------------
   # 4. build matrix — bake only services classified as changed (from source)
@@ -808,105 +655,17 @@ jobs:
           } >> "${GITHUB_STEP_SUMMARY}"
 
   # ---------------------------------------------------------------------------
-  # 5. retag matrix — copy PREV_TAG → NEW_TAG for unchanged services (no source rebuild)
-  # ---------------------------------------------------------------------------
-  retag:
-    name: Retag ${{ matrix.service }}
-    needs: [prepare, preflight]
-    if: needs.preflight.outputs.retag_count != '0'
-    runs-on: ubuntu-latest
-    timeout-minutes: 20
-    environment: ${{ needs.prepare.outputs.target_environment }}
-    permissions:
-      contents: read
-      id-token: write
-    strategy:
-      fail-fast: false
-      max-parallel: 23
-      matrix:
-        service: ${{ fromJson(needs.preflight.outputs.retag_services) }}
-    env:
-      AWS_REGION: ${{ vars.AWS_REGION || 'us-east-1' }}
-    steps:
-      - name: Configure AWS credentials (OIDC)
-        # aws-actions/configure-aws-credentials@v6.2.2
-        uses: aws-actions/configure-aws-credentials@517a711dbcd0e402f90c77e7e2f81e849156e31d
-        with:
-          role-to-assume: ${{ vars.AWS_ROLE_ARN }}
-          aws-region: ${{ env.AWS_REGION }}
-
-      - name: Login to Amazon ECR
-        # aws-actions/amazon-ecr-login@v2.1.6
-        uses: aws-actions/amazon-ecr-login@d539f0932e70871a027e9d5a9d8fc38589180a64
-
-      - name: Set up Docker Buildx
-        # docker/setup-buildx-action@v4.2.0
-        uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c
-
-      - name: Retag previous image to new global tag
-        env:
-          IMAGE_NAME: ${{ vars.IMAGE_NAME }}
-          NEW_TAG: ${{ needs.prepare.outputs.version }}
-          PREV_TAG: ${{ needs.preflight.outputs.prev_tag }}
-          SERVICE: ${{ matrix.service }}
-        run: |
-          set -euo pipefail
-          if [[ -z "${PREV_TAG}" ]]; then
-            echo "::error::PREV_TAG is empty; cannot retag ${SERVICE}"
-            exit 1
-          fi
-          if [[ "${PREV_TAG}" == "${NEW_TAG}" ]]; then
-            echo "PREV_TAG equals NEW_TAG (${NEW_TAG}); ensuring tag exists via imagetools create (idempotent)."
-          fi
-
-          SRC="${IMAGE_NAME}/${SERVICE}:${PREV_TAG}"
-          DST="${IMAGE_NAME}/${SERVICE}:${NEW_TAG}"
-          echo "Retag ${SRC} → ${DST}"
-
-          docker buildx imagetools create --tag "${DST}" "${SRC}"
-
-          # Resolve digests for summary (best-effort).
-          SRC_DIGEST="$(docker buildx imagetools inspect "${SRC}" --format '{{.Manifest.Digest}}' 2>/dev/null || echo unknown)"
-          DST_DIGEST="$(docker buildx imagetools inspect "${DST}" --format '{{.Manifest.Digest}}' 2>/dev/null || echo unknown)"
-          echo "src_digest=${SRC_DIGEST}"
-          echo "dst_digest=${DST_DIGEST}"
-
-      - name: Job summary
-        if: always()
-        env:
-          IMAGE_NAME: ${{ vars.IMAGE_NAME }}
-          NEW_TAG: ${{ needs.prepare.outputs.version }}
-          PREV_TAG: ${{ needs.preflight.outputs.prev_tag }}
-          SERVICE: ${{ matrix.service }}
-          SHORT_SHA: ${{ needs.prepare.outputs.short_sha }}
-          TARGET_ENV: ${{ needs.prepare.outputs.target_environment }}
-        run: |
-          {
-            echo "## Retag ${SERVICE}"
-            echo ""
-            echo "| Field | Value |"
-            echo "|---|---|"
-            echo "| Environment | \`${TARGET_ENV}\` |"
-            echo "| Service | \`${SERVICE}\` |"
-            echo "| Source | \`${IMAGE_NAME}/${SERVICE}:${PREV_TAG}\` |"
-            echo "| Destination | \`${IMAGE_NAME}/${SERVICE}:${NEW_TAG}\` |"
-            echo "| Mode | retag (no source rebuild) |"
-            echo "| Commit | \`${SHORT_SHA}\` |"
-          } >> "${GITHUB_STEP_SUMMARY}"
-
-  # ---------------------------------------------------------------------------
-  # 6. verify ECR — all 23 tags under NEW_TAG after build and/or retag
+  # 5. verify ECR — only BUILD_SET tags under NEW_TAG
   # ---------------------------------------------------------------------------
   verify-ecr:
     name: Verify ECR tags
-    needs: [prepare, preflight, build, retag]
-    # Continue when build or retag is skipped (empty matrix side); not when they fail.
+    needs: [prepare, preflight, build]
     if: >
       always() &&
       needs.prepare.result == 'success' &&
       needs.preflight.result == 'success' &&
-      (needs.build.result == 'success' || needs.build.result == 'skipped') &&
-      (needs.retag.result == 'success' || needs.retag.result == 'skipped')
+      needs.preflight.outputs.build_count != '0' &&
+      needs.build.result == 'success'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     environment: ${{ needs.prepare.outputs.target_environment }}
@@ -923,11 +682,11 @@ jobs:
           role-to-assume: ${{ vars.AWS_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
 
-      - name: Describe every promoted release tag
+      - name: Describe every BUILD_SET tag
         env:
           IMAGE_NAME: ${{ vars.IMAGE_NAME }}
           DEMO_VERSION: ${{ needs.prepare.outputs.version }}
-          SERVICES_JSON: ${{ needs.prepare.outputs.services }}
+          SERVICES_JSON: ${{ needs.preflight.outputs.build_services }}
         run: |
           set -euo pipefail
           PROJECT="${IMAGE_NAME#*/}"
@@ -975,7 +734,7 @@ jobs:
   # chart mutation. A failure here makes release-ready fail closed.
   resolve-image-digests:
     name: Resolve image digests
-    needs: [prepare, verify-ecr]
+    needs: [prepare, preflight, verify-ecr]
     runs-on: ubuntu-latest
     environment: ${{ needs.prepare.outputs.target_environment }}
     permissions:
@@ -996,7 +755,7 @@ jobs:
         env:
           IMAGE_NAME: ${{ vars.IMAGE_NAME }}
           VERSION: ${{ needs.prepare.outputs.version }}
-          SERVICES_JSON: ${{ needs.prepare.outputs.services }}
+          SERVICES_JSON: ${{ needs.preflight.outputs.build_services }}
         run: |
           set -euo pipefail
           project="${IMAGE_NAME#*/}"
@@ -1011,8 +770,7 @@ jobs:
   trivy-image-scan:
     name: Trivy image scan
     needs: [prepare, preflight, verify-ecr]
-    # Selective rebuild: scan only services baked from source (retag reuses prior digests).
-    # Full rebuild or empty build list falls back to the full catalog.
+    # Scan exactly BUILD_SET; unchanged digests are not republished.
     if: >
       always() &&
       needs.prepare.result == 'success' &&
@@ -1028,7 +786,7 @@ jobs:
       fail-fast: false
       max-parallel: 8
       matrix:
-        service: ${{ fromJson(needs.preflight.outputs.build_count != '0' && needs.preflight.outputs.build_services || needs.prepare.outputs.services) }}
+        service: ${{ fromJson(needs.preflight.outputs.build_services) }}
     env:
       AWS_REGION: ${{ vars.AWS_REGION || 'us-east-1' }}
       IMAGE_REF: ${{ vars.IMAGE_NAME }}/${{ matrix.service }}:${{ needs.prepare.outputs.version }}
@@ -1135,7 +893,7 @@ jobs:
   sign-and-attest:
     name: Sign and attest ${{ matrix.service }}
     needs: [prepare, preflight, verify-ecr, trivy-image-scan, trivy-iac-scan, semgrep-sast, trufflehog-secrets]
-    # Sign digests that were (re)scanned this run; retag-only reuses prior signatures on full catalog scan.
+    # Sign exactly the digests built and scanned in this run.
     if: >
       always() &&
       needs.prepare.result == 'success' &&
@@ -1156,7 +914,7 @@ jobs:
       fail-fast: false
       max-parallel: 8
       matrix:
-        service: ${{ fromJson(needs.preflight.outputs.build_count != '0' && needs.preflight.outputs.build_services || needs.prepare.outputs.services) }}
+        service: ${{ fromJson(needs.preflight.outputs.build_services) }}
     env:
       AWS_REGION: ${{ vars.AWS_REGION || 'us-east-1' }}
       COSIGN_KEY: ${{ vars.COSIGN_KMS_KEY || 'awskms:///alias/tf2-cosign-signing-key' }}
@@ -1256,13 +1014,12 @@ jobs:
           cosign attest --yes --predicate predicate.json --type "${PROVENANCE_TYPE}" --key "${COSIGN_KEY}" "${IMAGE}"
 
   # ---------------------------------------------------------------------------
-  # 7. publish-mem0-fastembed-artifact — selective like the image matrix:
-  #    rebuild from source when mem0 is in the build list; otherwise retag
-  #    (copy) PREV_TAG → NEW_TAG objects under the same S3 prefix.
+  # 6. publish-mem0-fastembed-artifact — only when mem0 is in BUILD_SET.
   # ---------------------------------------------------------------------------
   publish-mem0-fastembed-artifact:
     name: Publish Mem0 FastEmbed artifact
     needs: [prepare, preflight]
+    if: contains(needs.preflight.outputs.build_services, '"mem0"')
     runs-on: ubuntu-latest
     timeout-minutes: 45
     environment: ${{ needs.prepare.outputs.target_environment }}
@@ -1273,38 +1030,16 @@ jobs:
       AWS_REGION: ${{ vars.AWS_REGION || 'us-east-1' }}
       MEM0_FASTEMBED_ARTIFACT_S3_URI: ${{ vars.MEM0_FASTEMBED_ARTIFACT_S3_URI }}
       VERSION: ${{ needs.prepare.outputs.version }}
-      PREV_TAG: ${{ needs.preflight.outputs.prev_tag }}
       SHORT_SHA: ${{ needs.prepare.outputs.short_sha }}
       TARGET_ENV: ${{ needs.prepare.outputs.target_environment }}
-      BUILD_SERVICES_JSON: ${{ needs.preflight.outputs.build_services }}
-      MODE: ${{ needs.prepare.outputs.mode }}
     steps:
-      - name: Resolve artifact action (build vs retag)
-        id: plan
-        run: |
-          set -euo pipefail
-          # mem0 image is always in build or retag of the release set.
-          # Artifact follows the same classification: rebuild only when mem0 bakes.
-          if printf '%s' "${BUILD_SERVICES_JSON}" | jq -e 'index("mem0") != null' >/dev/null; then
-            ACTION="build"
-            REASON="mem0 is in the image build list (mode=${MODE})"
-          else
-            ACTION="retag"
-            REASON="mem0 is unchanged; retag FastEmbed from PREV_TAG (mode=${MODE})"
-          fi
-          {
-            echo "action=${ACTION}"
-            echo "reason=${REASON}"
-          } >> "${GITHUB_OUTPUT}"
-          echo "action=${ACTION} reason=${REASON}"
-
       - name: Validate artifact destination
         id: dest
         run: |
           set -euo pipefail
           if [[ -z "${MEM0_FASTEMBED_ARTIFACT_S3_URI}" ]]; then
             # Do not block the whole image release when CloudOps has not wired the
-            # model-cache bucket URI yet. Image matrix build/retag still proceeds.
+            # model-cache bucket URI yet. The mem0 image publish still proceeds.
             echo "::warning::MEM0_FASTEMBED_ARTIFACT_S3_URI is not set on '${TARGET_ENV}'; skipping FastEmbed publish."
             echo "skip=true" >> "${GITHUB_OUTPUT}"
             exit 0
@@ -1320,12 +1055,12 @@ jobs:
           echo "base_uri=${MEM0_FASTEMBED_ARTIFACT_S3_URI%/}" >> "${GITHUB_OUTPUT}"
 
       - name: Checkout
-        if: steps.dest.outputs.skip != 'true' && steps.plan.outputs.action == 'build'
+        if: steps.dest.outputs.skip != 'true'
         # actions/checkout@v7.0.0
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
 
       - name: Setup Python
-        if: steps.dest.outputs.skip != 'true' && steps.plan.outputs.action == 'build'
+        if: steps.dest.outputs.skip != 'true'
         # actions/setup-python@v6.2.0
         uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405
         with:
@@ -1334,15 +1069,15 @@ jobs:
           cache-dependency-path: src/mem0/requirements-production.txt
 
       - name: Install Mem0 artifact dependencies
-        if: steps.dest.outputs.skip != 'true' && steps.plan.outputs.action == 'build'
+        if: steps.dest.outputs.skip != 'true'
         run: python -m pip install -r src/mem0/requirements-production.txt
 
       - name: Build FastEmbed artifact
-        if: steps.dest.outputs.skip != 'true' && steps.plan.outputs.action == 'build'
+        if: steps.dest.outputs.skip != 'true'
         run: python src/mem0/scripts/build_embedding_model_artifact.py --output-dir "${RUNNER_TEMP}/mem0-fastembed"
 
       - name: Validate FastEmbed artifact offline
-        if: steps.dest.outputs.skip != 'true' && steps.plan.outputs.action == 'build'
+        if: steps.dest.outputs.skip != 'true'
         run: |
           set -euo pipefail
           ARCHIVE="$(find "${RUNNER_TEMP}/mem0-fastembed" -maxdepth 1 -type f -name '*.tar.gz' | head -n 1)"
@@ -1363,7 +1098,7 @@ jobs:
           aws-region: ${{ env.AWS_REGION }}
 
       - name: Upload rebuilt artifact to S3
-        if: steps.dest.outputs.skip != 'true' && steps.plan.outputs.action == 'build'
+        if: steps.dest.outputs.skip != 'true'
         env:
           BASE_URI: ${{ steps.dest.outputs.base_uri }}
         run: |
@@ -1394,54 +1129,6 @@ jobs:
             echo "| Commit | \`${SHORT_SHA}\` |"
           } >> "${GITHUB_STEP_SUMMARY}"
 
-      - name: Retag previous FastEmbed artifact to new tag
-        if: steps.dest.outputs.skip != 'true' && steps.plan.outputs.action == 'retag'
-        env:
-          BASE_URI: ${{ steps.dest.outputs.base_uri }}
-        run: |
-          set -euo pipefail
-          if [[ -z "${PREV_TAG}" ]]; then
-            echo "::error::PREV_TAG is empty; cannot retag FastEmbed artifact"
-            exit 1
-          fi
-          if [[ "${PREV_TAG}" == "${VERSION}" ]]; then
-            echo "PREV_TAG equals NEW_TAG (${VERSION}); ensuring objects exist under that prefix."
-          fi
-
-          SRC="${BASE_URI}/${PREV_TAG}/"
-          DST="${BASE_URI}/${VERSION}/"
-          echo "Retag FastEmbed ${SRC} → ${DST}"
-
-          # Fail if the previous tag has no objects (operator must rebuild once).
-          if ! aws s3 ls "${SRC}" --region "${AWS_REGION}" 2>/dev/null | grep -q .; then
-            echo "::error::No FastEmbed objects at ${SRC}. Re-run with mem0 in the build list or set force_full_rebuild."
-            exit 1
-          fi
-
-          aws s3 cp "${SRC}" "${DST}" --recursive --region "${AWS_REGION}"
-
-          # Best-effort presence check for common artifact files.
-          FOUND=0
-          while IFS= read -r line; do
-            [[ -n "${line}" ]] && FOUND=1
-          done < <(aws s3 ls "${DST}" --region "${AWS_REGION}" 2>/dev/null || true)
-          if [[ "${FOUND}" -eq 0 ]]; then
-            echo "::error::Retag completed but destination ${DST} is empty"
-            exit 1
-          fi
-
-          {
-            echo "## Mem0 FastEmbed artifact (retag)"
-            echo ""
-            echo "| Field | Value |"
-            echo "|---|---|"
-            echo "| Environment | \`${TARGET_ENV}\` |"
-            echo "| Mode | retag (S3 copy, no model rebuild) |"
-            echo "| Source | \`${SRC}\` |"
-            echo "| Destination | \`${DST}\` |"
-            echo "| Commit | \`${SHORT_SHA}\` |"
-          } >> "${GITHUB_STEP_SUMMARY}"
-
       - name: Job summary (skipped)
         if: steps.dest.outputs.skip == 'true'
         run: |
@@ -1449,17 +1136,16 @@ jobs:
             echo "## Mem0 FastEmbed artifact"
             echo ""
             echo "Skipped: \`MEM0_FASTEMBED_ARTIFACT_S3_URI\` is not set on \`${TARGET_ENV}\`."
-            echo "Image matrix build/retag for mem0 is independent of this artifact job."
-            echo "Planned action was: \`${{ steps.plan.outputs.action }}\` (${{ steps.plan.outputs.reason }})."
+            echo "The mem0 image build is independent of this optional artifact destination."
           } >> "${GITHUB_STEP_SUMMARY}"
 
   # ---------------------------------------------------------------------------
-  # 8. release-ready — sole gate for chart promotion (auto-dev or auto-prod PR)
+  # 7. release-ready — sole gate for chart promotion (auto-dev or auto-prod PR)
   # ---------------------------------------------------------------------------
   release-ready:
     name: Release ready
     if: always()
-    needs: [ci, prepare, preflight, build, retag, verify-ecr, trivy-image-scan, trivy-iac-scan, semgrep-sast, trufflehog-secrets, sign-and-attest, publish-mem0-fastembed-artifact]
+    needs: [ci, prepare, preflight, build, verify-ecr, trivy-image-scan, trivy-iac-scan, semgrep-sast, trufflehog-secrets, sign-and-attest, publish-mem0-fastembed-artifact]
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -1470,7 +1156,6 @@ jobs:
           PREPARE_RESULT: ${{ needs.prepare.result }}
           PREFLIGHT_RESULT: ${{ needs.preflight.result }}
           BUILD_RESULT: ${{ needs.build.result }}
-          RETAG_RESULT: ${{ needs.retag.result }}
           VERIFY_RESULT: ${{ needs.verify-ecr.result }}
           TRIVY_RESULT: ${{ needs.trivy-image-scan.result }}
           TRIVY_IAC_RESULT: ${{ needs.trivy-iac-scan.result }}
@@ -1484,7 +1169,7 @@ jobs:
           SERVICE_COUNT: ${{ needs.prepare.outputs.service_count }}
           MODE: ${{ needs.prepare.outputs.mode }}
           BUILD_COUNT: ${{ needs.preflight.outputs.build_count }}
-          RETAG_COUNT: ${{ needs.preflight.outputs.retag_count }}
+          BUILD_SERVICES_JSON: ${{ needs.preflight.outputs.build_services }}
         run: |
           set -euo pipefail
           {
@@ -1496,7 +1181,6 @@ jobs:
             echo "| prepare | \`${PREPARE_RESULT}\` |"
             echo "| preflight | \`${PREFLIGHT_RESULT}\` |"
             echo "| build | \`${BUILD_RESULT}\` |"
-            echo "| retag | \`${RETAG_RESULT}\` |"
             echo "| verify-ecr | \`${VERIFY_RESULT}\` |"
             echo "| trivy-image-scan | \`${TRIVY_RESULT}\` |"
             echo "| trivy-iac-scan | \`${TRIVY_IAC_RESULT}\` |"
@@ -1513,7 +1197,6 @@ jobs:
             echo "| Services | \`${SERVICE_COUNT}\` |"
             echo "| Mode | \`${MODE}\` |"
             echo "| Build count | \`${BUILD_COUNT}\` |"
-            echo "| Retag count | \`${RETAG_COUNT}\` |"
             echo ""
             if [[ "${TARGET_ENV}" == "development" ]]; then
               echo "On success, **update-chart-dev** will direct-push rebuilt service digests under \`service-digest/\` on the chart repo."
@@ -1524,29 +1207,42 @@ jobs:
           } >> "${GITHUB_STEP_SUMMARY}"
 
           FAILED=0
-          # build/retag may be skipped when that side of the selective plan is empty.
-          for pair in "ci:${CI_RESULT}:strict" "prepare:${PREPARE_RESULT}:strict" "preflight:${PREFLIGHT_RESULT}:strict" "build:${BUILD_RESULT}:allow_skip" "retag:${RETAG_RESULT}:allow_skip" "verify-ecr:${VERIFY_RESULT}:strict" "trivy-image-scan:${TRIVY_RESULT}:strict" "trivy-iac-scan:${TRIVY_IAC_RESULT}:strict" "semgrep-sast:${SEMGREP_RESULT}:strict" "trufflehog-secrets:${TRUFFLEHOG_RESULT}:strict" "sign-and-attest:${SIGN_RESULT}:strict" "publish-mem0-fastembed-artifact:${MEM0_ARTIFACT_RESULT}:strict"; do
+          for pair in "ci:${CI_RESULT}" "prepare:${PREPARE_RESULT}" "preflight:${PREFLIGHT_RESULT}" "trivy-iac-scan:${TRIVY_IAC_RESULT}" "semgrep-sast:${SEMGREP_RESULT}" "trufflehog-secrets:${TRUFFLEHOG_RESULT}"; do
             name="${pair%%:*}"
-            rest="${pair#*:}"
-            result="${rest%%:*}"
-            mode="${rest#*:}"
-            if [[ "${mode}" == "allow_skip" ]]; then
-              if [[ "${result}" != "success" && "${result}" != "skipped" ]]; then
-                echo "::error::Release gate failed: job '${name}' result='${result}' (want success|skipped)"
+            result="${pair#*:}"
+            if [[ "${result}" != "success" ]]; then
+              echo "::error::Release gate failed: job '${name}' result='${result}' (want success)"
+              FAILED=1
+            fi
+          done
+
+          if [[ "${BUILD_COUNT}" -eq 0 ]]; then
+            for pair in "build:${BUILD_RESULT}" "verify-ecr:${VERIFY_RESULT}" "trivy-image-scan:${TRIVY_RESULT}" "sign-and-attest:${SIGN_RESULT}" "publish-mem0-fastembed-artifact:${MEM0_ARTIFACT_RESULT}"; do
+              name="${pair%%:*}"
+              result="${pair#*:}"
+              if [[ "${result}" != "skipped" ]]; then
+                echo "::error::No-op gate failed: job '${name}' result='${result}' (want skipped)"
                 FAILED=1
               fi
-            else
+            done
+          else
+            for pair in "build:${BUILD_RESULT}" "verify-ecr:${VERIFY_RESULT}" "trivy-image-scan:${TRIVY_RESULT}" "sign-and-attest:${SIGN_RESULT}"; do
+              name="${pair%%:*}"
+              result="${pair#*:}"
               if [[ "${result}" != "success" ]]; then
                 echo "::error::Release gate failed: job '${name}' result='${result}' (want success)"
                 FAILED=1
               fi
+            done
+            if printf '%s' "${BUILD_SERVICES_JSON}" | jq -e 'index("mem0") != null' >/dev/null; then
+              if [[ "${MEM0_ARTIFACT_RESULT}" != "success" ]]; then
+                echo "::error::Release gate failed: mem0 artifact result='${MEM0_ARTIFACT_RESULT}' (want success)"
+                FAILED=1
+              fi
+            elif [[ "${MEM0_ARTIFACT_RESULT}" != "skipped" ]]; then
+              echo "::error::Mem0 is not in BUILD_SET but artifact job result='${MEM0_ARTIFACT_RESULT}' (want skipped)"
+              FAILED=1
             fi
-          done
-
-          # At least one path must produce images (safety against both sides skipped).
-          if [[ "${BUILD_RESULT}" == "skipped" && "${RETAG_RESULT}" == "skipped" ]]; then
-            echo "::error::Both build and retag were skipped; no images published for tag ${VERSION}"
-            FAILED=1
           fi
 
           if [[ "${FAILED}" -ne 0 ]]; then
@@ -1554,7 +1250,11 @@ jobs:
             exit 1
           fi
 
-          echo "Release is ready (tag=${VERSION}, env=${TARGET_ENV}, mode=${MODE})."
+          if [[ "${BUILD_COUNT}" -eq 0 ]]; then
+            echo "No release services changed; no image was published or promoted."
+          else
+            echo "Release is ready (tag=${VERSION}, env=${TARGET_ENV}, mode=${MODE}, build_count=${BUILD_COUNT})."
+          fi
 
   # ---------------------------------------------------------------------------
   # 9. update-chart-dev — direct-push rebuilt services' immutable digests
@@ -1564,8 +1264,7 @@ jobs:
   update-chart-dev:
     name: Update chart dev service digests
     needs: [prepare, preflight, resolve-image-digests, release-ready]
-    # always(): when selective publish skips empty build/retag, GHA would otherwise
-    # cascade-skip this job even if release-ready succeeded. Gate on result + env.
+    # always(): evaluate the explicit release gate even when a no-op BUILD_SET skips jobs.
     if: >
       always() &&
       needs.release-ready.result == 'success' &&
@@ -1657,8 +1356,7 @@ jobs:
   create-chart-prod-pr:
     name: Create chart production digest PR
     needs: [prepare, preflight, resolve-image-digests, release-ready]
-    # always(): when selective publish skips empty build/retag, GHA would otherwise
-    # cascade-skip this job even if release-ready succeeded. Gate on result + env.
+    # always(): evaluate the explicit release gate even when a no-op BUILD_SET skips jobs.
     if: >
       always() &&
       needs.release-ready.result == 'success' &&
