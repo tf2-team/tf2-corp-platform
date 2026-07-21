@@ -155,6 +155,9 @@ message CopilotSource {
     // "catalog" for product facts, "review" for review-grounded claims.
     string source_type = 2;
     string product_id = 3;
+    string username = 4;
+    float score = 5;
+    string description = 6;
 }
 
 message ConfirmCartActionRequest {

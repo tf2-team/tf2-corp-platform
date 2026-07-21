@@ -22,6 +22,9 @@ export interface CopilotSource {
   sourceId: string;
   sourceType: string;
   productId: string;
+  username?: string;
+  score?: number;
+  description?: string;
 }
 
 export interface CopilotResponse {

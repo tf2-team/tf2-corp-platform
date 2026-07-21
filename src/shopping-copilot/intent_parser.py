@@ -32,6 +32,7 @@ Return JSON only. Do not use Markdown or add commentary.
 Always include every key below, even when its value is null, false, or []:
 
 {
+  "is_greeting": boolean,
   "is_shopping_related": boolean,
   "query": string,
   "category": string | null,
@@ -59,17 +60,20 @@ Rules:
 
 Examples:
 
+User: hi
+JSON: {"is_greeting":true,"is_shopping_related":true,"query":"","category":null,"max_price":null,"features":[],"needs_review_qa":false,"follow_up_question":null,"wants_add_to_cart":false,"cart_product_hint":null}
+
 User: Show me lens cleaning kits under $30
-JSON: {"is_shopping_related":true,"query":"lens cleaning kit","category":null,"max_price":30,"features":[],"needs_review_qa":false,"follow_up_question":null,"wants_add_to_cart":false,"cart_product_hint":null}
+JSON: {"is_greeting":false,"is_shopping_related":true,"query":"lens cleaning kit","category":null,"max_price":30,"features":[],"needs_review_qa":false,"follow_up_question":null,"wants_add_to_cart":false,"cart_product_hint":null}
 
 User: Is the Red Flashlight good for night observation?
-JSON: {"is_shopping_related":true,"query":"red flashlight","category":"flashlight","max_price":null,"features":[],"needs_review_qa":true,"follow_up_question":"Is the Red Flashlight good for night observation?","wants_add_to_cart":false,"cart_product_hint":null}
+JSON: {"is_greeting":false,"is_shopping_related":true,"query":"red flashlight","category":"flashlight","max_price":null,"features":[],"needs_review_qa":true,"follow_up_question":"Is the Red Flashlight good for night observation?","wants_add_to_cart":false,"cart_product_hint":null}
 
 User: Add the Lens Cleaning Kit to my cart
-JSON: {"is_shopping_related":true,"query":"lens cleaning kit","category":null,"max_price":null,"features":[],"needs_review_qa":false,"follow_up_question":null,"wants_add_to_cart":true,"cart_product_hint":"Lens Cleaning Kit"}
+JSON: {"is_greeting":false,"is_shopping_related":true,"query":"lens cleaning kit","category":null,"max_price":null,"features":[],"needs_review_qa":false,"follow_up_question":null,"wants_add_to_cart":true,"cart_product_hint":"Lens Cleaning Kit"}
 
 User: Write a Python quicksort program
-JSON: {"is_shopping_related":false,"query":"","category":null,"max_price":null,"features":[],"needs_review_qa":false,"follow_up_question":null,"wants_add_to_cart":false,"cart_product_hint":null}
+JSON: {"is_greeting":false,"is_shopping_related":false,"query":"","category":null,"max_price":null,"features":[],"needs_review_qa":false,"follow_up_question":null,"wants_add_to_cart":false,"cart_product_hint":null}
 """
 
 

@@ -16,7 +16,7 @@ def test_retrieve_bypass_if_few_reviews():
     safe_set = SafeReviewSet(product_id="P001", reviews=reviews)
     
     # top_k = 5, which is > len(reviews)
-    result = retrieve_relevant_reviews(safe_set, "good battery", top_k=5)
+    result = retrieve_relevant_reviews(safe_set, "How long does the battery last on this product?", top_k=5)
     
     # Should bypass and return all 3 reviews in original order
     assert len(result.reviews) == 3
@@ -47,17 +47,11 @@ def test_retrieve_with_rrf_ranking(mock_get_model):
     mock_cos_sim.return_value = torch.tensor([[0.85, 0.40, 0.10, 0.20]])
     
     with patch("sentence_transformers.util.cos_sim", mock_cos_sim):
-        # We query with "cheap battery"
-        result = retrieve_relevant_reviews(safe_set, "cheap battery", top_k=2)
+        # Query does not contain the word "review"
+        result = retrieve_relevant_reviews(safe_set, "How long does the battery last on this product?", top_k=2)
         
         # Result should have top 2 reviews
         assert len(result.reviews) == 2
         # Review 101 must be first (rank 1 in both BERT and BM25)
         assert result.reviews[0].source_id == "101"
-        # Review 102 must be second (rank 2 in BERT, even though 0 in BM25, its RRF is higher than 104 and 103)
-        # RRF calculations:
-        # 101: BERT rank 1, BM25 rank 1 -> RRF = 1/61 + 1/61 = 0.0327
-        # 102: BERT rank 2, BM25 rank 2 -> RRF = 1/62 + 1/62 = 0.0322
-        # 104: BERT rank 3, BM25 rank 2 -> RRF = 1/63 + 1/62 = 0.0320
-        # 103: BERT rank 4, BM25 rank 2 -> RRF = 1/64 + 1/62 = 0.0317
         assert result.reviews[1].source_id == "102"

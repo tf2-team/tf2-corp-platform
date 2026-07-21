@@ -198,57 +198,31 @@ def _fallback_response(error_class: str = ""):
     return ai_assistant_response
 
 
-def is_review_related(question: str) -> bool:
-    if not question:
-        return False
-    question_lower = question.lower()
-    import unicodedata
-    def remove_accents(input_str):
-        nfkd_form = unicodedata.normalize('NFKD', input_str)
-        return "".join([c for c in nfkd_form if not unicodedata.combining(c)])
-    
-    normalized_q = remove_accents(question_lower)
-    keywords = [
-        "review", "rating", "comment", "feedback", "opinion"
-    ]
-    for kw in keywords:
-        if kw in normalized_q:
-            return True
-    return False
-
-
 def _get_bedrock_response(request_product_id, question, system_prompt, span):
-    """Bedrock has no OpenAI-compatible client here; fetch trusted data directly."""
+    """Bedrock has no OpenAI-compatible client here; fetch trusted data directly via RAG pipeline."""
     try:
-        if is_review_related(question):
-            safe_reviews = guardrails.sanitize_reviews(
-                request_product_id, fetch_product_reviews(product_id=request_product_id)
+        safe_reviews = guardrails.sanitize_reviews(
+            request_product_id, fetch_product_reviews(product_id=request_product_id)
+        )
+        safe_reviews = retrieve_relevant_reviews(safe_reviews, question)
+        span.set_attribute("app.safe_reviews.count", len(safe_reviews.reviews))
+        if not safe_reviews.reviews:
+            candidate_text = ABSTAIN_MESSAGE
+            structured_response = _build_structured_response(
+                status="ABSTAINED", answer=ABSTAIN_MESSAGE, reason=ABSTAIN_MESSAGE
             )
-            safe_reviews = retrieve_relevant_reviews(safe_reviews, question)
-            span.set_attribute("app.safe_reviews.count", len(safe_reviews.reviews))
-            if not safe_reviews.reviews:
-                candidate_text = ABSTAIN_MESSAGE
-                structured_response = _build_structured_response(
-                    status="ABSTAINED", answer=ABSTAIN_MESSAGE, reason=ABSTAIN_MESSAGE
-                )
-            else:
-                grounded = validate_grounded_summary(
-                    generate_grounded_summary(safe_reviews, question=question), safe_reviews
-                )
-                span.set_attribute("app.grounding.status", grounded.status.value)
-                candidate_text = grounded.answer if grounded.status == ResponseStatus.GROUNDED else grounded.reason
-                structured_response = _build_structured_response(
-                    status=grounded.status.value,
-                    answer=candidate_text or ABSTAIN_MESSAGE,
-                    reason="" if grounded.status == ResponseStatus.GROUNDED else candidate_text or ABSTAIN_MESSAGE,
-                    claims=[{"text": claim.text, "source_ids": claim.sources} for claim in grounded.claims],
-                )
         else:
-            candidate_text = converse_text(
-                system_prompt,
-                f"Product information:\n{fetch_product_info(request_product_id)}\n\nQuestion: {question}",
+            grounded = validate_grounded_summary(
+                generate_grounded_summary(safe_reviews, question=question), safe_reviews
             )
-            structured_response = _build_structured_response(status="GROUNDED", answer=candidate_text)
+            span.set_attribute("app.grounding.status", grounded.status.value)
+            candidate_text = grounded.answer if grounded.status == ResponseStatus.GROUNDED else grounded.reason
+            structured_response = _build_structured_response(
+                status=grounded.status.value,
+                answer=candidate_text or ABSTAIN_MESSAGE,
+                reason="" if grounded.status == ResponseStatus.GROUNDED else candidate_text or ABSTAIN_MESSAGE,
+                claims=[{"text": claim.text, "source_ids": claim.sources} for claim in grounded.claims],
+            )
     except Exception as exc:
         logger.error("Bedrock AI assistant request failed: %s", type(exc).__name__)
         span.record_exception(exc)
@@ -443,9 +417,9 @@ def get_ai_assistant_response(request_product_id, question):
                     }
                 )
 
-        # Automatically fetch reviews from DB if model didn't call fetch_product_reviews for a review-related query
-        if is_review_related(question) and safe_reviews is None:
-            logger.info("Model did not call fetch_product_reviews for review-related question. Fetching reviews directly.")
+        # Automatically fetch reviews from DB if model didn't call fetch_product_reviews
+        if safe_reviews is None:
+            logger.info("Fetching reviews directly for RAG grounding pipeline.")
             raw_reviews = fetch_product_reviews(product_id=request_product_id)
             safe_reviews = guardrails.sanitize_reviews(request_product_id, raw_reviews)
             safe_reviews = retrieve_relevant_reviews(safe_reviews, question)
@@ -459,87 +433,79 @@ def get_ai_assistant_response(request_product_id, question):
         structured_response = None
         candidate_text = ""
 
-        # Enforce grounding pipeline for all review-related queries
-        if is_review_related(question):
-            if safe_reviews is not None and safe_reviews.reviews:
-                if llm_inaccurate_response and request_product_id == "L9ECAV7KIM":
-                    span.set_attribute("app.flagd.llm_inaccurate_response", True)
-                    logger.info(f"llmInaccurateResponse is on for product_id: {request_product_id}; grounding must still filter any fabricated claim")
+        # Enforce RAG grounding pipeline for all queries
+        if safe_reviews is not None and safe_reviews.reviews:
+            if llm_inaccurate_response and request_product_id == "L9ECAV7KIM":
+                span.set_attribute("app.flagd.llm_inaccurate_response", True)
+                logger.info(f"llmInaccurateResponse is on for product_id: {request_product_id}; grounding must still filter any fabricated claim")
 
-                try:
-                    draft = generate_grounded_summary(safe_reviews, question=question)
-                    grounded = validate_grounded_summary(draft, safe_reviews)
-                except Exception as e:
-                    logger.error(f"Grounding pipeline failed: {type(e).__name__}")
-                    span.record_exception(e)
-                    span.set_status(Status(StatusCode.ERROR, description=type(e).__name__))
-                    return _fallback_response(type(e).__name__)
+            try:
+                draft = generate_grounded_summary(safe_reviews, question=question)
+                grounded = validate_grounded_summary(draft, safe_reviews)
+            except Exception as e:
+                logger.error(f"Grounding pipeline failed: {type(e).__name__}")
+                span.record_exception(e)
+                span.set_status(Status(StatusCode.ERROR, description=type(e).__name__))
+                return _fallback_response(type(e).__name__)
 
-                span.set_attribute("app.grounding.status", grounded.status.value)
+            span.set_attribute("app.grounding.status", grounded.status.value)
 
-                if grounded.status == ResponseStatus.GROUNDED:
-                    span.set_attribute("app.grounding.claim_count", len(grounded.claims))
-                    candidate_text = grounded.answer
-                    structured_response = _build_structured_response(
-                        status="GROUNDED",
-                        answer=grounded.answer,
-                        claims=[{"text": c.text, "source_ids": c.sources} for c in grounded.claims],
-                    )
-                else:
-                    candidate_text = grounded.reason
-                    structured_response = _build_structured_response(
-                        status="ABSTAINED",
-                        answer=grounded.reason or ABSTAIN_MESSAGE,
-                        reason=grounded.reason or ABSTAIN_MESSAGE,
-                    )
+            if grounded.status == ResponseStatus.GROUNDED:
+                span.set_attribute("app.grounding.claim_count", len(grounded.claims))
+                candidate_text = grounded.answer
+                structured_response = _build_structured_response(
+                    status="GROUNDED",
+                    answer=grounded.answer,
+                    claims=[{"text": c.text, "source_ids": c.sources} for c in grounded.claims],
+                )
             else:
-                # No reviews or all blocked
-                candidate_text = ABSTAIN_MESSAGE
+                candidate_text = grounded.reason
                 structured_response = _build_structured_response(
                     status="ABSTAINED",
-                    answer=ABSTAIN_MESSAGE,
-                    reason=ABSTAIN_MESSAGE,
+                    answer=grounded.reason or ABSTAIN_MESSAGE,
+                    reason=grounded.reason or ABSTAIN_MESSAGE,
                 )
-                span.set_attribute("app.grounding.status", "ABSTAINED")
-        else:
-            # Non-review queries
-            if tool_calls:
-                if llm_inaccurate_response and request_product_id == "L9ECAV7KIM":
-                    logger.info(f"Returning an inaccurate response for product_id: {request_product_id}")
-                    messages.append(
-                        {
-                            "role": "user",
-                            "content": f"Based on the tool results, answer the original question about product ID, but make the answer inaccurate:{request_product_id}. Keep the response brief with no more than 1-2 sentences. Reply in English."
-                        }
-                    )
-                else:
-                    messages.append(
-                        {
-                            "role": "user",
-                            "content": f"Based on the tool results, answer the original question about product ID:{request_product_id}. Keep the response brief with no more than 1-2 sentences. Reply in English."
-                        }
-                    )
-
-                logger.info(f"Invoking the LLM with {len(messages)} messages")
-
-                try:
-                    final_response = client.chat.completions.create(
-                        model=llm_model,
-                        messages=messages,
-                        timeout=20.0,
-                    )
-                    candidate_text = final_response.choices[0].message.content
-                except Exception as e:
-                    logger.error(f"LLM final-answer call failed: {type(e).__name__}")
-                    span.record_exception(e)
-                    span.set_status(Status(StatusCode.ERROR, description=type(e).__name__))
-                    return _fallback_response(type(e).__name__)
+        elif tool_calls:
+            # Fallback for non-review tool calls (e.g. fetch_product_info)
+            if llm_inaccurate_response and request_product_id == "L9ECAV7KIM":
+                logger.info(f"Returning an inaccurate response for product_id: {request_product_id}")
+                messages.append(
+                    {
+                        "role": "user",
+                        "content": f"Based on the tool results, answer the original question about product ID, but make the answer inaccurate:{request_product_id}. Keep the response brief with no more than 1-2 sentences. Reply in English."
+                    }
+                )
             else:
-                # Model answered without tools; still surface empty content as fallback
-                # rather than a blank or hanging client response.
-                candidate_text = response_message.content or ""
-                if not candidate_text.strip():
-                    return _fallback_response("EmptyLLMResponse")
+                messages.append(
+                    {
+                        "role": "user",
+                        "content": f"Based on the tool results, answer the original question about product ID:{request_product_id}. Keep the response brief with no more than 1-2 sentences. Reply in English."
+                    }
+                )
+
+            logger.info(f"Invoking the LLM with {len(messages)} messages")
+
+            try:
+                final_response = client.chat.completions.create(
+                    model=llm_model,
+                    messages=messages,
+                    timeout=20.0,
+                )
+                candidate_text = final_response.choices[0].message.content
+            except Exception as e:
+                logger.error(f"LLM final-answer call failed: {type(e).__name__}")
+                span.record_exception(e)
+                span.set_status(Status(StatusCode.ERROR, description=type(e).__name__))
+                return _fallback_response(type(e).__name__)
+        else:
+            # No reviews or all blocked, and no non-review tool calls
+            candidate_text = ABSTAIN_MESSAGE
+            structured_response = _build_structured_response(
+                status="ABSTAINED",
+                answer=ABSTAIN_MESSAGE,
+                reason=ABSTAIN_MESSAGE,
+            )
+            span.set_attribute("app.grounding.status", "ABSTAINED")
 
         # --- A1.2, step 3: scan whatever text we're about to return -
         output_guard = guardrails.scan_output(candidate_text)

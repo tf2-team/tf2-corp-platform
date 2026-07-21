@@ -30,7 +30,7 @@ from typing import Optional, TypedDict
 from langgraph.graph import StateGraph, START, END
 import valkey as valkeylib
 from techx_ai_common.contracts import GroundedResponse, GuardrailAction, ResponseStatus
-from techx_ai_common.guardrails import sanitize_request
+from techx_ai_common.guardrails import sanitize_request, scan_output
 from techx_ai_common.proto import demo_pb2_grpc
 from copilot_contracts import (
     CopilotStatus,
@@ -59,6 +59,7 @@ class CopilotState(TypedDict):
     allowed_product_ids: list[str]
     catalog_results: list[CopilotProductResult]
     qa_result: Optional[GroundedResponse]
+    safe_reviews: Optional[dict]
     pending_action: Optional[PendingCartAction]
     status: CopilotStatus
     interpreted_criteria: str
@@ -209,17 +210,17 @@ def make_nodes(deps: CopilotDeps):
             target_product_id = state["catalog_results"][0].product_id
 
         try:
-            grounded = answer_with_reviews(
+            grounded, safe_revs = answer_with_reviews(
                 product_id=target_product_id,
                 question=intent.follow_up_question,
                 allowed_product_ids=state["allowed_product_ids"],
                 product_reviews_stub=deps.reviews_stub,
             )
-            return {**state, "qa_result": grounded}
+            return {**state, "qa_result": grounded, "safe_reviews": safe_revs}
         except Exception as exc:
             logger.error("Review Q&A failed: %s", exc)
             # Non-fatal: fall through with no qa_result rather than FALLBACK.
-            return {**state, "qa_result": None}
+            return {**state, "qa_result": None, "safe_reviews": None}
 
     def cart_node(state: CopilotState) -> CopilotState:
         """Prepare a pending add-to-cart token (does NOT write to cart)."""
@@ -270,6 +271,21 @@ def make_nodes(deps: CopilotDeps):
             target_p = state["catalog_results"][0]
             desc = target_p.description or target_p.name
             reason_text = f"Product Description ({target_p.name}): {desc}"
+
+        text_to_scan = reason_text
+        if qa_result and qa_result.answer:
+            text_to_scan = f"{text_to_scan}\n{qa_result.answer}".strip()
+
+        output_guard = scan_output(text_to_scan or "")
+        if output_guard.action == GuardrailAction.BLOCK:
+            logger.info("Output blocked by guardrail: %s", output_guard.reason)
+            return {
+                **state,
+                "status": CopilotStatus.BLOCKED,
+                "reason": output_guard.reason or "Output blocked by guardrail",
+            }
+        if output_guard.action == GuardrailAction.SANITIZED and output_guard.sanitized_text:
+            reason_text = output_guard.sanitized_text
 
         return {**state, "status": CopilotStatus.GROUNDED, "reason": reason_text}
 

@@ -66,6 +66,8 @@ class SafeReview(ContractModel):
     source_id: str = Field(min_length=1)
     text: str = Field(min_length=1)
     score: Optional[Decimal] = None
+    username: Optional[str] = None
+    description: Optional[str] = None
 
 
 class SafeReviewSet(ContractModel):

@@ -27,7 +27,7 @@ from opentelemetry.sdk._logs import LoggerProvider, LoggingHandler
 from opentelemetry.sdk._logs.export import BatchLogRecordProcessor
 from opentelemetry.sdk.resources import Resource
 
-from techx_ai_common.guardrails import initialize_guardrails
+from techx_ai_common.guardrails import initialize_guardrails, sanitize_reviews
 from techx_ai_common.proto import demo_pb2, demo_pb2_grpc
 
 from copilot_graph import CopilotDeps, run_copilot, CopilotStatus
@@ -81,14 +81,48 @@ class ShoppingCopilotServicer(demo_pb2_grpc.ShoppingCopilotServiceServicer):
 
             qa = state.get("qa_result")
             if qa and qa.claims:
+                target_product_id = state["catalog_results"][0].product_id if state.get("catalog_results") else ""
+                reviews_by_id = {}
+                state_safe_revs = state.get("safe_reviews")
+                if state_safe_revs and getattr(state_safe_revs, "reviews", None):
+                    for sr in state_safe_revs.reviews:
+                        reviews_by_id[sr.source_id] = sr
+                elif target_product_id:
+                    try:
+                        reviews_resp = self._deps.reviews_stub.GetProductReviews(
+                            demo_pb2.GetProductReviewsRequest(product_id=target_product_id)
+                        )
+                        raw_reviews = [
+                            {
+                                "id": r.id,
+                                "username": r.username,
+                                "description": r.description,
+                                "score": r.score,
+                            }
+                            for r in reviews_resp.product_reviews
+                        ]
+                        safe_rev_set = sanitize_reviews(target_product_id, raw_reviews)
+                        for sr in safe_rev_set.reviews:
+                            reviews_by_id[sr.source_id] = sr
+                    except Exception as e:
+                        logger.error("Failed to fetch product reviews for metadata in server: %s", e)
+
                 for claim in qa.claims:
                     c = resp.claims.add(text=claim.text)
                     c.source_ids.extend(claim.sources)
                     for source_id in claim.sources:
+                        review = reviews_by_id.get(source_id)
+                        try:
+                            r_score = float(review.score) if review and review.score is not None else 0.0
+                        except (ValueError, TypeError):
+                            r_score = 0.0
                         resp.sources.add(
                             source_id=source_id,
                             source_type="review",
-                            product_id=state["catalog_results"][0].product_id if state.get("catalog_results") else "",
+                            product_id=target_product_id,
+                            username=(review.username if review and review.username else "Anonymous"),
+                            score=r_score,
+                            description=(review.description if review and review.description else ""),
                         )
 
             pending = state.get("pending_action")

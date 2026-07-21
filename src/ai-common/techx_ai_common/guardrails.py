@@ -233,11 +233,15 @@ def sanitize_reviews(product_id: str, reviews) -> SafeReviewSet:
             except Exception:
                 pass
 
+        username_val = item[0] if isinstance(item, (list, tuple)) and len(item) > 0 else (item.get("username") if isinstance(item, dict) else None)
+
         safe_reviews.append(
             SafeReview(
                 source_id=source_id,
                 text=sanitized_text,
-                score=score
+                score=score,
+                username=username_val,
+                description=sanitized_text,
             )
         )
 
