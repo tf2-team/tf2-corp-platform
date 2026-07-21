@@ -103,9 +103,9 @@ class RuntimeConfigTest(unittest.TestCase):
 
         self.assertEqual(profile.step_seconds, 1)
         self.assertEqual(profile.required_source_resolution_seconds, 1)
-        self.assertEqual(profile.detector_bucket_seconds, 60)
-        self.assertEqual(profile.lookback_seconds, 2700)
-        self.assertEqual(profile.lookback_seconds // profile.detector_bucket_seconds, 45)
+        self.assertEqual(profile.detector_bucket_seconds, 30)
+        self.assertEqual(profile.lookback_seconds, 3600)
+        self.assertEqual(profile.lookback_seconds // profile.detector_bucket_seconds, 120)
         self.assertEqual(registry.result_defaults.on_empty, "zero")
 
     def test_template_can_override_default_empty_result_policy(self):

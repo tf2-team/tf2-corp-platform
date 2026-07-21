@@ -57,7 +57,14 @@ def anomaly_engine(**overrides) -> V001AnomalyEngine:
 
 def rca_engine(config: RuntimeConfig, **combined_overrides) -> V001RcaEngine:
     hyperparameters = rca_hyperparameters()
-    return V001RcaEngine(config, hyperparameters["graph"], {**hyperparameters["combined"], **combined_overrides})
+    combined = {
+        **hyperparameters["combined"],
+        "min_tail_anomaly_buckets": hyperparameters["anomaly"]["min_tail_anomaly_buckets"],
+        "min_relative_change_ratio": hyperparameters["anomaly"]["min_relative_change_ratio"],
+        "min_absolute_change": hyperparameters["anomaly"]["min_absolute_change"],
+        **combined_overrides,
+    }
+    return V001RcaEngine(config, hyperparameters["graph"], combined)
 
 
 def graph_rca(config: RuntimeConfig) -> GraphTraversalRca:
@@ -598,6 +605,20 @@ class V001AnomalyRcaTest(unittest.TestCase):
         result = rca_engine(runtime_config).rank(findings, series, top_k=5)
 
         self.assertEqual(result.root_causes[0].root_cause_metrics, ["error_rate_5m", "cpu_millicores"])
+
+    def test_rca_drops_tiny_disk_drift(self):
+        runtime_config = load_runtime_config(Path("config/runtime.json"))
+        findings = [
+            AnomalyFinding(algorithm="weighted_sum", service="recommendation", metric="error_rate_5m", signal_id="recommendation_error_rate_5m", score=1.0, timestamp=10),
+        ]
+        series = [
+            metric("recommendation", "error_rate_5m", [0] * 8 + [10, 10, 10]),
+            metric("recommendation", "disk_io_bytes_per_second", [0] * 8 + [3000, 3000, 3000]),
+        ]
+
+        result = rca_engine(runtime_config, drift_min_points=8).rank(findings, series, top_k=5)
+
+        self.assertEqual(result.root_causes[0].root_cause_metrics, ["error_rate_5m"])
 
     def test_rca_prioritizes_error_rate_over_infra_metrics(self):
         runtime_config = load_runtime_config(Path("config/runtime.json"))

@@ -255,7 +255,7 @@ class AiopsPipeline:
         config = self.rca_hyperparameters
         anomaly_engine = build_v001_anomaly_engine(config)
         findings = anomaly_engine.evaluate(detector_series, logs=log_messages) if log_messages else anomaly_engine.evaluate(detector_series)
-        rca_engine = V001RcaEngine(self.runtime_config, config["graph"], config["combined"])
+        rca_engine = V001RcaEngine(self.runtime_config, config["graph"], _combined_rca_hyperparameters(config))
         result = rca_engine.rank(findings, detector_series, top_k=int(config["top_k"]))
         _log_final_root_cause_algorithm_scores(result, getattr(anomaly_engine, "last_algorithm_findings", findings))
         return result
@@ -459,6 +459,16 @@ def _log_final_root_cause_algorithm_scores(result: RcaResult, findings: list[Ano
         _score(scores.get("ewma_stl")),
         _score(scores.get("isolation_forest")),
     )
+
+
+def _combined_rca_hyperparameters(config: dict) -> dict:
+    anomaly = config["anomaly"]
+    return {
+        **config["combined"],
+        "min_tail_anomaly_buckets": anomaly["min_tail_anomaly_buckets"],
+        "min_relative_change_ratio": anomaly["min_relative_change_ratio"],
+        "min_absolute_change": anomaly["min_absolute_change"],
+    }
 
 
 def _score(value: float | None) -> str:

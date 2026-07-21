@@ -6,7 +6,8 @@ from __future__ import annotations
 from collections import defaultdict
 import math
 
-from aiops.anomaly.stats import robust_score
+from aiops.anomaly.stats import median, robust_score
+from aiops.anomaly.v001 import _metric_group, _point_changed
 from aiops.rca.graph import GraphTraversalRca
 from aiops.schemas import AnomalyFinding, MetricSeries, RcaResult, RootCauseCandidate, RuntimeConfig
 
@@ -19,6 +20,9 @@ class V001RcaEngine:
         self.drift_min_points = int(combined_hyperparameters["drift_min_points"])
         self.drift_score_threshold = float(combined_hyperparameters["drift_score_threshold"])
         self.detection_window_seconds = int(combined_hyperparameters["detection_window_seconds"]) or None
+        self.min_tail_anomaly_buckets = {key: int(value) for key, value in combined_hyperparameters["min_tail_anomaly_buckets"].items()}
+        self.min_relative_change_ratio = {key: float(value) for key, value in combined_hyperparameters["min_relative_change_ratio"].items()}
+        self.min_absolute_change = {key: float(value) for key, value in combined_hyperparameters["min_absolute_change"].items()}
         self.canonical_service_suffixes = tuple(combined_hyperparameters["canonical_service_suffixes"])
         self.metric_aliases = combined_hyperparameters["metric_aliases"]
         self.graph = GraphTraversalRca(
@@ -107,6 +111,8 @@ class V001RcaEngine:
         return {service: 1.0 - (index / latest) for service, index in drift_indexes.items()}
 
     def _first_drift_index(self, metric: MetricSeries, values: list[float]) -> int | None:
+        if not self._significant_tail_change(metric):
+            return None
         for index in _tail_indexes(metric, self.detection_window_seconds, self.drift_min_points - 1):
             if robust_score(values[:index], [values[index]]) >= self.drift_score_threshold:
                 return index
@@ -123,10 +129,32 @@ class V001RcaEngine:
                 default=(0.0, 0),
             )
             if score >= self.drift_score_threshold:
+                if not self._significant_tail_change(metric):
+                    continue
                 if self._busy_infra_without_failure(metric.service, metric.metric, metric.points[index].timestamp, all_series, findings):
                     continue
                 rows.append((self._canonical_service(metric.service), metric.metric, score))
         return rows
+
+    def _significant_tail_change(self, metric: MetricSeries) -> bool:
+        indexes = list(_tail_indexes(metric, self.detection_window_seconds, self.drift_min_points - 1))
+        if not indexes:
+            return False
+        baseline_values = [point.value for point in metric.points[: indexes[0]]]
+        if len(baseline_values) < 4:
+            return False
+        group = _metric_group(metric.metric)
+        baseline = median(baseline_values)
+        changed = sum(
+            _point_changed(
+                metric.points[index].value,
+                baseline,
+                self.min_relative_change_ratio[group],
+                self.min_absolute_change[group],
+            )
+            for index in indexes
+        )
+        return changed >= self.min_tail_anomaly_buckets[group]
 
     def _correlation_scores(self, series: list[MetricSeries], findings: list[AnomalyFinding]) -> dict[str, float]:
         primary = self._primary_series(series, findings)
