@@ -1167,6 +1167,9 @@ jobs:
         with:
           role-to-assume: ${{ vars.AWS_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
+      - name: Login to Amazon ECR
+        # aws-actions/amazon-ecr-login@v2.1.6
+        uses: aws-actions/amazon-ecr-login@d539f0932e70871a027e9d5a9d8fc38589180a64
       - name: Install Cosign
         # sigstore/cosign-installer@v3.9.2
         uses: sigstore/cosign-installer@d58896d6a1865668819e1d91763c7751a165e159
