@@ -220,8 +220,8 @@ def make_nodes(deps: CopilotDeps):
                 valkey_client=deps.valkey_client,
             )
             return {**state, "pending_action": action}
-        except Exception:
-            logger.error("Pending cart action creation failed")
+        except Exception as exc:
+            logger.error("Cart token creation failed: %s", exc)
             # Non-fatal.
             return {**state, "pending_action": None}
 

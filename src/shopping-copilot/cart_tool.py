@@ -102,13 +102,13 @@ def confirm_cart_action(
     payload_raw = valkey_client.getdel(key)
 
     if payload_raw is None:
-        logger.info("Pending cart action was not found or has expired")
+        logger.info("Confirm cart: token not found or expired. token_prefix=%s", token[:8])
         return False, "Token expired or not found."
 
     try:
         payload = json.loads(payload_raw)
     except json.JSONDecodeError:
-        logger.error("Pending cart action payload is invalid")
+        logger.error("Confirm cart: corrupt token payload. token_prefix=%s", token[:8])
         return False, "Invalid token payload."
 
     stored_user_id = payload.get("user_id", "")

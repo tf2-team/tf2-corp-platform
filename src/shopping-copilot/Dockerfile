@@ -2,14 +2,13 @@
 # Copyright The OpenTelemetry Authors
 # SPDX-License-Identifier: Apache-2.0
 
-FROM docker.io/library/python:3.12-slim-bookworm@sha256:d50fb7611f86d04a3b0471b46d7557818d88983fc3136726336b2a4c657aa30b AS build-venv
+FROM docker.io/library/python:3.12-slim-bookworm AS build-venv
 
 ENV PIP_DEFAULT_TIMEOUT=120 \
     PIP_RETRIES=10 \
     PIP_DISABLE_PIP_VERSION_CHECK=1
 
 RUN apt-get update && \
-    apt-get upgrade -y --no-install-recommends && \
     apt-get install --no-install-recommends -y gcc g++ && \
     rm -rf /var/lib/apt/lists/*
 
@@ -18,18 +17,15 @@ COPY ./src/shopping-copilot/requirements.txt requirements.txt
 
 RUN --mount=type=cache,id=techx-pip-cache,target=/root/.cache/pip,sharing=locked \
     python -m venv venv && \
-    venv/bin/pip install --no-deps \
-        llm-guard==0.3.16 presidio-anonymizer==2.2.363 && \
     venv/bin/pip install /build/ai-common && \
     venv/bin/pip install -r requirements.txt
 
 RUN --mount=type=cache,id=techx-pip-cache,target=/root/.cache/pip,sharing=locked \
     venv/bin/opentelemetry-bootstrap -a install
 
-FROM docker.io/library/python:3.12-slim-bookworm@sha256:d50fb7611f86d04a3b0471b46d7557818d88983fc3136726336b2a4c657aa30b
+FROM docker.io/library/python:3.12-slim-bookworm
 
 RUN apt-get update && \
-    apt-get upgrade -y --no-install-recommends && \
     apt-get install --no-install-recommends -y libgomp1 && \
     rm -rf /var/lib/apt/lists/*
 
@@ -63,4 +59,3 @@ USER 10001
 
 EXPOSE ${SHOPPING_COPILOT_PORT}
 ENTRYPOINT [ "/venv/bin/opentelemetry-instrument", "/venv/bin/python", "copilot_server.py" ]
-# Change trail: @hungxqt - 2026-07-20 - Trivy HIGH/CRITICAL remediation (base upgrades, OS package updates, dep bumps)

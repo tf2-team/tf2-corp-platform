@@ -3,7 +3,7 @@
 
 
 
-FROM --platform=${BUILDPLATFORM} docker.io/library/rust:1.91@sha256:867f1d1162913c401378a8504fb17fe2032c760dc316448766f150a130204aad AS builder
+FROM --platform=${BUILDPLATFORM} docker.io/library/rust:1.91 AS builder
 ARG TARGETARCH
 ARG TARGETPLATFORM
 ARG BUILDPLATFORM
@@ -35,7 +35,7 @@ RUN if [ "${TARGETPLATFORM}" = "linux/arm64" ] && [ "${BUILDPLATFORM}" != "linux
     fi
 
 
-FROM gcr.io/distroless/cc-debian13:nonroot@sha256:d97bc0a941b8d4be647dc0ee75b264ddbb772f1ac5ba690a4309c00723b23775
+FROM gcr.io/distroless/cc-debian13:nonroot
 
 WORKDIR /app
 
@@ -43,6 +43,4 @@ COPY --from=builder /app/target/release/shipping shipping
 
 EXPOSE ${SHIPPING_PORT}
 
-USER nonroot
 CMD ["./shipping"]
-# Change trail: @hungxqt - 2026-07-20 - Explicit nonroot USER before CMD for Semgrep/CI container hardening
