@@ -9,10 +9,12 @@ const { RECOMMENDATION_ADDR = '' } = process.env;
 
 const client = new RecommendationServiceClient(RECOMMENDATION_ADDR, ChannelCredentials.createInsecure());
 
-const RecommendationsGateway = () => ({
+type RecommendationsClient = Pick<RecommendationServiceClient, 'listRecommendations'>;
+
+export const createRecommendationsGateway = (recommendationsClient: RecommendationsClient = client) => ({
   listRecommendations(userId: string, productIds: string[]) {
     return new Promise<ListRecommendationsResponse>((resolve, reject) =>
-      client.listRecommendations(
+      recommendationsClient.listRecommendations(
         { userId, productIds },
         new Metadata(),
         { deadline: createOptionalDependencyDeadline() },
@@ -22,4 +24,4 @@ const RecommendationsGateway = () => ({
   },
 });
 
-export default RecommendationsGateway();
+export default createRecommendationsGateway();

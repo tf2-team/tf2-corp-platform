@@ -5,6 +5,7 @@
   "scripts": {
     "dev": "NODE_OPTIONS='--require ./utils/telemetry/Instrumentation.js' next dev",
     "build": "next build",
+    "test:resilience": "tsx --test utils/resilience/OptionalDependency.test.mjs utils/resilience/OptionalDependency.integration.test.mjs",
     "start": "node --require ./Instrumentation.js server.js",
     "lint": "next lint",
     "cy:open": "cypress open",
@@ -63,6 +64,7 @@
     "eslint-plugin-react-hooks": "7.0.1",
     "openapi-typescript": "7.10.1",
     "ts-proto": "2.10.1",
+    "tsx": "4.23.1",
     "typescript": "5.9.3"
   },
   "overrides": {

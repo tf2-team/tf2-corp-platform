@@ -1,7 +1,7 @@
 // Copyright The OpenTelemetry Authors
 // SPDX-License-Identifier: Apache-2.0
 
-import type { NextApiRequest, NextApiResponse } from 'next';
+import type { NextApiHandler } from 'next';
 import InstrumentationMiddleware from '../../utils/telemetry/InstrumentationMiddleware';
 import AdGateway from '../../gateways/rpc/Ad.gateway';
 import { Ad, Empty } from '../../protos/demo';
@@ -13,12 +13,17 @@ import {
 
 type TResponse = Ad[] | Empty;
 
-const handler = async ({ method, query }: NextApiRequest, res: NextApiResponse<TResponse>) => {
+type AdDependency = Pick<typeof AdGateway, 'listAds'>;
+
+export const createDataHandler = (
+  adDependency: AdDependency = AdGateway,
+  onFallback: typeof recordOptionalDependencyFallback = recordOptionalDependencyFallback
+): NextApiHandler<TResponse> => async ({ method, query }, res) => {
   switch (method) {
     case 'GET': {
       const { contextKeys = [] } = query;
       try {
-        const { ads: adList } = await AdGateway.listAds(
+        const { ads: adList } = await adDependency.listAds(
           Array.isArray(contextKeys) ? contextKeys : contextKeys.split(',')
         );
 
@@ -26,7 +31,7 @@ const handler = async ({ method, query }: NextApiRequest, res: NextApiResponse<T
       } catch (error) {
         if (!isOptionalDependencyError(error)) throw error;
 
-        recordOptionalDependencyFallback('ad', error);
+        onFallback('ad', error);
         setDegradedDependencyHeader(res, 'ad');
         return res.status(200).json([]);
       }
@@ -38,4 +43,4 @@ const handler = async ({ method, query }: NextApiRequest, res: NextApiResponse<T
   }
 };
 
-export default InstrumentationMiddleware(handler);
+export default InstrumentationMiddleware(createDataHandler());
