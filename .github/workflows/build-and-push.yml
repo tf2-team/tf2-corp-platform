@@ -1160,6 +1160,10 @@ jobs:
     env:
       AWS_REGION: ${{ vars.AWS_REGION || 'us-east-1' }}
       COSIGN_KEY: ${{ vars.COSIGN_KMS_KEY || 'awskms:///alias/tf2-cosign-signing-key' }}
+      # Application image tags stay immutable; Cosign's read-append-write metadata
+      # is stored in a dedicated mutable repository so retries and multiple
+      # attestations do not overwrite runtime image tags.
+      COSIGN_REPOSITORY: ${{ vars.IMAGE_NAME }}/cosign-artifacts
       PROVENANCE_TYPE: https://techx-corp.dev/attestations/provenance/v1
     steps:
       - name: Configure AWS credentials (OIDC)
