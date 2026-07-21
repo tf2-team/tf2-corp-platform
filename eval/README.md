@@ -6,20 +6,20 @@ Reproducible evaluation pipeline for the AI tier's quality and safety across bot
 ## Quick Start
 
 ```bash
-# Run eval on gold dataset (copilot)
+# Validate a gold dataset (copilot)
 make eval DATASET=eval/datasets/gold/copilot_v0.jsonl
 
-# Run eval on gold dataset (summary)
+# Validate a gold dataset (summary)
 make eval DATASET=eval/datasets/gold/summary_v0.jsonl
 
-# Run eval on external dataset (BTC hidden set)
+# Validate an external dataset (BTC hidden set)
 make eval DATASET=/path/to/hidden.jsonl
 
 # Install the loader dependency and run its integration tests
 python -m pip install -r eval/requirements.txt
 cd eval && python -m unittest harness.test_loader
 
-# Compare before/after
+# Full evaluation and before/after comparison will be available after EV-2.4
 python -m eval.run_eval --dataset eval/datasets/gold/copilot_v0.jsonl --output results/candidate --compare results/baseline results/candidate
 ```
 

@@ -142,6 +142,14 @@ run-tests:
 	$(DOCKER_COMPOSE_CMD) $(DOCKER_COMPOSE_ENV) -f docker-compose-tests.yml run frontendTests
 	$(DOCKER_COMPOSE_CMD) $(DOCKER_COMPOSE_ENV) -f docker-compose-tests.yml run traceBasedTests
 
+.PHONY: eval
+eval:
+	@test -n "$(DATASET)" || (echo "Usage: make eval DATASET=eval/datasets/gold/<file>.jsonl" && exit 1)
+	python -m pip install -r eval/requirements.txt
+	cd eval && python -m unittest harness.test_loader
+	cd eval && python -c "from harness.loader import load_dataset; load_dataset(r'$(abspath $(DATASET))')"
+	@echo "Dataset validation complete. Full adapter and grader execution will be added in EV-2.4."
+
 .PHONY: run-tracetesting
 run-tracetesting:
 	$(DOCKER_COMPOSE_CMD) $(DOCKER_COMPOSE_ENV) -f docker-compose-tests.yml run traceBasedTests ${SERVICES_TO_TEST}
