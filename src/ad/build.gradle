@@ -39,6 +39,7 @@ dependencies {
     } else {
         implementation platform("io.opentelemetry:opentelemetry-bom:${opentelemetryVersion}")
         implementation platform("io.opentelemetry.instrumentation:opentelemetry-instrumentation-bom:${opentelemetryInstrumentationVersion}")
+        implementation enforcedPlatform("io.netty:netty-bom:4.1.135.Final")
 
         implementation "com.google.api.grpc:proto-google-common-protos:2.63.2",
                 "com.google.protobuf:protobuf-java:${protocVersion}",
@@ -51,8 +52,8 @@ dependencies {
                 "io.opentelemetry:opentelemetry-sdk",
                 "io.opentelemetry.instrumentation:opentelemetry-instrumentation-annotations",
                 "org.apache.logging.log4j:log4j-core:2.25.3",
-                "dev.openfeature.contrib.providers:flagd:0.11.19",
-                'dev.openfeature:sdk:1.19.2'
+                "dev.openfeature.contrib.providers:flagd:0.13.3",
+                'dev.openfeature:sdk:1.20.2'
 
         runtimeOnly "com.fasterxml.jackson.core:jackson-core:${jacksonVersion}",
                 "com.fasterxml.jackson.core:jackson-databind:${jacksonVersion}",

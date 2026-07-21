@@ -8,7 +8,7 @@ USER 0
 
 # Rotate when rebuilding the secure-delivery baseline so package-manager security
 # updates are not silently restored from an older BuildKit cache layer.
-ARG SECURITY_UPDATE_EPOCH=2026-07-21
+ARG SECURITY_UPDATE_EPOCH=2026-07-21-cve-refresh-1
 
 ADD --chmod=644 https://repo1.maven.org/maven2/com/fasterxml/jackson/core/jackson-databind/2.21.4/jackson-databind-2.21.4.jar /tmp/jackson-databind-2.21.4.jar
 ADD --chmod=644 https://repo1.maven.org/maven2/tools/jackson/core/jackson-databind/3.1.4/jackson-databind-3.1.4.jar /tmp/jackson-databind-3.1.4.jar

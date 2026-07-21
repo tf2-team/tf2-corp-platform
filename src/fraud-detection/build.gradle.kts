@@ -30,11 +30,8 @@ repositories {
 dependencies {
     constraints {
         implementation("com.fasterxml.jackson.core:jackson-databind:2.21.4")
-        implementation("io.netty:netty-codec:4.1.135.Final")
-        implementation("io.netty:netty-codec-http:4.1.135.Final")
-        implementation("io.netty:netty-codec-http2:4.1.135.Final")
-        implementation("io.netty:netty-handler:4.1.135.Final")
     }
+    implementation(enforcedPlatform("io.netty:netty-bom:4.1.135.Final"))
     implementation("com.google.protobuf:protobuf-java:${protobufVersion}")
     testImplementation(kotlin("test"))
     implementation(kotlin("script-runtime"))
@@ -50,8 +47,8 @@ dependencies {
     implementation("org.apache.logging.log4j:log4j-core:2.25.3")
     implementation("org.slf4j:slf4j-api:2.0.17")
     implementation("com.google.protobuf:protobuf-kotlin:${protobufVersion}")
-    implementation("dev.openfeature:sdk:1.19.2")
-    implementation("dev.openfeature.contrib.providers:flagd:0.11.19")
+    implementation("dev.openfeature:sdk:1.20.2")
+    implementation("dev.openfeature.contrib.providers:flagd:0.13.3")
     implementation("redis.clients:jedis:5.1.2")
 
     if (JavaVersion.current().isJava9Compatible) {
