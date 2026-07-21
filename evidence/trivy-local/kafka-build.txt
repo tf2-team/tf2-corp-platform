@@ -1,0 +1,175 @@
+#0 building with "desktop-linux" instance using docker driver
+
+#1 [internal] load local bake definitions
+#1 reading docker-compose.yml 31.23kB / 31.23kB done
+#1 reading docker-bake.hcl 6.69kB / 6.69kB done
+#1 DONE 0.0s
+
+#2 [internal] load build definition from Dockerfile
+#2 transferring dockerfile: 1.78kB 0.0s done
+#2 DONE 0.1s
+
+#3 [internal] load metadata for docker.io/apache/kafka:4.3.1@sha256:77e3df9054047a88b520d0cc46e16696d3b22022e1d580aeccd2632df6532837
+#3 ...
+
+#4 [auth] apache/kafka:pull token for registry-1.docker.io
+#4 DONE 0.0s
+
+#3 [internal] load metadata for docker.io/apache/kafka:4.3.1@sha256:77e3df9054047a88b520d0cc46e16696d3b22022e1d580aeccd2632df6532837
+#3 DONE 4.2s
+
+#5 [internal] load .dockerignore
+#5 transferring context: 464B 0.0s done
+#5 DONE 0.0s
+
+#6 [1/3] FROM docker.io/apache/kafka:4.3.1@sha256:77e3df9054047a88b520d0cc46e16696d3b22022e1d580aeccd2632df6532837
+#6 resolve docker.io/apache/kafka:4.3.1@sha256:77e3df9054047a88b520d0cc46e16696d3b22022e1d580aeccd2632df6532837 0.0s done
+#6 DONE 0.0s
+
+#7 [3/3] ADD --chown=appuser:appuser https://github.com/open-telemetry/opentelemetry-java-instrumentation/releases/download/v2.29.0/opentelemetry-javaagent.jar /tmp/opentelemetry-javaagent.jar
+#7 ...
+
+#6 [1/3] FROM docker.io/apache/kafka:4.3.1@sha256:77e3df9054047a88b520d0cc46e16696d3b22022e1d580aeccd2632df6532837
+#6 DONE 0.3s
+
+#6 [1/3] FROM docker.io/apache/kafka:4.3.1@sha256:77e3df9054047a88b520d0cc46e16696d3b22022e1d580aeccd2632df6532837
+#6 sha256:5ef4bf1bda3522f6b64c24ee154ed6739c8ab26c1be19e7b9e564bf0f39cbf22 0B / 16.86MB 0.2s
+#6 sha256:9ee28cb5e924c3c9b6ef4de6ced1d8c0de5b6fd24f9bac201bcd32b9bbc32f38 0B / 3.00kB 0.2s
+#6 sha256:cb74ead52f1038ce8e2259f455558a20ebae5f06cefdcb83c399f159be4364ac 0B / 2.28kB 0.2s
+#6 sha256:625afcf9df2fd8c5633bb80b24b8417a6950f9dfc4d3ac2e7616d66f9fb57c8c 0B / 7.14MB 0.2s
+#6 ...
+
+#7 [3/3] ADD --chown=appuser:appuser https://github.com/open-telemetry/opentelemetry-java-instrumentation/releases/download/v2.29.0/opentelemetry-javaagent.jar /tmp/opentelemetry-javaagent.jar
+#7 CACHED
+
+#6 [1/3] FROM docker.io/apache/kafka:4.3.1@sha256:77e3df9054047a88b520d0cc46e16696d3b22022e1d580aeccd2632df6532837
+#6 sha256:9ee28cb5e924c3c9b6ef4de6ced1d8c0de5b6fd24f9bac201bcd32b9bbc32f38 3.00kB / 3.00kB 1.3s done
+#6 sha256:cb74ead52f1038ce8e2259f455558a20ebae5f06cefdcb83c399f159be4364ac 2.28kB / 2.28kB 1.5s done
+#6 sha256:c62d3fe6c5864a4a9dcbfede720c0fb8b3f07bcd0aa46248a161287a7ec9d4e6 0B / 1.57kB 0.2s
+#6 sha256:5ef4bf1bda3522f6b64c24ee154ed6739c8ab26c1be19e7b9e564bf0f39cbf22 1.05MB / 16.86MB 1.8s
+#6 sha256:2d1a277377d10ae29a58277bdefa13f3a1cfffb295a5b7bce5ad0b0d82661629 0B / 2.28kB 0.2s
+#6 sha256:c62d3fe6c5864a4a9dcbfede720c0fb8b3f07bcd0aa46248a161287a7ec9d4e6 1.57kB / 1.57kB 0.6s done
+#6 sha256:2d1a277377d10ae29a58277bdefa13f3a1cfffb295a5b7bce5ad0b0d82661629 2.28kB / 2.28kB 0.5s done
+#6 sha256:f9f362c352e24fffe4dd54534c07f22a7211da3112615b479474f1de063adb49 0B / 14.54MB 0.3s
+#6 sha256:da9d0fb3345c8fa944451bc81ffc8d4852a9d9ce9b9ab5e6e08d634414c4bcfc 0B / 143.16MB 0.2s
+#6 sha256:5ef4bf1bda3522f6b64c24ee154ed6739c8ab26c1be19e7b9e564bf0f39cbf22 2.10MB / 16.86MB 2.4s
+#6 sha256:5ef4bf1bda3522f6b64c24ee154ed6739c8ab26c1be19e7b9e564bf0f39cbf22 3.15MB / 16.86MB 2.6s
+#6 sha256:5ef4bf1bda3522f6b64c24ee154ed6739c8ab26c1be19e7b9e564bf0f39cbf22 4.19MB / 16.86MB 2.7s
+#6 sha256:5ef4bf1bda3522f6b64c24ee154ed6739c8ab26c1be19e7b9e564bf0f39cbf22 5.24MB / 16.86MB 2.9s
+#6 sha256:5ef4bf1bda3522f6b64c24ee154ed6739c8ab26c1be19e7b9e564bf0f39cbf22 6.29MB / 16.86MB 3.0s
+#6 sha256:625afcf9df2fd8c5633bb80b24b8417a6950f9dfc4d3ac2e7616d66f9fb57c8c 1.05MB / 7.14MB 3.0s
+#6 sha256:5ef4bf1bda3522f6b64c24ee154ed6739c8ab26c1be19e7b9e564bf0f39cbf22 7.34MB / 16.86MB 3.2s
+#6 sha256:5ef4bf1bda3522f6b64c24ee154ed6739c8ab26c1be19e7b9e564bf0f39cbf22 9.44MB / 16.86MB 3.3s
+#6 sha256:625afcf9df2fd8c5633bb80b24b8417a6950f9dfc4d3ac2e7616d66f9fb57c8c 2.10MB / 7.14MB 3.3s
+#6 sha256:5ef4bf1bda3522f6b64c24ee154ed6739c8ab26c1be19e7b9e564bf0f39cbf22 11.53MB / 16.86MB 3.5s
+#6 sha256:625afcf9df2fd8c5633bb80b24b8417a6950f9dfc4d3ac2e7616d66f9fb57c8c 3.15MB / 7.14MB 3.5s
+#6 sha256:625afcf9df2fd8c5633bb80b24b8417a6950f9dfc4d3ac2e7616d66f9fb57c8c 4.19MB / 7.14MB 3.6s
+#6 sha256:5ef4bf1bda3522f6b64c24ee154ed6739c8ab26c1be19e7b9e564bf0f39cbf22 13.63MB / 16.86MB 3.9s
+#6 sha256:5ef4bf1bda3522f6b64c24ee154ed6739c8ab26c1be19e7b9e564bf0f39cbf22 16.86MB / 16.86MB 4.0s done
+#6 sha256:f9f362c352e24fffe4dd54534c07f22a7211da3112615b479474f1de063adb49 1.05MB / 14.54MB 2.3s
+#6 extracting sha256:5ef4bf1bda3522f6b64c24ee154ed6739c8ab26c1be19e7b9e564bf0f39cbf22
+#6 sha256:625afcf9df2fd8c5633bb80b24b8417a6950f9dfc4d3ac2e7616d66f9fb57c8c 6.29MB / 7.14MB 4.2s
+#6 sha256:6e338134b21e530c8c101d288f216594c45a122a53f0d095568b2d0e943d8fec 0B / 53.30MB 0.2s
+#6 sha256:625afcf9df2fd8c5633bb80b24b8417a6950f9dfc4d3ac2e7616d66f9fb57c8c 7.14MB / 7.14MB 4.3s done
+#6 extracting sha256:5ef4bf1bda3522f6b64c24ee154ed6739c8ab26c1be19e7b9e564bf0f39cbf22 0.6s done
+#6 sha256:42516208460b63f47d0044aef98b70571ce7765cc9108b0a3d14ae7fa16d7566 0B / 128B 0.2s
+#6 sha256:f9f362c352e24fffe4dd54534c07f22a7211da3112615b479474f1de063adb49 2.10MB / 14.54MB 2.9s
+#6 sha256:6e338134b21e530c8c101d288f216594c45a122a53f0d095568b2d0e943d8fec 3.15MB / 53.30MB 0.8s
+#6 sha256:42516208460b63f47d0044aef98b70571ce7765cc9108b0a3d14ae7fa16d7566 128B / 128B 0.7s done
+#6 sha256:f9f362c352e24fffe4dd54534c07f22a7211da3112615b479474f1de063adb49 3.15MB / 14.54MB 3.6s
+#6 sha256:6e338134b21e530c8c101d288f216594c45a122a53f0d095568b2d0e943d8fec 7.34MB / 53.30MB 1.5s
+#6 sha256:6e338134b21e530c8c101d288f216594c45a122a53f0d095568b2d0e943d8fec 12.58MB / 53.30MB 1.7s
+#6 sha256:f9f362c352e24fffe4dd54534c07f22a7211da3112615b479474f1de063adb49 4.19MB / 14.54MB 4.1s
+#6 sha256:6e338134b21e530c8c101d288f216594c45a122a53f0d095568b2d0e943d8fec 15.73MB / 53.30MB 1.8s
+#6 sha256:6e338134b21e530c8c101d288f216594c45a122a53f0d095568b2d0e943d8fec 18.87MB / 53.30MB 2.1s
+#6 sha256:f9f362c352e24fffe4dd54534c07f22a7211da3112615b479474f1de063adb49 5.24MB / 14.54MB 4.7s
+#6 sha256:6e338134b21e530c8c101d288f216594c45a122a53f0d095568b2d0e943d8fec 24.12MB / 53.30MB 2.7s
+#6 sha256:6e338134b21e530c8c101d288f216594c45a122a53f0d095568b2d0e943d8fec 29.36MB / 53.30MB 2.9s
+#6 sha256:f9f362c352e24fffe4dd54534c07f22a7211da3112615b479474f1de063adb49 6.29MB / 14.54MB 5.4s
+#6 sha256:da9d0fb3345c8fa944451bc81ffc8d4852a9d9ce9b9ab5e6e08d634414c4bcfc 3.15MB / 143.16MB 5.3s
+#6 sha256:6e338134b21e530c8c101d288f216594c45a122a53f0d095568b2d0e943d8fec 32.51MB / 53.30MB 3.5s
+#6 sha256:6e338134b21e530c8c101d288f216594c45a122a53f0d095568b2d0e943d8fec 35.65MB / 53.30MB 3.6s
+#6 sha256:f9f362c352e24fffe4dd54534c07f22a7211da3112615b479474f1de063adb49 7.34MB / 14.54MB 6.2s
+#6 sha256:f9f362c352e24fffe4dd54534c07f22a7211da3112615b479474f1de063adb49 8.39MB / 14.54MB 6.3s
+#6 sha256:6e338134b21e530c8c101d288f216594c45a122a53f0d095568b2d0e943d8fec 40.89MB / 53.30MB 4.1s
+#6 sha256:6e338134b21e530c8c101d288f216594c45a122a53f0d095568b2d0e943d8fec 45.09MB / 53.30MB 4.2s
+#6 sha256:f9f362c352e24fffe4dd54534c07f22a7211da3112615b479474f1de063adb49 10.49MB / 14.54MB 6.9s
+#6 sha256:6e338134b21e530c8c101d288f216594c45a122a53f0d095568b2d0e943d8fec 49.28MB / 53.30MB 4.8s
+#6 sha256:6e338134b21e530c8c101d288f216594c45a122a53f0d095568b2d0e943d8fec 53.30MB / 53.30MB 5.7s done
+#6 extracting sha256:6e338134b21e530c8c101d288f216594c45a122a53f0d095568b2d0e943d8fec
+#6 sha256:f9f362c352e24fffe4dd54534c07f22a7211da3112615b479474f1de063adb49 11.53MB / 14.54MB 9.6s
+#6 sha256:f9f362c352e24fffe4dd54534c07f22a7211da3112615b479474f1de063adb49 12.58MB / 14.54MB 10.0s
+#6 sha256:f9f362c352e24fffe4dd54534c07f22a7211da3112615b479474f1de063adb49 13.63MB / 14.54MB 10.3s
+#6 sha256:f9f362c352e24fffe4dd54534c07f22a7211da3112615b479474f1de063adb49 14.54MB / 14.54MB 10.4s done
+#6 sha256:da9d0fb3345c8fa944451bc81ffc8d4852a9d9ce9b9ab5e6e08d634414c4bcfc 7.34MB / 143.16MB 10.3s
+#6 extracting sha256:6e338134b21e530c8c101d288f216594c45a122a53f0d095568b2d0e943d8fec 2.7s done
+#6 extracting sha256:42516208460b63f47d0044aef98b70571ce7765cc9108b0a3d14ae7fa16d7566 0.0s done
+#6 extracting sha256:2d1a277377d10ae29a58277bdefa13f3a1cfffb295a5b7bce5ad0b0d82661629 0.0s done
+#6 extracting sha256:4f4fb700ef54461cfa02571ae0db9a0dc1e0cdb5577484a6d75e68dc38e8acc1 0.0s done
+#6 sha256:da9d0fb3345c8fa944451bc81ffc8d4852a9d9ce9b9ab5e6e08d634414c4bcfc 14.68MB / 143.16MB 13.9s
+#6 sha256:da9d0fb3345c8fa944451bc81ffc8d4852a9d9ce9b9ab5e6e08d634414c4bcfc 22.02MB / 143.16MB 15.9s
+#6 sha256:da9d0fb3345c8fa944451bc81ffc8d4852a9d9ce9b9ab5e6e08d634414c4bcfc 29.36MB / 143.16MB 17.7s
+#6 sha256:da9d0fb3345c8fa944451bc81ffc8d4852a9d9ce9b9ab5e6e08d634414c4bcfc 36.70MB / 143.16MB 19.2s
+#6 sha256:da9d0fb3345c8fa944451bc81ffc8d4852a9d9ce9b9ab5e6e08d634414c4bcfc 44.04MB / 143.16MB 20.4s
+#6 sha256:da9d0fb3345c8fa944451bc81ffc8d4852a9d9ce9b9ab5e6e08d634414c4bcfc 51.38MB / 143.16MB 21.4s
+#6 sha256:da9d0fb3345c8fa944451bc81ffc8d4852a9d9ce9b9ab5e6e08d634414c4bcfc 58.88MB / 143.16MB 22.3s
+#6 sha256:da9d0fb3345c8fa944451bc81ffc8d4852a9d9ce9b9ab5e6e08d634414c4bcfc 66.06MB / 143.16MB 23.4s
+#6 sha256:da9d0fb3345c8fa944451bc81ffc8d4852a9d9ce9b9ab5e6e08d634414c4bcfc 73.40MB / 143.16MB 24.1s
+#6 sha256:da9d0fb3345c8fa944451bc81ffc8d4852a9d9ce9b9ab5e6e08d634414c4bcfc 80.74MB / 143.16MB 24.7s
+#6 sha256:da9d0fb3345c8fa944451bc81ffc8d4852a9d9ce9b9ab5e6e08d634414c4bcfc 88.08MB / 143.16MB 25.3s
+#6 sha256:da9d0fb3345c8fa944451bc81ffc8d4852a9d9ce9b9ab5e6e08d634414c4bcfc 96.47MB / 143.16MB 26.1s
+#6 sha256:da9d0fb3345c8fa944451bc81ffc8d4852a9d9ce9b9ab5e6e08d634414c4bcfc 103.81MB / 143.16MB 26.7s
+#6 sha256:da9d0fb3345c8fa944451bc81ffc8d4852a9d9ce9b9ab5e6e08d634414c4bcfc 112.20MB / 143.16MB 27.4s
+#6 sha256:da9d0fb3345c8fa944451bc81ffc8d4852a9d9ce9b9ab5e6e08d634414c4bcfc 122.68MB / 143.16MB 28.5s
+#6 sha256:da9d0fb3345c8fa944451bc81ffc8d4852a9d9ce9b9ab5e6e08d634414c4bcfc 132.12MB / 143.16MB 28.9s
+#6 sha256:da9d0fb3345c8fa944451bc81ffc8d4852a9d9ce9b9ab5e6e08d634414c4bcfc 139.46MB / 143.16MB 29.4s
+#6 sha256:da9d0fb3345c8fa944451bc81ffc8d4852a9d9ce9b9ab5e6e08d634414c4bcfc 143.16MB / 143.16MB 29.7s done
+#6 extracting sha256:da9d0fb3345c8fa944451bc81ffc8d4852a9d9ce9b9ab5e6e08d634414c4bcfc
+#6 extracting sha256:da9d0fb3345c8fa944451bc81ffc8d4852a9d9ce9b9ab5e6e08d634414c4bcfc 1.0s done
+#6 DONE 33.2s
+
+#6 [1/3] FROM docker.io/apache/kafka:4.3.1@sha256:77e3df9054047a88b520d0cc46e16696d3b22022e1d580aeccd2632df6532837
+#6 extracting sha256:9ee28cb5e924c3c9b6ef4de6ced1d8c0de5b6fd24f9bac201bcd32b9bbc32f38 0.0s done
+#6 extracting sha256:f9f362c352e24fffe4dd54534c07f22a7211da3112615b479474f1de063adb49
+#6 extracting sha256:f9f362c352e24fffe4dd54534c07f22a7211da3112615b479474f1de063adb49 0.3s done
+#6 DONE 33.5s
+
+#6 [1/3] FROM docker.io/apache/kafka:4.3.1@sha256:77e3df9054047a88b520d0cc46e16696d3b22022e1d580aeccd2632df6532837
+#6 extracting sha256:625afcf9df2fd8c5633bb80b24b8417a6950f9dfc4d3ac2e7616d66f9fb57c8c
+#6 extracting sha256:625afcf9df2fd8c5633bb80b24b8417a6950f9dfc4d3ac2e7616d66f9fb57c8c 0.2s done
+#6 DONE 33.8s
+
+#6 [1/3] FROM docker.io/apache/kafka:4.3.1@sha256:77e3df9054047a88b520d0cc46e16696d3b22022e1d580aeccd2632df6532837
+#6 extracting sha256:cb74ead52f1038ce8e2259f455558a20ebae5f06cefdcb83c399f159be4364ac 0.0s done
+#6 extracting sha256:c62d3fe6c5864a4a9dcbfede720c0fb8b3f07bcd0aa46248a161287a7ec9d4e6 0.0s done
+#6 DONE 33.8s
+
+#8 [2/3] RUN if command -v apk >/dev/null 2>&1; then       apk upgrade --no-cache;     elif command -v microdnf >/dev/null 2>&1; then       microdnf upgrade -y && microdnf clean all;     elif command -v apt-get >/dev/null 2>&1; then       apt-get update && apt-get upgrade -y --no-install-recommends && rm -rf /var/lib/apt/lists/*;     fi
+#8 3.916 (1/8) Upgrading alpine-release (3.23.4-r0 -> 3.23.5-r0)
+#8 4.155 (2/8) Upgrading ca-certificates-bundle (20260413-r0 -> 20260611-r0)
+#8 4.396 (3/8) Upgrading ca-certificates (20260413-r0 -> 20260611-r0)
+#8 4.660 (4/8) Upgrading libexpat (2.7.5-r0 -> 2.8.2-r0)
+#8 4.890 (5/8) Upgrading freetype (2.14.1-r0 -> 2.14.3-r0)
+#8 5.194 (6/8) Upgrading p11-kit (0.25.5-r2 -> 0.26.2-r0)
+#8 5.471 (7/8) Upgrading p11-kit-trust (0.25.5-r2 -> 0.26.2-r0)
+#8 5.754 (8/8) Upgrading tzdata (2026b-r0 -> 2026c-r0)
+#8 6.076 Executing busybox-1.37.0-r30.trigger
+#8 6.085 Executing ca-certificates-20260611-r0.trigger
+#8 6.117 OK: 43.2 MiB in 80 packages
+#8 DONE 6.4s
+
+#9 [3/3] ADD --chown=appuser:appuser https://github.com/open-telemetry/opentelemetry-java-instrumentation/releases/download/v2.29.0/opentelemetry-javaagent.jar /tmp/opentelemetry-javaagent.jar
+#9 DONE 0.1s
+
+#10 exporting to image
+#10 exporting layers
+#10 exporting layers 0.7s done
+#10 exporting manifest sha256:c028d5e9d18ec6920167667013cdd87cde29fb5c8f189d6b670ed76d09b1d70f 0.0s done
+#10 exporting config sha256:0d9e53b7399ed12f28c6bdcd93213a307305bae4afae3dfa7d5ff11f275ad272 0.0s done
+#10 exporting attestation manifest sha256:d5970ab4648ed5e9412f0d1414a72919c5de1dc250d0db73fbfb4f8f4ebdae87 0.0s done
+#10 exporting manifest list sha256:c2a9f6c14ea33614dccd9ebb8f7ad434caedceec7d6bda52da855a8d059fac28 0.0s done
+#10 naming to docker.io/local/kafka:trivy-test
+#10 naming to docker.io/local/kafka:trivy-test done
+#10 unpacking to docker.io/local/kafka:trivy-test
+#10 unpacking to docker.io/local/kafka:trivy-test 2.3s done
+#10 DONE 3.3s

@@ -3,7 +3,11 @@
 # SPDX-License-Identifier: Apache-2.0
 
 
-FROM python:3.12-slim-bookworm AS base
+FROM python:3.12-slim-trixie@sha256:57cd7c3a7a273101a6485ba99423ee568157882804b1124b4dd04266317710de AS base
+
+RUN apt-get -qq update \
+    && apt-get upgrade -y --no-install-recommends \
+    && rm -rf /var/lib/apt/lists/*
 
 FROM base AS builder
 
@@ -40,3 +44,4 @@ RUN chown -R appuser:appgroup /usr/src/app /opt/pw-browsers
 USER 10001
 
 ENTRYPOINT ["locust", "--skip-log-setup"]
+# Change trail: @hungxqt - 2026-07-20 - Trivy HIGH/CRITICAL remediation (base upgrades, OS package updates, dep bumps)

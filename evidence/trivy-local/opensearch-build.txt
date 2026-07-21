@@ -1,0 +1,118 @@
+#0 building with "desktop-linux" instance using docker driver
+
+#1 [internal] load local bake definitions
+#1 reading docker-compose.yml 31.23kB / 31.23kB done
+#1 reading docker-bake.hcl 6.69kB / 6.69kB done
+#1 DONE 0.0s
+
+#2 [internal] load build definition from Dockerfile
+#2 transferring dockerfile: 2.66kB 0.0s done
+#2 DONE 0.1s
+
+#3 [internal] load metadata for docker.io/opensearchproject/opensearch:3.7.0@sha256:44ba7ea58a319adf61c33ab16873f9ef5dbb30b291a832d375172f0b2d24e3c9
+#3 ...
+
+#4 [auth] opensearchproject/opensearch:pull token for registry-1.docker.io
+#4 DONE 0.0s
+
+#3 [internal] load metadata for docker.io/opensearchproject/opensearch:3.7.0@sha256:44ba7ea58a319adf61c33ab16873f9ef5dbb30b291a832d375172f0b2d24e3c9
+#3 DONE 4.4s
+
+#5 [internal] load .dockerignore
+#5 transferring context: 464B 0.0s done
+#5 DONE 0.0s
+
+#6 [1/3] FROM docker.io/opensearchproject/opensearch:3.7.0@sha256:44ba7ea58a319adf61c33ab16873f9ef5dbb30b291a832d375172f0b2d24e3c9
+#6 resolve docker.io/opensearchproject/opensearch:3.7.0@sha256:44ba7ea58a319adf61c33ab16873f9ef5dbb30b291a832d375172f0b2d24e3c9 0.0s done
+#6 DONE 0.2s
+
+#6 [1/3] FROM docker.io/opensearchproject/opensearch:3.7.0@sha256:44ba7ea58a319adf61c33ab16873f9ef5dbb30b291a832d375172f0b2d24e3c9
+#6 sha256:c1d0ea8d4942c46806a615cc4a4bd0d5d519bce4bc1667c72da3c199621cbd30 0B / 2.06kB 0.2s
+#6 sha256:882a703b1263a2e19d4564dcb82492f55f69e70553b26db078c9c779b38748e7 0B / 226B 0.2s
+#6 sha256:760927c12e44e88c057ee9a69ad284cdc0957ac977880b62b0dc1d0d81703083 0B / 1.07GB 0.2s
+#6 sha256:824223f9fadd8a00ad7f0595259ead57b0664e11d1e68b0f3fbe8b8f75eb9ad4 0B / 1.56kB 0.2s
+#6 sha256:c1d0ea8d4942c46806a615cc4a4bd0d5d519bce4bc1667c72da3c199621cbd30 2.06kB / 2.06kB 0.5s done
+#6 sha256:882a703b1263a2e19d4564dcb82492f55f69e70553b26db078c9c779b38748e7 226B / 226B 0.7s done
+#6 sha256:a851be0ea94654688a45fde7009263cacf0a59d4066ee63750044fd61f1c604c 0B / 4.39MB 0.2s
+#6 sha256:3b5eb82da667b3e3ec6bc9d0b202bfba5f45c665af1ff4c33b4d24e971967e96 0B / 54.57MB 0.2s
+#6 sha256:824223f9fadd8a00ad7f0595259ead57b0664e11d1e68b0f3fbe8b8f75eb9ad4 1.56kB / 1.56kB 1.2s done
+#6 sha256:a851be0ea94654688a45fde7009263cacf0a59d4066ee63750044fd61f1c604c 1.05MB / 4.39MB 4.4s
+#6 sha256:760927c12e44e88c057ee9a69ad284cdc0957ac977880b62b0dc1d0d81703083 1.05MB / 1.07GB 5.2s
+#6 sha256:a851be0ea94654688a45fde7009263cacf0a59d4066ee63750044fd61f1c604c 2.10MB / 4.39MB 4.7s
+#6 sha256:a851be0ea94654688a45fde7009263cacf0a59d4066ee63750044fd61f1c604c 3.15MB / 4.39MB 5.0s
+#6 sha256:3b5eb82da667b3e3ec6bc9d0b202bfba5f45c665af1ff4c33b4d24e971967e96 3.15MB / 54.57MB 5.0s
+#6 sha256:a851be0ea94654688a45fde7009263cacf0a59d4066ee63750044fd61f1c604c 4.39MB / 4.39MB 5.3s done
+#6 sha256:3b5eb82da667b3e3ec6bc9d0b202bfba5f45c665af1ff4c33b4d24e971967e96 6.29MB / 54.57MB 5.5s
+#6 sha256:3b5eb82da667b3e3ec6bc9d0b202bfba5f45c665af1ff4c33b4d24e971967e96 9.44MB / 54.57MB 5.8s
+#6 sha256:3b5eb82da667b3e3ec6bc9d0b202bfba5f45c665af1ff4c33b4d24e971967e96 12.58MB / 54.57MB 6.1s
+#6 sha256:3b5eb82da667b3e3ec6bc9d0b202bfba5f45c665af1ff4c33b4d24e971967e96 15.73MB / 54.57MB 7.3s
+#6 sha256:3b5eb82da667b3e3ec6bc9d0b202bfba5f45c665af1ff4c33b4d24e971967e96 18.87MB / 54.57MB 7.4s
+#6 sha256:3b5eb82da667b3e3ec6bc9d0b202bfba5f45c665af1ff4c33b4d24e971967e96 22.02MB / 54.57MB 7.6s
+#6 sha256:3b5eb82da667b3e3ec6bc9d0b202bfba5f45c665af1ff4c33b4d24e971967e96 27.26MB / 54.57MB 8.3s
+#6 sha256:3b5eb82da667b3e3ec6bc9d0b202bfba5f45c665af1ff4c33b4d24e971967e96 32.51MB / 54.57MB 9.4s
+#6 sha256:760927c12e44e88c057ee9a69ad284cdc0957ac977880b62b0dc1d0d81703083 36.70MB / 1.07GB 10.3s
+#6 sha256:3b5eb82da667b3e3ec6bc9d0b202bfba5f45c665af1ff4c33b4d24e971967e96 36.70MB / 54.57MB 9.7s
+#6 sha256:3b5eb82da667b3e3ec6bc9d0b202bfba5f45c665af1ff4c33b4d24e971967e96 39.85MB / 54.57MB 10.4s
+#6 sha256:3b5eb82da667b3e3ec6bc9d0b202bfba5f45c665af1ff4c33b4d24e971967e96 44.04MB / 54.57MB 10.6s
+#6 sha256:3b5eb82da667b3e3ec6bc9d0b202bfba5f45c665af1ff4c33b4d24e971967e96 47.19MB / 54.57MB 10.9s
+#6 sha256:3b5eb82da667b3e3ec6bc9d0b202bfba5f45c665af1ff4c33b4d24e971967e96 50.33MB / 54.57MB 11.8s
+#6 sha256:3b5eb82da667b3e3ec6bc9d0b202bfba5f45c665af1ff4c33b4d24e971967e96 53.48MB / 54.57MB 12.1s
+#6 sha256:3b5eb82da667b3e3ec6bc9d0b202bfba5f45c665af1ff4c33b4d24e971967e96 54.57MB / 54.57MB 12.3s done
+#6 extracting sha256:3b5eb82da667b3e3ec6bc9d0b202bfba5f45c665af1ff4c33b4d24e971967e96
+#6 extracting sha256:3b5eb82da667b3e3ec6bc9d0b202bfba5f45c665af1ff4c33b4d24e971967e96 2.0s done
+#6 extracting sha256:a851be0ea94654688a45fde7009263cacf0a59d4066ee63750044fd61f1c604c
+#6 sha256:760927c12e44e88c057ee9a69ad284cdc0957ac977880b62b0dc1d0d81703083 80.74MB / 1.07GB 15.4s
+#6 extracting sha256:a851be0ea94654688a45fde7009263cacf0a59d4066ee63750044fd61f1c604c 0.3s done
+#6 extracting sha256:824223f9fadd8a00ad7f0595259ead57b0664e11d1e68b0f3fbe8b8f75eb9ad4 0.0s done
+#6 sha256:760927c12e44e88c057ee9a69ad284cdc0957ac977880b62b0dc1d0d81703083 135.27MB / 1.07GB 19.3s
+#6 sha256:760927c12e44e88c057ee9a69ad284cdc0957ac977880b62b0dc1d0d81703083 189.79MB / 1.07GB 23.0s
+#6 sha256:760927c12e44e88c057ee9a69ad284cdc0957ac977880b62b0dc1d0d81703083 246.42MB / 1.07GB 27.1s
+#6 sha256:760927c12e44e88c057ee9a69ad284cdc0957ac977880b62b0dc1d0d81703083 303.04MB / 1.07GB 30.7s
+#6 sha256:760927c12e44e88c057ee9a69ad284cdc0957ac977880b62b0dc1d0d81703083 356.66MB / 1.07GB 35.1s
+#6 sha256:760927c12e44e88c057ee9a69ad284cdc0957ac977880b62b0dc1d0d81703083 407.90MB / 1.07GB 40.1s
+#6 sha256:760927c12e44e88c057ee9a69ad284cdc0957ac977880b62b0dc1d0d81703083 462.42MB / 1.07GB 44.0s
+#6 sha256:760927c12e44e88c057ee9a69ad284cdc0957ac977880b62b0dc1d0d81703083 516.95MB / 1.07GB 47.6s
+#6 sha256:760927c12e44e88c057ee9a69ad284cdc0957ac977880b62b0dc1d0d81703083 570.58MB / 1.07GB 51.8s
+#6 sha256:760927c12e44e88c057ee9a69ad284cdc0957ac977880b62b0dc1d0d81703083 628.10MB / 1.07GB 56.0s
+#6 sha256:760927c12e44e88c057ee9a69ad284cdc0957ac977880b62b0dc1d0d81703083 684.72MB / 1.07GB 59.6s
+#6 sha256:760927c12e44e88c057ee9a69ad284cdc0957ac977880b62b0dc1d0d81703083 739.25MB / 1.07GB 63.2s
+#6 sha256:760927c12e44e88c057ee9a69ad284cdc0957ac977880b62b0dc1d0d81703083 769.65MB / 1.07GB 68.7s
+#6 sha256:760927c12e44e88c057ee9a69ad284cdc0957ac977880b62b0dc1d0d81703083 824.86MB / 1.07GB 73.6s
+#6 sha256:760927c12e44e88c057ee9a69ad284cdc0957ac977880b62b0dc1d0d81703083 882.90MB / 1.07GB 77.4s
+#6 sha256:760927c12e44e88c057ee9a69ad284cdc0957ac977880b62b0dc1d0d81703083 937.43MB / 1.07GB 80.8s
+#6 sha256:760927c12e44e88c057ee9a69ad284cdc0957ac977880b62b0dc1d0d81703083 995.10MB / 1.07GB 84.8s
+#6 sha256:760927c12e44e88c057ee9a69ad284cdc0957ac977880b62b0dc1d0d81703083 1.05GB / 1.07GB 88.8s
+#6 sha256:760927c12e44e88c057ee9a69ad284cdc0957ac977880b62b0dc1d0d81703083 1.07GB / 1.07GB 90.1s done
+#6 extracting sha256:760927c12e44e88c057ee9a69ad284cdc0957ac977880b62b0dc1d0d81703083
+#6 extracting sha256:760927c12e44e88c057ee9a69ad284cdc0957ac977880b62b0dc1d0d81703083 28.8s done
+#6 DONE 119.1s
+
+#6 [1/3] FROM docker.io/opensearchproject/opensearch:3.7.0@sha256:44ba7ea58a319adf61c33ab16873f9ef5dbb30b291a832d375172f0b2d24e3c9
+#6 extracting sha256:4f4fb700ef54461cfa02571ae0db9a0dc1e0cdb5577484a6d75e68dc38e8acc1 0.0s done
+#6 extracting sha256:882a703b1263a2e19d4564dcb82492f55f69e70553b26db078c9c779b38748e7 0.0s done
+#6 extracting sha256:c1d0ea8d4942c46806a615cc4a4bd0d5d519bce4bc1667c72da3c199621cbd30 0.0s done
+#6 DONE 119.1s
+
+#7 [2/3] RUN if command -v microdnf >/dev/null 2>&1; then       microdnf upgrade -y && microdnf clean all;     elif command -v yum >/dev/null 2>&1; then       yum upgrade -y && yum clean all;     elif command -v dnf >/dev/null 2>&1; then       dnf upgrade -y && dnf clean all;     fi
+#7 17.02 Amazon Linux 2023 repository                    4.4 MB/s |  71 MB     00:15    
+#7 32.78 Last metadata expiration check: 0:00:23 ago on Mon Jul 20 11:58:35 2026.
+#7 34.04 Dependencies resolved.
+#7 34.08 Nothing to do.
+#7 34.08 Complete!
+#7 34.38 9 files removed
+#7 DONE 34.4s
+
+#8 [3/3] RUN rm -rf     /usr/share/opensearch/plugins/opensearch-security-analytics     /usr/share/opensearch/plugins/opensearch-alerting     /usr/share/opensearch/plugins/opensearch-anomaly-detection     /usr/share/opensearch/plugins/opensearch-asynchronous-search     /usr/share/opensearch/plugins/opensearch-cross-cluster-replication     /usr/share/opensearch/plugins/opensearch-custom-codecs     /usr/share/opensearch/plugins/opensearch-flow-framework     /usr/share/opensearch/plugins/opensearch-geospatial     /usr/share/opensearch/plugins/opensearch-neural-search     /usr/share/opensearch/plugins/opensearch-knn     /usr/share/opensearch/plugins/opensearch-ltr     /usr/share/opensearch/plugins/opensearch-skills     /usr/share/opensearch/plugins/opensearch-ml     /usr/share/opensearch/plugins/opensearch-notifications     /usr/share/opensearch/plugins/opensearch-notifications-core     /usr/share/opensearch/plugins/opensearch-observability     /usr/share/opensearch/plugins/opensearch-performance-analyzer     /usr/share/opensearch/plugins/opensearch-reports-scheduler     /usr/share/opensearch/plugins/opensearch-search-relevance     /usr/share/opensearch/plugins/opensearch-system-templates     /usr/share/opensearch/plugins/opensearch-ubi     /usr/share/opensearch/plugins/query-insights
+#8 DONE 0.5s
+
+#9 exporting to image
+#9 exporting layers
+#9 exporting layers 0.3s done
+#9 exporting manifest sha256:de9f92a619b76c3a23f0330e30c3da9bf5fc09c3c19a1913d568018f7ad20080 0.0s done
+#9 exporting config sha256:86d35240ee906359e1f13ba8500434c27cf72d57293720e6ec721a6b77f38eca 0.0s done
+#9 exporting attestation manifest sha256:aa68c5a9918df29facfe3bbc489471140edd5178f1fa55ba33c22b04d31eb563
+#9 exporting attestation manifest sha256:aa68c5a9918df29facfe3bbc489471140edd5178f1fa55ba33c22b04d31eb563 0.1s done
+#9 exporting manifest list sha256:c6e1dafd908de7ef793745739e2c817a4080890df47701e76f614eed2343ef11 0.0s done
+#9 naming to docker.io/local/opensearch:trivy-test done
+#9 unpacking to docker.io/local/opensearch:trivy-test 0.1s done
+#9 DONE 0.8s

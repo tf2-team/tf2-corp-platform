@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 
-FROM --platform=${BUILDPLATFORM} gradle:8-jdk17 AS builder
+FROM --platform=${BUILDPLATFORM} gradle:8-jdk17@sha256:b7d2b978cad21a07a1192b9112029bc1a80ffe58db7ec828c3f399f833a468cb AS builder
 
 WORKDIR /usr/src/app/
 
@@ -12,15 +12,26 @@ COPY ./pb/ ./src/main/proto/
 RUN gradle shadowJar
 
 # -----------------------------------------------------------------------------
+# Temurin JRE (not distroless) so apt security upgrades apply for Trivy.
 
-FROM gcr.io/distroless/java17-debian12:nonroot
+FROM eclipse-temurin:17-jre@sha256:92999aea37688157a53a40bfcb187c30f317422e028045fd5fc5c548fde9e626
 
 ARG OTEL_JAVA_AGENT_VERSION
 WORKDIR /usr/src/app/
 
-ADD --chmod=644 https://github.com/open-telemetry/opentelemetry-java-instrumentation/releases/download/v$OTEL_JAVA_AGENT_VERSION/opentelemetry-javaagent.jar /usr/src/app/opentelemetry-javaagent.jar
+RUN apt-get update \
+    && apt-get upgrade -y --no-install-recommends \
+    && rm -rf /var/lib/apt/lists/* \
+    && groupadd -g 10001 appgroup \
+    && useradd -r -u 10001 -g appgroup appuser \
+    # Temurin image ships /usr/bin/pebble (Go) with HIGH x/net and stdlib CVEs; not used by this service.
+    && rm -f /usr/bin/pebble
+
+ADD --chmod=644 --chown=appuser:appgroup https://github.com/open-telemetry/opentelemetry-java-instrumentation/releases/download/v$OTEL_JAVA_AGENT_VERSION/opentelemetry-javaagent.jar /usr/src/app/opentelemetry-javaagent.jar
 ENV JAVA_TOOL_OPTIONS=-javaagent:/usr/src/app/opentelemetry-javaagent.jar
 
-COPY --from=builder /usr/src/app/build/libs/fraud-detection-1.0-all.jar fraud-detection-1.0-all.jar
+COPY --from=builder --chown=appuser:appgroup /usr/src/app/build/libs/fraud-detection-1.0-all.jar fraud-detection-1.0-all.jar
 
+USER 10001
 ENTRYPOINT [ "java", "-jar", "fraud-detection-1.0-all.jar" ]
+# Change trail: @hungxqt - 2026-07-20 - Remove pebble gobinary and keep Temurin apt upgrade for Trivy

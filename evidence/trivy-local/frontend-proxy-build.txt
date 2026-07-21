@@ -1,0 +1,389 @@
+#0 building with "desktop-linux" instance using docker driver
+
+#1 [internal] load local bake definitions
+#1 reading docker-compose.yml 31.23kB / 31.23kB 0.1s done
+#1 reading docker-bake.hcl 6.69kB / 6.69kB 0.0s done
+#1 DONE 0.1s
+
+#2 [internal] load build definition from Dockerfile
+#2 transferring dockerfile: 811B 0.0s done
+#2 DONE 0.1s
+
+#3 [internal] load metadata for docker.io/envoyproxy/envoy:v1.35-latest@sha256:a707c3821b4cecb5db43d8e86e983e0f57b81010fefbabc01feeb071fb8cc08e
+#3 ...
+
+#4 [auth] envoyproxy/envoy:pull token for registry-1.docker.io
+#4 DONE 0.0s
+
+#3 [internal] load metadata for docker.io/envoyproxy/envoy:v1.35-latest@sha256:a707c3821b4cecb5db43d8e86e983e0f57b81010fefbabc01feeb071fb8cc08e
+#3 DONE 5.0s
+
+#5 [internal] load .dockerignore
+#5 transferring context: 464B 0.0s done
+#5 DONE 0.1s
+
+#6 [internal] load build context
+#6 transferring context: 12.79kB 0.1s done
+#6 DONE 0.3s
+
+#7 [1/4] FROM docker.io/envoyproxy/envoy:v1.35-latest@sha256:a707c3821b4cecb5db43d8e86e983e0f57b81010fefbabc01feeb071fb8cc08e
+#7 resolve docker.io/envoyproxy/envoy:v1.35-latest@sha256:a707c3821b4cecb5db43d8e86e983e0f57b81010fefbabc01feeb071fb8cc08e 0.1s done
+#7 DONE 0.9s
+
+#7 [1/4] FROM docker.io/envoyproxy/envoy:v1.35-latest@sha256:a707c3821b4cecb5db43d8e86e983e0f57b81010fefbabc01feeb071fb8cc08e
+#7 sha256:040e5bd14d1182dade64b5fc5db37faa4ad25acfab82d6a68ea733050944b897 0B / 4.64kB 0.2s
+#7 sha256:7a402182a4ebc2f25ce33eb0e8fde1ceeba4d6115bfbe0b0258767513cb0639d 0B / 30.08MB 0.2s
+#7 sha256:0b6ae9c1d73b8ff6a1c51d0d166d4703765b0dad429fc9c70dd30583c035a817 0B / 790B 0.2s
+#7 sha256:310b9ff2a2af0c4e16e3cda68c89d93893aa8dac9b259362f9d39482558866e4 0B / 485B 0.2s
+#7 sha256:040e5bd14d1182dade64b5fc5db37faa4ad25acfab82d6a68ea733050944b897 4.64kB / 4.64kB 0.5s done
+#7 sha256:8eeae2224101834a123759fe1220759b9929f2b17523f5e3872304e23146e808 0B / 6.28MB 0.2s
+#7 sha256:0b6ae9c1d73b8ff6a1c51d0d166d4703765b0dad429fc9c70dd30583c035a817 790B / 790B 1.2s done
+#7 sha256:310b9ff2a2af0c4e16e3cda68c89d93893aa8dac9b259362f9d39482558866e4 485B / 485B 1.4s done
+#7 sha256:1243bb722929e0f5ec075179586284ee09dc50490e0fa5950b49e5e7204e8514 0B / 175B 0.2s
+#7 sha256:f8c0c286a2b2d75db81b19a3b0b70033b82e7bb0ed1d0f252bafba2a57bbed16 0B / 1.40kB 0.2s
+#7 sha256:1243bb722929e0f5ec075179586284ee09dc50490e0fa5950b49e5e7204e8514 175B / 175B 0.5s done
+#7 sha256:f8c0c286a2b2d75db81b19a3b0b70033b82e7bb0ed1d0f252bafba2a57bbed16 1.40kB / 1.40kB 0.5s done
+#7 sha256:40d16f30db405106ef8074779bdf41f012465c2a785bbeaa2eab9f2081099b47 0B / 29.74MB 1.0s
+#7 sha256:7a402182a4ebc2f25ce33eb0e8fde1ceeba4d6115bfbe0b0258767513cb0639d 2.10MB / 30.08MB 4.3s
+#7 sha256:7a402182a4ebc2f25ce33eb0e8fde1ceeba4d6115bfbe0b0258767513cb0639d 4.19MB / 30.08MB 4.6s
+#7 sha256:7a402182a4ebc2f25ce33eb0e8fde1ceeba4d6115bfbe0b0258767513cb0639d 6.29MB / 30.08MB 4.7s
+#7 sha256:8eeae2224101834a123759fe1220759b9929f2b17523f5e3872304e23146e808 1.05MB / 6.28MB 4.3s
+#7 sha256:8eeae2224101834a123759fe1220759b9929f2b17523f5e3872304e23146e808 1.79MB / 6.28MB 4.7s
+#7 sha256:7a402182a4ebc2f25ce33eb0e8fde1ceeba4d6115bfbe0b0258767513cb0639d 8.39MB / 30.08MB 5.3s
+#7 sha256:7a402182a4ebc2f25ce33eb0e8fde1ceeba4d6115bfbe0b0258767513cb0639d 12.58MB / 30.08MB 5.5s
+#7 sha256:7a402182a4ebc2f25ce33eb0e8fde1ceeba4d6115bfbe0b0258767513cb0639d 14.68MB / 30.08MB 5.6s
+#7 sha256:7a402182a4ebc2f25ce33eb0e8fde1ceeba4d6115bfbe0b0258767513cb0639d 16.78MB / 30.08MB 5.8s
+#7 sha256:8eeae2224101834a123759fe1220759b9929f2b17523f5e3872304e23146e808 3.15MB / 6.28MB 5.6s
+#7 sha256:7a402182a4ebc2f25ce33eb0e8fde1ceeba4d6115bfbe0b0258767513cb0639d 20.97MB / 30.08MB 6.4s
+#7 sha256:8eeae2224101834a123759fe1220759b9929f2b17523f5e3872304e23146e808 5.24MB / 6.28MB 5.9s
+#7 sha256:7a402182a4ebc2f25ce33eb0e8fde1ceeba4d6115bfbe0b0258767513cb0639d 25.17MB / 30.08MB 6.5s
+#7 sha256:7a402182a4ebc2f25ce33eb0e8fde1ceeba4d6115bfbe0b0258767513cb0639d 29.36MB / 30.08MB 6.7s
+#7 sha256:8eeae2224101834a123759fe1220759b9929f2b17523f5e3872304e23146e808 6.28MB / 6.28MB 6.2s done
+#7 sha256:7a402182a4ebc2f25ce33eb0e8fde1ceeba4d6115bfbe0b0258767513cb0639d 30.08MB / 30.08MB 6.9s done
+#7 sha256:40d16f30db405106ef8074779bdf41f012465c2a785bbeaa2eab9f2081099b47 2.10MB / 29.74MB 5.9s
+#7 sha256:40d16f30db405106ef8074779bdf41f012465c2a785bbeaa2eab9f2081099b47 5.24MB / 29.74MB 6.5s
+#7 sha256:40d16f30db405106ef8074779bdf41f012465c2a785bbeaa2eab9f2081099b47 7.34MB / 29.74MB 6.8s
+#7 sha256:40d16f30db405106ef8074779bdf41f012465c2a785bbeaa2eab9f2081099b47 10.49MB / 29.74MB 7.0s
+#7 sha256:40d16f30db405106ef8074779bdf41f012465c2a785bbeaa2eab9f2081099b47 13.63MB / 29.74MB 7.3s
+#7 sha256:40d16f30db405106ef8074779bdf41f012465c2a785bbeaa2eab9f2081099b47 15.81MB / 29.74MB 7.4s
+#7 sha256:40d16f30db405106ef8074779bdf41f012465c2a785bbeaa2eab9f2081099b47 18.87MB / 29.74MB 7.6s
+#7 sha256:40d16f30db405106ef8074779bdf41f012465c2a785bbeaa2eab9f2081099b47 22.02MB / 29.74MB 8.0s
+#7 sha256:40d16f30db405106ef8074779bdf41f012465c2a785bbeaa2eab9f2081099b47 26.21MB / 29.74MB 8.2s
+#7 sha256:40d16f30db405106ef8074779bdf41f012465c2a785bbeaa2eab9f2081099b47 29.74MB / 29.74MB 8.3s
+#7 sha256:40d16f30db405106ef8074779bdf41f012465c2a785bbeaa2eab9f2081099b47 29.74MB / 29.74MB 8.5s done
+#7 extracting sha256:40d16f30db405106ef8074779bdf41f012465c2a785bbeaa2eab9f2081099b47
+#7 extracting sha256:40d16f30db405106ef8074779bdf41f012465c2a785bbeaa2eab9f2081099b47 1.1s done
+#7 DONE 12.4s
+
+#7 [1/4] FROM docker.io/envoyproxy/envoy:v1.35-latest@sha256:a707c3821b4cecb5db43d8e86e983e0f57b81010fefbabc01feeb071fb8cc08e
+#7 extracting sha256:f8c0c286a2b2d75db81b19a3b0b70033b82e7bb0ed1d0f252bafba2a57bbed16 0.1s done
+#7 extracting sha256:1243bb722929e0f5ec075179586284ee09dc50490e0fa5950b49e5e7204e8514 0.1s done
+#7 DONE 12.6s
+
+#7 [1/4] FROM docker.io/envoyproxy/envoy:v1.35-latest@sha256:a707c3821b4cecb5db43d8e86e983e0f57b81010fefbabc01feeb071fb8cc08e
+#7 extracting sha256:8eeae2224101834a123759fe1220759b9929f2b17523f5e3872304e23146e808
+#7 extracting sha256:8eeae2224101834a123759fe1220759b9929f2b17523f5e3872304e23146e808 0.9s done
+#7 DONE 13.5s
+
+#7 [1/4] FROM docker.io/envoyproxy/envoy:v1.35-latest@sha256:a707c3821b4cecb5db43d8e86e983e0f57b81010fefbabc01feeb071fb8cc08e
+#7 extracting sha256:0b6ae9c1d73b8ff6a1c51d0d166d4703765b0dad429fc9c70dd30583c035a817 0.0s done
+#7 extracting sha256:310b9ff2a2af0c4e16e3cda68c89d93893aa8dac9b259362f9d39482558866e4 0.0s done
+#7 extracting sha256:040e5bd14d1182dade64b5fc5db37faa4ad25acfab82d6a68ea733050944b897 0.0s done
+#7 DONE 13.6s
+
+#7 [1/4] FROM docker.io/envoyproxy/envoy:v1.35-latest@sha256:a707c3821b4cecb5db43d8e86e983e0f57b81010fefbabc01feeb071fb8cc08e
+#7 extracting sha256:7a402182a4ebc2f25ce33eb0e8fde1ceeba4d6115bfbe0b0258767513cb0639d
+#7 extracting sha256:7a402182a4ebc2f25ce33eb0e8fde1ceeba4d6115bfbe0b0258767513cb0639d 0.7s done
+#7 DONE 14.3s
+
+#7 [1/4] FROM docker.io/envoyproxy/envoy:v1.35-latest@sha256:a707c3821b4cecb5db43d8e86e983e0f57b81010fefbabc01feeb071fb8cc08e
+#7 extracting sha256:4f4fb700ef54461cfa02571ae0db9a0dc1e0cdb5577484a6d75e68dc38e8acc1 0.1s done
+#7 DONE 14.4s
+
+#8 [2/4] RUN apt-get update &&     apt-get upgrade -y --no-install-recommends &&     apt-get install --no-install-recommends -y gettext-base &&     apt-get clean &&     rm -rf /var/lib/apt/lists/*
+#8 1.778 Get:1 http://archive.ubuntu.com/ubuntu jammy InRelease [270 kB]
+#8 1.790 Get:2 http://security.ubuntu.com/ubuntu jammy-security InRelease [129 kB]
+#8 3.084 Get:3 http://security.ubuntu.com/ubuntu jammy-security/restricted amd64 Packages [7332 kB]
+#8 3.463 Get:4 http://archive.ubuntu.com/ubuntu jammy-updates InRelease [128 kB]
+#8 3.721 Get:5 http://archive.ubuntu.com/ubuntu jammy-backports InRelease [127 kB]
+#8 4.046 Get:6 http://archive.ubuntu.com/ubuntu jammy/restricted amd64 Packages [164 kB]
+#8 4.607 Get:7 http://archive.ubuntu.com/ubuntu jammy/universe amd64 Packages [17.5 MB]
+#8 6.073 Get:8 http://security.ubuntu.com/ubuntu jammy-security/universe amd64 Packages [1313 kB]
+#8 6.217 Get:9 http://security.ubuntu.com/ubuntu jammy-security/main amd64 Packages [4091 kB]
+#8 6.733 Get:10 http://security.ubuntu.com/ubuntu jammy-security/multiverse amd64 Packages [77.8 kB]
+#8 7.978 Get:11 http://archive.ubuntu.com/ubuntu jammy/multiverse amd64 Packages [266 kB]
+#8 7.984 Get:12 http://archive.ubuntu.com/ubuntu jammy/main amd64 Packages [1792 kB]
+#8 8.029 Get:13 http://archive.ubuntu.com/ubuntu jammy-updates/multiverse amd64 Packages [86.4 kB]
+#8 8.030 Get:14 http://archive.ubuntu.com/ubuntu jammy-updates/universe amd64 Packages [1615 kB]
+#8 8.069 Get:15 http://archive.ubuntu.com/ubuntu jammy-updates/main amd64 Packages [4442 kB]
+#8 8.365 Get:16 http://archive.ubuntu.com/ubuntu jammy-updates/restricted amd64 Packages [7649 kB]
+#8 8.992 Get:17 http://archive.ubuntu.com/ubuntu jammy-backports/universe amd64 Packages [35.6 kB]
+#8 8.998 Get:18 http://archive.ubuntu.com/ubuntu jammy-backports/main amd64 Packages [82.8 kB]
+#8 10.07 Fetched 47.1 MB in 9s (5221 kB/s)
+#8 10.07 Reading package lists...
+#8 11.61 Reading package lists...
+#8 12.77 Building dependency tree...
+#8 13.08 Reading state information...
+#8 13.14 Calculating upgrade...
+#8 13.48 The following packages will be upgraded:
+#8 13.48   gzip libncurses6 libncursesw6 libtinfo6 ncurses-base ncurses-bin perl-base
+#8 13.48   tar tzdata
+#8 14.28 9 upgraded, 0 newly installed, 0 to remove and 0 not upgraded.
+#8 14.28 Need to get 3072 kB of archives.
+#8 14.28 After this operation, 7168 B of additional disk space will be used.
+#8 14.28 Get:1 http://archive.ubuntu.com/ubuntu jammy-updates/main amd64 gzip amd64 1.10-4ubuntu4.2 [96.1 kB]
+#8 15.06 Get:2 http://archive.ubuntu.com/ubuntu jammy-updates/main amd64 ncurses-bin amd64 6.3-2ubuntu0.2 [184 kB]
+#8 15.53 Get:3 http://archive.ubuntu.com/ubuntu jammy-updates/main amd64 perl-base amd64 5.34.0-3ubuntu1.7 [1763 kB]
+#8 16.35 Get:4 http://archive.ubuntu.com/ubuntu jammy-updates/main amd64 tar amd64 1.34+dfsg-1ubuntu0.1.22.04.5 [298 kB]
+#8 16.42 Get:5 http://archive.ubuntu.com/ubuntu jammy-updates/main amd64 ncurses-base all 6.3-2ubuntu0.2 [20.1 kB]
+#8 16.43 Get:6 http://archive.ubuntu.com/ubuntu jammy-updates/main amd64 libncurses6 amd64 6.3-2ubuntu0.2 [111 kB]
+#8 16.46 Get:7 http://archive.ubuntu.com/ubuntu jammy-updates/main amd64 libncursesw6 amd64 6.3-2ubuntu0.2 [147 kB]
+#8 16.50 Get:8 http://archive.ubuntu.com/ubuntu jammy-updates/main amd64 libtinfo6 amd64 6.3-2ubuntu0.2 [105 kB]
+#8 16.52 Get:9 http://archive.ubuntu.com/ubuntu jammy-updates/main amd64 tzdata all 2026b-0ubuntu0.22.04.1 [348 kB]
+#8 16.72 debconf: delaying package configuration, since apt-utils is not installed
+#8 16.78 Fetched 3072 kB in 3s (1006 kB/s)
+#8 16.81 (Reading database ... 
+(Reading database ... 5%
+(Reading database ... 10%
+(Reading database ... 15%
+(Reading database ... 20%
+(Reading database ... 25%
+(Reading database ... 30%
+(Reading database ... 35%
+(Reading database ... 40%
+(Reading database ... 45%
+(Reading database ... 50%
+(Reading database ... 55%
+(Reading database ... 60%
+(Reading database ... 65%
+(Reading database ... 70%
+(Reading database ... 75%
+(Reading database ... 80%
+(Reading database ... 85%
+(Reading database ... 90%
+(Reading database ... 95%
+(Reading database ... 100%
+(Reading database ... 6728 files and directories currently installed.)
+#8 16.84 Preparing to unpack .../gzip_1.10-4ubuntu4.2_amd64.deb ...
+#8 16.86 Unpacking gzip (1.10-4ubuntu4.2) over (1.10-4ubuntu4.1) ...
+#8 17.13 Setting up gzip (1.10-4ubuntu4.2) ...
+#8 17.21 (Reading database ... 
+(Reading database ... 5%
+(Reading database ... 10%
+(Reading database ... 15%
+(Reading database ... 20%
+(Reading database ... 25%
+(Reading database ... 30%
+(Reading database ... 35%
+(Reading database ... 40%
+(Reading database ... 45%
+(Reading database ... 50%
+(Reading database ... 55%
+(Reading database ... 60%
+(Reading database ... 65%
+(Reading database ... 70%
+(Reading database ... 75%
+(Reading database ... 80%
+(Reading database ... 85%
+(Reading database ... 90%
+(Reading database ... 95%
+(Reading database ... 100%
+(Reading database ... 6728 files and directories currently installed.)
+#8 17.23 Preparing to unpack .../ncurses-bin_6.3-2ubuntu0.2_amd64.deb ...
+#8 17.25 Unpacking ncurses-bin (6.3-2ubuntu0.2) over (6.3-2ubuntu0.1) ...
+#8 17.36 Setting up ncurses-bin (6.3-2ubuntu0.2) ...
+#8 17.43 (Reading database ... 
+(Reading database ... 5%
+(Reading database ... 10%
+(Reading database ... 15%
+(Reading database ... 20%
+(Reading database ... 25%
+(Reading database ... 30%
+(Reading database ... 35%
+(Reading database ... 40%
+(Reading database ... 45%
+(Reading database ... 50%
+(Reading database ... 55%
+(Reading database ... 60%
+(Reading database ... 65%
+(Reading database ... 70%
+(Reading database ... 75%
+(Reading database ... 80%
+(Reading database ... 85%
+(Reading database ... 90%
+(Reading database ... 95%
+(Reading database ... 100%
+(Reading database ... 6728 files and directories currently installed.)
+#8 17.43 Preparing to unpack .../perl-base_5.34.0-3ubuntu1.7_amd64.deb ...
+#8 17.46 Unpacking perl-base (5.34.0-3ubuntu1.7) over (5.34.0-3ubuntu1.5) ...
+#8 22.85 Setting up perl-base (5.34.0-3ubuntu1.7) ...
+#8 22.90 (Reading database ... 
+(Reading database ... 5%
+(Reading database ... 10%
+(Reading database ... 15%
+(Reading database ... 20%
+(Reading database ... 25%
+(Reading database ... 30%
+(Reading database ... 35%
+(Reading database ... 40%
+(Reading database ... 45%
+(Reading database ... 50%
+(Reading database ... 55%
+(Reading database ... 60%
+(Reading database ... 65%
+(Reading database ... 70%
+(Reading database ... 75%
+(Reading database ... 80%
+(Reading database ... 85%
+(Reading database ... 90%
+(Reading database ... 95%
+(Reading database ... 100%
+(Reading database ... 6728 files and directories currently installed.)
+#8 22.91 Preparing to unpack .../tar_1.34+dfsg-1ubuntu0.1.22.04.5_amd64.deb ...
+#8 22.94 Unpacking tar (1.34+dfsg-1ubuntu0.1.22.04.5) over (1.34+dfsg-1ubuntu0.1.22.04.2) ...
+#8 23.09 Setting up tar (1.34+dfsg-1ubuntu0.1.22.04.5) ...
+#8 23.21 (Reading database ... 
+(Reading database ... 5%
+(Reading database ... 10%
+(Reading database ... 15%
+(Reading database ... 20%
+(Reading database ... 25%
+(Reading database ... 30%
+(Reading database ... 35%
+(Reading database ... 40%
+(Reading database ... 45%
+(Reading database ... 50%
+(Reading database ... 55%
+(Reading database ... 60%
+(Reading database ... 65%
+(Reading database ... 70%
+(Reading database ... 75%
+(Reading database ... 80%
+(Reading database ... 85%
+(Reading database ... 90%
+(Reading database ... 95%
+(Reading database ... 100%
+(Reading database ... 6728 files and directories currently installed.)
+#8 23.24 Preparing to unpack .../ncurses-base_6.3-2ubuntu0.2_all.deb ...
+#8 23.27 Unpacking ncurses-base (6.3-2ubuntu0.2) over (6.3-2ubuntu0.1) ...
+#8 23.58 Setting up ncurses-base (6.3-2ubuntu0.2) ...
+#8 23.65 (Reading database ... 
+(Reading database ... 5%
+(Reading database ... 10%
+(Reading database ... 15%
+(Reading database ... 20%
+(Reading database ... 25%
+(Reading database ... 30%
+(Reading database ... 35%
+(Reading database ... 40%
+(Reading database ... 45%
+(Reading database ... 50%
+(Reading database ... 55%
+(Reading database ... 60%
+(Reading database ... 65%
+(Reading database ... 70%
+(Reading database ... 75%
+(Reading database ... 80%
+(Reading database ... 85%
+(Reading database ... 90%
+(Reading database ... 95%
+(Reading database ... 100%
+(Reading database ... 6728 files and directories currently installed.)
+#8 23.69 Preparing to unpack .../libncurses6_6.3-2ubuntu0.2_amd64.deb ...
+#8 23.72 Unpacking libncurses6:amd64 (6.3-2ubuntu0.2) over (6.3-2ubuntu0.1) ...
+#8 23.83 Preparing to unpack .../libncursesw6_6.3-2ubuntu0.2_amd64.deb ...
+#8 23.87 Unpacking libncursesw6:amd64 (6.3-2ubuntu0.2) over (6.3-2ubuntu0.1) ...
+#8 23.98 Preparing to unpack .../libtinfo6_6.3-2ubuntu0.2_amd64.deb ...
+#8 24.02 Unpacking libtinfo6:amd64 (6.3-2ubuntu0.2) over (6.3-2ubuntu0.1) ...
+#8 24.18 Setting up libtinfo6:amd64 (6.3-2ubuntu0.2) ...
+#8 24.29 (Reading database ... 
+(Reading database ... 5%
+(Reading database ... 10%
+(Reading database ... 15%
+(Reading database ... 20%
+(Reading database ... 25%
+(Reading database ... 30%
+(Reading database ... 35%
+(Reading database ... 40%
+(Reading database ... 45%
+(Reading database ... 50%
+(Reading database ... 55%
+(Reading database ... 60%
+(Reading database ... 65%
+(Reading database ... 70%
+(Reading database ... 75%
+(Reading database ... 80%
+(Reading database ... 85%
+(Reading database ... 90%
+(Reading database ... 95%
+(Reading database ... 100%
+(Reading database ... 6728 files and directories currently installed.)
+#8 24.30 Preparing to unpack .../tzdata_2026b-0ubuntu0.22.04.1_all.deb ...
+#8 24.32 Unpacking tzdata (2026b-0ubuntu0.22.04.1) over (2026a-0ubuntu0.22.04.1) ...
+#8 30.48 Setting up tzdata (2026b-0ubuntu0.22.04.1) ...
+#8 30.67 
+#8 30.67 Current default time zone: 'Etc/UTC'
+#8 30.67 Local time is now:      Mon Jul 20 11:44:55 UTC 2026.
+#8 30.67 Universal Time is now:  Mon Jul 20 11:44:55 UTC 2026.
+#8 30.67 Run 'dpkg-reconfigure tzdata' if you wish to change it.
+#8 30.67 
+#8 30.70 Setting up libncurses6:amd64 (6.3-2ubuntu0.2) ...
+#8 30.71 Setting up libncursesw6:amd64 (6.3-2ubuntu0.2) ...
+#8 30.73 Processing triggers for libc-bin (2.35-0ubuntu3.13) ...
+#8 30.80 Reading package lists...
+#8 31.92 Building dependency tree...
+#8 32.19 Reading state information...
+#8 32.69 The following NEW packages will be installed:
+#8 32.69   gettext-base
+#8 33.19 0 upgraded, 1 newly installed, 0 to remove and 0 not upgraded.
+#8 33.19 Need to get 37.8 kB of archives.
+#8 33.19 After this operation, 291 kB of additional disk space will be used.
+#8 33.19 Get:1 http://archive.ubuntu.com/ubuntu jammy/main amd64 gettext-base amd64 0.21-4ubuntu4 [37.8 kB]
+#8 33.68 debconf: delaying package configuration, since apt-utils is not installed
+#8 33.73 Fetched 37.8 kB in 1s (45.1 kB/s)
+#8 33.77 Selecting previously unselected package gettext-base.
+#8 33.77 (Reading database ... 
+(Reading database ... 5%
+(Reading database ... 10%
+(Reading database ... 15%
+(Reading database ... 20%
+(Reading database ... 25%
+(Reading database ... 30%
+(Reading database ... 35%
+(Reading database ... 40%
+(Reading database ... 45%
+(Reading database ... 50%
+(Reading database ... 55%
+(Reading database ... 60%
+(Reading database ... 65%
+(Reading database ... 70%
+(Reading database ... 75%
+(Reading database ... 80%
+(Reading database ... 85%
+(Reading database ... 90%
+(Reading database ... 95%
+(Reading database ... 100%
+(Reading database ... 6728 files and directories currently installed.)
+#8 33.78 Preparing to unpack .../gettext-base_0.21-4ubuntu4_amd64.deb ...
+#8 33.78 Unpacking gettext-base (0.21-4ubuntu4) ...
+#8 33.82 Setting up gettext-base (0.21-4ubuntu4) ...
+#8 DONE 33.9s
+
+#9 [3/4] WORKDIR /home/envoy
+#9 DONE 0.8s
+
+#10 [4/4] COPY ./src/frontend-proxy/envoy.tmpl.yaml envoy.tmpl.yaml
+#10 DONE 0.8s
+
+#11 exporting to image
+#11 exporting layers
+#11 exporting layers 1.0s done
+#11 exporting manifest sha256:b22c889ecab100fd14e7315c4560a76ff371f7042c831a3d4870abf1fe7acae5 0.0s done
+#11 exporting config sha256:cc69253325c7bca1a710c057901c982be72964f4e24130d7288baeab40241728 0.0s done
+#11 exporting attestation manifest sha256:19a738fd81a8e13069908405ee428d1b58cfe80dbe7441fcf1a5ec96c85b3e35 0.0s done
+#11 exporting manifest list sha256:e0be5d7d5a4b421c398f18406034a67b70515c2079a159d46bd47100a495f2ca 0.0s done
+#11 naming to docker.io/local/frontend-proxy:trivy-test
+#11 naming to docker.io/local/frontend-proxy:trivy-test done
+#11 unpacking to docker.io/local/frontend-proxy:trivy-test
+#11 unpacking to docker.io/local/frontend-proxy:trivy-test 0.4s done
+#11 DONE 1.6s
