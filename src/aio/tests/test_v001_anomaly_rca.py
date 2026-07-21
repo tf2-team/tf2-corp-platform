@@ -9,6 +9,7 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 
 from aiops.anomaly import V001AnomalyEngine, build_v001_anomaly_engine
+from aiops.anomaly import v001 as anomaly_v001
 from aiops.anomaly.v001 import EwmaStlDetector, LogTemplateMetricBuilder, ServiceIsolationForestDetector, _metric_group, _point_changed
 from aiops.api.app import run_static_pipeline
 from aiops.config import Settings, load_hyperparameters, load_runtime_config
@@ -317,6 +318,81 @@ class V001AnomalyRcaTest(unittest.TestCase):
         ]
 
         self.assertEqual(engine._suppress_busy_infra(findings, series), [])
+
+    def test_coordinated_load_growth_is_filtered_before_anomaly_detection(self):
+        engine = anomaly_engine()
+        series = [
+            minute_metric("checkout", "request_rate_5m", [10] * 30 + [30] * 15),
+            minute_metric("checkout", "cpu_millicores", [100] * 30 + [300] * 15),
+            minute_metric("checkout", "memory_usage_bytes", [100_000_000] * 30 + [150_000_000] * 15),
+            minute_metric("checkout", "socket_io_bytes_per_second", [1_000_000] * 30 + [3_000_000] * 15),
+            minute_metric("checkout", "p95_latency_5m", [0.05] * 30 + [0.10] * 15),
+            minute_metric("checkout", "workload_ready_pods", [1] * 30 + [2] * 15),
+            minute_metric("checkout", "error_rate_5m", [0] * 45),
+        ]
+
+        self.assertEqual(
+            [item.metric for item in engine._filter_normal_traffic_growth(series)],
+            ["error_rate_5m"],
+        )
+        series[-1] = minute_metric("checkout", "error_rate_5m", [0] * 44 + [0.01])
+        self.assertEqual(engine._filter_normal_traffic_growth(series), series)
+        series[-1] = minute_metric("checkout", "error_rate_5m", [0] * 45)
+        series[-2] = minute_metric("checkout", "workload_ready_pods", [2] * 30 + [1] * 15)
+        self.assertEqual(engine._filter_normal_traffic_growth(series), series)
+
+    def test_normal_growth_allows_one_bucket_timestamp_skew(self):
+        engine = anomaly_engine()
+
+        def skewed(name: str, baseline: float, increased: float, offset: int) -> MetricSeries:
+            item = minute_metric("checkout", name, [baseline] * 30 + [increased] * 15)
+            return item.model_copy(update={"points": [point.model_copy(update={"timestamp": point.timestamp + offset}) for point in item.points]})
+
+        series = [
+            skewed("request_rate_5m", 10, 30, 0),
+            skewed("cpu_millicores", 100, 300, 10),
+            skewed("memory_usage_bytes", 100_000_000, 150_000_000, 20),
+            skewed("socket_io_bytes_per_second", 1_000_000, 3_000_000, 30),
+            skewed("p95_latency_5m", 0.05, 0.10, 40),
+            skewed("error_rate_5m", 0, 0, 0),
+        ]
+
+        self.assertEqual([item.metric for item in engine._filter_normal_traffic_growth(series)], ["error_rate_5m"])
+
+    def test_growth_gate_uses_median_three_smoothing_and_logs_rejection(self):
+        self.assertTrue(hasattr(anomaly_v001, "_median3"))
+        self.assertEqual(anomaly_v001._median3([10, 100, 10]), [10, 10, 10])
+        engine = anomaly_engine()
+        with self.assertLogs("aiops.anomaly.v001", level="INFO") as logs:
+            engine._filter_normal_traffic_growth([minute_metric("checkout", "request_rate_5m", [10] * 45)])
+        self.assertIn("reason=missing_metrics", " ".join(logs.output))
+
+    def test_growth_gate_only_measures_detection_tail(self):
+        engine = anomaly_engine()
+        request_rate = minute_metric("checkout", "request_rate_5m", [10] * 30 + [30] * 15)
+
+        timestamps = engine._increase_timestamps(request_rate, "request_rate")
+        cutoff = request_rate.points[-1].timestamp - engine.detection_window_seconds
+
+        self.assertTrue(timestamps)
+        self.assertTrue(all(timestamp >= cutoff for timestamp in timestamps))
+
+    def test_staggered_load_growth_is_not_treated_as_simultaneous(self):
+        engine = anomaly_engine()
+
+        def values(baseline: float, increased: float, active: set[int]) -> list[float]:
+            return [baseline] * 30 + [increased if index in active else baseline for index in range(15)]
+
+        series = [
+            minute_metric("checkout", "request_rate_5m", values(10, 30, {0, 1, 2})),
+            minute_metric("checkout", "cpu_millicores", values(100, 300, {3, 4, 5})),
+            minute_metric("checkout", "memory_usage_bytes", values(100_000_000, 150_000_000, {6, 7, 8})),
+            minute_metric("checkout", "socket_io_bytes_per_second", values(1_000_000, 3_000_000, {9, 10, 11})),
+            minute_metric("checkout", "p95_latency_5m", values(0.05, 0.10, {12, 13, 14})),
+            minute_metric("checkout", "error_rate_5m", [0] * 45),
+        ]
+
+        self.assertEqual(engine._filter_normal_traffic_growth(series), series)
 
     def test_latency_above_slo_is_kept_when_traffic_increases(self):
         engine = anomaly_engine()

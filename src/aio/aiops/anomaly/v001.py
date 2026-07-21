@@ -5,6 +5,7 @@ from __future__ import annotations
 
 from collections import defaultdict
 import hashlib
+import logging
 import os
 from pathlib import Path
 import re
@@ -12,6 +13,8 @@ import warnings
 
 from aiops.anomaly.stats import mean, median, robust_score, stdev
 from aiops.schemas import AnomalyFinding, MetricSeries
+
+logger = logging.getLogger(__name__)
 
 os.environ.setdefault("MPLCONFIGDIR", "/tmp")
 
@@ -304,7 +307,12 @@ class V001AnomalyEngine:
         self.last_algorithm_findings: list[AnomalyFinding] = []
 
     def evaluate(self, series: list[MetricSeries], logs: list[tuple[str, int, str]] | None = None) -> list[AnomalyFinding]:
-        raw_metric_findings = [*self.robust_drift.evaluate(series), *self.ewma_stl.evaluate(series), *self.isolation_forest.evaluate(series)]
+        detector_series = self._filter_normal_traffic_growth(series)
+        raw_metric_findings = [
+            *self.robust_drift.evaluate(detector_series),
+            *self.ewma_stl.evaluate(detector_series),
+            *self.isolation_forest.evaluate(detector_series),
+        ]
         metric_findings = self._significant_metric_findings(self._weighted_sum(raw_metric_findings), series)
         log_series = self.log_templates.build(logs or [])
         raw_log_findings = [*self.ewma_stl.evaluate(log_series), *self.isolation_forest.evaluate(log_series)]
@@ -411,6 +419,85 @@ class V001AnomalyEngine:
                 filtered.append(finding)
         return filtered
 
+    def _filter_normal_traffic_growth(self, series: list[MetricSeries]) -> list[MetricSeries]:
+        by_service: dict[str, list[MetricSeries]] = defaultdict(list)
+        for metric in series:
+            by_service[metric.service].append(metric)
+        normal_services = {
+            service
+            for service, service_series in by_service.items()
+            if self._is_normal_traffic_growth(service_series)
+        }
+        return [
+            metric
+            for metric in series
+            if metric.service not in normal_services or _is_error_metric(metric.metric) or _is_oom_metric(metric.metric)
+        ]
+
+    def _is_normal_traffic_growth(self, series: list[MetricSeries]) -> bool:
+        service = series[0].service if series else "unknown"
+        required_groups = ("request_rate", "latency", "cpu", "memory", "socket_io")
+        by_group = {group: [metric for metric in series if _metric_group(metric.metric) == group] for group in required_groups}
+        missing = [group for group, metrics in by_group.items() if not metrics]
+        if missing:
+            logger.info("AIOPS_NORMAL_GROWTH_GATE service=%s result=detect reason=missing_metrics metrics=%s", service, ",".join(missing))
+            return False
+        error_metrics = [metric for metric in series if _is_error_metric(metric.metric)]
+        if any(self._error_increased(metric) for metric in error_metrics):
+            logger.info("AIOPS_NORMAL_GROWTH_GATE service=%s result=detect reason=error_increased", service)
+            return False
+        if any("ready_pods" in metric.metric and self._ready_pods_decreased(metric) for metric in series):
+            logger.info("AIOPS_NORMAL_GROWTH_GATE service=%s result=detect reason=ready_pods_decreased", service)
+            return False
+        increase_timestamps = {
+            group: set().union(
+                *(self._increase_timestamps(metric, group) for metric in metrics)
+            )
+            for group, metrics in by_group.items()
+        }
+        below_threshold = [group for group, timestamps in increase_timestamps.items() if not timestamps]
+        if below_threshold:
+            logger.info("AIOPS_NORMAL_GROWTH_GATE service=%s result=detect reason=below_threshold metrics=%s", service, ",".join(below_threshold))
+            return False
+        tolerance = max(_series_step_seconds(metric) for metrics in by_group.values() for metric in metrics)
+        simultaneous = sum(
+            all(any(abs(timestamp - other) <= tolerance for other in increase_timestamps[group]) for group in required_groups[1:])
+            for timestamp in increase_timestamps["request_rate"]
+        )
+        required = max(self.min_tail_anomaly_buckets[group] for group in required_groups)
+        if simultaneous < required:
+            logger.info(
+                "AIOPS_NORMAL_GROWTH_GATE service=%s result=detect reason=insufficient_common_buckets common=%s required=%s",
+                service,
+                simultaneous,
+                required,
+            )
+            return False
+        logger.info("AIOPS_NORMAL_GROWTH_GATE service=%s result=skip reason=coordinated_growth common=%s", service, simultaneous)
+        return True
+
+    def _increase_timestamps(self, metric: MetricSeries, group: str) -> set[int]:
+        return _tail_increase_timestamps(
+            metric,
+            self.detection_window_seconds,
+            self.min_points - 1,
+            self.min_tail_anomaly_buckets[group],
+            self.min_relative_change_ratio[group],
+            self.min_absolute_change[group],
+        )
+
+    def _ready_pods_decreased(self, metric: MetricSeries) -> bool:
+        group = _metric_group(metric.metric)
+        indexes, values, baseline = _tail_context(metric, self.detection_window_seconds, self.min_points - 1)
+        if not indexes:
+            return False
+        changed = sum(values[index] < baseline and _point_changed(values[index], baseline, self.min_relative_change_ratio[group], self.min_absolute_change[group]) for index in indexes)
+        return changed >= self.min_tail_anomaly_buckets[group] and median([values[index] for index in indexes]) < baseline
+
+    def _error_increased(self, metric: MetricSeries) -> bool:
+        indexes, values, baseline = _tail_context(metric, self.detection_window_seconds, self.min_points - 1)
+        return any(values[index] > baseline and _point_changed(values[index], baseline, 0.0, self.min_absolute_change["error"]) for index in indexes)
+
     def _suppress_busy_cpu(self, findings: list[AnomalyFinding], series: list[MetricSeries]) -> list[AnomalyFinding]:
         return self._suppress_busy_infra(findings, series)
 
@@ -443,6 +530,10 @@ def _is_hard_failure_metric(metric: str) -> bool:
     return "error_rate" in metric or "error_ratio" in metric or "ready_pods" in metric
 
 
+def _is_error_metric(metric: str) -> bool:
+    return "error_rate" in metric or "error_ratio" in metric
+
+
 def _metric_group(metric: str) -> str:
     if "error_rate" in metric or "error_ratio" in metric:
         return "error"
@@ -468,6 +559,45 @@ def _point_changed(value: float, baseline: float, min_relative: float, min_absol
     if baseline == 0:
         return delta > 0
     return delta / abs(baseline) >= min_relative
+
+
+def _tail_increase_timestamps(
+    metric: MetricSeries,
+    detection_window_seconds: int | None,
+    start: int,
+    min_buckets: int,
+    min_relative: float,
+    min_absolute: float,
+) -> set[int]:
+    indexes, values, baseline = _tail_context(metric, detection_window_seconds, start)
+    if not indexes:
+        return set()
+    changed = {
+        metric.points[index].timestamp
+        for index in indexes
+        if values[index] > baseline and _point_changed(values[index], baseline, min_relative, min_absolute)
+    }
+    return changed if len(changed) >= min_buckets and median([values[index] for index in indexes]) > baseline else set()
+
+
+def _tail_context(metric: MetricSeries, detection_window_seconds: int | None, start: int) -> tuple[list[int], list[float], float]:
+    indexes = list(_tail_indexes(metric, detection_window_seconds, start))
+    values = _median3([point.value for point in metric.points])
+    baseline_values = values[: indexes[0]] if indexes else []
+    return (indexes, values, median(baseline_values)) if len(baseline_values) >= 4 else ([], values, 0.0)
+
+
+def _median3(values: list[float]) -> list[float]:
+    if len(values) < 3:
+        return values[:]
+    return [values[0], *(median(values[index - 1 : index + 2]) for index in range(1, len(values) - 1)), values[-1]]
+
+
+def _series_step_seconds(metric: MetricSeries) -> int:
+    if metric.detector_bucket_seconds or metric.step_seconds:
+        return metric.detector_bucket_seconds or metric.step_seconds or 1
+    differences = [right.timestamp - left.timestamp for left, right in zip(metric.points, metric.points[1:]) if right.timestamp > left.timestamp]
+    return int(median(differences)) if differences else 1
 
 
 def _request_rate_increased(series: list[MetricSeries], timestamp: int, threshold: float) -> bool:
