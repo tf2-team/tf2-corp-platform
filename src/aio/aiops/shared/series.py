@@ -3,6 +3,7 @@
 # SPDX-License-Identifier: Apache-2.0
 from __future__ import annotations
 
+from collections import defaultdict
 from aiops.schemas import MetricPoint, MetricSeries, SignalQuality
 
 
@@ -16,14 +17,25 @@ def _bucket(series: MetricSeries) -> MetricSeries:
     step_seconds = series.step_seconds or bucket_seconds
     if bucket_seconds <= step_seconds:
         return series
-    latest_by_bucket: dict[int, MetricPoint] = {}
+    values_by_bucket: dict[int, list[float]] = defaultdict(list)
     for point in series.points:
         timestamp = (point.timestamp // bucket_seconds) * bucket_seconds
-        latest_by_bucket[timestamp] = MetricPoint(timestamp=timestamp, value=point.value)
+        values_by_bucket[timestamp].append(point.value)
     return series.model_copy(
         update={
-            "points": [latest_by_bucket[timestamp] for timestamp in sorted(latest_by_bucket)],
+            "points": [
+                MetricPoint(timestamp=timestamp, value=_bucket_value(series.metric, values))
+                for timestamp, values in sorted(values_by_bucket.items())
+            ],
             "step_seconds": bucket_seconds,
             "detector_bucket_seconds": bucket_seconds,
         }
     )
+
+
+def _bucket_value(metric: str, values: list[float]) -> float:
+    if "error_rate" in metric or "error_ratio" in metric or "latency" in metric:
+        return max(values)
+    if "cpu" in metric or "memory" in metric or "request_rate" in metric:
+        return sum(values) / len(values)
+    return values[-1]

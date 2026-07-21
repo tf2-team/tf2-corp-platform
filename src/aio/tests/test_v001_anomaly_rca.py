@@ -16,6 +16,7 @@ from aiops.pipeline.runtime import _log_final_root_cause_algorithm_scores
 from aiops.rca.graph import GraphTraversalRca
 from aiops.rca import V001RcaEngine
 from aiops.schemas import AnomalyFinding, MetricPoint, MetricSeries, PipelineRunRequest, RcaResult, RootCauseCandidate, RuntimeConfig
+from aiops.shared.series import prepare_detector_series
 
 
 def metric(service: str, name: str, values: list[float]) -> MetricSeries:
@@ -64,6 +65,30 @@ def graph_rca(config: RuntimeConfig) -> GraphTraversalRca:
 
 
 class V001AnomalyRcaTest(unittest.TestCase):
+    def test_detector_bucket_aggregation_matches_metric_type(self):
+        series = prepare_detector_series(
+            [
+                MetricSeries(
+                    service="payment",
+                    metric="error_rate_5m",
+                    signal_id="payment_error_rate_5m",
+                    step_seconds=1,
+                    detector_bucket_seconds=60,
+                    points=[MetricPoint(timestamp=index, value=value) for index, value in enumerate([0.1, 0.9, 0.2])],
+                ),
+                MetricSeries(
+                    service="payment",
+                    metric="cpu_millicores",
+                    signal_id="payment_cpu_millicores",
+                    step_seconds=1,
+                    detector_bucket_seconds=60,
+                    points=[MetricPoint(timestamp=index, value=value) for index, value in enumerate([10.0, 100.0, 20.0])],
+                ),
+            ]
+        )
+
+        self.assertEqual([item.points[0].value for item in series], [0.9, 130.0 / 3.0])
+
     def test_ewma_formula_does_not_emit_statsmodels_zero_sse_warning(self):
         detector = EwmaStlDetector(alpha=0.3, z_threshold=3.0, min_points=8, seasonal_period=1)
 
