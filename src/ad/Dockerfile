@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 
-FROM --platform=${BUILDPLATFORM} eclipse-temurin:21-jdk@sha256:da9d3a4f7650db39b918fc5a2c3da76556fb8cc8e5f3767cdea0bb409286951a AS builder
+FROM --platform=${BUILDPLATFORM} eclipse-temurin:21-jdk AS builder
 ARG _JAVA_OPTIONS
 WORKDIR /usr/src/app/
 
@@ -20,17 +20,10 @@ RUN ./gradlew installDist -PprotoSourceDir=./proto
 
 # -----------------------------------------------------------------------------
 
-FROM eclipse-temurin:21-jre@sha256:273396ed5998598ed1091e8d72711c2d36980a0e65103859c55a4e977a41ffd3
+FROM eclipse-temurin:21-jre
 
 ARG OTEL_JAVA_AGENT_VERSION
 ARG _JAVA_OPTIONS
-
-# Apply OS security updates for Trivy HIGH/CRITICAL on the JRE base.
-RUN apt-get update \
-    && apt-get upgrade -y --no-install-recommends \
-    && rm -rf /var/lib/apt/lists/* \
-    # Temurin image ships /usr/bin/pebble (Go) with HIGH x/net and stdlib CVEs; not used by this service.
-    && rm -f /usr/bin/pebble
 
 WORKDIR /usr/src/app/
 
@@ -47,4 +40,3 @@ USER 10001
 
 EXPOSE ${AD_PORT}
 ENTRYPOINT [ "./build/install/techx-corp-ad/bin/Ad" ]
-# Change trail: @hungxqt - 2026-07-20 - Remove pebble gobinary; Netty/jackson fixes via build.gradle

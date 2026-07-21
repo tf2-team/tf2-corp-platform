@@ -102,7 +102,10 @@ class ShoppingCopilotServicer(demo_pb2_grpc.ShoppingCopilotServiceServicer):
         request: demo_pb2.ConfirmCartActionRequest,
         context,
     ) -> demo_pb2.ConfirmCartActionResponse:
-        logger.info("ConfirmCartAction requested for user_id=%r", request.user_id)
+        logger.info(
+            "ConfirmCartAction: user_id=%r token_prefix=%s",
+            request.user_id, request.pending_action_token[:8],
+        )
         success, reason = confirm_cart_action(
             token=request.pending_action_token,
             user_id=request.user_id,

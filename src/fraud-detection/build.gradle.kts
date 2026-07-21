@@ -28,13 +28,6 @@ repositories {
 
 
 dependencies {
-    constraints {
-        implementation("com.fasterxml.jackson.core:jackson-databind:2.21.4")
-        implementation("io.netty:netty-codec:4.1.135.Final")
-        implementation("io.netty:netty-codec-http:4.1.135.Final")
-        implementation("io.netty:netty-codec-http2:4.1.135.Final")
-        implementation("io.netty:netty-handler:4.1.135.Final")
-    }
     implementation("com.google.protobuf:protobuf-java:${protobufVersion}")
     testImplementation(kotlin("test"))
     implementation(kotlin("script-runtime"))
