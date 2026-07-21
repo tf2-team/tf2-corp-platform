@@ -19,6 +19,35 @@
       "robust_drift_min_baseline_points": 30,
       "detection_window_seconds": 900,
       "suppress_cpu_robust_threshold": 4.0,
+      "suppress_latency_absolute_threshold_seconds": 0.5,
+      "suppress_latency_relative_increase_ratio": 0.25,
+      "min_tail_anomaly_buckets": {
+        "error": 1,
+        "latency": 3,
+        "cpu": 3,
+        "memory": 3,
+        "disk": 3,
+        "request_rate": 3,
+        "default": 2
+      },
+      "min_relative_change_ratio": {
+        "error": 0.0,
+        "latency": 0.25,
+        "cpu": 0.3,
+        "memory": 0.3,
+        "disk": 0.3,
+        "request_rate": 0.5,
+        "default": 0.3
+      },
+      "min_absolute_change": {
+        "error": 0.005,
+        "latency": 0.05,
+        "cpu": 10.0,
+        "memory": 10485760.0,
+        "disk": 1048576.0,
+        "request_rate": 5.0,
+        "default": 1.0
+      },
       "drain3_config_path": "config/drain3.ini",
       "log_bucket_seconds": 60,
       "log_correlation_window_seconds": 120,

@@ -77,6 +77,11 @@ class SettingsTest(unittest.TestCase):
         self.assertEqual(config["rca"]["anomaly"]["robust_drift_min_baseline_points"], 30)
         self.assertEqual(config["rca"]["anomaly"]["detection_window_seconds"], 900)
         self.assertEqual(config["rca"]["anomaly"]["suppress_cpu_robust_threshold"], 4.0)
+        self.assertEqual(config["rca"]["anomaly"]["suppress_latency_absolute_threshold_seconds"], 0.5)
+        self.assertEqual(config["rca"]["anomaly"]["suppress_latency_relative_increase_ratio"], 0.25)
+        self.assertEqual(config["rca"]["anomaly"]["min_tail_anomaly_buckets"]["latency"], 3)
+        self.assertEqual(config["rca"]["anomaly"]["min_relative_change_ratio"]["cpu"], 0.3)
+        self.assertEqual(config["rca"]["anomaly"]["min_absolute_change"]["error"], 0.005)
         self.assertEqual(config["rca"]["min_points"], 30)
         self.assertEqual(config["rca"]["anomaly"]["log_correlation_window_seconds"], 120)
         self.assertEqual(config["rca"]["anomaly"]["log_history_buckets"], 45)
@@ -105,7 +110,7 @@ class SettingsTest(unittest.TestCase):
         self.assertEqual(config["detectors"]["thresholds"]["ops01_checkout_slo"], 0.01)
         profile = load_prometheus_query_registry(Path("config/prometheus_queries.json")).collection_profiles["one_second"]
         self.assertEqual(profile.step_seconds, 1)
-        self.assertEqual(profile.lookback_seconds, 2700)
+        self.assertEqual(profile.lookback_seconds, 3600)
         self.assertGreaterEqual(
             profile.lookback_seconds // profile.detector_bucket_seconds + 1,
             config["rca"]["min_points"],
