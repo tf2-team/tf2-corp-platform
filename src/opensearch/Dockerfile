@@ -11,7 +11,6 @@ USER 0
 ARG SECURITY_UPDATE_EPOCH=2026-07-21-cve-refresh-2
 
 ADD --chmod=644 https://repo1.maven.org/maven2/com/fasterxml/jackson/core/jackson-databind/2.21.4/jackson-databind-2.21.4.jar /tmp/jackson-databind-2.21.4.jar
-ADD --chmod=644 https://repo1.maven.org/maven2/tools/jackson/core/jackson-databind/3.1.4/jackson-databind-3.1.4.jar /tmp/jackson-databind-3.1.4.jar
 
 # Apply available OS security updates for Trivy HIGH/CRITICAL on the vendor base.
 RUN echo "security update baseline: ${SECURITY_UPDATE_EPOCH}" >/dev/null \
@@ -70,11 +69,16 @@ RUN rm -rf \
 RUN rm -f /usr/share/opensearch/lib/jackson-databind-*.jar \
     /usr/share/opensearch/modules/ingest-geoip/jackson-databind-*.jar \
     /usr/share/opensearch/plugins/opensearch-sql/jackson-databind-*.jar \
-    && cp /tmp/jackson-databind-2.21.4.jar /usr/share/opensearch/lib/ \
     && cp /tmp/jackson-databind-2.21.4.jar /usr/share/opensearch/modules/ingest-geoip/ \
     && cp /tmp/jackson-databind-2.21.4.jar /usr/share/opensearch/plugins/opensearch-sql/ \
-    && cp /tmp/jackson-databind-3.1.4.jar /usr/share/opensearch/lib/ \
-    && rm -f /tmp/jackson-databind-*.jar
+    && rm -f /tmp/jackson-databind-*.jar \
+    && for jar in /usr/share/opensearch/lib/jackson-databind-*.jar; do \
+         test ! -e "${jar}" || { echo "Jackson databind must remain module-local: ${jar}" >&2; exit 1; }; \
+       done \
+    && set -- /usr/share/opensearch/modules/*/jackson-databind-*.jar /usr/share/opensearch/plugins/*/jackson-databind-*.jar \
+    && test "$#" -eq 2 \
+    && test -f /usr/share/opensearch/modules/ingest-geoip/jackson-databind-2.21.4.jar \
+    && test -f /usr/share/opensearch/plugins/opensearch-sql/jackson-databind-2.21.4.jar
 
 # Keep only these essential plugins:
 # - opensearch-index-management (index lifecycle management)
@@ -82,4 +86,4 @@ RUN rm -f /usr/share/opensearch/lib/jackson-databind-*.jar \
 # - opensearch-job-scheduler (task scheduling)
 
 USER 1000
-# Change trail: @hungxqt - 2026-07-20 - Bump OpenSearch base to 3.7.0 for Trivy HIGH OS packages
+# Change trail: @MinhKhoa2209 - 2026-07-22 - Keep fixed Jackson module-local; never duplicate it in global lib.

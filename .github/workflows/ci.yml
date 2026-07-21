@@ -330,7 +330,11 @@ jobs:
           echo "  DEMO_VERSION=${DEMO_VERSION}"
           echo "  platform=linux/amd64 (PR validation only)"
           echo "  cache=disabled (no ECR)"
-          echo "  output=type=cacheonly (no load/push)"
+          OUTPUT_TYPE="cacheonly"
+          case "${SERVICE}" in
+            email|llm|opensearch) OUTPUT_TYPE="docker" ;;
+          esac
+          echo "  output=type=${OUTPUT_TYPE} (no push)"
 
           # Overrides:
           # - single platform for PR speed (publish path still multi-arch)
@@ -344,7 +348,12 @@ jobs:
             --set "*.cache-from=" \
             --set "*.cache-to=" \
             --set "*.tags=${IMAGE_NAME}/${SERVICE}:${DEMO_VERSION}" \
-            --set "*.output=type=cacheonly"
+            --set "*.output=type=${OUTPUT_TYPE}"
+
+          if [[ "${OUTPUT_TYPE}" == "docker" ]]; then
+            bash scripts/smoke_runtime_image.sh \
+              "${SERVICE}" "${IMAGE_NAME}/${SERVICE}:${DEMO_VERSION}"
+          fi
 
       - name: Job summary
         if: always()

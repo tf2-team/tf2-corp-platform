@@ -220,10 +220,11 @@ if __name__ == '__main__':
 
     app.logger.info(f"Loaded product review summaries count: {len(product_review_summaries)}")
 
-    print("OpenAI API server starting on http://localhost:8000")
-    print("Set your OpenAI base URL to: http://localhost:8000/v1")
+    app_port = int(os.environ.get("APP_PORT", "8000"))
+    print(f"OpenAI API server starting on http://localhost:{app_port}")
+    print(f"Set your OpenAI base URL to: http://localhost:{app_port}/v1")
     app.run(
         host=os.environ.get("LLM_HOST", "0.0.0.0"),
-        port=int(os.environ.get("LLM_PORT", "8000")),
+        port=app_port,
     )
-# Change trail: @hungxqt - 2026-07-15 - Dual-read local- LLM flags with BTC keys.
+# Change trail: @MinhKhoa2209 - 2026-07-22 - Avoid Kubernetes LLM_PORT service-link collision.
