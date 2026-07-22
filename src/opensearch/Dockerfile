@@ -38,11 +38,13 @@ RUN echo "security update baseline: ${SECURITY_UPDATE_EPOCH}" >/dev/null \
     && rpm -q python3-3.9.25-1.amzn2023.0.8 \
     && rpm -q python3-libs-3.9.25-1.amzn2023.0.8
 
-# Remove plugins in dependency order - remove dependent plugins first
-# These plugins are not needed for basic log storage and retrieval in the demo
-# Remove plugins in dependency order
-RUN rm -rf \
-    /usr/share/opensearch/plugins/opensearch-security \
+# Strip unused plugins to shrink the image. KEEP opensearch-security:
+# chart SEC-06 expects the security plugin + demo TLS so OTel/Grafana can use
+# https://opensearch:9200 with basic auth. Removing the plugin left the node on
+# plain HTTP and broke the log pipeline (TLS handshake failures / empty Grafana logs).
+# Remove dependent / optional plugins first; leave security, SQL, ILM, job-scheduler.
+RUN test -d /usr/share/opensearch/plugins/opensearch-security \
+    && rm -rf \
     /usr/share/opensearch/plugins/opensearch-security-analytics \
     /usr/share/opensearch/plugins/opensearch-alerting \
     /usr/share/opensearch/plugins/opensearch-anomaly-detection \
@@ -64,26 +66,36 @@ RUN rm -rf \
     /usr/share/opensearch/plugins/opensearch-search-relevance \
     /usr/share/opensearch/plugins/opensearch-system-templates \
     /usr/share/opensearch/plugins/opensearch-ubi \
-    /usr/share/opensearch/plugins/query-insights
+    /usr/share/opensearch/plugins/query-insights \
+    && test -d /usr/share/opensearch/plugins/opensearch-security \
+    && test -d /usr/share/opensearch/plugins/opensearch-sql \
+    && test -d /usr/share/opensearch/plugins/opensearch-index-management \
+    && test -d /usr/share/opensearch/plugins/opensearch-job-scheduler
 
+# Pin jackson-databind in every module/plugin that ships a copy (CVE baseline).
+# Never place it in the global lib/ (OpenSearch classpath rules).
+# After keeping opensearch-security, replace any security-plugin copy as well.
 RUN rm -f /usr/share/opensearch/lib/jackson-databind-*.jar \
-    /usr/share/opensearch/modules/ingest-geoip/jackson-databind-*.jar \
-    /usr/share/opensearch/plugins/opensearch-sql/jackson-databind-*.jar \
-    && cp /tmp/jackson-databind-2.21.4.jar /usr/share/opensearch/modules/ingest-geoip/ \
-    && cp /tmp/jackson-databind-2.21.4.jar /usr/share/opensearch/plugins/opensearch-sql/ \
+    && for jar in /usr/share/opensearch/modules/*/jackson-databind-*.jar \
+                  /usr/share/opensearch/plugins/*/jackson-databind-*.jar; do \
+         if [ -f "${jar}" ]; then \
+           dir="$(dirname "${jar}")"; \
+           rm -f "${dir}"/jackson-databind-*.jar; \
+           cp /tmp/jackson-databind-2.21.4.jar "${dir}/jackson-databind-2.21.4.jar"; \
+         fi; \
+       done \
     && rm -f /tmp/jackson-databind-*.jar \
     && for jar in /usr/share/opensearch/lib/jackson-databind-*.jar; do \
          test ! -e "${jar}" || { echo "Jackson databind must remain module-local: ${jar}" >&2; exit 1; }; \
        done \
-    && set -- /usr/share/opensearch/modules/*/jackson-databind-*.jar /usr/share/opensearch/plugins/*/jackson-databind-*.jar \
-    && test "$#" -eq 2 \
     && test -f /usr/share/opensearch/modules/ingest-geoip/jackson-databind-2.21.4.jar \
     && test -f /usr/share/opensearch/plugins/opensearch-sql/jackson-databind-2.21.4.jar
 
-# Keep only these essential plugins:
+# Essential plugins retained after slim:
+# - opensearch-security (SEC-06 TLS + basic auth; required for chart HTTPS clients)
 # - opensearch-index-management (index lifecycle management)
-# - opensearch-sql (SQL query support for Grafana PPL queries)
-# - opensearch-job-scheduler (task scheduling)
+# - opensearch-sql (SQL/PPL for Grafana)
+# - opensearch-job-scheduler (task scheduling for ILM)
 
 USER 1000
-# Change trail: @MinhKhoa2209 - 2026-07-22 - Keep fixed Jackson module-local; never duplicate it in global lib.
+# Change trail: @hungxqt - 2026-07-22 - Keep opensearch-security for SEC-06 HTTPS log pipeline.
