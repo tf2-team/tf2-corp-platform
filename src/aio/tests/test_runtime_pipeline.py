@@ -78,6 +78,8 @@ def runtime_kwargs(settings: Settings) -> dict:
         "qualification_dev": settings.qualification_gate_dev,
         "qualification_max_sample_age_seconds": settings.qualification_max_sample_age_seconds,
         "correlation_hyperparameters": hyperparameters["correlation"],
+        "slo_notification_suppress_seconds": hyperparameters["incident"]["direct_slo_suppress_seconds"],
+        "slo_notification_state": {},
     }
 
 

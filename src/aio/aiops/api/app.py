@@ -116,6 +116,7 @@ def run_pipeline_with_collector(collector, settings: Settings, runtime_config, m
         ),
         notification_sender=NotificationClient(settings) if _configured_url(settings.notification_webhook_url) else None,
         rca_history_path=settings.rca_history_path,
+        slo_notification_suppress_seconds=int(hyperparameters["incident"]["direct_slo_suppress_seconds"]),
     )
     try:
         result = pipeline.run_once(metric_series=metric_series or [])

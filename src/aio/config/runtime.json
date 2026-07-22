@@ -245,16 +245,6 @@
       "runbook_id": "RB-CHECKOUT-DEPENDENCY"
     },
     {
-      "id": "ops04_checkout_latency_p95",
-      "type": "threshold",
-      "enabled": true,
-      "signal_id": "checkout_p95_latency_5m",
-      "flow": "checkout",
-      "service": "checkout",
-      "severity": "SEV1",
-      "runbook_id": "RB-CHECKOUT-LATENCY"
-    },
-    {
       "id": "ops05_cart_error_rate",
       "type": "threshold",
       "enabled": false,

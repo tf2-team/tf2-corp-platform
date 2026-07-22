@@ -24,17 +24,27 @@ class RuntimeConfigTest(unittest.TestCase):
         self.assertEqual(next(signal for signal in config.signals if signal.id == "checkout_bad_ratio_24h").feature_role, "official_slo")
         self.assertEqual(next(signal for signal in config.signals if signal.id == "checkout_payment_error_rate_5m").feature_role, "dependency_signal")
         detector_ids = {detector.detector_id for detector in detectors}
-        self.assertIn("ops04_checkout_latency_p95", detector_ids)
+        self.assertIn("auto_checkout_latency_p95", detector_ids)
         self.assertTrue({detector.id for detector in config.detectors if detector.id.startswith("auto_")} <= detector_ids)
 
     def test_each_service_error_rate_signal_has_auto_detector(self):
         config = load_runtime_config(Path("config/runtime.json"))
         signal_ids = {signal.id for signal in config.signals if signal.query_id.endswith(".error_rate_5m")}
-        auto_detectors = [detector for detector in config.detectors if detector.id.startswith("auto_")]
+        auto_detectors = [detector for detector in config.detectors if detector.id.startswith("auto_") and detector.id.endswith("_error_rate")]
         detector_signal_ids = {detector.signal_id for detector in auto_detectors}
 
         self.assertEqual(detector_signal_ids, signal_ids)
         self.assertTrue(all(detector.enabled for detector in auto_detectors))
+
+    def test_each_service_p95_latency_signal_has_one_second_slo_detector(self):
+        config = load_runtime_config(Path("config/runtime.json"))
+        hyperparameters = load_hyperparameters(Settings().hyperparameters_path)
+        detectors = build_detectors(config, Settings(), hyperparameters["no_data"], hyperparameters["detectors"])
+        signal_ids = {signal.id for signal in config.signals if signal.query_id.endswith(".p95_latency_5m")}
+        latency_detectors = [detector for detector in detectors if detector.detector_id.endswith("_latency_p95")]
+
+        self.assertEqual({detector.signal_id for detector in latency_detectors}, signal_ids)
+        self.assertTrue(all(detector.threshold == 1.0 for detector in latency_detectors))
 
     def test_prometheus_services_expand_generated_metrics(self):
         raw = json.loads(Path("config/runtime.json").read_text(encoding="utf-8"))

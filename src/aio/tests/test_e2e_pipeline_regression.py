@@ -151,6 +151,8 @@ def run_pipeline(
         qualification_max_sample_age_seconds=settings.qualification_max_sample_age_seconds,
         rca_hyperparameters=rca_hyperparameters,
         correlation_hyperparameters=hyperparameters["correlation"],
+        slo_notification_suppress_seconds=hyperparameters["incident"]["direct_slo_suppress_seconds"],
+        slo_notification_state={},
         remediation=(
             RemediationFeatureExtractor(),
             HistoryRetriever(hyperparameters["remediation"]["similarity_weights"], hyperparameters["remediation"]["history_top_k"]),
@@ -262,10 +264,10 @@ class E2EPipelineRegressionTest(unittest.TestCase):
             )
 
         self.assertEqual(len(result.incidents), 1)
-        self.assertEqual(result.candidates[0].detector_id, "ops04_checkout_latency_p95")
+        self.assertEqual(result.candidates[0].detector_id, "auto_checkout_latency_p95")
         self.assertEqual(result.candidates[0].reason, "threshold_breached")
         self.assertEqual(result.incidents[0].service, "checkout")
-        self.assertEqual(result.notifications[0].runbook_id, "RB-CHECKOUT-LATENCY")
+        self.assertEqual(result.notifications[0].runbook_id, "RB-SERVICE-LATENCY")
         self.assertEqual(result.policy_decisions, [])
 
     def test_dependency_breach_prefers_payment_dependency_incident(self):

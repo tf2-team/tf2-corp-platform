@@ -10,6 +10,8 @@ import re
 from datetime import UTC, datetime
 from itertools import count
 from pathlib import Path
+from threading import Lock
+from time import monotonic
 from typing import Protocol
 from uuid import uuid4
 
@@ -45,6 +47,8 @@ from aiops.pipeline.analysis import (
 
 logger = logging.getLogger(__name__)
 _RUN_COUNTER = count(1)
+_SLO_NOTIFICATION_TIMES: dict[tuple[str, str, str], float] = {}
+_SLO_NOTIFICATION_LOCK = Lock()
 
 RemediationComponents = tuple[
     RemediationFeatureExtractor,
@@ -92,6 +96,8 @@ class AiopsPipeline:
         enricher: Enricher | None = None,
         notification_sender: NotificationSender | None = None,
         rca_history_path: Path | None = None,
+        slo_notification_suppress_seconds: int = 900,
+        slo_notification_state: dict[tuple[str, str, str], float] | None = None,
     ):
         self.collector = collector
         self.qualification = QualificationGate(
@@ -114,6 +120,8 @@ class AiopsPipeline:
         self.remediation = remediation
         self.notification_sender = notification_sender
         self.rca_history_path = rca_history_path
+        self.slo_notification_suppress_seconds = slo_notification_suppress_seconds
+        self.slo_notification_state = slo_notification_state if slo_notification_state is not None else _SLO_NOTIFICATION_TIMES
 
     def run_once(self, metric_series: list[MetricSeries] | None = None) -> PipelineResult:
         run_number = next(_RUN_COUNTER)
@@ -205,8 +213,23 @@ class AiopsPipeline:
         return result
 
     def _dispatch_slo_notifications(self, incidents: list[Incident]) -> list[NotificationMessage]:
-        notifications = NotificationBuilder().build(incidents)
-        for message in notifications:
+        notifications = []
+        for incident, message in zip(incidents, NotificationBuilder().build(incidents)):
+            signal_id = incident.events[-1].signal_id
+            key = (incident.events[-1].environment, message.service, signal_id)
+            now = monotonic()
+            with _SLO_NOTIFICATION_LOCK:
+                last_sent = self.slo_notification_state.get(key)
+                if last_sent is not None and now - last_sent < self.slo_notification_suppress_seconds:
+                    logger.info(
+                        "AIOPS_SLO_NOTIFY_SUPPRESSED service=%s signal=%s remaining_seconds=%s",
+                        message.service,
+                        signal_id,
+                        int(self.slo_notification_suppress_seconds - (now - last_sent)),
+                    )
+                    continue
+                self.slo_notification_state[key] = now
+            notifications.append(message)
             logger.info(
                 "AIOPS_SLO_NOTIFY_DIRECT incident=%s service=%s severity=%s runbook=%s",
                 message.incident_id,

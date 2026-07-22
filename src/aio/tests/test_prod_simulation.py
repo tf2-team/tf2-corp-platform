@@ -40,7 +40,7 @@ def metric(service: str, name: str, values: list[float]) -> MetricSeries:
     )
 
 
-def prod_pipeline(root: Path, sender: FakeNotificationSender, repeat_seconds: int = 900, observations=None) -> AiopsPipeline:
+def prod_pipeline(root: Path, sender: FakeNotificationSender, repeat_seconds: int = 900, observations=None, slo_state=None) -> AiopsPipeline:
     settings = Settings().model_copy(update={"state_store_path": root / "aiops.sqlite3"})
     runtime_config = load_runtime_config(settings.runtime_config_path)
     hyperparameters = load_hyperparameters(settings.hyperparameters_path)
@@ -68,6 +68,8 @@ def prod_pipeline(root: Path, sender: FakeNotificationSender, repeat_seconds: in
         normalization_schema=load_normalization_schema(settings.normalization_schema_path),
         qualification_dev=settings.qualification_gate_dev,
         qualification_max_sample_age_seconds=settings.qualification_max_sample_age_seconds,
+        slo_notification_suppress_seconds=hyperparameters["incident"]["direct_slo_suppress_seconds"],
+        slo_notification_state=slo_state if slo_state is not None else {},
         rca_hyperparameters=hyperparameters["rca"],
         correlation_hyperparameters=correlation_hyperparameters,
         notification_sender=sender,
@@ -84,7 +86,7 @@ class ProdSimulationTest(unittest.TestCase):
             pipeline.run_once()
             pipeline.store.close()
 
-        self.assertEqual([message.runbook_id for message in sender.sent], ["RB-CHECKOUT-LATENCY"])
+        self.assertEqual([message.runbook_id for message in sender.sent], ["RB-SERVICE-LATENCY"])
 
     def test_service_error_rate_slo_breach_sends_notification(self):
         with TemporaryDirectory() as tmp:
@@ -105,7 +107,7 @@ class ProdSimulationTest(unittest.TestCase):
             pipeline.store.close()
 
         self.assertEqual([incident.service for incident in result.incidents], ["checkout"])
-        self.assertEqual([message.runbook_id for message in sender.sent], ["RB-CHECKOUT-LATENCY"])
+        self.assertEqual([message.runbook_id for message in sender.sent], ["RB-SERVICE-LATENCY"])
 
     def test_checkout_payment_dependency_breach_pages_dependency_runbook(self):
         with TemporaryDirectory() as tmp:
@@ -149,24 +151,31 @@ class ProdSimulationTest(unittest.TestCase):
         self.assertEqual(result.rca_result.root_causes[0].service, "payment")
         self.assertEqual(sender.sent, [])
 
-    def test_repeated_slo_breach_notifies_without_persistence_or_dedup(self):
+    def test_repeated_slo_breach_is_suppressed_for_fifteen_minutes_without_persistence(self):
         with TemporaryDirectory() as tmp:
             sender = FakeNotificationSender()
             root = Path(tmp)
-            first = prod_pipeline(root, sender, repeat_seconds=0, observations=[observation("checkout_p95_latency_5m", 16.0)])
+            slo_state = {}
+            first = prod_pipeline(root, sender, repeat_seconds=0, observations=[observation("checkout_p95_latency_5m", 16.0)], slo_state=slo_state)
             first.run_once()
             first.store.close()
 
-            second = prod_pipeline(root, sender, repeat_seconds=0, observations=[observation("checkout_p95_latency_5m", 17.0)])
+            second = prod_pipeline(root, sender, repeat_seconds=0, observations=[observation("checkout_p95_latency_5m", 17.0)], slo_state=slo_state)
             result = second.run_once()
             counts = second.store._connection.execute(
                 "SELECT (SELECT COUNT(*) FROM incidents), (SELECT COUNT(*) FROM notification_outbox)"
             ).fetchone()
             history_exists = (root / "notification_history.jsonl").exists()
             second.store.close()
+            for key in slo_state:
+                slo_state[key] -= 901
+            third = prod_pipeline(root, sender, observations=[observation("checkout_p95_latency_5m", 18.0)], slo_state=slo_state)
+            third.run_once()
+            third.store.close()
 
         self.assertEqual(result.incidents[0].occurrence_count, 1)
-        self.assertEqual(len({message.incident_id for message in sender.sent}), 2)
+        self.assertEqual(len(sender.sent), 2)
+        self.assertEqual(result.notifications, [])
         self.assertEqual(counts, (0, 0))
         self.assertFalse(history_exists)
 

@@ -102,6 +102,7 @@
     "unknown_confidence": 0.7
   },
   "detectors": {
+    "latency_slo_seconds": 1.0,
     "thresholds": {
       "ops03_checkout_payment_dependency": 0.05,
       "auto_checkout_error_rate": 0.05,
@@ -118,7 +119,6 @@
       "auto_email_error_rate": 0.05,
       "auto_quote_error_rate": 0.05,
       "auto_fraud_detection_error_rate": 0.05,
-      "ops04_checkout_latency_p95": 0.5,
       "ops05_cart_error_rate": 0.02,
       "ops06_product_catalog_cpu": 50.0
     },
@@ -142,6 +142,7 @@
     }
   },
   "incident": {
-    "notification_cooldown_seconds": 900
+    "notification_cooldown_seconds": 900,
+    "direct_slo_suppress_seconds": 900
   }
 }
