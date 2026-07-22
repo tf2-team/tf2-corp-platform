@@ -8,8 +8,12 @@ USER 0
 
 # Rotate when rebuilding the secure-delivery baseline so package-manager security
 # updates are not silently restored from an older BuildKit cache layer.
-ARG SECURITY_UPDATE_EPOCH=2026-07-21-cve-refresh-2
+ARG SECURITY_UPDATE_EPOCH=2026-07-22-jackson-core-ghsa-r7wm
 
+# Trivy HIGH GHSA-r7wm-3cxj-wff9: jackson-core async maxNumberLength bypass (incomplete prior fix).
+# Vendor 3.7.0 ships jackson-core 2.21.3 + tools.jackson.core 3.1.3; pin fixed floors in-tree.
+ADD --chmod=644 https://repo1.maven.org/maven2/com/fasterxml/jackson/core/jackson-core/2.21.4/jackson-core-2.21.4.jar /tmp/jackson-core-2.21.4.jar
+ADD --chmod=644 https://repo1.maven.org/maven2/tools/jackson/core/jackson-core/3.1.4/jackson-core-3.1.4.jar /tmp/jackson-core-3.1.4.jar
 ADD --chmod=644 https://repo1.maven.org/maven2/com/fasterxml/jackson/core/jackson-databind/2.21.4/jackson-databind-2.21.4.jar /tmp/jackson-databind-2.21.4.jar
 
 # Apply available OS security updates for Trivy HIGH/CRITICAL on the vendor base.
@@ -66,6 +70,38 @@ RUN rm -rf \
     /usr/share/opensearch/plugins/opensearch-ubi \
     /usr/share/opensearch/plugins/query-insights
 
+# Replace vulnerable jackson-core (2.21.3 / 3.1.3) wherever OpenSearch ships them (lib, modules, plugins).
+RUN set -eu \
+    && found2=0 \
+    && found3=0 \
+    && for jar in \
+         /usr/share/opensearch/lib/jackson-core-*.jar \
+         /usr/share/opensearch/modules/*/jackson-core-*.jar \
+         /usr/share/opensearch/plugins/*/jackson-core-*.jar; do \
+         [ -e "${jar}" ] || continue; \
+         dir=$(dirname "${jar}"); \
+         base=$(basename "${jar}"); \
+         case "${base}" in \
+           jackson-core-2.*) \
+             rm -f "${jar}"; \
+             cp /tmp/jackson-core-2.21.4.jar "${dir}/jackson-core-2.21.4.jar"; \
+             found2=1 ;; \
+           jackson-core-3.*) \
+             rm -f "${jar}"; \
+             cp /tmp/jackson-core-3.1.4.jar "${dir}/jackson-core-3.1.4.jar"; \
+             found3=1 ;; \
+           *) \
+             echo "Unexpected jackson-core jar: ${jar}" >&2; \
+             exit 1 ;; \
+         esac; \
+       done \
+    && test "${found2}" -eq 1 \
+    && test "${found3}" -eq 1 \
+    && test -z "$(find /usr/share/opensearch \( -name 'jackson-core-2.21.3.jar' -o -name 'jackson-core-3.1.3.jar' \) -print -quit)" \
+    && test -n "$(find /usr/share/opensearch -name 'jackson-core-2.21.4.jar' -print -quit)" \
+    && test -n "$(find /usr/share/opensearch -name 'jackson-core-3.1.4.jar' -print -quit)" \
+    && rm -f /tmp/jackson-core-*.jar
+
 RUN rm -f /usr/share/opensearch/lib/jackson-databind-*.jar \
     /usr/share/opensearch/modules/ingest-geoip/jackson-databind-*.jar \
     /usr/share/opensearch/plugins/opensearch-sql/jackson-databind-*.jar \
@@ -86,4 +122,4 @@ RUN rm -f /usr/share/opensearch/lib/jackson-databind-*.jar \
 # - opensearch-job-scheduler (task scheduling)
 
 USER 1000
-# Change trail: @MinhKhoa2209 - 2026-07-22 - Keep fixed Jackson module-local; never duplicate it in global lib.
+# Change trail: @hungxqt - 2026-07-22 - Pin jackson-core 2.21.4 and 3.1.4 for GHSA-r7wm-3cxj-wff9
