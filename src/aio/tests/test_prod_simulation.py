@@ -11,7 +11,7 @@ from aiops.normalization import load_normalization_schema
 from aiops.pipeline import AiopsPipeline
 from aiops.qualification import load_qualification_schema
 from aiops.remediation import PolicyEngine
-from aiops.schemas import MetricPoint, MetricSeries, Observation, SignalQuality
+from aiops.schemas import MetricPoint, MetricSeries, NotificationMessage, Observation, SignalQuality
 from aiops.storage import SQLiteIncidentStore
 
 
@@ -151,7 +151,7 @@ class ProdSimulationTest(unittest.TestCase):
         self.assertEqual(result.rca_result.root_causes[0].service, "payment")
         self.assertEqual(sender.sent, [])
 
-    def test_repeated_slo_breach_is_suppressed_for_fifteen_minutes_without_persistence(self):
+    def test_repeated_slo_breach_is_suppressed_without_database_persistence(self):
         with TemporaryDirectory() as tmp:
             sender = FakeNotificationSender()
             root = Path(tmp)
@@ -165,19 +165,20 @@ class ProdSimulationTest(unittest.TestCase):
             counts = second.store._connection.execute(
                 "SELECT (SELECT COUNT(*) FROM incidents), (SELECT COUNT(*) FROM notification_outbox)"
             ).fetchone()
-            history_exists = (root / "notification_history.jsonl").exists()
             second.store.close()
             for key in slo_state:
                 slo_state[key] -= 901
             third = prod_pipeline(root, sender, observations=[observation("checkout_p95_latency_5m", 18.0)], slo_state=slo_state)
             third.run_once()
             third.store.close()
+            history_rows = (root / "notification_history.jsonl").read_text(encoding="utf-8").splitlines()
 
         self.assertEqual(result.incidents[0].occurrence_count, 1)
         self.assertEqual(len(sender.sent), 2)
         self.assertEqual(result.notifications, [])
         self.assertEqual(counts, (0, 0))
-        self.assertFalse(history_exists)
+        self.assertEqual(len(history_rows), 2)
+        self.assertTrue(all(NotificationMessage.model_validate_json(row) for row in history_rows))
 
 
 if __name__ == "__main__":

@@ -643,12 +643,12 @@ class RuntimePipelineTest(unittest.TestCase):
             counts = store._connection.execute(
                 "SELECT (SELECT COUNT(*) FROM incidents), (SELECT COUNT(*) FROM notification_outbox), (SELECT COUNT(*) FROM notification_attempts)"
             ).fetchone()
-            history_exists = (root / "notification_history.jsonl").exists()
+            history_rows = (root / "notification_history.jsonl").read_text(encoding="utf-8").splitlines()
             store.close()
 
         self.assertEqual(len(result.notifications), 1)
         self.assertEqual(counts, (0, 0, 0))
-        self.assertFalse(history_exists)
+        self.assertEqual(len(history_rows), 1)
         self.assertIn("AIOPS_SLO_NOTIFY_FAILED", " ".join(logs.output))
 
     def test_pipeline_accepts_current_cdo_signal_shape_before_detection(self):

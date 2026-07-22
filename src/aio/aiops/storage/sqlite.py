@@ -175,7 +175,7 @@ class SQLiteIncidentStore:
                 if notification_enqueued:
                     self._set_service_notification_cooldown(incident.service, incident.cooldown_until or _now())
                     self._last_enqueued_incident_ids.add(incident.incident_id)
-                    self._append_notification_history(notification)
+                    self.record_notification_history(notification)
                     logger.info(
                         "AIOPS_NOTIFY_ENQUEUED_READY incident=%s service=%s severity=%s runbook=%s status=pending",
                         incident.incident_id,
@@ -234,7 +234,7 @@ class SQLiteIncidentStore:
             (service, cooldown_until, _now()),
         )
 
-    def _append_notification_history(self, notification: NotificationMessage) -> None:
+    def record_notification_history(self, notification: NotificationMessage) -> None:
         path = self.path.parent / "notification_history.jsonl"
         with path.open("a", encoding="utf-8") as handle:
             handle.write(notification.model_dump_json() + "\n")

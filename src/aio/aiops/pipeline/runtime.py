@@ -66,6 +66,8 @@ class IncidentStore(Protocol):
 
     def pending_notifications_for(self, incidents: list[Incident]) -> list[NotificationMessage]: ...
 
+    def record_notification_history(self, message: NotificationMessage) -> None: ...
+
     def due_notifications(self, limit: int = 100) -> list[NotificationMessage]: ...
 
     def mark_notification_sent(self, incident_id: str) -> None: ...
@@ -230,6 +232,7 @@ class AiopsPipeline:
                     continue
                 self.slo_notification_state[key] = now
             notifications.append(message)
+            self.store.record_notification_history(message)
             logger.info(
                 "AIOPS_SLO_NOTIFY_DIRECT incident=%s service=%s severity=%s runbook=%s",
                 message.incident_id,
