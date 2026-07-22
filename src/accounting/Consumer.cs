@@ -329,7 +329,7 @@ internal class Consumer : IDisposable
             Key = orderId,
             Value = System.Text.Encoding.UTF8.GetBytes(orderId)
         }).GetAwaiter().GetResult();
-        _logger.LogInformation("Published RDS persistence acknowledgement for order {orderId}", orderId);
+        Log.PersistenceAckPublished(_logger, orderId);
     }
 
     private static IConsumer<string, byte[]> BuildConsumer(string servers)

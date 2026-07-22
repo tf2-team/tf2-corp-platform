@@ -13,7 +13,7 @@ internal sealed class OutboxReconciler : IDisposable
     private const string PublishedStatus = "published";
     private const string PendingStatus = "pending";
 
-    private readonly IAmazonDynamoDB _dynamoDb;
+    private readonly AmazonDynamoDBClient _dynamoDb;
     private readonly string _table;
     private readonly ILogger _logger;
     private readonly Action<string> _publishPersistenceAck;
@@ -124,7 +124,7 @@ internal sealed class OutboxReconciler : IDisposable
             if (persisted)
             {
                 _publishPersistenceAck(orderId);
-                _logger.LogInformation("Replayed RDS persistence ACK for stale outbox event {orderId}", orderId);
+                Log.PersistenceAckReplayed(_logger, orderId);
                 return;
             }
 
