@@ -17,7 +17,7 @@ from locust_plugins.users.playwright import PlaywrightUser, pw, PageWithRetry, e
 # Without this, the master UI shows worker_count=0 until the master process restarts.
 def _install_master_stale_worker_guard():
     try:
-        from locust.runners import MasterRunner
+        from locust.runners import MasterRunner, STATE_RUNNING, STATE_SPAWNING
     except ImportError:
         return
     if getattr(MasterRunner, "_techx_stale_worker_guard", False):
@@ -26,62 +26,40 @@ def _install_master_stale_worker_guard():
     _orig_handle_message = MasterRunner.handle_message
 
     def _safe_handle_message(self, client_id, msg):
+        msg_type = getattr(msg, "type", None)
         try:
-            return _orig_handle_message(self, client_id, msg)
+            res = _orig_handle_message(self, client_id, msg)
         except KeyError:
             node_id = getattr(msg, "node_id", None) or client_id
             logging.warning(
                 "Ignoring message from unknown/disconnected Locust worker node_id=%s type=%s",
                 node_id,
-                getattr(msg, "type", None),
+                msg_type,
             )
-            return None
+            res = None
+
+        # Dynamic Load Rebalancing: when a worker disconnects or connects during an active test,
+        # re-distribute target_user_count across remaining active workers so active users never drop.
+        if msg_type in ("client_stopped", "client_ready") and getattr(self, "state", None) in (STATE_RUNNING, STATE_SPAWNING):
+            target_users = getattr(self, "target_user_count", 0) or 0
+            if target_users > 0:
+                ready_clients = getattr(self.clients, "ready", {})
+                active_workers = len(ready_clients)
+                if active_workers > 0:
+                    spawn_rate = getattr(self, "spawn_rate", 10) or 10
+                    logging.info(
+                        "Worker state changed (type=%s, active_workers=%d, target_users=%d). "
+                        "Re-distributing load across active workers...",
+                        msg_type, active_workers, target_users
+                    )
+                    self.start(target_users, spawn_rate)
+        return res
 
     MasterRunner.handle_message = _safe_handle_message
     MasterRunner._techx_stale_worker_guard = True
 
 
 _install_master_stale_worker_guard()
-
-from locust import events
-from locust.runners import MasterRunner, STATE_RUNNING, STATE_SPAWNING
-
-# Dynamic Load Rebalancing on Worker Scale-Down / Connect:
-# When HPA scales down a worker pod (or worker disconnects), Locust Master automatically
-# redistributes target_user_count across remaining active workers so active users never drop.
-@events.worker_disconnect.add_listener
-def _on_worker_disconnect(environment, client_id, **kwargs):
-    runner = getattr(environment, "runner", None)
-    if isinstance(runner, MasterRunner):
-        target_users = getattr(runner, "target_user_count", 0) or 0
-        if target_users > 0 and runner.state in (STATE_RUNNING, STATE_SPAWNING):
-            ready_clients = getattr(runner.clients, "ready", {})
-            active_workers = len(ready_clients)
-            if active_workers > 0:
-                spawn_rate = getattr(runner, "spawn_rate", 10) or 10
-                logging.info(
-                    "Worker client_id=%s disconnected during active test (target_users=%d). "
-                    "Re-distributing load across %d remaining active workers (spawn_rate=%.1f)...",
-                    client_id, target_users, active_workers, spawn_rate
-                )
-                runner.start(target_users, spawn_rate)
-
-@events.worker_connect.add_listener
-def _on_worker_connect(environment, client_id, **kwargs):
-    runner = getattr(environment, "runner", None)
-    if isinstance(runner, MasterRunner):
-        target_users = getattr(runner, "target_user_count", 0) or 0
-        if target_users > 0 and runner.state in (STATE_RUNNING, STATE_SPAWNING):
-            ready_clients = getattr(runner.clients, "ready", {})
-            active_workers = len(ready_clients)
-            if active_workers > 0:
-                spawn_rate = getattr(runner, "spawn_rate", 10) or 10
-                logging.info(
-                    "New worker client_id=%s connected during active test (target_users=%d). "
-                    "Re-distributing load across %d active workers (spawn_rate=%.1f)...",
-                    client_id, target_users, active_workers, spawn_rate
-                )
-                runner.start(target_users, spawn_rate)
 
 
 from opentelemetry import context, baggage, trace
