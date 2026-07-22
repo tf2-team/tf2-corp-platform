@@ -43,6 +43,47 @@ def _install_master_stale_worker_guard():
 
 _install_master_stale_worker_guard()
 
+from locust import events
+from locust.runners import MasterRunner, STATE_RUNNING, STATE_SPAWNING
+
+# Dynamic Load Rebalancing on Worker Scale-Down / Connect:
+# When HPA scales down a worker pod (or worker disconnects), Locust Master automatically
+# redistributes target_user_count across remaining active workers so active users never drop.
+@events.worker_disconnect.add_listener
+def _on_worker_disconnect(environment, client_id, **kwargs):
+    runner = getattr(environment, "runner", None)
+    if isinstance(runner, MasterRunner):
+        target_users = getattr(runner, "target_user_count", 0) or 0
+        if target_users > 0 and runner.state in (STATE_RUNNING, STATE_SPAWNING):
+            ready_clients = getattr(runner.clients, "ready", {})
+            active_workers = len(ready_clients)
+            if active_workers > 0:
+                spawn_rate = getattr(runner, "spawn_rate", 10) or 10
+                logging.info(
+                    "Worker client_id=%s disconnected during active test (target_users=%d). "
+                    "Re-distributing load across %d remaining active workers (spawn_rate=%.1f)...",
+                    client_id, target_users, active_workers, spawn_rate
+                )
+                runner.start(target_users, spawn_rate)
+
+@events.worker_connect.add_listener
+def _on_worker_connect(environment, client_id, **kwargs):
+    runner = getattr(environment, "runner", None)
+    if isinstance(runner, MasterRunner):
+        target_users = getattr(runner, "target_user_count", 0) or 0
+        if target_users > 0 and runner.state in (STATE_RUNNING, STATE_SPAWNING):
+            ready_clients = getattr(runner.clients, "ready", {})
+            active_workers = len(ready_clients)
+            if active_workers > 0:
+                spawn_rate = getattr(runner, "spawn_rate", 10) or 10
+                logging.info(
+                    "New worker client_id=%s connected during active test (target_users=%d). "
+                    "Re-distributing load across %d active workers (spawn_rate=%.1f)...",
+                    client_id, target_users, active_workers, spawn_rate
+                )
+                runner.start(target_users, spawn_rate)
+
+
 from opentelemetry import context, baggage, trace
 from opentelemetry.context import Context
 from opentelemetry.metrics import set_meter_provider
