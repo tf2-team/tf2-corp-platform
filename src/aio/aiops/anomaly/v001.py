@@ -423,32 +423,29 @@ class V001AnomalyEngine:
         by_service: dict[str, list[MetricSeries]] = defaultdict(list)
         for metric in series:
             by_service[metric.service].append(metric)
-        normal_services = {
-            service
-            for service, service_series in by_service.items()
-            if self._is_normal_traffic_growth(service_series)
-        }
+        decisions = {service: self._normal_traffic_growth_decision(service_series) for service, service_series in by_service.items()}
+        normal_services = {service for service, (normal, _) in decisions.items() if normal}
+        logger.info(
+            "AIOPS_NORMAL_GROWTH_GATE %s",
+            " | ".join(f"service={service} result={'skip' if normal else 'detect'} {detail}" for service, (normal, detail) in decisions.items()),
+        )
         return [
             metric
             for metric in series
             if metric.service not in normal_services or _is_error_metric(metric.metric) or _is_oom_metric(metric.metric)
         ]
 
-    def _is_normal_traffic_growth(self, series: list[MetricSeries]) -> bool:
-        service = series[0].service if series else "unknown"
+    def _normal_traffic_growth_decision(self, series: list[MetricSeries]) -> tuple[bool, str]:
         required_groups = ("request_rate", "latency", "cpu", "memory", "socket_io")
         by_group = {group: [metric for metric in series if _metric_group(metric.metric) == group] for group in required_groups}
         missing = [group for group, metrics in by_group.items() if not metrics]
         if missing:
-            logger.info("AIOPS_NORMAL_GROWTH_GATE service=%s result=detect reason=missing_metrics metrics=%s", service, ",".join(missing))
-            return False
+            return False, f"reason=missing_metrics metrics={','.join(missing)}"
         error_metrics = [metric for metric in series if _is_error_metric(metric.metric)]
         if any(self._error_increased(metric) for metric in error_metrics):
-            logger.info("AIOPS_NORMAL_GROWTH_GATE service=%s result=detect reason=error_increased", service)
-            return False
+            return False, "reason=error_increased"
         if any("ready_pods" in metric.metric and self._ready_pods_decreased(metric) for metric in series):
-            logger.info("AIOPS_NORMAL_GROWTH_GATE service=%s result=detect reason=ready_pods_decreased", service)
-            return False
+            return False, "reason=ready_pods_decreased"
         increase_timestamps = {
             group: set().union(
                 *(self._increase_timestamps(metric, group) for metric in metrics)
@@ -457,8 +454,7 @@ class V001AnomalyEngine:
         }
         below_threshold = [group for group, timestamps in increase_timestamps.items() if not timestamps]
         if below_threshold:
-            logger.info("AIOPS_NORMAL_GROWTH_GATE service=%s result=detect reason=below_threshold metrics=%s", service, ",".join(below_threshold))
-            return False
+            return False, f"reason=below_threshold metrics={','.join(below_threshold)}"
         tolerance = max(_series_step_seconds(metric) for metrics in by_group.values() for metric in metrics)
         simultaneous = sum(
             all(any(abs(timestamp - other) <= tolerance for other in increase_timestamps[group]) for group in required_groups[1:])
@@ -466,15 +462,8 @@ class V001AnomalyEngine:
         )
         required = max(self.min_tail_anomaly_buckets[group] for group in required_groups)
         if simultaneous < required:
-            logger.info(
-                "AIOPS_NORMAL_GROWTH_GATE service=%s result=detect reason=insufficient_common_buckets common=%s required=%s",
-                service,
-                simultaneous,
-                required,
-            )
-            return False
-        logger.info("AIOPS_NORMAL_GROWTH_GATE service=%s result=skip reason=coordinated_growth common=%s", service, simultaneous)
-        return True
+            return False, f"reason=insufficient_common_buckets common={simultaneous} required={required}"
+        return True, f"reason=coordinated_growth common={simultaneous}"
 
     def _increase_timestamps(self, metric: MetricSeries, group: str) -> set[int]:
         return _tail_increase_timestamps(

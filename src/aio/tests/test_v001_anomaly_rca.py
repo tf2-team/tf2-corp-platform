@@ -364,7 +364,13 @@ class V001AnomalyRcaTest(unittest.TestCase):
         self.assertEqual(anomaly_v001._median3([10, 100, 10]), [10, 10, 10])
         engine = anomaly_engine()
         with self.assertLogs("aiops.anomaly.v001", level="INFO") as logs:
-            engine._filter_normal_traffic_growth([minute_metric("checkout", "request_rate_5m", [10] * 45)])
+            engine._filter_normal_traffic_growth(
+                [
+                    minute_metric("checkout", "request_rate_5m", [10] * 45),
+                    minute_metric("payment", "request_rate_5m", [10] * 45),
+                ]
+            )
+        self.assertEqual(len(logs.records), 1)
         self.assertIn("reason=missing_metrics", " ".join(logs.output))
 
     def test_growth_gate_only_measures_detection_tail(self):
