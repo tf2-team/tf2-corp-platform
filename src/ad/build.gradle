@@ -19,7 +19,10 @@ version = "0.1.0-SNAPSHOT"
 def opentelemetryVersion = "1.57.0"
 def opentelemetryInstrumentationVersion = "2.23.0"
 def grpcVersion = "1.78.0"
-def jacksonVersion = "2.20.1"
+// Trivy HIGH: CVE-2026-54512/54513 — jackson-databind must be >=2.21.4 (flagd-core pulls 2.21.2).
+def jacksonVersion = "2.21.4"
+// jackson-annotations publishes major.minor only on Maven Central (no 2.21.x patch line).
+def jacksonAnnotationsVersion = "2.21"
 def protocVersion = "4.33.2"
 
 tasks.withType(JavaCompile).configureEach {
@@ -33,12 +36,29 @@ ext {
     offlineCompile = output.get().asFile
 }
 
+// Hard floor so flagd-core / json-schema-validator cannot package jackson-databind 2.21.2 into the image.
+configurations.configureEach {
+    resolutionStrategy {
+        force "com.fasterxml.jackson.core:jackson-core:${jacksonVersion}",
+                "com.fasterxml.jackson.core:jackson-databind:${jacksonVersion}",
+                "com.fasterxml.jackson.core:jackson-annotations:${jacksonAnnotationsVersion}",
+                "com.fasterxml.jackson.dataformat:jackson-dataformat-yaml:${jacksonVersion}"
+    }
+}
+
 dependencies {
     if (speed) {
         implementation fileTree(dir: offlineCompile, include: '*.jar')
     } else {
         implementation platform("io.opentelemetry:opentelemetry-bom:${opentelemetryVersion}")
         implementation platform("io.opentelemetry.instrumentation:opentelemetry-instrumentation-bom:${opentelemetryInstrumentationVersion}")
+        implementation enforcedPlatform("io.netty:netty-bom:4.1.135.Final")
+        implementation enforcedPlatform("com.fasterxml.jackson:jackson-bom:${jacksonVersion}")
+
+        constraints {
+            implementation "com.fasterxml.jackson.core:jackson-databind:${jacksonVersion}"
+            runtimeOnly "com.fasterxml.jackson.core:jackson-databind:${jacksonVersion}"
+        }
 
         implementation "com.google.api.grpc:proto-google-common-protos:2.63.2",
                 "com.google.protobuf:protobuf-java:${protocVersion}",
@@ -51,8 +71,8 @@ dependencies {
                 "io.opentelemetry:opentelemetry-sdk",
                 "io.opentelemetry.instrumentation:opentelemetry-instrumentation-annotations",
                 "org.apache.logging.log4j:log4j-core:2.25.3",
-                "dev.openfeature.contrib.providers:flagd:0.11.19",
-                'dev.openfeature:sdk:1.19.2'
+                "dev.openfeature.contrib.providers:flagd:0.13.3",
+                'dev.openfeature:sdk:1.20.2'
 
         runtimeOnly "com.fasterxml.jackson.core:jackson-core:${jacksonVersion}",
                 "com.fasterxml.jackson.core:jackson-databind:${jacksonVersion}",
@@ -141,3 +161,4 @@ applicationDistribution.into('bin') {
     from(ad)
     fileMode = 0755
 }
+// Change trail: @hungxqt - 2026-07-21 - Force jackson-databind 2.21.4 for CVE-2026-54512/54513

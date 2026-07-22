@@ -18,16 +18,33 @@ version = "1.0"
 
 val grpcVersion = "1.78.0"
 val protobufVersion = "4.33.2"
-
+// Trivy HIGH: CVE-2026-54512/54513 — jackson-databind must be >=2.21.4 (flagd-core pulls 2.21.2).
+val jacksonVersion = "2.21.4"
+val jacksonAnnotationsVersion = "2.21"
 
 repositories {
     mavenCentral()
     gradlePluginPortal()
 }
 
-
+// Hard floor so flagd-core cannot package jackson-databind 2.21.2 into the image.
+configurations.configureEach {
+    resolutionStrategy {
+        force(
+            "com.fasterxml.jackson.core:jackson-core:$jacksonVersion",
+            "com.fasterxml.jackson.core:jackson-databind:$jacksonVersion",
+            "com.fasterxml.jackson.core:jackson-annotations:$jacksonAnnotationsVersion",
+            "com.fasterxml.jackson.dataformat:jackson-dataformat-yaml:$jacksonVersion",
+        )
+    }
+}
 
 dependencies {
+    constraints {
+        implementation("com.fasterxml.jackson.core:jackson-databind:$jacksonVersion")
+    }
+    implementation(enforcedPlatform("io.netty:netty-bom:4.1.135.Final"))
+    implementation(enforcedPlatform("com.fasterxml.jackson:jackson-bom:$jacksonVersion"))
     implementation("com.google.protobuf:protobuf-java:${protobufVersion}")
     testImplementation(kotlin("test"))
     implementation(kotlin("script-runtime"))
@@ -43,8 +60,8 @@ dependencies {
     implementation("org.apache.logging.log4j:log4j-core:2.25.3")
     implementation("org.slf4j:slf4j-api:2.0.17")
     implementation("com.google.protobuf:protobuf-kotlin:${protobufVersion}")
-    implementation("dev.openfeature:sdk:1.19.2")
-    implementation("dev.openfeature.contrib.providers:flagd:0.11.19")
+    implementation("dev.openfeature:sdk:1.20.2")
+    implementation("dev.openfeature.contrib.providers:flagd:0.13.3")
     implementation("redis.clients:jedis:5.1.2")
 
     if (JavaVersion.current().isJava9Compatible) {
@@ -100,3 +117,4 @@ application {
 tasks.jar {
     manifest.attributes["Main-Class"] = "frauddetection.MainKt"
 }
+// Change trail: @hungxqt - 2026-07-21 - Force jackson-databind 2.21.4 for CVE-2026-54512/54513

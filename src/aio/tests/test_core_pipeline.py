@@ -57,12 +57,12 @@ class PydanticModelTest(unittest.TestCase):
         with self.assertRaises(ValidationError):
             Observation(signal_id="checkout_slo", value=0.2, unit="ratio", window="24h", quality="bad")
 
-    def test_correlator_does_not_accept_notification_suppression_settings(self):
+    def test_correlator_only_accepts_used_topology_setting(self):
         parameters = signature(Correlator).parameters
 
         self.assertNotIn("suppress_window_seconds", parameters)
         self.assertNotIn("suppress_min_root_score", parameters)
-        self.assertNotIn("topology_max_hops", parameters)
+        self.assertIn("topology_max_hops", parameters)
 
 
 class FeatureBuilderTest(unittest.TestCase):

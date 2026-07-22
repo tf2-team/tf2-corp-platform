@@ -3,14 +3,13 @@
 # SPDX-License-Identifier: Apache-2.0
 
 
-FROM docker.io/library/python:3.12-alpine3.22 AS build-venv
+FROM docker.io/library/python:3.12-alpine3.22@sha256:a190708a2dec1bd18b1decb539f8e8f5407abaa9bf39cacda583f7f8c11db322 AS build-venv
 
 ENV PIP_DEFAULT_TIMEOUT=120 \
     PIP_RETRIES=10 \
     PIP_DISABLE_PIP_VERSION_CHECK=1
 
-RUN apk update && \
-    apk add gcc g++ linux-headers
+RUN apk upgrade --no-cache && apk add --no-cache gcc g++ linux-headers
 
 COPY ./src/llm/requirements.txt requirements.txt
 
@@ -18,7 +17,11 @@ RUN --mount=type=cache,id=techx-pip-cache,target=/root/.cache/pip,sharing=locked
     python -m venv venv && \
     venv/bin/pip install -r requirements.txt
 
-FROM docker.io/library/python:3.12-alpine3.22
+FROM docker.io/library/python:3.12-alpine3.22@sha256:a190708a2dec1bd18b1decb539f8e8f5407abaa9bf39cacda583f7f8c11db322
+
+RUN apk upgrade --no-cache
+
+ENV APP_PORT=8000
 
 COPY --from=build-venv /venv/ /venv/
 
@@ -35,5 +38,6 @@ RUN chown -R appuser:appgroup /app
 
 USER 10001
 
-EXPOSE ${LLM_PORT}
+EXPOSE 8000
 ENTRYPOINT [ "/venv/bin/python", "app.py" ]
+# Change trail: @MinhKhoa2209 - 2026-07-22 - Use APP_PORT instead of Kubernetes-reserved service-link name.

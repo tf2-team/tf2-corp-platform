@@ -17,7 +17,7 @@ from locust_plugins.users.playwright import PlaywrightUser, pw, PageWithRetry, e
 # Without this, the master UI shows worker_count=0 until the master process restarts.
 def _install_master_stale_worker_guard():
     try:
-        from locust.runners import MasterRunner
+        from locust.runners import MasterRunner, STATE_RUNNING, STATE_SPAWNING
     except ImportError:
         return
     if getattr(MasterRunner, "_techx_stale_worker_guard", False):
@@ -26,22 +26,58 @@ def _install_master_stale_worker_guard():
     _orig_handle_message = MasterRunner.handle_message
 
     def _safe_handle_message(self, client_id, msg):
+        msg_type = getattr(msg, "type", None)
         try:
-            return _orig_handle_message(self, client_id, msg)
+            res = _orig_handle_message(self, client_id, msg)
         except KeyError:
             node_id = getattr(msg, "node_id", None) or client_id
             logging.warning(
                 "Ignoring message from unknown/disconnected Locust worker node_id=%s type=%s",
                 node_id,
-                getattr(msg, "type", None),
+                msg_type,
             )
-            return None
+            res = None
+
+        # Dynamic Load Rebalancing: when a worker disconnects or connects during an active test,
+        # re-distribute target_user_count across remaining active workers asynchronously.
+        if msg_type in ("client_stopped", "client_ready") and getattr(self, "state", None) in (STATE_RUNNING, STATE_SPAWNING):
+            target_users = getattr(self, "target_user_count", 0) or 0
+            if target_users > 0 and not getattr(self, "_rebalance_scheduled", False):
+                self._rebalance_scheduled = True
+
+                def _do_rebalance():
+                    try:
+                        import gevent
+                        gevent.sleep(0.5)
+                        if getattr(self, "state", None) in (STATE_RUNNING, STATE_SPAWNING):
+                            t_users = getattr(self, "target_user_count", 0) or 0
+                            s_rate = getattr(self, "spawn_rate", 10) or 10
+                            n_workers = len(getattr(self.clients, "ready", {}))
+                            if t_users > 0 and n_workers > 0:
+                                logging.info(
+                                    "Rebalancing Locust load: %d users across %d active workers...",
+                                    t_users, n_workers
+                                )
+                                self.start(t_users, s_rate)
+                    except Exception as err:
+                        logging.warning("Locust rebalance deferred: %s", err)
+                    finally:
+                        self._rebalance_scheduled = False
+
+                try:
+                    import gevent
+                    gevent.spawn(_do_rebalance)
+                except Exception as err:
+                    self._rebalance_scheduled = False
+                    logging.warning("Failed to schedule Locust rebalance: %s", err)
+        return res
 
     MasterRunner.handle_message = _safe_handle_message
     MasterRunner._techx_stale_worker_guard = True
 
 
 _install_master_stale_worker_guard()
+
 
 from opentelemetry import context, baggage, trace
 from opentelemetry.context import Context
@@ -237,7 +273,7 @@ class WebsiteUser(HttpUser):
     @task(2)
     def add_to_cart(self, user=""):
         if user == "":
-            user = str(uuid.uuid1())
+            user = str(uuid.uuid4())
         product = random.choice(products)
         quantity = random.choice([1, 2, 3, 4, 5, 10])
         with self.tracer.start_as_current_span("user_add_to_cart", context=Context(), attributes={"user.id": user, "product.id": product, "quantity": quantity}):
@@ -254,7 +290,7 @@ class WebsiteUser(HttpUser):
 
     @task(1)
     def checkout(self):
-        user = str(uuid.uuid1())
+        user = str(uuid.uuid4())
         with self.tracer.start_as_current_span("user_checkout_single", context=Context(), attributes={"user.id": user}):
             self.add_to_cart(user=user)
             checkout_person = random.choice(people)
@@ -264,7 +300,7 @@ class WebsiteUser(HttpUser):
 
     @task(1)
     def checkout_multi(self):
-        user = str(uuid.uuid1())
+        user = str(uuid.uuid4())
         item_count = random.choice([2, 3, 4])
         with self.tracer.start_as_current_span("user_checkout_multi", context=Context(),
                                             attributes={"user.id": user, "item.count": item_count}):

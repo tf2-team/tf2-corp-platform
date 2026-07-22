@@ -1,0 +1,134 @@
+[
+    {
+        "Service":  "accounting",
+        "Build":  "PASS",
+        "Trivy":  "PASS",
+        "Findings":  0
+    },
+    {
+        "Service":  "ad",
+        "Build":  "PASS",
+        "Trivy":  "PASS",
+        "Findings":  0
+    },
+    {
+        "Service":  "cart",
+        "Build":  "PASS",
+        "Trivy":  "PASS",
+        "Findings":  0
+    },
+    {
+        "Service":  "checkout",
+        "Build":  "PASS",
+        "Trivy":  "PASS",
+        "Findings":  0
+    },
+    {
+        "Service":  "currency",
+        "Build":  "PASS",
+        "Trivy":  "PASS",
+        "Findings":  0
+    },
+    {
+        "Service":  "email",
+        "Build":  "PASS",
+        "Trivy":  "PASS",
+        "Findings":  0
+    },
+    {
+        "Service":  "flagd-ui",
+        "Build":  "PASS",
+        "Trivy":  "PASS",
+        "Findings":  0
+    },
+    {
+        "Service":  "fraud-detection",
+        "Build":  "PASS",
+        "Trivy":  "PASS",
+        "Findings":  0
+    },
+    {
+        "Service":  "frontend",
+        "Build":  "PASS",
+        "Trivy":  "PASS",
+        "Findings":  0
+    },
+    {
+        "Service":  "frontend-proxy",
+        "Build":  "PASS",
+        "Trivy":  "PASS",
+        "Findings":  0
+    },
+    {
+        "Service":  "image-provider",
+        "Build":  "PASS",
+        "Trivy":  "PASS",
+        "Findings":  0
+    },
+    {
+        "Service":  "kafka",
+        "Build":  "PASS",
+        "Trivy":  "PASS",
+        "Findings":  0
+    },
+    {
+        "Service":  "llm",
+        "Build":  "PASS",
+        "Trivy":  "PASS",
+        "Findings":  0
+    },
+    {
+        "Service":  "load-generator",
+        "Build":  "PASS",
+        "Trivy":  "PASS",
+        "Findings":  0
+    },
+    {
+        "Service":  "mem0",
+        "Build":  "PASS",
+        "Trivy":  "PASS",
+        "Findings":  0
+    },
+    {
+        "Service":  "opensearch",
+        "Build":  "PASS",
+        "Trivy":  "PASS",
+        "Findings":  0
+    },
+    {
+        "Service":  "payment",
+        "Build":  "PASS",
+        "Trivy":  "PASS",
+        "Findings":  0
+    },
+    {
+        "Service":  "product-catalog",
+        "Build":  "PASS",
+        "Trivy":  "PASS",
+        "Findings":  0
+    },
+    {
+        "Service":  "product-reviews",
+        "Build":  "PASS",
+        "Trivy":  "PASS",
+        "Findings":  0
+    },
+    {
+        "Service":  "quote",
+        "Build":  "PASS",
+        "Trivy":  "PASS",
+        "Findings":  0
+    },
+    {
+        "Service":  "recommendation",
+        "Build":  "PASS",
+        "Trivy":  "PASS",
+        "Findings":  0
+    },
+    {
+        "Service":  "shipping",
+        "Build":  "PASS",
+        "Trivy":  "PASS",
+        "Findings":  0
+    }
+]

@@ -888,7 +888,7 @@ class RuntimePipelineTest(unittest.TestCase):
                 **runtime_kwargs(settings),
             )
             pipeline._run_v001_rca = lambda metric_series, incidents: RcaResult(
-                root_causes=[RootCauseCandidate(service="checkout", score=1.0, root_cause_metrics=["error_rate_5m"])]
+                root_causes=[RootCauseCandidate(service="valkey-cart", score=1.0, root_cause_metrics=["error_rate_5m"])]
             )
 
             result = pipeline.run_once()
@@ -943,7 +943,7 @@ class RuntimePipelineTest(unittest.TestCase):
 
         self.assertIn("cart", {message.service for message in result.notifications})
 
-    def test_pipeline_does_not_suppress_sev1_child_notification(self):
+    def test_pipeline_does_not_suppress_sev1_caller_notifications(self):
         settings = Settings()
         with TemporaryDirectory() as tmp:
             store = SQLiteIncidentStore(Path(tmp) / "aiops.sqlite3", environment=settings.environment)
@@ -957,7 +957,7 @@ class RuntimePipelineTest(unittest.TestCase):
                 **kwargs,
             )
             pipeline._run_v001_rca = lambda metric_series, incidents: RcaResult(
-                root_causes=[RootCauseCandidate(service="checkout", score=1.0, root_cause_metrics=["error_rate_5m"])]
+                root_causes=[RootCauseCandidate(service="valkey-cart", score=1.0, root_cause_metrics=["error_rate_5m"])]
             )
 
             result = pipeline.run_once()

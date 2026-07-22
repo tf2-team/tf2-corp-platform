@@ -34,6 +34,7 @@ from aiops.remediation import (
 )
 from aiops.schemas import CandidateEvent, Incident, RemediationDecision, VerificationResult
 from aiops.shared.series import prepare_detector_series
+from aiops.topology import TopologyGraph
 from aiops.verification import VerificationEngine
 from aiops.pipeline.analysis import (
     apply_corroboration as _apply_corroboration,
@@ -102,8 +103,13 @@ class AiopsPipeline:
         self.normalizer = Normalizer(normalization_schema)
         self.feature_builder = FeatureBuilder(runtime_config)
         self.detector_engine = DetectorEngine(detectors)
-        correlator_options = {key: value for key, value in (correlation_hyperparameters or {}).items() if key in {"window_seconds", "confidence_threshold", "weights"}}
-        self.correlator = Correlator(runtime_config, **correlator_options)
+        self.topology_graph = TopologyGraph(runtime_config) if runtime_config is not None else None
+        correlator_options = {
+            key: value
+            for key, value in (correlation_hyperparameters or {}).items()
+            if key in {"window_seconds", "confidence_threshold", "weights", "topology_max_hops"}
+        }
+        self.correlator = Correlator(runtime_config, topology_graph=self.topology_graph, **correlator_options)
         self.enricher = enricher or Enricher(runtime_config=runtime_config)
         self.store = store
         self.policy = policy
@@ -264,7 +270,12 @@ class AiopsPipeline:
             float(anomaly_config["single_evidence_bonus"]),
             float(anomaly_config["dual_evidence_bonus"]),
         )
-        rca_engine = V001RcaEngine(self.runtime_config, config["graph"], _combined_rca_hyperparameters(config))
+        rca_engine = V001RcaEngine(
+            self.runtime_config,
+            config["graph"],
+            _combined_rca_hyperparameters(config),
+            topology_graph=self.topology_graph,
+        )
         result = rca_engine.rank(findings, detector_series, top_k=int(config["top_k"]), corroboration=corroboration)
         _log_final_root_cause_algorithm_scores(result, getattr(anomaly_engine, "last_algorithm_findings", findings))
         return result
@@ -373,10 +384,11 @@ class AiopsPipeline:
             if root.score >= float(self.correlation_hyperparameters.get("suppress_min_root_score", 0.8)):
                 root_service = root.service
                 current_root_service = root_service
-                affected_services = _blast_radius_services(
-                    self.runtime_config,
-                    root_service,
-                    int(self.correlation_hyperparameters.get("topology_max_hops", 2)),
+                max_hops = int(self.correlation_hyperparameters.get("topology_max_hops", 2))
+                affected_services = (
+                    self.topology_graph.blast_radius(root_service, max_hops)
+                    if self.topology_graph is not None
+                    else _blast_radius_services(self.runtime_config, root_service, max_hops)
                 )
                 affected_services -= {incident.service for incident in incidents if incident.severity == "SEV1"}
                 register = getattr(self.store, "register_active_root_cause", None)

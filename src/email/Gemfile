@@ -3,14 +3,19 @@
 source "https://rubygems.org"
 
 gem "net-smtp", "~> 0.5.1"
+gem "net-imap", "~> 0.6.4"
 gem "pony",     "~> 1.13"
-gem "puma",     "~> 7.1"
+gem "puma",     "~> 8.0.2"
+gem "rack",     "~> 3.1.21"
+gem "rack-session", ">= 2.1.2"
 gem "sinatra",  "~> 4.2"
 gem "rackup",   "~> 2.2"
 
 gem "google-protobuf", "~> 4.33.0"
 
 gem "ostruct"
+gem "erb", "~> 6.0.6"
+gem "zlib", "~> 3.2.3"
 
 gem "opentelemetry-sdk",                   "~> 1.10"
 gem "opentelemetry-common",                "~> 0.23"

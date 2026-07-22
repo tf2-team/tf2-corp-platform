@@ -10,11 +10,19 @@ from aiops.anomaly.stats import median, robust_score
 from aiops.rca.graph import GraphTraversalRca
 from aiops.schemas import AnomalyFinding, MetricSeries, RcaResult, RootCauseCandidate, RuntimeConfig, TelemetryCorroboration
 from aiops.shared.tail import evaluate_tail_change, fixed_baseline_and_tail, metric_group, normal_traffic_growth_decision, series_step_seconds, tail_indexes
+from aiops.topology import TopologyGraph
 
 
 class V001RcaEngine:
-    def __init__(self, config: RuntimeConfig, graph_hyperparameters: dict[str, float], combined_hyperparameters: dict[str, float]):
+    def __init__(
+        self,
+        config: RuntimeConfig,
+        graph_hyperparameters: dict[str, float],
+        combined_hyperparameters: dict[str, float],
+        topology_graph: TopologyGraph | None = None,
+    ):
         self.config = config
+        self.topology_graph = topology_graph or TopologyGraph(config)
         self.ranker_weights = combined_hyperparameters["ranker_weights"]
         self.rrf_k = combined_hyperparameters["rrf_k"]
         self.drift_min_points = int(combined_hyperparameters["drift_min_points"])
@@ -31,6 +39,7 @@ class V001RcaEngine:
             damping=graph_hyperparameters["damping"],
             pagerank_weight=graph_hyperparameters["pagerank_weight"],
             timestamp_weight=graph_hyperparameters["timestamp_weight"],
+            topology_graph=self.topology_graph,
         )
 
     def rank(
@@ -162,20 +171,7 @@ class V001RcaEngine:
         return rows
 
     def _dependency_path_contains(self, source: str, target: str) -> bool:
-        graph = {service.name: service.dependencies for service in self.config.topology.services}
-        if source not in graph or target not in graph:
-            return False
-        pending = [source]
-        seen = set()
-        while pending:
-            service = pending.pop()
-            if service == target:
-                return True
-            if service in seen:
-                continue
-            seen.add(service)
-            pending.extend(graph.get(service, []))
-        return False
+        return self.topology_graph.has_dependency_path(source, target)
 
     def _earliest_drift_scores(self, series: list[MetricSeries]) -> dict[str, float]:
         drift_indexes: dict[str, int] = {}

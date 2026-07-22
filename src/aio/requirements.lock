@@ -3,6 +3,8 @@
 drain3==0.9.11
 fastapi==0.116.1
 httpx==0.28.1
+networkx==3.6.1
+pandas==2.3.3
 prometheus-client==0.22.1
 pydantic==2.11.7
 pydantic-settings==2.10.1
