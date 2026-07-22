@@ -180,7 +180,7 @@ class EnricherTest(unittest.TestCase):
                     "processes": {"p1": {"serviceName": "checkout"}, "p2": {"serviceName": "payment"}},
                     "spans": [
                         {"processID": "p1", "operationName": "checkout", "startTime": 950_000_000, "tags": [{"key": "error", "value": True}]},
-                        {"processID": "p2", "operationName": "charge", "startTime": 900_000_000, "tags": [{"key": "otel.status_code", "value": "ERROR"}]},
+                        {"processID": "p2", "operationName": "charge", "startTime": 900_000_000, "duration": 12_000, "tags": [{"key": "otel.status_code", "value": "ERROR"}]},
                     ],
                 }
             ]
@@ -193,6 +193,10 @@ class EnricherTest(unittest.TestCase):
         self.assertTrue(result.trace_failure)
         self.assertEqual(result.trace_root_service, "payment")
         self.assertEqual(result.trace_failure_timestamp, 900)
+        self.assertEqual(result.trace_id, "trace-1")
+        self.assertEqual(result.trace_operation, "charge")
+        self.assertEqual(result.trace_status, "ERROR")
+        self.assertEqual(result.trace_duration_ms, 12.0)
         query = opensearch.calls[0][1]
         self.assertEqual(query["query"]["bool"]["filter"][0]["range"]["@timestamp"], {"gte": "1970-01-01T00:01:40Z", "lte": "1970-01-01T00:16:40Z"})
         self.assertIn("exception", str(query).lower())

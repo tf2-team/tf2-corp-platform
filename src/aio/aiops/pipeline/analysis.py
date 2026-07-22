@@ -5,6 +5,7 @@ from __future__ import annotations
 
 from statistics import median
 
+from aiops.notifications import is_slo_notification
 from aiops.schemas import AnomalyFinding, Incident, MetricSeries, RuntimeConfig, TelemetryCorroboration
 
 
@@ -45,7 +46,7 @@ def slo_impact_findings(incidents: list[Incident]) -> list[AnomalyFinding]:
         (event.service, event.signal_id): event
         for incident in incidents
         for event in incident.events
-        if event.reason == "threshold_breached" and any(marker in event.signal_id for marker in ("latency", "error_rate", "error_ratio"))
+        if is_slo_notification(event)
     }
     return [
         AnomalyFinding(

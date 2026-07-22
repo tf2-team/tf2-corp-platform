@@ -151,8 +151,6 @@ def run_pipeline(
         qualification_max_sample_age_seconds=settings.qualification_max_sample_age_seconds,
         rca_hyperparameters=rca_hyperparameters,
         correlation_hyperparameters=hyperparameters["correlation"],
-        slo_notification_suppress_seconds=hyperparameters["incident"]["direct_slo_suppress_seconds"],
-        slo_notification_state={},
         remediation=(
             RemediationFeatureExtractor(),
             HistoryRetriever(hyperparameters["remediation"]["similarity_weights"], hyperparameters["remediation"]["history_top_k"]),

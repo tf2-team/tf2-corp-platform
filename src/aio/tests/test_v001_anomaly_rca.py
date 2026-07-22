@@ -11,13 +11,14 @@ from tempfile import TemporaryDirectory
 from aiops.anomaly import V001AnomalyEngine, build_v001_anomaly_engine
 from aiops.anomaly import v001 as anomaly_v001
 from aiops.anomaly.v001 import EwmaStlDetector, LogTemplateMetricBuilder, ServiceIsolationForestDetector, _metric_group, _point_changed
-from aiops.api.app import run_static_pipeline
+from aiops.api.app import print_rca_result, run_static_pipeline
 from aiops.config import Settings, load_hyperparameters, load_runtime_config
 from aiops.pipeline.runtime import _log_final_root_cause_algorithm_scores
 from aiops.rca.graph import GraphTraversalRca
 from aiops.rca import V001RcaEngine
-from aiops.schemas import AnomalyFinding, MetricPoint, MetricSeries, PipelineRunRequest, RcaResult, RootCauseCandidate, RuntimeConfig, TelemetryCorroboration
+from aiops.schemas import AnomalyFinding, MetricPoint, MetricSeries, PipelineResult, PipelineRunRequest, RcaResult, RootCauseCandidate, RuntimeConfig, TelemetryCorroboration
 from aiops.shared.series import prepare_detector_series
+from aiops.shared.tail import fixed_baseline_and_tail
 
 
 def metric(service: str, name: str, values: list[float]) -> MetricSeries:
@@ -74,6 +75,14 @@ def graph_rca(config: RuntimeConfig) -> GraphTraversalRca:
 
 
 class V001AnomalyRcaTest(unittest.TestCase):
+    def test_fixed_baseline_excludes_every_detection_tail_point(self):
+        series = minute_metric("payment", "cpu_millicores", [10.0] * 45 + [20.0] * 15)
+
+        baseline, tail = fixed_baseline_and_tail(series, 900, 30, [point.value for point in series.points])
+
+        self.assertEqual(baseline, [10.0] * 45)
+        self.assertEqual(list(tail), list(range(45, 60)))
+
     def test_cpu_millicores_metric_uses_cpu_thresholds(self):
         self.assertEqual(_metric_group("cpu_millicores"), "cpu")
 
@@ -408,6 +417,18 @@ class V001AnomalyRcaTest(unittest.TestCase):
         )
         series[-1] = minute_metric("checkout", "error_rate_5m", [0] * 44 + [0.01])
         self.assertEqual(engine._filter_normal_traffic_growth(series), series)
+
+    def test_load_growth_allows_flat_memory_when_cpu_and_socket_increase(self):
+        engine = anomaly_engine()
+        series = [
+            minute_metric("checkout", "request_rate_5m", [10] * 30 + [30] * 15),
+            minute_metric("checkout", "cpu_millicores", [100] * 30 + [300] * 15),
+            minute_metric("checkout", "memory_usage_bytes", [100_000_000] * 45),
+            minute_metric("checkout", "socket_io_bytes_per_second", [1_000_000] * 30 + [3_000_000] * 15),
+            minute_metric("checkout", "error_rate_5m", [0] * 45),
+        ]
+
+        self.assertEqual([item.metric for item in engine._filter_normal_traffic_growth(series)], ["error_rate_5m"])
         series[-1] = minute_metric("checkout", "error_rate_5m", [0] * 45)
         series[-2] = minute_metric("checkout", "workload_ready_pods", [2] * 30 + [1] * 15)
         self.assertEqual(engine._filter_normal_traffic_growth(series), series)
@@ -924,6 +945,10 @@ class V001AnomalyRcaTest(unittest.TestCase):
                 trace_root_service="payment",
                 trace_failure_timestamp=900,
                 trace_reference="https://jaeger/trace/1",
+                trace_id="trace-1",
+                trace_operation="charge",
+                trace_status="ERROR",
+                trace_duration_ms=12.0,
             )
         }
 
@@ -931,6 +956,18 @@ class V001AnomalyRcaTest(unittest.TestCase):
 
         self.assertEqual(result.root_causes[0].service, "payment")
         self.assertIn("trace_failure", result.root_causes[0].root_cause_metrics)
+        self.assertIn(
+            "trace_id=trace-1 operation=charge status=ERROR upstream=checkout downstream=payment duration_ms=12.000 reference=https://jaeger/trace/1",
+            result.root_causes[0].evidence,
+        )
+        output = io.StringIO()
+        with redirect_stdout(output):
+            print_rca_result(
+                PipelineResult(
+                    observations=[], features=[], candidates=[], incidents=[], notifications=[], policy_decisions=[], verification_results=[], rca_result=result
+                )
+            )
+        self.assertIn("trace_id=trace-1", output.getvalue())
 
     def test_trace_root_outside_dependency_path_is_rejected(self):
         runtime_config = load_runtime_config(Path("config/runtime.json"))

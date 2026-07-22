@@ -25,6 +25,7 @@ class RuntimeConfigTest(unittest.TestCase):
         self.assertEqual(next(signal for signal in config.signals if signal.id == "checkout_payment_error_rate_5m").feature_role, "dependency_signal")
         detector_ids = {detector.detector_id for detector in detectors}
         self.assertIn("auto_checkout_latency_p95", detector_ids)
+        self.assertIn("auto_checkout_latency_p99", detector_ids)
         self.assertTrue({detector.id for detector in config.detectors if detector.id.startswith("auto_")} <= detector_ids)
 
     def test_each_service_error_rate_signal_has_auto_detector(self):
@@ -36,16 +37,17 @@ class RuntimeConfigTest(unittest.TestCase):
         self.assertEqual(detector_signal_ids, signal_ids)
         self.assertTrue(all(detector.enabled for detector in auto_detectors))
 
-    def test_each_service_p95_latency_signal_has_configured_slo_detector(self):
+    def test_each_service_latency_signal_has_configured_slo_detector(self):
         config = load_runtime_config(Path("config/runtime.json"))
         hyperparameters = load_hyperparameters(Settings().hyperparameters_path)
         detectors = build_detectors(config, Settings(), hyperparameters["no_data"], hyperparameters["detectors"])
-        signal_ids = {signal.id for signal in config.signals if signal.query_id.endswith(".p95_latency_5m")}
-        latency_detectors = [detector for detector in detectors if detector.detector_id.endswith("_latency_p95")]
+        signal_ids = {signal.id for signal in config.signals if any(signal.query_id.endswith(f".p{percentile}_latency_5m") for percentile in (95, 99))}
+        latency_detectors = [detector for detector in detectors if detector.detector_id.endswith(("_latency_p95", "_latency_p99"))]
         configured_thresholds = hyperparameters["detectors"]["latency_slo_overrides"]
 
         self.assertEqual({detector.signal_id for detector in latency_detectors}, signal_ids)
         self.assertEqual({detector.service for detector in latency_detectors}, set(configured_thresholds))
+        self.assertEqual(len(latency_detectors), len(configured_thresholds) * 2)
         thresholds = {detector.service: detector.threshold for detector in latency_detectors}
         self.assertEqual(thresholds["cart"], 0.3)
         self.assertEqual(thresholds["frontend"], 0.5)

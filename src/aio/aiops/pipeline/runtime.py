@@ -10,10 +10,7 @@ import re
 from datetime import UTC, datetime
 from itertools import count
 from pathlib import Path
-from threading import Lock
-from time import monotonic
 from typing import Protocol
-from uuid import uuid4
 
 from aiops.collectors import Collector
 from aiops.correlation import Correlator
@@ -24,7 +21,7 @@ from aiops.anomaly import build_v001_anomaly_engine
 from aiops.rca import V001RcaEngine
 from aiops.schemas import AnomalyFinding, MetricSeries, NotificationMessage, PipelineResult, PolicyDecision, RcaResult, RuntimeConfig
 from aiops.normalization import Normalizer
-from aiops.notifications import NotificationBuilder
+from aiops.notifications import is_slo_notification
 from aiops.qualification import QualificationGate
 from aiops.remediation import (
     ActionCatalog,
@@ -47,8 +44,6 @@ from aiops.pipeline.analysis import (
 
 logger = logging.getLogger(__name__)
 _RUN_COUNTER = count(1)
-_SLO_NOTIFICATION_TIMES: dict[tuple[str, str, str], float] = {}
-_SLO_NOTIFICATION_LOCK = Lock()
 
 RemediationComponents = tuple[
     RemediationFeatureExtractor,
@@ -65,8 +60,6 @@ class IncidentStore(Protocol):
         ...
 
     def pending_notifications_for(self, incidents: list[Incident]) -> list[NotificationMessage]: ...
-
-    def record_notification_history(self, message: NotificationMessage) -> None: ...
 
     def due_notifications(self, limit: int = 100) -> list[NotificationMessage]: ...
 
@@ -98,8 +91,6 @@ class AiopsPipeline:
         enricher: Enricher | None = None,
         notification_sender: NotificationSender | None = None,
         rca_history_path: Path | None = None,
-        slo_notification_suppress_seconds: int = 900,
-        slo_notification_state: dict[tuple[str, str, str], float] | None = None,
     ):
         self.collector = collector
         self.qualification = QualificationGate(
@@ -111,7 +102,8 @@ class AiopsPipeline:
         self.normalizer = Normalizer(normalization_schema)
         self.feature_builder = FeatureBuilder(runtime_config)
         self.detector_engine = DetectorEngine(detectors)
-        self.correlator = Correlator(runtime_config, **correlation_hyperparameters) if correlation_hyperparameters else Correlator(runtime_config)
+        correlator_options = {key: value for key, value in (correlation_hyperparameters or {}).items() if key in {"window_seconds", "confidence_threshold", "weights"}}
+        self.correlator = Correlator(runtime_config, **correlator_options)
         self.enricher = enricher or Enricher(runtime_config=runtime_config)
         self.store = store
         self.policy = policy
@@ -122,8 +114,6 @@ class AiopsPipeline:
         self.remediation = remediation
         self.notification_sender = notification_sender
         self.rca_history_path = rca_history_path
-        self.slo_notification_suppress_seconds = slo_notification_suppress_seconds
-        self.slo_notification_state = slo_notification_state if slo_notification_state is not None else _SLO_NOTIFICATION_TIMES
 
     def run_once(self, metric_series: list[MetricSeries] | None = None) -> PipelineResult:
         run_number = next(_RUN_COUNTER)
@@ -149,14 +139,11 @@ class AiopsPipeline:
         logger.debug("AIOPS_BLOCK correlate candidates=%s ids=%s", len(correlated), [candidate.detector_id for candidate in correlated])
         enriched = self.enricher.enrich(correlated, features)
         logger.debug("AIOPS_BLOCK enrich candidates=%s evidence=%s", len(enriched), [len(candidate.evidence) for candidate in enriched])
-        slo_candidates = [candidate for candidate in enriched if _is_slo_candidate(candidate)]
-        persisted_candidates = [candidate for candidate in enriched if not _is_slo_candidate(candidate)]
-        slo_incidents = [_transient_slo_incident(candidate) for candidate in slo_candidates]
-        direct_notifications = self._dispatch_slo_notifications(slo_incidents)
-        incidents = [self.store.upsert(candidate) for candidate in persisted_candidates]
-        analysis_incidents = [*incidents, *slo_incidents]
+        incidents = [self.store.upsert(candidate) for candidate in enriched]
+        analysis_incidents = incidents
+        regular_incidents = [incident for incident in incidents if not is_slo_notification(incident.events[-1])]
         deduped_incidents = _unique_incidents(incidents)
-        logger.debug("AIOPS_BLOCK incident persisted=%s transient_slo=%s ids=%s", len(incidents), len(slo_incidents), [incident.incident_id for incident in analysis_incidents])
+        logger.debug("AIOPS_BLOCK incident persisted=%s ids=%s", len(incidents), [incident.incident_id for incident in analysis_incidents])
 
         rca_result = self._run_v001_rca(metric_series or [], analysis_incidents)
         logger.info(
@@ -175,10 +162,10 @@ class AiopsPipeline:
             [root.service for root in rca_result.root_causes],
         )
         self._log_failure_conclusion(rca_result, analysis_incidents)
-        suppressed_incident_ids = self._suppress_related_notifications(deduped_incidents, rca_result)
-        actionable_incidents = [incident for incident in incidents if incident.incident_id not in suppressed_incident_ids]
+        suppressed_incident_ids = self._suppress_related_notifications(_unique_incidents(regular_incidents), rca_result)
+        actionable_incidents = [incident for incident in regular_incidents if incident.incident_id not in suppressed_incident_ids]
         self._record_rca_history(rca_result, incidents, enriched, metric_series or [])
-        notifications = [*direct_notifications, *self._flush_notifications(incidents)]
+        notifications = self._flush_notifications(incidents)
         logger.debug("AIOPS_BLOCK notify notifications=%s", len(notifications))
         decisions: list[PolicyDecision] = []
         for incident in actionable_incidents:
@@ -213,40 +200,6 @@ class AiopsPipeline:
             len(rca_result.root_causes),
         )
         return result
-
-    def _dispatch_slo_notifications(self, incidents: list[Incident]) -> list[NotificationMessage]:
-        notifications = []
-        for incident, message in zip(incidents, NotificationBuilder().build(incidents)):
-            signal_id = incident.events[-1].signal_id
-            key = (incident.events[-1].environment, message.service, signal_id)
-            now = monotonic()
-            with _SLO_NOTIFICATION_LOCK:
-                last_sent = self.slo_notification_state.get(key)
-                if last_sent is not None and now - last_sent < self.slo_notification_suppress_seconds:
-                    logger.info(
-                        "AIOPS_SLO_NOTIFY_SUPPRESSED service=%s signal=%s remaining_seconds=%s",
-                        message.service,
-                        signal_id,
-                        int(self.slo_notification_suppress_seconds - (now - last_sent)),
-                    )
-                    continue
-                self.slo_notification_state[key] = now
-            notifications.append(message)
-            self.store.record_notification_history(message)
-            logger.info(
-                "AIOPS_SLO_NOTIFY_DIRECT incident=%s service=%s severity=%s runbook=%s",
-                message.incident_id,
-                message.service,
-                message.severity,
-                message.runbook_id,
-            )
-            if self.notification_sender is None:
-                continue
-            try:
-                self.notification_sender.send(message)
-            except Exception as exc:
-                logger.warning("AIOPS_SLO_NOTIFY_FAILED incident=%s error=%s", message.incident_id, exc)
-        return notifications
 
     def _flush_notifications(self, incidents: list[Incident]) -> list[NotificationMessage]:
         if self.notification_sender is None:
@@ -526,23 +479,3 @@ def _log_count(summary: str) -> int:
 
 def _unique_incidents(incidents: list[Incident]) -> list[Incident]:
     return list({incident.incident_id: incident for incident in incidents}.values())
-
-
-def _is_slo_candidate(candidate: CandidateEvent) -> bool:
-    return candidate.reason == "threshold_breached" and any(
-        marker in candidate.signal_id for marker in ("latency", "error_rate", "error_ratio")
-    )
-
-
-def _transient_slo_incident(candidate: CandidateEvent) -> Incident:
-    token = uuid4().hex
-    return Incident(
-        incident_id=f"slo-{token[:12]}",
-        fingerprint=f"slo-direct:{token}",
-        state="open",
-        severity=candidate.severity,
-        flow=candidate.flow,
-        service=candidate.service,
-        likely_dependency=candidate.likely_dependency,
-        events=[candidate],
-    )

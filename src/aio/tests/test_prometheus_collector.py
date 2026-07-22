@@ -90,7 +90,13 @@ class PrometheusCollectorTest(unittest.TestCase):
         services_with_metrics = {signal.service for signal in config.signals if signal.query_id.endswith(".error_rate_5m")}
 
         self.assertTrue(signal_query_ids.issubset(config.prometheus_queries))
-        self.assertCountEqual(client.queries, [config.prometheus_queries[signal.query_id] for signal in prometheus_signals])
+        latency_queries = [query for query in client.queries if query.startswith("max_over_time(")]
+        self.assertEqual(len(latency_queries), sum("latency" in signal.id for signal in prometheus_signals))
+        self.assertTrue(all(query.endswith("[5m:1s])") for query in latency_queries))
+        self.assertCountEqual(
+            [query for query in client.queries if not query.startswith("max_over_time(")],
+            [config.prometheus_queries[signal.query_id] for signal in prometheus_signals if "latency" not in signal.id],
+        )
         self.assertTrue(services_with_metrics.issubset(config.prometheus_services))
         self.assertEqual(len(observations), len(signal_query_ids))
         self.assertEqual(observations[0].value, 0.2)

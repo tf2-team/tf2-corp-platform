@@ -72,9 +72,14 @@ def tail_indexes(metric: MetricSeries, detection_window_seconds: int | None, sta
         return range(0)
     if not detection_window_seconds:
         return range(start, len(metric.points))
-    cutoff = metric.points[-1].timestamp - detection_window_seconds
+    cutoff = metric.points[-1].timestamp - detection_window_seconds + series_step_seconds(metric)
     first = next((index for index, point in enumerate(metric.points) if point.timestamp >= cutoff), len(metric.points))
     return range(max(start, first), len(metric.points))
+
+
+def fixed_baseline_and_tail(metric: MetricSeries, detection_window_seconds: int | None, start: int, values: list[float]) -> tuple[list[float], range]:
+    indexes = tail_indexes(metric, detection_window_seconds, start)
+    return (values[: indexes.start], indexes)
 
 
 def median3(values: list[float]) -> list[float]:
@@ -99,10 +104,11 @@ def normal_traffic_growth_decision(
     min_absolute_change: dict[str, float],
     correlation_lag_buckets: dict[str, int],
 ) -> tuple[bool, str]:
-    required_groups = ("request_rate", "cpu", "memory", "socket_io")
-    by_group = {group: [metric for metric in series if metric_group(metric.metric) == group] for group in required_groups}
+    infra_groups = ("cpu", "memory", "socket_io")
+    groups = ("request_rate", *infra_groups)
+    by_group = {group: [metric for metric in series if metric_group(metric.metric) == group] for group in groups}
     missing = [group for group, metrics in by_group.items() if not metrics]
-    if missing:
+    if "request_rate" in missing or sum(bool(by_group[group]) for group in infra_groups) < 2:
         return False, f"reason=missing_metrics metrics={','.join(missing)}"
     for metric in series:
         change = _smoothed_tail_change(metric, detection_window_seconds, start, min_tail_anomaly_buckets, min_relative_change_ratio, min_absolute_change)
@@ -118,7 +124,7 @@ def normal_traffic_growth_decision(
             if decreased >= min_tail_anomaly_buckets[group] and change.indexes and median(change.values[index] for index in change.indexes) < change.baseline:
                 return False, "reason=ready_pods_decreased"
     base_tolerance = max(series_step_seconds(metric) for metrics in by_group.values() for metric in metrics)
-    required = max(min_tail_anomaly_buckets[group] for group in required_groups)
+    required = max(min_tail_anomaly_buckets[group] for group in groups)
     failures = []
     for direction, label in ((1, "growth"), (-1, "decline")):
         timestamps = {
@@ -138,19 +144,37 @@ def normal_traffic_growth_decision(
             )
             for group, metrics in by_group.items()
         }
-        below_threshold = [group for group, changed_at in timestamps.items() if not changed_at]
-        if below_threshold:
-            failures.append(f"{label}:{','.join(below_threshold)}")
+        changed_infra = [group for group in infra_groups if timestamps[group]]
+        if not timestamps["request_rate"] or len(changed_infra) < 2:
+            failures.append(f"{label}:request={bool(timestamps['request_rate'])},infra={','.join(changed_infra)}")
             continue
         request_onset = min(timestamps["request_rate"])
-        aligned = all(
-            -base_tolerance <= min(timestamps[group]) - request_onset <= base_tolerance * correlation_lag_buckets[group]
-            for group in required_groups[1:]
-        )
-        simultaneous = min(len(changed_at) for changed_at in timestamps.values()) if aligned else 0
+        aligned_infra = [
+            group
+            for group in changed_infra
+            if -base_tolerance <= min(timestamps[group]) - request_onset <= base_tolerance * correlation_lag_buckets[group]
+        ]
+        opposite = [
+            group
+            for group in infra_groups
+            if group not in changed_infra
+            and any(
+                tail_direction_timestamps(
+                    metric,
+                    detection_window_seconds,
+                    start,
+                    min_tail_anomaly_buckets[group],
+                    min_relative_change_ratio[group],
+                    min_absolute_change[group],
+                    -direction,
+                )
+                for metric in by_group[group]
+            )
+        ]
+        simultaneous = min([len(timestamps["request_rate"]), *sorted((len(timestamps[group]) for group in aligned_infra), reverse=True)[:2]]) if len(aligned_infra) >= 2 and not opposite else 0
         if simultaneous >= required:
-            return True, f"reason=coordinated_{label} common={simultaneous}"
-        failures.append(f"{label}:common={simultaneous}")
+            return True, f"reason=coordinated_{label} common={simultaneous} infra={','.join(aligned_infra)}"
+        failures.append(f"{label}:common={simultaneous},opposite={','.join(opposite)}")
     return False, f"reason=not_coordinated details={'|'.join(failures)} required={required}"
 
 

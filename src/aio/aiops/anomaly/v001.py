@@ -13,7 +13,7 @@ import warnings
 
 from aiops.anomaly.stats import mean, median, robust_score, stdev
 from aiops.schemas import AnomalyFinding, MetricSeries
-from aiops.shared.tail import evaluate_tail_change, median3, metric_group, normal_traffic_growth_decision, point_changed, series_step_seconds, tail_increase_timestamps, tail_indexes
+from aiops.shared.tail import evaluate_tail_change, fixed_baseline_and_tail, median3, metric_group, normal_traffic_growth_decision, point_changed, series_step_seconds, tail_increase_timestamps, tail_indexes
 
 logger = logging.getLogger(__name__)
 
@@ -42,11 +42,9 @@ class EwmaStlDetector:
             if len(values) < self.min_points:
                 continue
             residuals = self._residuals(values)
-            scored = []
-            for index in tail_indexes(metric, self.detection_window_seconds, self.min_points - 1):
-                baseline = residuals[:index]
-                score = abs(residuals[index] - mean(baseline)) / (stdev(baseline) or 1.0)
-                scored.append((score, index))
+            baseline, indexes = fixed_baseline_and_tail(metric, self.detection_window_seconds, self.min_points - 1, residuals)
+            center, spread = mean(baseline), stdev(baseline) or 1.0
+            scored = [(abs(residuals[index] - center) / spread, index) for index in indexes]
             score, index = max(scored, default=(0.0, 0))
             if score >= self.z_threshold:
                 findings.append(self._finding(metric, "ewma_stl", score, metric.points[index].timestamp))
@@ -88,9 +86,10 @@ class RobustDriftDetector:
             values = [point.value for point in metric.points]
             if len(values) < self.min_points:
                 continue
+            baseline, indexes = fixed_baseline_and_tail(metric, self.detection_window_seconds, self.min_baseline_points, values)
             scored = [
-                (robust_score(values[:index], [values[index]]), index)
-                for index in tail_indexes(metric, self.detection_window_seconds, self.min_baseline_points)
+                (robust_score(baseline, [values[index]]), index)
+                for index in indexes
             ]
             score, index = max(scored, default=(0.0, 0))
             if score >= self.score_threshold:

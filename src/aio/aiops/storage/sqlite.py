@@ -10,18 +10,19 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 from aiops.incidents import incident_fingerprint
-from aiops.notifications import NotificationBuilder
+from aiops.notifications import NotificationBuilder, is_slo_notification
 from aiops.schemas import CandidateEvent, Incident, NotificationMessage
 
 logger = logging.getLogger(__name__)
 
 
 class SQLiteIncidentStore:
-    def __init__(self, path: Path, environment: str, runbooks_dir: Path | None = None, notification_cooldown_seconds: int = 900):
+    def __init__(self, path: Path, environment: str, runbooks_dir: Path | None = None, notification_cooldown_seconds: int = 900, slo_dedup_seconds: int = 300):
         self.path = path
         self.environment = environment
         self.runbooks_dir = runbooks_dir or _default_runbooks_dir()
         self.notification_cooldown_seconds = notification_cooldown_seconds
+        self.slo_dedup_seconds = slo_dedup_seconds
         self._last_enqueued_incident_ids: set[str] = set()
         self.path.parent.mkdir(parents=True, exist_ok=True)
         self._connection = sqlite3.connect(self.path)
@@ -127,16 +128,18 @@ class SQLiteIncidentStore:
             incident.severity = min(incident.severity, candidate.severity)
 
         now = datetime.now(UTC)
+        slo_notification = is_slo_notification(candidate)
         notification_due = self._notification_due(incident, is_new, now)
         can_enqueue_incident = notification_due and self._can_enqueue_notification(incident.incident_id)
-        service_notification_due = self._service_notification_due(incident.service, incident.severity, now) if can_enqueue_incident else False
+        service_notification_due = (slo_notification or self._service_notification_due(incident.service, incident.severity, now)) if can_enqueue_incident else False
         notification = (
             NotificationBuilder().build([incident])[0]
             if can_enqueue_incident and service_notification_due
             else None
         )
         if notification is not None:
-            incident.cooldown_until = (now + timedelta(seconds=self.notification_cooldown_seconds)).isoformat()
+            cooldown_seconds = self.slo_dedup_seconds if slo_notification else self.notification_cooldown_seconds
+            incident.cooldown_until = (now + timedelta(seconds=cooldown_seconds)).isoformat()
         service_suppressed = can_enqueue_incident and not service_notification_due
         notification_enqueued = False
         with self._connection:
@@ -173,7 +176,8 @@ class SQLiteIncidentStore:
                 )
                 notification_enqueued = cursor.rowcount > 0
                 if notification_enqueued:
-                    self._set_service_notification_cooldown(incident.service, incident.cooldown_until or _now())
+                    if not slo_notification:
+                        self._set_service_notification_cooldown(incident.service, incident.cooldown_until or _now())
                     self._last_enqueued_incident_ids.add(incident.incident_id)
                     self.record_notification_history(notification)
                     logger.info(

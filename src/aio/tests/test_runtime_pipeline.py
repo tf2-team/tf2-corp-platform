@@ -26,6 +26,7 @@ from aiops.schemas import (
     TelemetryCorroboration,
 )
 from aiops.pipeline import AiopsPipeline
+from aiops.notifications import is_slo_notification
 from aiops.pipeline.runtime import _apply_corroboration, _slo_impact_findings
 from aiops.remediation import (
     ActionCatalog,
@@ -78,8 +79,6 @@ def runtime_kwargs(settings: Settings) -> dict:
         "qualification_dev": settings.qualification_gate_dev,
         "qualification_max_sample_age_seconds": settings.qualification_max_sample_age_seconds,
         "correlation_hyperparameters": hyperparameters["correlation"],
-        "slo_notification_suppress_seconds": hyperparameters["incident"]["direct_slo_suppress_seconds"],
-        "slo_notification_state": {},
     }
 
 
@@ -215,6 +214,8 @@ class RuntimePipelineTest(unittest.TestCase):
         findings = _slo_impact_findings([incident])
 
         self.assertEqual(findings, [])
+        self.assertFalse(is_slo_notification(event))
+        self.assertTrue(is_slo_notification(event.model_copy(update={"signal_id": "checkout_p95_latency_5m"})))
 
     def test_slo_threshold_incident_is_added_to_rca_anomalies(self):
         settings = Settings()
@@ -427,7 +428,7 @@ class RuntimePipelineTest(unittest.TestCase):
         self.assertNotIn("AIOPS_RCA_SYNTHETIC_CANDIDATE", text)
         self.assertIn("AIOPS_DEDUP_RESULT input_candidates=0 incidents=0", text)
 
-    def test_pipeline_keeps_direct_slo_notification_independent_from_rca(self):
+    def test_pipeline_keeps_slo_notification_independent_from_rca(self):
         settings = Settings()
         with TemporaryDirectory() as tmp:
             store = SQLiteIncidentStore(Path(tmp) / "aiops.sqlite3", environment=settings.environment)
@@ -612,7 +613,7 @@ class RuntimePipelineTest(unittest.TestCase):
         self.assertEqual(outbox_row, ("retry", 1, "grafana webhook down"))
         self.assertEqual(attempt_row, ("failed", 1, "grafana webhook down"))
 
-    def test_slo_notification_failure_does_not_create_retry_or_history(self):
+    def test_slo_notification_failure_uses_common_retry_and_history(self):
         settings = Settings()
         with TemporaryDirectory() as tmp:
             root = Path(tmp)
@@ -647,9 +648,9 @@ class RuntimePipelineTest(unittest.TestCase):
             store.close()
 
         self.assertEqual(len(result.notifications), 1)
-        self.assertEqual(counts, (0, 0, 0))
+        self.assertEqual(counts, (1, 1, 1))
         self.assertEqual(len(history_rows), 1)
-        self.assertIn("AIOPS_SLO_NOTIFY_FAILED", " ".join(logs.output))
+        self.assertIn("AIOPS_BLOCK notify_failed", " ".join(logs.output))
 
     def test_pipeline_accepts_current_cdo_signal_shape_before_detection(self):
         settings = Settings()
@@ -874,7 +875,7 @@ class RuntimePipelineTest(unittest.TestCase):
         self.assertEqual(rows[0]["series_point_count"]["max"], 60)
         self.assertEqual(rows[0]["root_causes"][0]["service"], result.rca_result.root_causes[0].service)
 
-    def test_pipeline_suppresses_blast_radius_child_notifications(self):
+    def test_pipeline_does_not_suppress_slo_blast_radius_notifications(self):
         settings = Settings()
         with TemporaryDirectory() as tmp:
             root = Path(tmp)
@@ -895,7 +896,7 @@ class RuntimePipelineTest(unittest.TestCase):
             store.close()
 
         self.assertEqual({message.service for message in result.notifications}, {"checkout", "cart", "valkey-cart"})
-        self.assertEqual(outbox_rows, [(next(incident.incident_id for incident in result.incidents if incident.service == "checkout"), "pending")])
+        self.assertEqual(outbox_rows, sorted((incident.incident_id, "pending") for incident in result.incidents))
         self.assertEqual(len(result.policy_decisions), 1)
         self.assertEqual(result.policy_decisions[0].result, "dry-run-recorded")
 

@@ -9,7 +9,7 @@ import math
 from aiops.anomaly.stats import median, robust_score
 from aiops.rca.graph import GraphTraversalRca
 from aiops.schemas import AnomalyFinding, MetricSeries, RcaResult, RootCauseCandidate, RuntimeConfig, TelemetryCorroboration
-from aiops.shared.tail import evaluate_tail_change, metric_group, normal_traffic_growth_decision, series_step_seconds, tail_indexes
+from aiops.shared.tail import evaluate_tail_change, fixed_baseline_and_tail, metric_group, normal_traffic_growth_decision, series_step_seconds, tail_indexes
 
 
 class V001RcaEngine:
@@ -95,6 +95,14 @@ class V001RcaEngine:
 
         candidates: list[RootCauseCandidate] = []
         trace_services = {finding.service for finding in trace_findings}
+        trace_details = {
+            self._canonical_service(evidence.trace_root_service): [
+                f"trace_id={evidence.trace_id or 'unknown'} operation={evidence.trace_operation or 'unknown'} status={evidence.trace_status or 'unknown'} "
+                f"upstream={source} downstream={evidence.trace_root_service} duration_ms={(evidence.trace_duration_ms or 0.0):.3f} reference={evidence.trace_reference or 'unknown'}"
+            ]
+            for source, evidence in (corroboration or {}).items()
+            if evidence.trace_failure and evidence.trace_root_service
+        }
         for service, rank_score in sorted(
             service_scores.items(),
             key=lambda item: (item[0] in trace_services, item[1] * evidence_strength.get(item[0], 0.0)),
@@ -120,6 +128,7 @@ class V001RcaEngine:
                         f"correlation_score={correlation_scores.get(service, 0.0):.3f}",
                         f"weighted_rrf_score={rank_score:.3f}",
                         f"evidence_strength={evidence_strength.get(service, 0.0):.3f}",
+                        *trace_details.get(service, []),
                         *[f"{metric} {source}_score={metric_score:.3f}" for metric, metric_score, source in metric_scores],
                     ],
                 )
@@ -186,8 +195,9 @@ class V001RcaEngine:
     def _first_drift_index(self, metric: MetricSeries, values: list[float]) -> int | None:
         if not self._significant_tail_change(metric):
             return None
-        for index in tail_indexes(metric, self.detection_window_seconds, self.drift_min_points - 1):
-            if robust_score(values[:index], [values[index]]) >= self.drift_score_threshold:
+        baseline, indexes = fixed_baseline_and_tail(metric, self.detection_window_seconds, self.drift_min_points - 1, values)
+        for index in indexes:
+            if robust_score(baseline, [values[index]]) >= self.drift_score_threshold:
                 return index
         return None
 
@@ -197,8 +207,9 @@ class V001RcaEngine:
             values = [point.value for point in metric.points]
             if len(values) < self.drift_min_points or self._excluded_root_cause(metric.service):
                 continue
+            baseline, indexes = fixed_baseline_and_tail(metric, self.detection_window_seconds, self.drift_min_points - 1, values)
             score, index = max(
-                ((robust_score(values[:index], [values[index]]), index) for index in tail_indexes(metric, self.detection_window_seconds, self.drift_min_points - 1)),
+                ((robust_score(baseline, [values[index]]), index) for index in indexes),
                 default=(0.0, 0),
             )
             if score >= self.drift_score_threshold:
@@ -340,8 +351,8 @@ class V001RcaEngine:
             self._canonical_service(metric.service) == service
             and (
                 (_is_error_metric(metric.metric) or _is_oom_metric(metric.metric))
-                and _robust_score_at(metric, timestamp) >= self.drift_score_threshold
-                or "ready_pods" in metric.metric and _decreased_at(metric, timestamp, self.drift_score_threshold)
+                and _robust_score_at(metric, timestamp, self.detection_window_seconds, self.drift_min_points - 1) >= self.drift_score_threshold
+                or "ready_pods" in metric.metric and _decreased_at(metric, timestamp, self.drift_score_threshold, self.detection_window_seconds, self.drift_min_points - 1)
             )
             for metric in series
         )
@@ -375,13 +386,15 @@ def _metric_priority(metric: str) -> int:
     return 0
 
 
-def _robust_score_at(metric: MetricSeries, timestamp: int) -> float:
+def _robust_score_at(metric: MetricSeries, timestamp: int, detection_window_seconds: int | None, start: int) -> float:
     values = [point.value for point in metric.points]
     index = next((index for index, point in enumerate(metric.points) if point.timestamp >= timestamp), len(metric.points) - 1)
-    return robust_score(values[:index], [values[index]]) if index >= 4 else 0.0
+    baseline, _ = fixed_baseline_and_tail(metric, detection_window_seconds, start, values)
+    return robust_score(baseline, [values[index]])
 
 
-def _decreased_at(metric: MetricSeries, timestamp: int, threshold: float) -> bool:
+def _decreased_at(metric: MetricSeries, timestamp: int, threshold: float, detection_window_seconds: int | None, start: int) -> bool:
     values = [point.value for point in metric.points]
     index = next((index for index, point in enumerate(metric.points) if point.timestamp >= timestamp), len(metric.points) - 1)
-    return index >= 4 and values[index] < median(values[:index]) and robust_score(values[:index], [values[index]]) >= threshold
+    baseline, _ = fixed_baseline_and_tail(metric, detection_window_seconds, start, values)
+    return values[index] < median(baseline) and robust_score(baseline, [values[index]]) >= threshold

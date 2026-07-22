@@ -2,6 +2,7 @@
 # Copyright The OpenTelemetry Authors
 # SPDX-License-Identifier: Apache-2.0
 import unittest
+from inspect import signature
 from pathlib import Path
 
 from pydantic import ValidationError
@@ -55,6 +56,13 @@ class PydanticModelTest(unittest.TestCase):
 
         with self.assertRaises(ValidationError):
             Observation(signal_id="checkout_slo", value=0.2, unit="ratio", window="24h", quality="bad")
+
+    def test_correlator_does_not_accept_notification_suppression_settings(self):
+        parameters = signature(Correlator).parameters
+
+        self.assertNotIn("suppress_window_seconds", parameters)
+        self.assertNotIn("suppress_min_root_score", parameters)
+        self.assertNotIn("topology_max_hops", parameters)
 
 
 class FeatureBuilderTest(unittest.TestCase):
@@ -232,7 +240,8 @@ class DetectorEngineTest(unittest.TestCase):
         )
 
         hyperparameters = load_hyperparameters(Path("config/hyperparameters.json"))
-        candidates = Correlator(load_runtime_config(Path("config/runtime.json")), **hyperparameters["correlation"]).correlate([primary, dependency])
+        options = {key: hyperparameters["correlation"][key] for key in ("window_seconds", "confidence_threshold", "weights")}
+        candidates = Correlator(load_runtime_config(Path("config/runtime.json")), **options).correlate([primary, dependency])
 
         self.assertEqual(len(candidates), 1)
         self.assertEqual(candidates[0].likely_dependency, "payment")

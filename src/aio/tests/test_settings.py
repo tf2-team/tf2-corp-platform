@@ -98,7 +98,8 @@ class SettingsTest(unittest.TestCase):
         self.assertEqual(config["rca"]["graph"]["timestamp_weight"], 0.3)
         self.assertEqual(config["correlation"]["suppress_window_seconds"], 900)
         self.assertEqual(config["incident"]["notification_cooldown_seconds"], 900)
-        self.assertEqual(config["incident"]["direct_slo_suppress_seconds"], 900)
+        self.assertEqual(config["incident"]["slo_dedup_seconds"], 300)
+        self.assertNotIn("direct_slo_suppress_seconds", config["incident"])
         self.assertEqual(
             config["detectors"]["latency_slo_overrides"],
             {

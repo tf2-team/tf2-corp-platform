@@ -79,6 +79,7 @@ def run_pipeline_with_collector(collector, settings: Settings, runtime_config, m
         path=settings.state_store_path,
         environment=settings.environment,
         notification_cooldown_seconds=int(hyperparameters["incident"]["notification_cooldown_seconds"]),
+        slo_dedup_seconds=int(hyperparameters["incident"]["slo_dedup_seconds"]),
     )
     pipeline = AiopsPipeline(
         collector=collector,
@@ -116,7 +117,6 @@ def run_pipeline_with_collector(collector, settings: Settings, runtime_config, m
         ),
         notification_sender=NotificationClient(settings) if _configured_url(settings.notification_webhook_url) else None,
         rca_history_path=settings.rca_history_path,
-        slo_notification_suppress_seconds=int(hyperparameters["incident"]["direct_slo_suppress_seconds"]),
     )
     try:
         result = pipeline.run_once(metric_series=metric_series or [])
@@ -146,11 +146,13 @@ def print_rca_result(result: PipelineResult) -> None:
             flush=True,
         )
     for root in result.rca_result.root_causes:
+        trace = next((item for item in root.evidence if item.startswith("trace_id=")), "")
         print(
             "AIOPS_ROOT_CAUSE "
             f"service={root.service} "
             f"score={root.score:.3f} "
-            f"metrics={','.join(root.root_cause_metrics)}",
+            f"metrics={','.join(root.root_cause_metrics)}"
+            f"{' ' + trace if trace else ''}",
             flush=True,
         )
 

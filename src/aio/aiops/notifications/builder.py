@@ -3,7 +3,11 @@
 # SPDX-License-Identifier: Apache-2.0
 from __future__ import annotations
 
-from aiops.schemas import Incident, NotificationMessage
+from aiops.schemas import CandidateEvent, Incident, NotificationMessage
+
+
+def is_slo_notification(event: CandidateEvent) -> bool:
+    return event.reason == "threshold_breached" and any(marker in event.signal_id for marker in ("latency", "error_rate", "error_ratio"))
 
 
 class NotificationBuilder:
@@ -27,4 +31,3 @@ class NotificationBuilder:
             likely_dependency=dependency,
             runbook_id=last_event.runbook_id,
         )
-

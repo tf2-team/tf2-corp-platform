@@ -158,6 +158,6 @@
   },
   "incident": {
     "notification_cooldown_seconds": 900,
-    "direct_slo_suppress_seconds": 900
+    "slo_dedup_seconds": 300
   }
 }
