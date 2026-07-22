@@ -32,8 +32,8 @@ The customized OpenSearch image still shipped vulnerable `jackson-core` JARs fro
   * `jackson-core-2.21.4.jar`
   * `jackson-core-3.1.4.jar` (`tools.jackson.core`)
   * existing `jackson-databind-2.21.4.jar`
-* A dedicated `RUN` replaces every `jackson-core-2.*` / `jackson-core-3.*` under OpenSearch `lib/`, `modules/*/`, and remaining `plugins/*/` with the fixed versions.
-* Build fails closed if either line is missing or if vulnerable `2.21.3` / `3.1.3` jars remain.
+* A dedicated `RUN` replaces `/usr/share/opensearch/lib/jackson-core-*.jar` with `jackson-core-2.21.4.jar` and `jackson-core-3.1.4.jar` (vendor layout: both lines only in `lib/`).
+* Build fails closed if fixed jars are missing or vulnerable `2.21.3` / `3.1.3` filenames remain.
 * `SECURITY_UPDATE_EPOCH` rotated to `2026-07-22-jackson-core-ghsa-r7wm` so cached OS-update layers do not mask a rebuild.
 
 ## Technical Design Decisions
@@ -54,13 +54,16 @@ The customized OpenSearch image still shipped vulnerable `jackson-core` JARs fro
 ## Implementation Details
 
 1. `ADD` fixed `jackson-core` 2.21.4 and 3.1.4 from Maven Central next to the existing databind download.
-2. After plugin stripping, recursively `find` all `jackson-core-*.jar` under `/usr/share/opensearch` (vendor layout is deeper than one glob level).
-3. Route `jackson-core-2.*` → copy 2.21.4; `jackson-core-3.*` → copy 3.1.4; unexpected names fail the build.
-4. Require at least one line present; only assert the fixed version for lines that were found (do not require both 2.x and 3.x if the vendor ships one).
-5. Fail if vulnerable `2.21.3` / `3.1.3` filenames remain; print before/after jar inventory.
-6. Escape shell variables and command substitutions as `$$` / `$${...}` / `$$(...)` so Docker does not empty them during Dockerfile interpolation (this broke the first pin attempt: `test "" -eq 1`).
-7. Leave the existing module-local `jackson-databind` 2.21.4 install unchanged.
-8. Bump `SECURITY_UPDATE_EPOCH` for cache invalidation of the OS upgrade layer.
+2. Inspect vendor 3.7.0: both vulnerable jars live only in `/usr/share/opensearch/lib/` (`jackson-core-2.21.3.jar`, `jackson-core-3.1.3.jar`). Not under modules/plugins.
+3. After plugin stripping, `rm` all `lib/jackson-core-*.jar` and install the two fixed jars at fixed paths.
+4. Assert fixed jars present and vulnerable filenames absent (`test -f` / `test ! -e`). No `find` — OpenSearch base has no findutils (`find: command not found`).
+5. Leave the existing module-local `jackson-databind` 2.21.4 install unchanged.
+6. Bump `SECURITY_UPDATE_EPOCH` for cache invalidation of the OS upgrade layer.
+
+**Build failures that shaped this approach**
+
+* Shell one-liner with `$$` → CI parse error `syntax error near unexpected token '('` (run 29905445987).
+* Heredoc + recursive `find` → local build exit 127 (`find` missing on vendor image).
 
 ## Files Changed
 
@@ -98,32 +101,21 @@ The customized OpenSearch image still shipped vulnerable `jackson-core` JARs fro
 | Check | Command / Tool | Result |
 |---|---|---|
 | Maven artifacts exist | HTTP HEAD Maven Central for `jackson-core` 2.21.4 and 3.1.4 | ✅ 200 |
-| Dockerfile static review | Manual review of replace + fail-closed asserts | ✅ |
-| Image build + Trivy | Local Docker daemon unavailable in this session | ⏳ Post-merge / CI |
+| Vendor jar layout | `docker run` vendor 3.7.0; `ls lib/jackson-core-*` | ✅ only `2.21.3` + `3.1.3` in `lib/` |
+| Local image build | `docker build -f src/opensearch/Dockerfile -t local/opensearch:jackson-core-test .` | ✅ pin step installs 2.21.4 + 3.1.4 |
+| Jar inventory in image | `ls /usr/share/opensearch/lib/jackson-core-*.jar` | ✅ 2.21.4 + 3.1.4 only |
+| Trivy HIGH/CRITICAL fixable | `trivy image --severity HIGH,CRITICAL --ignore-unfixed --exit-code 1 local/opensearch:jackson-core-test` | ✅ exit 0; `jackson-core-2.21.4.jar` / `3.1.4.jar` = 0 vulns; no GHSA-r7wm |
 
 ### Manual Verification
 
 * Confirmed advisory fixed versions match pins (2.21.4 and 3.1.4).
+* Confirmed OpenSearch base has no `find` binary (use fixed paths only).
 * Confirmed prior Dockerfile only addressed `jackson-databind`, not `jackson-core`.
 
 ### Remaining Verification (Post-Merge)
 
-1. Rebuild OpenSearch image (CI bake or local):
-
-```cmd
-cd /d techx-corp-platform
-docker buildx bake -f docker-compose.yml -f docker-bake.hcl opensearch
-```
-
-2. Confirm jars in the image:
-
-```cmd
-docker run --rm --entrypoint sh %IMAGE_NAME%/opensearch:%DEMO_VERSION% -c "find /usr/share/opensearch -name \"jackson-core-*.jar\" -print"
-```
-
-Expected: only `jackson-core-2.21.4.jar` and `jackson-core-3.1.4.jar` (no `2.21.3` / `3.1.3`).
-
-3. Trivy image scan must not report GHSA-r7wm-3cxj-wff9 for OpenSearch.
+1. CI rebuild/push OpenSearch with the platform release tag.
+2. Promote chart image tag so Argo pulls the rebuilt image.
 
 ## Migration or Deployment Notes
 
@@ -146,4 +138,4 @@ Expected: only `jackson-core-2.21.4.jar` and `jackson-core-3.1.4.jar` (no `2.21.
 2. Rebuild and push OpenSearch with a new tag; promote chart tag.
 3. Note: rollback reintroduces Trivy HIGH GHSA-r7wm-3cxj-wff9 on OpenSearch.
 
-<!-- Change trail: @hungxqt - 2026-07-22 - Document jackson-core pin and Dockerfile $$ shell-escape build fix -->
+<!-- Change trail: @hungxqt - 2026-07-22 - Document lib-only jackson-core pin after local docker/trivy validation -->
