@@ -47,7 +47,8 @@ def temp_workspace() -> TemporaryDirectory:
 def observation(signal_id: str, value: float | None, quality: SignalQuality = SignalQuality.VERIFIED) -> Observation:
     labels = {"service": "checkout", "dependency": "payment"} if signal_id == "checkout_payment_error_rate_5m" else {}
     window = "24h" if signal_id == "checkout_bad_ratio_24h" else "5m"
-    return Observation(signal_id=signal_id, value=value, unit="ratio", window=window, quality=quality, labels=labels)
+    unit = "seconds" if "latency" in signal_id else "ratio"
+    return Observation(signal_id=signal_id, value=value, unit=unit, window=window, quality=quality, labels=labels)
 
 
 def metric(service: str, name: str, values: list[float]) -> MetricSeries:
@@ -247,7 +248,7 @@ class E2EPipelineRegressionTest(unittest.TestCase):
         self.assertEqual(result.notifications, [])
         self.assertEqual(result.policy_decisions, [])
 
-    def test_threshold_breach_opens_checkout_slo_incident(self):
+    def test_threshold_breach_opens_checkout_latency_incident(self):
         with temp_workspace() as tmp:
             root = Path(tmp)
             write_actions(root / "actions.json")
@@ -255,16 +256,16 @@ class E2EPipelineRegressionTest(unittest.TestCase):
             result = run_pipeline(
                 root,
                 [
-                    observation("checkout_bad_ratio_24h", 0.2),
+                    observation("checkout_p95_latency_5m", 16.0),
                     observation("checkout_payment_error_rate_5m", 0.001),
                 ],
             )
 
         self.assertEqual(len(result.incidents), 1)
-        self.assertEqual(result.candidates[0].detector_id, "ops01_checkout_slo")
+        self.assertEqual(result.candidates[0].detector_id, "ops04_checkout_latency_p95")
         self.assertEqual(result.candidates[0].reason, "threshold_breached")
         self.assertEqual(result.incidents[0].service, "checkout")
-        self.assertEqual(result.notifications[0].runbook_id, "RB-CHECKOUT-SLO")
+        self.assertEqual(result.notifications[0].runbook_id, "RB-CHECKOUT-LATENCY")
         self.assertEqual(result.policy_decisions[0].result, "dry-run-recorded")
 
     def test_dependency_breach_prefers_payment_dependency_incident(self):

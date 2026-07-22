@@ -381,7 +381,7 @@ class RuntimePipelineTest(unittest.TestCase):
         self.assertEqual(result.policy_decisions[0].result, "dry-run-recorded")
         self.assertEqual(result.verification_results[0].status, "not_recovered")
 
-    def test_pipeline_notifies_rca_only_root_cause(self):
+    def test_pipeline_does_not_notify_metric_only_rca(self):
         settings = Settings()
         with TemporaryDirectory() as tmp:
             store = SQLiteIncidentStore(Path(tmp) / "aiops.sqlite3", environment=settings.environment)
@@ -417,15 +417,15 @@ class RuntimePipelineTest(unittest.TestCase):
                 result = pipeline.run_once(metric_series=[metric("frontend", "p95_latency_5m", [0.1] * 31)])
             store.close()
 
-        self.assertEqual(result.candidates[0].detector_id, "rca_root_cause")
-        self.assertEqual(result.incidents[0].service, "frontend")
-        self.assertEqual(result.notifications[0].service, "frontend")
-        self.assertEqual(result.notifications[0].runbook_id, "RB-SERVICE-ERROR-RATE")
+        self.assertEqual(result.candidates, [])
+        self.assertEqual(result.incidents, [])
+        self.assertEqual(result.notifications, [])
+        self.assertEqual(result.rca_result.root_causes[0].service, "frontend")
         text = "\n".join(logs.output)
-        self.assertIn("AIOPS_RCA_SYNTHETIC_CANDIDATE service=frontend", text)
-        self.assertIn("AIOPS_DEDUP_RESULT input_candidates=1 incidents=1", text)
+        self.assertNotIn("AIOPS_RCA_SYNTHETIC_CANDIDATE", text)
+        self.assertIn("AIOPS_DEDUP_RESULT input_candidates=0 incidents=0", text)
 
-    def test_pipeline_adds_rca_root_incident_when_slo_incident_exists_for_different_service(self):
+    def test_pipeline_enriches_slo_incident_without_creating_rca_incident(self):
         settings = Settings()
         with TemporaryDirectory() as tmp:
             store = SQLiteIncidentStore(Path(tmp) / "aiops.sqlite3", environment=settings.environment)
@@ -465,9 +465,9 @@ class RuntimePipelineTest(unittest.TestCase):
             result = pipeline.run_once(metric_series=[metric("payment", "error_rate_5m", [0.0] * 31)])
             store.close()
 
-        self.assertEqual([incident.service for incident in result.incidents], ["checkout", "payment"])
-        self.assertEqual({message.service for message in result.notifications}, {"checkout", "payment"})
-        checkout = next(message for message in result.notifications if message.service == "checkout")
+        self.assertEqual([incident.service for incident in result.incidents], ["checkout"])
+        self.assertEqual([message.service for message in result.notifications], ["checkout"])
+        checkout = result.notifications[0]
         self.assertIn("likely root cause: payment (cpu_millicores)", checkout.summary)
 
     def test_pipeline_flushes_notification_outbox_to_sender(self):

@@ -207,6 +207,16 @@ class V001AnomalyRcaTest(unittest.TestCase):
 
         self.assertEqual(findings, [])
 
+    def test_v001_skips_models_when_tail_change_is_insignificant(self):
+        engine = anomaly_engine()
+        engine.robust_drift.evaluate = lambda _: self.fail("robust drift should not run")
+        engine.ewma_stl.evaluate = lambda _: self.fail("ewma should not run")
+        engine.isolation_forest.evaluate = lambda _: self.fail("isolation forest should not run")
+
+        findings = engine.evaluate([metric("payment", "cpu", [100] * 8)])
+
+        self.assertEqual(findings, [])
+
     def test_isolation_forest_normalizes_rows_before_scoring(self):
         detector = ServiceIsolationForestDetector(score_threshold=4.0, min_points=8)
         rows = detector._rows(
@@ -250,6 +260,16 @@ class V001AnomalyRcaTest(unittest.TestCase):
 
         self.assertEqual(calls, [(4, 3)])
         self.assertEqual(findings[0].timestamp, 7)
+
+    def test_rca_correlation_ignores_non_overlapping_timestamps(self):
+        config = load_runtime_config(Path("config/runtime.json"))
+        engine = rca_engine(config)
+        left = metric("checkout", "p95_latency_5m", [1, 2, 3])
+        right = metric("payment", "cpu", [1, 2, 3]).model_copy(
+            update={"points": [MetricPoint(timestamp=1000 + index, value=value) for index, value in enumerate([1, 2, 3])]}
+        )
+
+        self.assertEqual(engine._aligned_pearson(left, right), 0.0)
 
     def test_isolation_forest_scores_tail_with_one_model_fit(self):
         detector = ServiceIsolationForestDetector(score_threshold=1.0, min_points=5)
@@ -381,6 +401,36 @@ class V001AnomalyRcaTest(unittest.TestCase):
         self.assertEqual(engine._filter_normal_traffic_growth(series), series)
         series[-1] = minute_metric("checkout", "error_rate_5m", [0] * 45)
         series[-2] = minute_metric("checkout", "workload_ready_pods", [2] * 30 + [1] * 15)
+        self.assertEqual(engine._filter_normal_traffic_growth(series), series)
+
+    def test_coordinated_load_decline_is_filtered_before_anomaly_detection(self):
+        engine = anomaly_engine()
+        series = [
+            minute_metric("checkout", "request_rate_5m", [30] * 30 + [10] * 15),
+            minute_metric("checkout", "cpu_millicores", [300] * 30 + [100] * 15),
+            minute_metric("checkout", "memory_usage_bytes", [150_000_000] * 30 + [100_000_000] * 15),
+            minute_metric("checkout", "socket_io_bytes_per_second", [3_000_000] * 30 + [1_000_000] * 15),
+            minute_metric("checkout", "p95_latency_5m", [0.10] * 30 + [0.05] * 15),
+            minute_metric("checkout", "error_rate_5m", [0] * 45),
+        ]
+
+        with self.assertLogs("aiops.anomaly.v001", level="INFO") as logs:
+            filtered = engine._filter_normal_traffic_growth(series)
+
+        self.assertEqual([item.metric for item in filtered], ["error_rate_5m"])
+        self.assertIn("reason=coordinated_decline", " ".join(logs.output))
+
+    def test_mixed_growth_and_decline_is_not_filtered(self):
+        engine = anomaly_engine()
+        series = [
+            minute_metric("checkout", "request_rate_5m", [30] * 30 + [10] * 15),
+            minute_metric("checkout", "cpu_millicores", [100] * 30 + [300] * 15),
+            minute_metric("checkout", "memory_usage_bytes", [150_000_000] * 30 + [100_000_000] * 15),
+            minute_metric("checkout", "socket_io_bytes_per_second", [3_000_000] * 30 + [1_000_000] * 15),
+            minute_metric("checkout", "p95_latency_5m", [0.10] * 30 + [0.05] * 15),
+            minute_metric("checkout", "error_rate_5m", [0] * 45),
+        ]
+
         self.assertEqual(engine._filter_normal_traffic_growth(series), series)
 
     def test_normal_growth_allows_one_bucket_timestamp_skew(self):

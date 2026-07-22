@@ -31,10 +31,10 @@ class FastApiAppTest(unittest.TestCase):
                 PipelineRunRequest(
                     observations=[
                         Observation(
-                            signal_id="checkout_bad_ratio_24h",
-                            value=0.2,
-                            unit="ratio",
-                            window="24h",
+                            signal_id="checkout_p95_latency_5m",
+                            value=16.0,
+                            unit="seconds",
+                            window="5m",
                             quality=SignalQuality.VERIFIED,
                         )
                     ]

@@ -13,6 +13,7 @@ import warnings
 
 from aiops.anomaly.stats import mean, median, robust_score, stdev
 from aiops.schemas import AnomalyFinding, MetricSeries
+from aiops.shared.tail import evaluate_tail_change, median3, metric_group, normal_traffic_growth_decision, point_changed, series_step_seconds, tail_increase_timestamps, tail_indexes
 
 logger = logging.getLogger(__name__)
 
@@ -42,7 +43,7 @@ class EwmaStlDetector:
                 continue
             residuals = self._residuals(values)
             scored = []
-            for index in _tail_indexes(metric, self.detection_window_seconds, self.min_points - 1):
+            for index in tail_indexes(metric, self.detection_window_seconds, self.min_points - 1):
                 baseline = residuals[:index]
                 score = abs(residuals[index] - mean(baseline)) / (stdev(baseline) or 1.0)
                 scored.append((score, index))
@@ -89,7 +90,7 @@ class RobustDriftDetector:
                 continue
             scored = [
                 (robust_score(values[:index], [values[index]]), index)
-                for index in _tail_indexes(metric, self.detection_window_seconds, self.min_baseline_points)
+                for index in tail_indexes(metric, self.detection_window_seconds, self.min_baseline_points)
             ]
             score, index = max(scored, default=(0.0, 0))
             if score >= self.score_threshold:
@@ -311,14 +312,19 @@ class V001AnomalyEngine:
 
     def evaluate(self, series: list[MetricSeries], logs: list[tuple[str, int, str]] | None = None) -> list[AnomalyFinding]:
         detector_series = self._filter_normal_traffic_growth(series)
-        raw_metric_findings = [
-            *self.robust_drift.evaluate(detector_series),
-            *self.ewma_stl.evaluate(detector_series),
-            *self.isolation_forest.evaluate(detector_series),
-        ]
-        metric_findings = self._significant_metric_findings(self._weighted_sum(raw_metric_findings), series)
+        detector_series = [metric for metric in detector_series if self._has_significant_tail_change(metric)]
+        raw_metric_findings = (
+            [
+                *self.robust_drift.evaluate(detector_series),
+                *self.ewma_stl.evaluate(detector_series),
+                *self.isolation_forest.evaluate(detector_series),
+            ]
+            if detector_series
+            else []
+        )
+        metric_findings = self._weighted_sum(raw_metric_findings)
         log_series = self.log_templates.build(logs or [])
-        raw_log_findings = [*self.ewma_stl.evaluate(log_series), *self.isolation_forest.evaluate(log_series)]
+        raw_log_findings = [*self.ewma_stl.evaluate(log_series), *self.isolation_forest.evaluate(log_series)] if log_series else []
         log_findings = self._correlated_log_findings(
             self._weighted_sum(raw_log_findings),
             metric_findings,
@@ -326,26 +332,16 @@ class V001AnomalyEngine:
         self.last_algorithm_findings = [*raw_metric_findings, *raw_log_findings]
         return self._suppress_busy_infra([*metric_findings, *log_findings], [*series, *log_series])
 
-    def _significant_metric_findings(self, findings: list[AnomalyFinding], series: list[MetricSeries]) -> list[AnomalyFinding]:
-        by_signal_id = {metric.signal_id: metric for metric in series}
-        return [finding for finding in findings if self._has_significant_tail_change(by_signal_id.get(finding.signal_id))]
-
-    def _has_significant_tail_change(self, metric: MetricSeries | None) -> bool:
-        if metric is None:
-            return True
-        indexes = list(_tail_indexes(metric, self.detection_window_seconds, self.min_points - 1))
-        if not indexes:
-            return False
-        baseline_values = [point.value for point in metric.points[: indexes[0]]]
-        if len(baseline_values) < 4:
-            return False
-        baseline = median(baseline_values)
+    def _has_significant_tail_change(self, metric: MetricSeries) -> bool:
         group = _metric_group(metric.metric)
-        min_buckets = self.min_tail_anomaly_buckets[group]
-        min_relative = self.min_relative_change_ratio[group]
-        min_absolute = self.min_absolute_change[group]
-        count = sum(_point_changed(point.value, baseline, min_relative, min_absolute) for point in (metric.points[index] for index in indexes))
-        return count >= min_buckets
+        return evaluate_tail_change(
+            metric,
+            self.detection_window_seconds,
+            self.min_points - 1,
+            self.min_tail_anomaly_buckets[group],
+            self.min_relative_change_ratio[group],
+            self.min_absolute_change[group],
+        ).significant
 
     def _correlated_log_findings(self, log_findings: list[AnomalyFinding], metric_findings: list[AnomalyFinding]) -> list[AnomalyFinding]:
         return [
@@ -467,30 +463,11 @@ def _is_error_metric(metric: str) -> bool:
 
 
 def _metric_group(metric: str) -> str:
-    if "error_rate" in metric or "error_ratio" in metric:
-        return "error"
-    if "latency" in metric:
-        return "latency"
-    if "cpu" in metric:
-        return "cpu"
-    if "memory" in metric:
-        return "memory"
-    if "disk" in metric:
-        return "disk"
-    if "socket_io" in metric:
-        return "socket_io"
-    if "request_rate" in metric:
-        return "request_rate"
-    return "default"
+    return metric_group(metric)
 
 
 def _point_changed(value: float, baseline: float, min_relative: float, min_absolute: float) -> bool:
-    delta = abs(value - baseline)
-    if delta < min_absolute:
-        return False
-    if baseline == 0:
-        return delta > 0
-    return delta / abs(baseline) >= min_relative
+    return point_changed(value, baseline, min_relative, min_absolute)
 
 
 def _normal_traffic_growth_decision(
@@ -501,55 +478,7 @@ def _normal_traffic_growth_decision(
     min_relative_change_ratio: dict[str, float],
     min_absolute_change: dict[str, float],
 ) -> tuple[bool, str]:
-    required_groups = ("request_rate", "latency", "cpu", "memory", "socket_io")
-    by_group = {group: [metric for metric in series if _metric_group(metric.metric) == group] for group in required_groups}
-    missing = [group for group, metrics in by_group.items() if not metrics]
-    if missing:
-        return False, f"reason=missing_metrics metrics={','.join(missing)}"
-    for metric in series:
-        indexes, values, baseline = _tail_context(metric, detection_window_seconds, start)
-        if _is_error_metric(metric.metric) and any(
-            values[index] > baseline and _point_changed(values[index], baseline, 0.0, min_absolute_change["error"])
-            for index in indexes
-        ):
-            return False, "reason=error_increased"
-        if "ready_pods" in metric.metric:
-            group = _metric_group(metric.metric)
-            decreased = sum(
-                values[index] < baseline
-                and _point_changed(values[index], baseline, min_relative_change_ratio[group], min_absolute_change[group])
-                for index in indexes
-            )
-            if decreased >= min_tail_anomaly_buckets[group] and indexes and median([values[index] for index in indexes]) < baseline:
-                return False, "reason=ready_pods_decreased"
-    increase_timestamps = {
-        group: set().union(
-            *(
-                _tail_increase_timestamps(
-                    metric,
-                    detection_window_seconds,
-                    start,
-                    min_tail_anomaly_buckets[group],
-                    min_relative_change_ratio[group],
-                    min_absolute_change[group],
-                )
-                for metric in metrics
-            )
-        )
-        for group, metrics in by_group.items()
-    }
-    below_threshold = [group for group, timestamps in increase_timestamps.items() if not timestamps]
-    if below_threshold:
-        return False, f"reason=below_threshold metrics={','.join(below_threshold)}"
-    tolerance = max(_series_step_seconds(metric) for metrics in by_group.values() for metric in metrics)
-    simultaneous = sum(
-        all(any(abs(timestamp - other) <= tolerance for other in increase_timestamps[group]) for group in required_groups[1:])
-        for timestamp in increase_timestamps["request_rate"]
-    )
-    required = max(min_tail_anomaly_buckets[group] for group in required_groups)
-    if simultaneous < required:
-        return False, f"reason=insufficient_common_buckets common={simultaneous} required={required}"
-    return True, f"reason=coordinated_growth common={simultaneous}"
+    return normal_traffic_growth_decision(series, detection_window_seconds, start, min_tail_anomaly_buckets, min_relative_change_ratio, min_absolute_change)
 
 
 def _tail_increase_timestamps(
@@ -560,45 +489,26 @@ def _tail_increase_timestamps(
     min_relative: float,
     min_absolute: float,
 ) -> set[int]:
-    indexes, values, baseline = _tail_context(metric, detection_window_seconds, start)
-    if not indexes:
-        return set()
-    changed = {
-        metric.points[index].timestamp
-        for index in indexes
-        if values[index] > baseline and _point_changed(values[index], baseline, min_relative, min_absolute)
-    }
-    return changed if len(changed) >= min_buckets and median([values[index] for index in indexes]) > baseline else set()
+    return tail_increase_timestamps(metric, detection_window_seconds, start, min_buckets, min_relative, min_absolute)
 
 
 def _tail_context(metric: MetricSeries, detection_window_seconds: int | None, start: int) -> tuple[list[int], list[float], float]:
     indexes = list(_tail_indexes(metric, detection_window_seconds, start))
-    values = _median3([point.value for point in metric.points])
+    values = median3([point.value for point in metric.points])
     baseline_values = values[: indexes[0]] if indexes else []
     return (indexes, values, median(baseline_values)) if len(baseline_values) >= 4 else ([], values, 0.0)
 
 
 def _median3(values: list[float]) -> list[float]:
-    if len(values) < 3:
-        return values[:]
-    return [values[0], *(median(values[index - 1 : index + 2]) for index in range(1, len(values) - 1)), values[-1]]
+    return median3(values)
 
 
 def _series_step_seconds(metric: MetricSeries) -> int:
-    if metric.detector_bucket_seconds or metric.step_seconds:
-        return metric.detector_bucket_seconds or metric.step_seconds or 1
-    differences = [right.timestamp - left.timestamp for left, right in zip(metric.points, metric.points[1:]) if right.timestamp > left.timestamp]
-    return int(median(differences)) if differences else 1
+    return series_step_seconds(metric)
 
 
 def _tail_indexes(metric: MetricSeries, detection_window_seconds: int | None, start: int) -> range:
-    if not metric.points:
-        return range(0)
-    if not detection_window_seconds:
-        return range(start, len(metric.points))
-    cutoff = metric.points[-1].timestamp - detection_window_seconds
-    first = next((index for index, point in enumerate(metric.points) if point.timestamp >= cutoff), len(metric.points))
-    return range(max(start, first), len(metric.points))
+    return tail_indexes(metric, detection_window_seconds, start)
 
 
 def build_v001_anomaly_engine(config: dict, **overrides) -> V001AnomalyEngine:

@@ -8,7 +8,7 @@ from pydantic import ValidationError
 
 from aiops.config import Settings, load_hyperparameters, load_runtime_config
 from aiops.correlation import Correlator
-from aiops.deduplication import IncidentManager
+from aiops.incidents import IncidentManager
 from aiops.detectors import DependencyDetector, DetectorEngine, NoDataDetector, ThresholdDetector
 from aiops.features import FeatureBuilder
 from aiops.schemas import ActionCatalogItem, ActionProposal, CandidateEvent, EvidenceItem, Feature, HistoryAction, IncidentFeatures, IncidentHistoryRecord, Observation, SignalQuality

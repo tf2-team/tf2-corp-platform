@@ -222,16 +222,6 @@
   "signals": [],
   "detectors": [
     {
-      "id": "ops01_checkout_slo",
-      "type": "threshold",
-      "enabled": true,
-      "signal_id": "checkout_bad_ratio_24h",
-      "flow": "checkout",
-      "service": "checkout",
-      "severity": "SEV1",
-      "runbook_id": "RB-CHECKOUT-SLO"
-    },
-    {
       "id": "ops02_monitoring_loss",
       "type": "no-data",
       "enabled": true,

@@ -7,9 +7,9 @@ from collections import defaultdict
 import math
 
 from aiops.anomaly.stats import median, robust_score
-from aiops.anomaly.v001 import _metric_group, _normal_traffic_growth_decision, _point_changed
 from aiops.rca.graph import GraphTraversalRca
 from aiops.schemas import AnomalyFinding, MetricSeries, RcaResult, RootCauseCandidate, RuntimeConfig, TelemetryCorroboration
+from aiops.shared.tail import evaluate_tail_change, metric_group, normal_traffic_growth_decision, series_step_seconds, tail_indexes
 
 
 class V001RcaEngine:
@@ -185,7 +185,7 @@ class V001RcaEngine:
     def _first_drift_index(self, metric: MetricSeries, values: list[float]) -> int | None:
         if not self._significant_tail_change(metric):
             return None
-        for index in _tail_indexes(metric, self.detection_window_seconds, self.drift_min_points - 1):
+        for index in tail_indexes(metric, self.detection_window_seconds, self.drift_min_points - 1):
             if robust_score(values[:index], [values[index]]) >= self.drift_score_threshold:
                 return index
         return None
@@ -197,7 +197,7 @@ class V001RcaEngine:
             if len(values) < self.drift_min_points or self._excluded_root_cause(metric.service):
                 continue
             score, index = max(
-                ((robust_score(values[:index], [values[index]]), index) for index in _tail_indexes(metric, self.detection_window_seconds, self.drift_min_points - 1)),
+                ((robust_score(values[:index], [values[index]]), index) for index in tail_indexes(metric, self.detection_window_seconds, self.drift_min_points - 1)),
                 default=(0.0, 0),
             )
             if score >= self.drift_score_threshold:
@@ -209,24 +209,15 @@ class V001RcaEngine:
         return rows
 
     def _significant_tail_change(self, metric: MetricSeries) -> bool:
-        indexes = list(_tail_indexes(metric, self.detection_window_seconds, self.drift_min_points - 1))
-        if not indexes:
-            return False
-        baseline_values = [point.value for point in metric.points[: indexes[0]]]
-        if len(baseline_values) < 4:
-            return False
-        group = _metric_group(metric.metric)
-        baseline = median(baseline_values)
-        changed = sum(
-            _point_changed(
-                metric.points[index].value,
-                baseline,
-                self.min_relative_change_ratio[group],
-                self.min_absolute_change[group],
-            )
-            for index in indexes
-        )
-        return changed >= self.min_tail_anomaly_buckets[group]
+        group = metric_group(metric.metric)
+        return evaluate_tail_change(
+            metric,
+            self.detection_window_seconds,
+            self.drift_min_points - 1,
+            self.min_tail_anomaly_buckets[group],
+            self.min_relative_change_ratio[group],
+            self.min_absolute_change[group],
+        ).significant
 
     def _correlation_scores(
         self,
@@ -251,7 +242,7 @@ class V001RcaEngine:
         for metric in series:
             if metric.service == "global" or self._excluded_root_cause(metric.service):
                 continue
-            score = max(abs(self._pearson([point.value for point in primary.points], [point.value for point in metric.points])) for primary in primaries)
+            score = max(abs(self._aligned_pearson(primary, metric)) for primary in primaries)
             service = self._canonical_service(metric.service)
             scores[service] = max(scores.get(service, 0.0), score)
         return scores
@@ -275,6 +266,17 @@ class V001RcaEngine:
         right_denominator = math.sqrt(sum((value - right_mean) ** 2 for value in right))
         denominator = left_denominator * right_denominator
         return numerator / denominator if denominator else 0.0
+
+    def _aligned_pearson(self, left: MetricSeries, right: MetricSeries) -> float:
+        tolerance = max(series_step_seconds(left), series_step_seconds(right))
+        pairs = []
+        right_index = 0
+        for point in left.points:
+            while right_index + 1 < len(right.points) and abs(right.points[right_index + 1].timestamp - point.timestamp) <= abs(right.points[right_index].timestamp - point.timestamp):
+                right_index += 1
+            if right.points and abs(right.points[right_index].timestamp - point.timestamp) <= tolerance:
+                pairs.append((point.value, right.points[right_index].value))
+        return self._pearson([left_value for left_value, _ in pairs], [right_value for _, right_value in pairs])
 
     def _weighted_rrf(self, rankers: dict[str, dict[str, float]]) -> dict[str, float]:
         scores: dict[str, float] = defaultdict(float)
@@ -314,7 +316,7 @@ class V001RcaEngine:
             return False
         service = self._canonical_service(service)
         service_series = [item for item in series if self._canonical_service(item.service) == service]
-        normal, _ = _normal_traffic_growth_decision(
+        normal, _ = normal_traffic_growth_decision(
             service_series,
             self.detection_window_seconds,
             self.drift_min_points - 1,
@@ -381,13 +383,3 @@ def _decreased_at(metric: MetricSeries, timestamp: int, threshold: float) -> boo
     values = [point.value for point in metric.points]
     index = next((index for index, point in enumerate(metric.points) if point.timestamp >= timestamp), len(metric.points) - 1)
     return index >= 4 and values[index] < median(values[:index]) and robust_score(values[:index], [values[index]]) >= threshold
-
-
-def _tail_indexes(metric: MetricSeries, detection_window_seconds: int | None, start: int) -> range:
-    if not metric.points:
-        return range(0)
-    if not detection_window_seconds:
-        return range(start, len(metric.points))
-    cutoff = metric.points[-1].timestamp - detection_window_seconds
-    first = next((index for index, point in enumerate(metric.points) if point.timestamp >= cutoff), len(metric.points))
-    return range(max(start, first), len(metric.points))

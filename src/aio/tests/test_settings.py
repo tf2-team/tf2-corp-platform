@@ -95,7 +95,8 @@ class SettingsTest(unittest.TestCase):
         self.assertEqual(config["rca"]["graph"]["damping"], 0.85)
         self.assertEqual(config["rca"]["graph"]["pagerank_weight"], 0.7)
         self.assertEqual(config["rca"]["graph"]["timestamp_weight"], 0.3)
-        self.assertEqual(config["correlation"]["suppress_window_seconds"], 1800)
+        self.assertEqual(config["correlation"]["suppress_window_seconds"], 900)
+        self.assertEqual(config["incident"]["notification_cooldown_seconds"], 900)
         self.assertEqual(config["correlation"]["suppress_min_root_score"], 0.8)
         self.assertEqual(config["correlation"]["topology_max_hops"], 1)
         self.assertEqual(
@@ -113,7 +114,7 @@ class SettingsTest(unittest.TestCase):
         self.assertEqual(config["remediation"]["similarity_weights"]["service"], 0.35)
         self.assertEqual(config["remediation"]["similarity_weights"]["trace"], 0.2)
         self.assertEqual(config["no_data"]["missing_confidence"], 1.0)
-        self.assertEqual(config["detectors"]["thresholds"]["ops01_checkout_slo"], 0.01)
+        self.assertNotIn("ops01_checkout_slo", config["detectors"]["thresholds"])
         profile = load_prometheus_query_registry(Path("config/prometheus_queries.json")).collection_profiles["one_second"]
         self.assertEqual(profile.step_seconds, 1)
         self.assertEqual(profile.lookback_seconds, 3600)
@@ -155,10 +156,10 @@ class SettingsTest(unittest.TestCase):
                 PipelineRunRequest(
                     observations=[
                         Observation(
-                            signal_id="checkout_bad_ratio_24h",
-                            value=0.2,
+                            signal_id="checkout_p95_latency_5m",
+                            value=16.0,
                             unit="count",
-                            window="24h",
+                            window="5m",
                             quality=SignalQuality.VERIFIED,
                         )
                     ]
@@ -192,7 +193,7 @@ class SettingsTest(unittest.TestCase):
         self.assertEqual(result.features[0].unit, "ratio")
         self.assertEqual(result.features[0].window, "24h")
         self.assertEqual(result.features[0].labels["service"], "checkout")
-        self.assertEqual(result.candidates[0].detector_id, "ops01_checkout_slo")
+        self.assertEqual(result.candidates, [])
 
     def test_fastapi_routes_come_from_settings(self):
         settings = Settings(api_health_live_path="/livez", api_pipeline_run_path="/run-now")
