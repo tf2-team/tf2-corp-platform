@@ -23,6 +23,7 @@ WORKDIR /usr/src/app/
 COPY --from=builder /usr/src/app/product-catalog/ ./
 
 EXPOSE ${PRODUCT_CATALOG_PORT}
-USER nonroot
+# Numeric UID required: kubelet cannot verify runAsNonRoot when USER is a name (e.g. nonroot).
+USER 65532
 ENTRYPOINT [ "./product-catalog" ]
-# Change trail: @hungxqt - 2026-07-20 - Bump builder to Go 1.25 for Trivy HIGH/CRITICAL stdlib and module fixes
+# Change trail: @hungxqt - 2026-07-21 - Use numeric UID 65532 so Kubernetes runAsNonRoot can verify non-root
