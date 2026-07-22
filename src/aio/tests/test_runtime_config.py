@@ -42,8 +42,10 @@ class RuntimeConfigTest(unittest.TestCase):
         detectors = build_detectors(config, Settings(), hyperparameters["no_data"], hyperparameters["detectors"])
         signal_ids = {signal.id for signal in config.signals if signal.query_id.endswith(".p95_latency_5m")}
         latency_detectors = [detector for detector in detectors if detector.detector_id.endswith("_latency_p95")]
+        configured_thresholds = hyperparameters["detectors"]["latency_slo_overrides"]
 
         self.assertEqual({detector.signal_id for detector in latency_detectors}, signal_ids)
+        self.assertEqual({detector.service for detector in latency_detectors}, set(configured_thresholds))
         thresholds = {detector.service: detector.threshold for detector in latency_detectors}
         self.assertEqual(thresholds["cart"], 0.3)
         self.assertEqual(thresholds["frontend"], 0.5)
