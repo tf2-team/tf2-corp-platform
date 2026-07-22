@@ -92,6 +92,7 @@ export interface SearchProductsResponse {
 
 export interface CopilotSearchRequest {
   userMessage: string;
+  userId: string;
 }
 
 export interface CopilotProduct {
@@ -1252,13 +1253,16 @@ export const SearchProductsResponse: MessageFns<SearchProductsResponse> = {
 };
 
 function createBaseCopilotSearchRequest(): CopilotSearchRequest {
-  return { userMessage: "" };
+  return { userMessage: "", userId: "" };
 }
 
 export const CopilotSearchRequest: MessageFns<CopilotSearchRequest> = {
   encode(message: CopilotSearchRequest, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
     if (message.userMessage !== "") {
       writer.uint32(10).string(message.userMessage);
+    }
+    if (message.userId !== "") {
+      writer.uint32(18).string(message.userId);
     }
     return writer;
   },
@@ -1275,6 +1279,11 @@ export const CopilotSearchRequest: MessageFns<CopilotSearchRequest> = {
           message.userMessage = reader.string();
           continue;
         }
+        case 2: {
+          if (tag !== 18) break;
+          message.userId = reader.string();
+          continue;
+        }
       }
       if ((tag & 7) === 4 || tag === 0) break;
       reader.skip(tag & 7);
@@ -1283,12 +1292,16 @@ export const CopilotSearchRequest: MessageFns<CopilotSearchRequest> = {
   },
 
   fromJSON(object: any): CopilotSearchRequest {
-    return { userMessage: isSet(object.userMessage) ? globalThis.String(object.userMessage) : "" };
+    return {
+      userMessage: isSet(object.userMessage) ? globalThis.String(object.userMessage) : "",
+      userId: isSet(object.userId) ? globalThis.String(object.userId) : "",
+    };
   },
 
   toJSON(message: CopilotSearchRequest): unknown {
     const obj: any = {};
     if (message.userMessage !== "") obj.userMessage = message.userMessage;
+    if (message.userId !== "") obj.userId = message.userId;
     return obj;
   },
 
@@ -1298,6 +1311,7 @@ export const CopilotSearchRequest: MessageFns<CopilotSearchRequest> = {
   fromPartial<I extends Exact<DeepPartial<CopilotSearchRequest>, I>>(object: I): CopilotSearchRequest {
     const message = createBaseCopilotSearchRequest();
     message.userMessage = object.userMessage ?? "";
+    message.userId = object.userId ?? "";
     return message;
   },
 };

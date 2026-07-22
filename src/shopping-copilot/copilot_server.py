@@ -57,8 +57,7 @@ class ShoppingCopilotServicer(demo_pb2_grpc.ShoppingCopilotServiceServicer):
         with tracer.start_as_current_span("copilot_search") as span:
             span.set_attribute("app.copilot.message_length", len(request.user_message))
 
-            user_id = dict(context.invocation_metadata()).get("x-copilot-user-id", "anonymous")
-            state = run_copilot(request.user_message, self._deps, user_id or "anonymous")
+            state = run_copilot(request.user_message, self._deps, request.user_id or "anonymous")
             status = state.get("status", CS.FALLBACK)
 
             span.set_attribute("app.copilot.status", status.value)
