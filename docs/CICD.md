@@ -8,7 +8,7 @@ Helm deploy stays in `techx-corp-chart`.
 | Workflow | File | When | What |
 |---|---|---|---|
 | CI | `.github/workflows/ci.yml` | `pull_request` to `main` / `techx-dev-corp`; also `workflow_call` | Lint + selective unit tests; on PRs only, local (no-push) image bake for changed services |
-| Build & Push | `.github/workflows/build-and-push.yml` | `push` to `main` / `techx-dev-corp` with image-affecting path changes, tags `v*`, `workflow_dispatch` | Gated multi-arch bake of `BUILD_SET` → verify/scan/sign/attest the same set → selective digest promotion (dev push / prod PR) |
+| Build & Push | `.github/workflows/build-and-push.yml` | `push` to `main` / `techx-dev-corp` with image-affecting path changes, tags `v*`, `workflow_dispatch` | Per-service local amd64 bake → Trivy → multi-arch ECR push of `BUILD_SET` → verify/sign/attest → selective digest promotion (dev push / prod PR) |
 
 ### Job graph (PR CI)
 
@@ -44,9 +44,13 @@ PR bake intentionally differs from publish: single platform, no registry cache, 
 CI (reusable lint + unit tests)
   → prepare            # env, tag, catalog validation, classify BUILD_SET
   → AWS/ECR preflight  # OIDC + verify repositories selected in BUILD_SET
-  → build matrix       # BUILD_SET only (bake from source + GHA BuildKit cache)
+  → build matrix       # BUILD_SET only; each service:
+  │                      1) local linux/amd64 bake (no push)
+  │                      2) Trivy HIGH/CRITICAL (fixable) on local image
+  │                      3) multi-arch bake --push to ECR only if Trivy passes
   → verify ECR         # describe-images for BUILD_SET under NEW_TAG
-  → image security     # Trivy + Cosign signature + SBOM + provenance for BUILD_SET
+  → post-push security # Cosign signature + SBOM + provenance for BUILD_SET
+  │                      (parallel: Trivy IaC, Semgrep, TruffleHog)
   → Mem0 FastEmbed     # only when mem0 is in BUILD_SET
   → release-ready      # if: always(); sole gate for chart promotion
   → update-chart-dev      # development only: always() + release-ready success + env
@@ -54,7 +58,16 @@ CI (reusable lint + unit tests)
 ```
 
 Failing CI never reaches AWS authentication or image push.  
-`release-ready` requires build, ECR verification, Trivy image scan, signature, SBOM, and provenance to succeed for every service in `BUILD_SET`. If `BUILD_SET` is empty, publish/security jobs are skipped and chart promotion is explicitly disabled. The optional Mem0 artifact job runs only when mem0 is selected.
+Failing **local Trivy** never reaches ECR push for that service (AWS login happens only after the scan step).  
+`release-ready` requires build (local Trivy + gated push), ECR verification, signature, SBOM, and provenance to succeed for every service in `BUILD_SET`. If `BUILD_SET` is empty, publish/security jobs are skipped and chart promotion is explicitly disabled. The optional Mem0 artifact job runs only when mem0 is selected.
+
+#### Per-service publish steps (build job)
+
+| Step | What happens | ECR write? |
+|---|---|---|
+| **Local bake** | `docker buildx bake` for `linux/amd64` with `output=type=docker`; GHA BuildKit cache `type=gha` | No |
+| **Trivy image scan** | Scan the local tag `${IMAGE_NAME}/<service>:${VERSION}`; fail on fixable HIGH/CRITICAL (`ignore-unfixed: true`; temporary exit-code exception for `shopping-copilot` only) | No |
+| **Multi-arch push** | OIDC + ECR login, then `docker buildx bake … --push` for `linux/amd64,linux/arm64` (amd64 layers reuse GHA cache) | Yes |
 
 | Environment | After `release-ready` |
 |---|---|
@@ -88,7 +101,7 @@ Digest overlays make each service independently promotable. Unchanged services k
 
 | Service classification | Action |
 |---|---|
-| **Changed** (`src/<service>/**`, or `third-party/mem0` for mem0) | `docker buildx bake … --push` from source (BuildKit uses GHA `type=gha` layer cache) |
+| **Changed** (`src/<service>/**`, or `third-party/mem0` for mem0) | Local amd64 bake → Trivy → multi-arch `docker buildx bake … --push` (BuildKit uses GHA `type=gha` layer cache) |
 | **Unchanged** | No publish, scan/sign, digest update, or rollout |
 | **Shared / global path** (`pb/**`, `.env`, `buildkitd.toml`, `.gitmodules`) | **Full** bake of all 23 |
 | **Catalog only** (`docker-compose.yml`, `docker-bake.hcl`) | Does not select a service by itself; include the relevant `src/<service>/**` change or use reviewed full rebuild |
@@ -566,6 +579,7 @@ Local non-push Compose builds (`make build`, `make start`) are unchanged and use
 | prepare catalog assert fails | Add new Compose build targets to `docker-bake.hcl` group `release`. |
 | preflight missing ECR repo | Create nested repo via `techx-corp-infra` ECR module; re-run. |
 | Individual matrix build fails | Re-run failed jobs or full workflow; `fail-fast: false` keeps other services building. |
+| Trivy fails on local image (in build job) | Fix CVEs or base image; re-run. **Nothing was pushed** to ECR for that service in the failed attempt. |
 | verify-ecr reports missing tags | Re-run build for missing services or full workflow; do **not** promote chart values. |
 | release-ready red | Treat as not promotable; chart promote jobs are skipped. |
 | update-chart-dev / create-chart-prod-pr skipped after green release-ready | Confirm the target environment, `build_count != 0`, and `resolve-image-digests=success`. An empty `BUILD_SET` intentionally promotes nothing. |
@@ -609,12 +623,12 @@ Do **not** promote chart values while any matrix job or verification is incomple
 
 ```text
 # Development
-CI → prepare → preflight → build (all 23) → verify ECR → release-ready
-  → update-chart-dev (direct push values-dev.yaml) → Argo auto-sync
+CI → prepare → preflight → build (local Trivy → ECR push) → verify ECR → release-ready
+  → update-chart-dev (direct push service-digest overlays) → Argo auto-sync
 
 # Production
-CI → prepare → preflight → build (all 23) → verify ECR → release-ready
-  → create-chart-prod-pr (open values-prod.yaml PR) → human merge → Argo sync
+CI → prepare → preflight → build (local Trivy → ECR push) → verify ECR → release-ready
+  → create-chart-prod-pr (open service-digest PR) → human merge → Argo sync
 ```
 
 See chart runbook: `techx-corp-chart/docs/operations/gitops-argocd.md`.
@@ -623,7 +637,8 @@ See chart runbook: `techx-corp-chart/docs/operations/gitops-argocd.md`.
 
 - Actions pinned to full commit SHAs (major-version patch pins) with version comments.
 - Weekly Dependabot updates for `github-actions` (`.github/dependabot.yml`).
-- `id-token: write` only on preflight, build, and verify-ecr jobs.
+- `id-token: write` only on preflight, build (post-Trivy ECR push + sign path consumers), verify-ecr, resolve digests, sign-and-attest, and related AWS jobs.
+- Image CVE gate runs **before** ECR push (local amd64 image); a failed Trivy step never authenticates to ECR for that matrix leg.
 - GitHub expressions passed into shell steps via quoted environment variables.
 - OIDC authentication only; no long-lived AWS keys.
 - Production chart path still requires human PR merge (no auto-merge from platform CI).
@@ -637,4 +652,4 @@ See chart runbook: `techx-corp-chart/docs/operations/gitops-argocd.md`.
 - Native multi-arch runners
 - Full e2e / tracetest in PR CI
 
-<!-- Change trail: @hungxqt - 2026-07-22 - Document opensearch-security retained in customized OpenSearch image. -->
+<!-- Change trail: @hungxqt - 2026-07-22 - Document local Trivy gate before ECR push in build matrix. -->

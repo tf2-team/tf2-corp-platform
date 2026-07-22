@@ -934,14 +934,15 @@ jobs:
 
   sign-and-attest:
     name: Sign and attest ${{ matrix.service }}
-    needs: [prepare, preflight, verify-ecr, trivy-image-scan, trivy-iac-scan, semgrep-sast, trufflehog-secrets]
-    # Sign exactly the digests built and scanned in this run.
+    # Trivy image scan is embedded in build (before ECR push). verify-ecr only
+    # succeeds after that gated push, so a clean verify implies a clean image scan.
+    needs: [prepare, preflight, verify-ecr, trivy-iac-scan, semgrep-sast, trufflehog-secrets]
+    # Sign exactly the digests built, Trivy-scanned, and pushed in this run.
     if: >
       always() &&
       needs.prepare.result == 'success' &&
       needs.preflight.result == 'success' &&
       needs.verify-ecr.result == 'success' &&
-      needs.trivy-image-scan.result == 'success' &&
       needs.trivy-iac-scan.result == 'success' &&
       needs.semgrep-sast.result == 'success' &&
       needs.trufflehog-secrets.result == 'success'
@@ -1187,7 +1188,8 @@ jobs:
   release-ready:
     name: Release ready
     if: always()
-    needs: [ci, prepare, preflight, build, verify-ecr, trivy-image-scan, trivy-iac-scan, semgrep-sast, trufflehog-secrets, sign-and-attest, publish-mem0-fastembed-artifact]
+    # build embeds local Trivy before ECR push; no separate trivy-image-scan job.
+    needs: [ci, prepare, preflight, build, verify-ecr, trivy-iac-scan, semgrep-sast, trufflehog-secrets, sign-and-attest, publish-mem0-fastembed-artifact]
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -1199,7 +1201,6 @@ jobs:
           PREFLIGHT_RESULT: ${{ needs.preflight.result }}
           BUILD_RESULT: ${{ needs.build.result }}
           VERIFY_RESULT: ${{ needs.verify-ecr.result }}
-          TRIVY_RESULT: ${{ needs.trivy-image-scan.result }}
           TRIVY_IAC_RESULT: ${{ needs.trivy-iac-scan.result }}
           SEMGREP_RESULT: ${{ needs.semgrep-sast.result }}
           TRUFFLEHOG_RESULT: ${{ needs.trufflehog-secrets.result }}
@@ -1222,9 +1223,8 @@ jobs:
             echo "| ci | \`${CI_RESULT}\` |"
             echo "| prepare | \`${PREPARE_RESULT}\` |"
             echo "| preflight | \`${PREFLIGHT_RESULT}\` |"
-            echo "| build | \`${BUILD_RESULT}\` |"
+            echo "| build (local Trivy → ECR push) | \`${BUILD_RESULT}\` |"
             echo "| verify-ecr | \`${VERIFY_RESULT}\` |"
-            echo "| trivy-image-scan | \`${TRIVY_RESULT}\` |"
             echo "| trivy-iac-scan | \`${TRIVY_IAC_RESULT}\` |"
             echo "| semgrep-sast | \`${SEMGREP_RESULT}\` |"
             echo "| trufflehog-secrets | \`${TRUFFLEHOG_RESULT}\` |"
@@ -1259,7 +1259,7 @@ jobs:
           done
 
           if [[ "${BUILD_COUNT}" -eq 0 ]]; then
-            for pair in "build:${BUILD_RESULT}" "verify-ecr:${VERIFY_RESULT}" "trivy-image-scan:${TRIVY_RESULT}" "sign-and-attest:${SIGN_RESULT}" "publish-mem0-fastembed-artifact:${MEM0_ARTIFACT_RESULT}"; do
+            for pair in "build:${BUILD_RESULT}" "verify-ecr:${VERIFY_RESULT}" "sign-and-attest:${SIGN_RESULT}" "publish-mem0-fastembed-artifact:${MEM0_ARTIFACT_RESULT}"; do
               name="${pair%%:*}"
               result="${pair#*:}"
               if [[ "${result}" != "skipped" ]]; then
@@ -1268,7 +1268,7 @@ jobs:
               fi
             done
           else
-            for pair in "build:${BUILD_RESULT}" "verify-ecr:${VERIFY_RESULT}" "trivy-image-scan:${TRIVY_RESULT}" "sign-and-attest:${SIGN_RESULT}"; do
+            for pair in "build:${BUILD_RESULT}" "verify-ecr:${VERIFY_RESULT}" "sign-and-attest:${SIGN_RESULT}"; do
               name="${pair%%:*}"
               result="${pair#*:}"
               if [[ "${result}" != "success" ]]; then
@@ -1479,4 +1479,4 @@ jobs:
             gh pr create --repo "${CHART_REPO}" --base "${CHART_PROD_BRANCH}" --head "${promote_branch}" --title "chore(prod): promote rebuilt service digests (${VERSION})" --body "${body}"
           fi
 
-# Change trail: @hungxqt - 2026-07-20 - Trivy ignore-unfixed=true so only fixable HIGH/CRITICAL block release
+# Change trail: @hungxqt - 2026-07-22 - Build local amd64, Trivy scan, then multi-arch ECR push only on pass
