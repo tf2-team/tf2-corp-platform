@@ -265,7 +265,7 @@ func main() {
 			defer consumerGroup.Close()
 
 			handler := &ApprovedOrderConsumer{checkoutSvc: svc}
-			topics := []string{"orders-approved", "orders-cancelled"}
+			topics := []string{"orders-approved", "orders-cancelled", "orders-persisted"}
 			logger.Info(fmt.Sprintf("Starting consumer group for topics: %v", topics))
 
 			ctx := context.Background()
@@ -1046,9 +1046,27 @@ func (c *ApprovedOrderConsumer) Cleanup(sarama.ConsumerGroupSession) error {
 
 func (c *ApprovedOrderConsumer) ConsumeClaim(session sarama.ConsumerGroupSession, claim sarama.ConsumerGroupClaim) error {
 	for msg := range claim.Messages() {
-		logger.Info(fmt.Sprintf("Received approved/cancelled order message from topic: %s", msg.Topic))
+		logger.Info(fmt.Sprintf("Received order lifecycle message from topic: %s", msg.Topic))
 		ctx := session.Context()
-		if msg.Topic == "orders-approved" {
+		if msg.Topic == "orders-persisted" {
+			orderID := string(msg.Value)
+			if orderID == "" {
+				logger.Error("Received empty order persistence ACK")
+				continue
+			}
+			if c.checkoutSvc.Outbox == nil {
+				logger.Error("Cannot acknowledge persisted order: checkout outbox is unavailable", "order_id", orderID)
+				continue
+			}
+			ackCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
+			err := c.checkoutSvc.Outbox.Acknowledge(ackCtx, orderID)
+			cancel()
+			if err != nil {
+				logger.Error("Failed to delete persisted checkout outbox event", "order_id", orderID, "error", err)
+				continue
+			}
+			logger.Info("Deleted checkout outbox event after RDS persistence ACK", "order_id", orderID)
+		} else if msg.Topic == "orders-approved" {
 			var order pb.OrderResult
 			if err := proto.Unmarshal(msg.Value, &order); err != nil {
 				logger.Error(fmt.Sprintf("Failed to unmarshal approved order: %+v", err))
