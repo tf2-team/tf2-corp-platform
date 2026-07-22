@@ -124,8 +124,4 @@ docker buildx bake -f docker-compose.yml -f docker-bake.hcl opensearch --push
 1. Rebuild/redeploy previous OpenSearch image tag that stripped security **only if** chart clients are also switched back to HTTP (otherwise log pipeline stays broken).
 2. Prefer rolling forward: fix password/TLS bootstrap rather than re-stripping security.
 
-## Follow-up
-
-Jackson Trivy HIGH pins for cores/databind + opensaml metadata scrub: see `2026-07-22-opensearch-trivy-jackson-pins.md`.
-
-<!-- Change trail: @hungxqt - 2026-07-22 - Link follow-up Jackson Trivy pin change. -->
+<!-- Change trail: @hungxqt - 2026-07-22 - Retain opensearch-security in custom image for SEC-06. -->
