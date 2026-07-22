@@ -39,20 +39,37 @@ def _install_master_stale_worker_guard():
             res = None
 
         # Dynamic Load Rebalancing: when a worker disconnects or connects during an active test,
-        # re-distribute target_user_count across remaining active workers so active users never drop.
+        # re-distribute target_user_count across remaining active workers asynchronously.
         if msg_type in ("client_stopped", "client_ready") and getattr(self, "state", None) in (STATE_RUNNING, STATE_SPAWNING):
             target_users = getattr(self, "target_user_count", 0) or 0
-            if target_users > 0:
-                ready_clients = getattr(self.clients, "ready", {})
-                active_workers = len(ready_clients)
-                if active_workers > 0:
-                    spawn_rate = getattr(self, "spawn_rate", 10) or 10
-                    logging.info(
-                        "Worker state changed (type=%s, active_workers=%d, target_users=%d). "
-                        "Re-distributing load across active workers...",
-                        msg_type, active_workers, target_users
-                    )
-                    self.start(target_users, spawn_rate)
+            if target_users > 0 and not getattr(self, "_rebalance_scheduled", False):
+                self._rebalance_scheduled = True
+
+                def _do_rebalance():
+                    try:
+                        import gevent
+                        gevent.sleep(0.5)
+                        if getattr(self, "state", None) in (STATE_RUNNING, STATE_SPAWNING):
+                            t_users = getattr(self, "target_user_count", 0) or 0
+                            s_rate = getattr(self, "spawn_rate", 10) or 10
+                            n_workers = len(getattr(self.clients, "ready", {}))
+                            if t_users > 0 and n_workers > 0:
+                                logging.info(
+                                    "Rebalancing Locust load: %d users across %d active workers...",
+                                    t_users, n_workers
+                                )
+                                self.start(t_users, s_rate)
+                    except Exception as err:
+                        logging.warning("Locust rebalance deferred: %s", err)
+                    finally:
+                        self._rebalance_scheduled = False
+
+                try:
+                    import gevent
+                    gevent.spawn(_do_rebalance)
+                except Exception as err:
+                    self._rebalance_scheduled = False
+                    logging.warning("Failed to schedule Locust rebalance: %s", err)
         return res
 
     MasterRunner.handle_message = _safe_handle_message
