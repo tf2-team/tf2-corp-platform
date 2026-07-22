@@ -46,7 +46,7 @@
         "error": 0.005,
         "latency": 0.05,
         "cpu": 10.0,
-        "memory": 10485760.0,
+        "memory": 104857600.0,
         "disk": 1048576.0,
         "socket_io": 1048576.0,
         "request_rate": 5.0,
