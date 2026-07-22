@@ -206,11 +206,12 @@ target "shopping-copilot" {
   cache-to   = ["type=gha,mode=max,scope=shopping-copilot"]
 }
 
-# Customized OpenSearch (plugins stripped in src/opensearch/Dockerfile); used by Compose and Helm.
+# Customized OpenSearch (unused plugins stripped in src/opensearch/Dockerfile;
+# opensearch-security retained for SEC-06 HTTPS + basic auth). Used by Compose and Helm.
 target "opensearch" {
   inherits   = ["_release-common"]
   tags       = ["${IMAGE_NAME}/opensearch:${DEMO_VERSION}"]
   cache-from = ["type=gha,scope=opensearch"]
   cache-to   = ["type=gha,mode=max,scope=opensearch"]
 }
-# Change trail: @hungxqt - 2026-07-19 - Add shopping-copilot to release bake catalog (23 services).
+# Change trail: @hungxqt - 2026-07-22 - Note opensearch-security retained in slim OpenSearch image.
