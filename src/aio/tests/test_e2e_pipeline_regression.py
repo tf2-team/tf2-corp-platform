@@ -191,7 +191,7 @@ class FakeRcaEngine:
     def __init__(self, *args, **kwargs):
         pass
 
-    def rank(self, findings: list[AnomalyFinding], series: list[MetricSeries], top_k: int) -> RcaResult:
+    def rank(self, findings: list[AnomalyFinding], series: list[MetricSeries], top_k: int, corroboration=None) -> RcaResult:
         return RcaResult(
             anomalies=findings,
             root_causes=[

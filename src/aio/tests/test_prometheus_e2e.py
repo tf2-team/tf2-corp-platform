@@ -42,7 +42,7 @@ class FakeRcaEngine:
     def __init__(self, *_: object, **__: object):
         pass
 
-    def rank(self, findings, _series, top_k):
+    def rank(self, findings, _series, top_k, corroboration=None):
         return RcaResult(
             anomalies=findings,
             root_causes=[

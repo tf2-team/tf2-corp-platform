@@ -52,6 +52,7 @@ class Settings(BaseSettings):
     prometheus_base_url: str = ""
     prometheus_token: str = ""
     prometheus_account: str = ""
+    prometheus_timeout_seconds: float = 30.0
 
     grafana_webhook_secret: str = ""
 

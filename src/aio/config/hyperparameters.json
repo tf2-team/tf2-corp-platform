@@ -18,6 +18,10 @@
       "robust_drift_threshold": 4.0,
       "robust_drift_min_baseline_points": 30,
       "detection_window_seconds": 900,
+      "evidence_window_seconds": 900,
+      "no_evidence_multiplier": 0.5,
+      "single_evidence_bonus": 0.15,
+      "dual_evidence_bonus": 0.3,
       "min_tail_anomaly_buckets": {
         "error": 1,
         "latency": 3,

@@ -175,7 +175,7 @@ class SQLiteIncidentStore:
                 if notification_enqueued:
                     self._set_service_notification_cooldown(incident.service, incident.cooldown_until or _now())
                     self._last_enqueued_incident_ids.add(incident.incident_id)
-                    self._append_notification_history(incident, notification, "ready")
+                    self._append_notification_history(notification)
                     logger.info(
                         "AIOPS_NOTIFY_ENQUEUED_READY incident=%s service=%s severity=%s runbook=%s status=pending",
                         incident.incident_id,
@@ -234,21 +234,10 @@ class SQLiteIncidentStore:
             (service, cooldown_until, _now()),
         )
 
-    def _append_notification_history(self, incident: Incident, notification: NotificationMessage, status: str) -> None:
+    def _append_notification_history(self, notification: NotificationMessage) -> None:
         path = self.path.parent / "notification_history.jsonl"
-        payload = {
-            "recorded_at": _now(),
-            "status": status,
-            "incident_id": incident.incident_id,
-            "fingerprint": incident.fingerprint,
-            "service": incident.service,
-            "severity": incident.severity,
-            "flow": incident.flow,
-            "runbook_id": notification.runbook_id,
-            "title": notification.title,
-        }
         with path.open("a", encoding="utf-8") as handle:
-            handle.write(json.dumps(payload, ensure_ascii=False, sort_keys=True) + "\n")
+            handle.write(notification.model_dump_json() + "\n")
 
     def register_active_root_cause(self, root_service: str, affected_services: set[str], suppress_seconds: int = 900) -> None:
         now = datetime.now(UTC)
@@ -331,6 +320,13 @@ class SQLiteIncidentStore:
             incident_ids,
         ).fetchall()
         return [NotificationMessage.model_validate_json(row[0]) for row in rows]
+
+    def update_pending_notification(self, message: NotificationMessage) -> None:
+        with self._connection:
+            self._connection.execute(
+                "UPDATE notification_outbox SET notification_json = ?, updated_at = ? WHERE incident_id = ? AND status = 'pending'",
+                (message.model_dump_json(), _now(), message.incident_id),
+            )
 
     def suppressed_incident_ids(self, incidents: list[Incident]) -> set[str]:
         return {

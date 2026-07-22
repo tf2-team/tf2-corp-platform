@@ -16,6 +16,7 @@ class PrometheusClient:
             token=settings.prometheus_token,
             account=settings.prometheus_account,
             transport=transport,
+            timeout=settings.prometheus_timeout_seconds,
         )
 
     def query(self, query: str, time: str | None = None) -> dict:
@@ -29,4 +30,3 @@ class PrometheusClient:
 
     def targets(self) -> dict:
         return self._http.get("/api/v1/targets")
-

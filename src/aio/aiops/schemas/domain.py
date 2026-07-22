@@ -65,6 +65,16 @@ class AnomalyFinding(AiopsModel):
     timestamp: int
 
 
+class TelemetryCorroboration(AiopsModel):
+    service: str
+    available_sources: set[str] = Field(default_factory=set)
+    log_failure: bool = False
+    trace_failure: bool = False
+    trace_root_service: str | None = None
+    trace_failure_timestamp: int | None = None
+    trace_reference: str | None = None
+
+
 class RootCauseCandidate(AiopsModel):
     service: str
     score: float

@@ -23,8 +23,10 @@ from aiops.schemas import (
     RcaResult,
     RootCauseCandidate,
     SignalQuality,
+    TelemetryCorroboration,
 )
 from aiops.pipeline import AiopsPipeline
+from aiops.pipeline.runtime import _apply_corroboration, _slo_impact_findings
 from aiops.remediation import (
     ActionCatalog,
     HistoryRetriever,
@@ -86,6 +88,10 @@ def metric(service: str, name: str, values: list[float]) -> MetricSeries:
         signal_id=f"{service}_{name}",
         points=[MetricPoint(timestamp=index, value=value) for index, value in enumerate(values)],
     )
+
+
+def anomaly(name: str, score: float = 0.5, timestamp: int = 5) -> AnomalyFinding:
+    return AnomalyFinding(algorithm="weighted_sum", service="checkout", metric=name, signal_id=f"checkout_{name}", score=score, timestamp=timestamp)
 
 
 class RecoveredDependencyDetector(Detector):
@@ -177,6 +183,112 @@ class FakeNotificationSender:
 
 
 class RuntimePipelineTest(unittest.TestCase):
+    def test_bad_ratio_slo_incident_is_not_added_to_rca_anomalies(self):
+        event = CandidateEvent(
+            timestamp=44,
+            detector_id="ops01_checkout_slo",
+            flow="checkout",
+            service="checkout",
+            severity="SEV1",
+            signal_id="checkout_bad_ratio_24h",
+            value=0.03,
+            unit="ratio",
+            window="24h",
+            threshold=0.01,
+            quality=SignalQuality.VERIFIED,
+            reason="threshold_breached",
+            runbook_id="RB-CHECKOUT-SLO",
+        )
+        incident = Incident(
+            incident_id="inc-slo",
+            fingerprint="sha256:slo",
+            state="open",
+            severity="SEV1",
+            flow="checkout",
+            service="checkout",
+            likely_dependency="unknown",
+            events=[event],
+        )
+
+        findings = _slo_impact_findings([incident])
+
+        self.assertEqual(findings, [])
+
+    def test_slo_threshold_incident_is_added_to_rca_anomalies(self):
+        settings = Settings()
+        hyperparameters = load_hyperparameters(settings.hyperparameters_path)["rca"]
+        with TemporaryDirectory() as tmp:
+            pipeline = AiopsPipeline(
+                collector=StaticCollector([]),
+                detectors=[],
+                store=SQLiteIncidentStore(Path(tmp) / "aiops.sqlite3", environment=settings.environment),
+                policy=policy(settings),
+                rca_hyperparameters=hyperparameters,
+                **runtime_kwargs(settings),
+            )
+            incident = Incident(
+                incident_id="inc-latency",
+                fingerprint="sha256:latency",
+                state="open",
+                severity="SEV1",
+                flow="checkout",
+                service="checkout",
+                likely_dependency="unknown",
+                events=[
+                    CandidateEvent(
+                        timestamp=44,
+                        detector_id="ops04_checkout_latency_p95",
+                        flow="checkout",
+                        service="checkout",
+                        severity="SEV1",
+                        signal_id="checkout_p95_latency_5m",
+                        value=16.0,
+                        unit="seconds",
+                        window="5m",
+                        threshold=0.5,
+                        quality=SignalQuality.VERIFIED,
+                        reason="threshold_breached",
+                        runbook_id="RB-CHECKOUT-LATENCY",
+                    )
+                ],
+            )
+
+            result = pipeline._run_v001_rca([metric("checkout", "p95_latency_5m", [16.0] * 45)], [incident])
+            pipeline.store.close()
+
+        self.assertIn("slo_threshold", {finding.algorithm for finding in result.anomalies})
+
+    def test_corroboration_keeps_hard_failure_confidence(self):
+        finding = anomaly("error_rate_5m")
+        evidence = {"checkout": TelemetryCorroboration(service="checkout", available_sources={"log", "trace"})}
+
+        self.assertEqual(_apply_corroboration([finding], [], evidence, 0.5, 0.15, 0.3)[0].score, 0.5)
+
+    def test_corroboration_adds_single_and_dual_source_bonus(self):
+        finding = anomaly("cpu_millicores")
+        trace = {"checkout": TelemetryCorroboration(service="checkout", available_sources={"trace"}, trace_failure=True)}
+        both = {"checkout": TelemetryCorroboration(service="checkout", available_sources={"log", "trace"}, log_failure=True, trace_failure=True)}
+
+        self.assertEqual(_apply_corroboration([finding], [], trace, 0.5, 0.15, 0.3)[0].score, 0.65)
+        self.assertEqual(_apply_corroboration([finding], [], both, 0.5, 0.15, 0.3)[0].score, 0.8)
+
+    def test_corroboration_lowers_confidence_only_when_source_was_available(self):
+        finding = anomaly("cpu_millicores")
+        empty = {"checkout": TelemetryCorroboration(service="checkout", available_sources={"log", "trace"})}
+        unavailable = {"checkout": TelemetryCorroboration(service="checkout")}
+
+        self.assertEqual(_apply_corroboration([finding], [], empty, 0.5, 0.15, 0.3)[0].score, 0.25)
+        self.assertEqual(_apply_corroboration([finding], [], unavailable, 0.5, 0.15, 0.3)[0].score, 0.5)
+
+    def test_corroboration_treats_only_ready_pods_decrease_as_hard(self):
+        decrease = metric("checkout", "workload_ready_pods", [2, 2, 2, 2, 2, 1])
+        increase = metric("checkout", "workload_ready_pods", [1, 1, 1, 1, 1, 2])
+        evidence = {"checkout": TelemetryCorroboration(service="checkout", available_sources={"trace"})}
+        finding = anomaly("workload_ready_pods")
+
+        self.assertEqual(_apply_corroboration([finding], [decrease], evidence, 0.5, 0.15, 0.3)[0].score, 0.5)
+        self.assertEqual(_apply_corroboration([finding], [increase], evidence, 0.5, 0.15, 0.3)[0].score, 0.25)
+
     def test_root_cause_logs_conclusion(self):
         settings = Settings()
         with TemporaryDirectory() as tmp:
@@ -347,7 +459,7 @@ class RuntimePipelineTest(unittest.TestCase):
                         timestamp=123,
                     )
                 ],
-                root_causes=[RootCauseCandidate(service="payment", score=1.0, root_cause_metrics=["error_rate_5m"])],
+                root_causes=[RootCauseCandidate(service="payment", score=1.0, root_cause_metrics=["cpu_millicores"])],
             )
 
             result = pipeline.run_once(metric_series=[metric("payment", "error_rate_5m", [0.0] * 31)])
@@ -355,6 +467,8 @@ class RuntimePipelineTest(unittest.TestCase):
 
         self.assertEqual([incident.service for incident in result.incidents], ["checkout", "payment"])
         self.assertEqual({message.service for message in result.notifications}, {"checkout", "payment"})
+        checkout = next(message for message in result.notifications if message.service == "checkout")
+        self.assertIn("likely root cause: payment (cpu_millicores)", checkout.summary)
 
     def test_pipeline_flushes_notification_outbox_to_sender(self):
         settings = Settings()

@@ -48,6 +48,13 @@ class IntegrationClientTest(unittest.TestCase):
         self.assertEqual(str(seen[0].url), "https://prometheus.example/api/v1/query?query=up")
         self.assertEqual(seen[0].headers["authorization"], "Bearer CHANGE_ME_PROMETHEUS_TOKEN")
 
+    def test_prometheus_uses_configured_timeout(self):
+        cfg = fixed_settings(prometheus_base_url="https://prometheus.example", prometheus_timeout_seconds=42.0)
+
+        client = PrometheusClient(cfg)
+
+        self.assertEqual(client._http._client.timeout.read, 42.0)
+
     def test_all_direct_clients_build_expected_requests(self):
         calls: list[tuple[str, str]] = []
 

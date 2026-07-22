@@ -9,7 +9,7 @@ import math
 from aiops.anomaly.stats import median, robust_score
 from aiops.anomaly.v001 import _metric_group, _normal_traffic_growth_decision, _point_changed
 from aiops.rca.graph import GraphTraversalRca
-from aiops.schemas import AnomalyFinding, MetricSeries, RcaResult, RootCauseCandidate, RuntimeConfig
+from aiops.schemas import AnomalyFinding, MetricSeries, RcaResult, RootCauseCandidate, RuntimeConfig, TelemetryCorroboration
 
 
 class V001RcaEngine:
@@ -32,7 +32,13 @@ class V001RcaEngine:
             timestamp_weight=graph_hyperparameters["timestamp_weight"],
         )
 
-    def rank(self, findings: list[AnomalyFinding], series: list[MetricSeries], top_k: int) -> RcaResult:
+    def rank(
+        self,
+        findings: list[AnomalyFinding],
+        series: list[MetricSeries],
+        top_k: int,
+        corroboration: dict[str, TelemetryCorroboration] | None = None,
+    ) -> RcaResult:
         root_findings = [
             finding.model_copy(update={"service": self._canonical_service(finding.service)})
             if finding.service != "global"
@@ -42,12 +48,27 @@ class V001RcaEngine:
             and not _is_context_metric(finding.metric)
             and not self._busy_infra_without_failure(finding.service, finding.metric, finding.timestamp, series, findings)
         ]
+        trace_findings = self._trace_findings(findings, corroboration or {})
+        root_findings.extend(trace_findings)
+        rca_series = [metric for metric in series if not _is_context_metric(metric.metric)]
+        drift_metrics = self._drift_metrics(rca_series, series, findings)
+        if not root_findings and any(finding.algorithm == "slo_threshold" for finding in findings):
+            root_findings.extend(
+                AnomalyFinding(
+                    algorithm="drift",
+                    service=service,
+                    metric=metric,
+                    signal_id=signal_id,
+                    score=score,
+                    timestamp=timestamp,
+                )
+                for service, metric, signal_id, score, timestamp in drift_metrics
+            )
         if not root_findings:
             return RcaResult(anomalies=findings)
-        rca_series = [metric for metric in series if not _is_context_metric(metric.metric)]
         graph_scores = self.graph.rank_services(root_findings)
         earliest_scores = self._earliest_drift_scores(rca_series)
-        correlation_scores = self._correlation_scores(rca_series, root_findings)
+        correlation_scores = self._correlation_scores(rca_series, findings, series)
         service_scores = self._weighted_rrf(
             {
                 "graph": graph_scores,
@@ -68,11 +89,16 @@ class V001RcaEngine:
             if _is_log_metric(finding.metric) or _is_context_metric(finding.metric):
                 continue
             metrics_by_service[finding.service].append((finding.metric, finding.score, "anomaly"))
-        for service, metric, score in self._drift_metrics(rca_series, series, findings):
+        for service, metric, _, score, _ in drift_metrics:
             metrics_by_service[service].append((metric, score, "drift"))
 
         candidates: list[RootCauseCandidate] = []
-        for service, rank_score in sorted(service_scores.items(), key=lambda item: item[1] * evidence_strength.get(item[0], 0.0), reverse=True):
+        trace_services = {finding.service for finding in trace_findings}
+        for service, rank_score in sorted(
+            service_scores.items(),
+            key=lambda item: (item[0] in trace_services, item[1] * evidence_strength.get(item[0], 0.0)),
+            reverse=True,
+        ):
             score = rank_score * evidence_strength.get(service, 0.0)
             if service not in anomaly_services:
                 continue
@@ -101,6 +127,46 @@ class V001RcaEngine:
                 break
         return RcaResult(anomalies=findings, root_causes=candidates)
 
+    def _trace_findings(
+        self,
+        findings: list[AnomalyFinding],
+        corroboration: dict[str, TelemetryCorroboration],
+    ) -> list[AnomalyFinding]:
+        rows = []
+        for source, evidence in corroboration.items():
+            root = evidence.trace_root_service
+            if not evidence.trace_failure or root is None or not self._dependency_path_contains(source, root):
+                continue
+            score = max((finding.score for finding in findings if finding.service == source), default=0.0)
+            if score:
+                rows.append(
+                    AnomalyFinding(
+                        algorithm="trace",
+                        service=root,
+                        metric="trace_failure",
+                        signal_id=f"{root}_trace_failure",
+                        score=score,
+                        timestamp=evidence.trace_failure_timestamp or 0,
+                    )
+                )
+        return rows
+
+    def _dependency_path_contains(self, source: str, target: str) -> bool:
+        graph = {service.name: service.dependencies for service in self.config.topology.services}
+        if source not in graph or target not in graph:
+            return False
+        pending = [source]
+        seen = set()
+        while pending:
+            service = pending.pop()
+            if service == target:
+                return True
+            if service in seen:
+                continue
+            seen.add(service)
+            pending.extend(graph.get(service, []))
+        return False
+
     def _earliest_drift_scores(self, series: list[MetricSeries]) -> dict[str, float]:
         drift_indexes: dict[str, int] = {}
         for metric in series:
@@ -124,7 +190,7 @@ class V001RcaEngine:
                 return index
         return None
 
-    def _drift_metrics(self, series: list[MetricSeries], all_series: list[MetricSeries], findings: list[AnomalyFinding]) -> list[tuple[str, str, float]]:
+    def _drift_metrics(self, series: list[MetricSeries], all_series: list[MetricSeries], findings: list[AnomalyFinding]) -> list[tuple[str, str, str, float, int]]:
         rows = []
         for metric in series:
             values = [point.value for point in metric.points]
@@ -139,7 +205,7 @@ class V001RcaEngine:
                     continue
                 if self._busy_infra_without_failure(metric.service, metric.metric, metric.points[index].timestamp, all_series, findings):
                     continue
-                rows.append((self._canonical_service(metric.service), metric.metric, score))
+                rows.append((self._canonical_service(metric.service), metric.metric, metric.signal_id, score, metric.points[index].timestamp))
         return rows
 
     def _significant_tail_change(self, metric: MetricSeries) -> bool:
@@ -162,16 +228,30 @@ class V001RcaEngine:
         )
         return changed >= self.min_tail_anomaly_buckets[group]
 
-    def _correlation_scores(self, series: list[MetricSeries], findings: list[AnomalyFinding]) -> dict[str, float]:
-        primary = self._primary_series(series, findings)
-        if primary is None:
-            return {}
+    def _correlation_scores(
+        self,
+        series: list[MetricSeries],
+        findings: list[AnomalyFinding],
+        impact_series: list[MetricSeries] | None = None,
+    ) -> dict[str, float]:
+        impact_series = impact_series or series
+        primaries = [
+            metric
+            for finding in findings
+            if finding.algorithm == "slo_threshold"
+            for metric in impact_series
+            if metric.signal_id == finding.signal_id
+        ]
+        if not primaries:
+            primary = self._primary_series(impact_series, findings)
+            if primary is None:
+                return {}
+            primaries = [primary]
         scores: dict[str, float] = {}
-        primary_values = [point.value for point in primary.points]
         for metric in series:
             if metric.service == "global" or self._excluded_root_cause(metric.service):
                 continue
-            score = abs(self._pearson(primary_values, [point.value for point in metric.points]))
+            score = max(abs(self._pearson([point.value for point in primary.points], [point.value for point in metric.points])) for primary in primaries)
             service = self._canonical_service(metric.service)
             scores[service] = max(scores.get(service, 0.0), score)
         return scores
@@ -268,7 +348,7 @@ def _is_log_metric(metric: str) -> bool:
 
 
 def _is_context_metric(metric: str) -> bool:
-    return "request_rate" in metric or "latency" in metric
+    return "request_rate" in metric or "latency" in metric or _is_error_metric(metric)
 
 
 def _is_busy_infra_metric(metric: str) -> bool:
@@ -276,7 +356,7 @@ def _is_busy_infra_metric(metric: str) -> bool:
 
 
 def _is_error_metric(metric: str) -> bool:
-    return "error_rate" in metric or "error_ratio" in metric
+    return "error_rate" in metric or "error_ratio" in metric or "bad_ratio" in metric
 
 
 def _is_oom_metric(metric: str) -> bool:

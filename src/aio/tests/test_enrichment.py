@@ -6,7 +6,7 @@ from pathlib import Path
 
 from aiops.config import load_runtime_config
 from aiops.enrichment import Enricher
-from aiops.schemas import CandidateEvent, Feature, SignalQuality
+from aiops.schemas import AnomalyFinding, CandidateEvent, Feature, SignalQuality
 
 
 class FakeJaeger:
@@ -83,6 +83,16 @@ class FailingClient:
 
 
 class EnricherTest(unittest.TestCase):
+    def finding(self) -> AnomalyFinding:
+        return AnomalyFinding(
+            algorithm="weighted_sum",
+            service="checkout",
+            metric="cpu_millicores",
+            signal_id="checkout_cpu_millicores",
+            score=0.5,
+            timestamp=1000,
+        )
+
     def candidate(self) -> CandidateEvent:
         return CandidateEvent(
             detector_id="ops03_checkout_payment_dependency",
@@ -160,6 +170,49 @@ class EnricherTest(unittest.TestCase):
 
         self.assertEqual(result.evidence[0].source, "enrichment_failure")
         self.assertEqual(result.evidence[0].reference, "jaeger")
+
+    def test_corroboration_queries_tail_and_returns_earliest_trace_failure(self):
+        jaeger = FakeJaeger()
+        jaeger.search_traces = lambda service, limit=20, start=None, end=None: {
+            "data": [
+                {
+                    "traceID": "trace-1",
+                    "processes": {"p1": {"serviceName": "checkout"}, "p2": {"serviceName": "payment"}},
+                    "spans": [
+                        {"processID": "p1", "operationName": "checkout", "startTime": 950_000_000, "tags": [{"key": "error", "value": True}]},
+                        {"processID": "p2", "operationName": "charge", "startTime": 900_000_000, "tags": [{"key": "otel.status_code", "value": "ERROR"}]},
+                    ],
+                }
+            ]
+        }
+        opensearch = FakeOpenSearch()
+        result = Enricher(jaeger=jaeger, opensearch=opensearch).corroborate([self.finding()], window_seconds=900)["checkout"]
+
+        self.assertEqual(result.available_sources, {"log", "trace"})
+        self.assertTrue(result.log_failure)
+        self.assertTrue(result.trace_failure)
+        self.assertEqual(result.trace_root_service, "payment")
+        self.assertEqual(result.trace_failure_timestamp, 900)
+        query = opensearch.calls[0][1]
+        self.assertEqual(query["query"]["bool"]["filter"][0]["range"]["@timestamp"], {"gte": "1970-01-01T00:01:40Z", "lte": "1970-01-01T00:16:40Z"})
+        self.assertIn("exception", str(query).lower())
+
+    def test_latency_only_trace_is_available_but_not_failure(self):
+        jaeger = FakeJaeger()
+        jaeger.search_traces = lambda service, limit=20, start=None, end=None: {
+            "data": [{"traceID": "slow", "processes": {"p1": {"serviceName": service}}, "spans": [{"processID": "p1", "duration": 9_000_000, "tags": []}]}]
+        }
+
+        result = Enricher(jaeger=jaeger).corroborate([self.finding()], window_seconds=900)["checkout"]
+
+        self.assertEqual(result.available_sources, {"trace"})
+        self.assertFalse(result.trace_failure)
+        self.assertIsNone(result.trace_root_service)
+
+    def test_failed_corroboration_source_is_unavailable(self):
+        result = Enricher(jaeger=FailingClient()).corroborate([self.finding()], window_seconds=900)["checkout"]
+
+        self.assertEqual(result.available_sources, set())
 
 
 if __name__ == "__main__":

@@ -27,7 +27,8 @@ class FakeNotificationSender:
 def observation(signal_id: str, value: float | None, quality: SignalQuality = SignalQuality.VERIFIED) -> Observation:
     labels = {"service": "checkout", "dependency": "payment"} if signal_id == "checkout_payment_error_rate_5m" else {}
     window = "24h" if signal_id == "checkout_bad_ratio_24h" else "5m"
-    return Observation(signal_id=signal_id, value=value, unit="ratio", window=window, quality=quality, labels=labels)
+    unit = "seconds" if "latency" in signal_id else "ratio"
+    return Observation(signal_id=signal_id, value=value, unit=unit, window=window, quality=quality, labels=labels)
 
 
 def metric(service: str, name: str, values: list[float]) -> MetricSeries:
@@ -75,6 +76,26 @@ def prod_pipeline(root: Path, sender: FakeNotificationSender, repeat_seconds: in
 
 
 class ProdSimulationTest(unittest.TestCase):
+    def test_checkout_latency_slo_breach_sends_notification(self):
+        with TemporaryDirectory() as tmp:
+            sender = FakeNotificationSender()
+            pipeline = prod_pipeline(Path(tmp), sender, observations=[observation("checkout_p95_latency_5m", 16.0)])
+
+            pipeline.run_once()
+            pipeline.store.close()
+
+        self.assertEqual([message.runbook_id for message in sender.sent], ["RB-CHECKOUT-LATENCY"])
+
+    def test_service_error_rate_slo_breach_sends_notification(self):
+        with TemporaryDirectory() as tmp:
+            sender = FakeNotificationSender()
+            pipeline = prod_pipeline(Path(tmp), sender, observations=[observation("payment_error_rate_5m", 0.2)])
+
+            pipeline.run_once()
+            pipeline.store.close()
+
+        self.assertEqual([message.runbook_id for message in sender.sent], ["RB-SERVICE-ERROR-RATE"])
+
     def test_checkout_slo_breach_pages_once(self):
         with TemporaryDirectory() as tmp:
             sender = FakeNotificationSender()

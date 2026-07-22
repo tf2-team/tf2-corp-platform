@@ -33,6 +33,7 @@ from aiops.schemas.domain import (
     RemediationDecision,
     RootCauseCandidate,
     SignalQuality,
+    TelemetryCorroboration,
     VerificationResult,
 )
 from aiops.schemas.prometheus import (
@@ -94,5 +95,6 @@ __all__ = [
     "SignalDefinition",
     "TopologyConfig",
     "TopologyService",
+    "TelemetryCorroboration",
     "VerificationResult",
 ]

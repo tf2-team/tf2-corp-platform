@@ -8,7 +8,7 @@ import time
 from datetime import UTC, datetime
 from typing import Any, Protocol
 
-from aiops.schemas import CandidateEvent, EvidenceItem, Feature
+from aiops.schemas import AnomalyFinding, CandidateEvent, EvidenceItem, Feature, TelemetryCorroboration
 from aiops.schemas import RuntimeConfig
 from aiops.shared.features import index_features
 
@@ -63,6 +63,61 @@ class Enricher:
             evidence.extend(self._external_evidence(candidate))
             enriched.append(candidate.model_copy(update={"evidence": tuple(evidence)}))
         return enriched
+
+    def corroborate(self, findings: list[AnomalyFinding], window_seconds: int) -> dict[str, TelemetryCorroboration]:
+        by_service: dict[str, list[AnomalyFinding]] = {}
+        for finding in findings:
+            by_service.setdefault(finding.service, []).append(finding)
+        return {
+            service: self._corroborate_service(service, max(item.timestamp for item in items), window_seconds)
+            for service, items in by_service.items()
+        }
+
+    def _corroborate_service(self, service: str, end: int, window_seconds: int) -> TelemetryCorroboration:
+        update: dict[str, Any] = {"service": service, "available_sources": set()}
+        if self.opensearch is not None:
+            try:
+                data = self.opensearch.search(
+                    self.opensearch_index,
+                    {
+                        "size": 1,
+                        "query": {
+                            "bool": {
+                                "must": [
+                                    {"multi_match": {"query": service, "fields": ["service.name", "k8s.deployment.name"]}},
+                                    {"simple_query_string": {"query": "exception | timeout | failed | failure | connection refused | oom | retry exhausted", "fields": ["message", "body", "log"]}},
+                                ],
+                                "filter": [{"range": {"@timestamp": {"gte": _iso_utc(end - window_seconds), "lte": _iso_utc(end)}}}],
+                            }
+                        },
+                    },
+                )
+                update["available_sources"].add("log")
+                total = data.get("hits", {}).get("total", 0)
+                update["log_failure"] = (total.get("value", 0) if isinstance(total, dict) else total) > 0
+            except Exception:
+                pass
+        if self.jaeger is not None:
+            try:
+                traces = self.jaeger.search_traces(service, limit=20, start=(end - window_seconds) * 1_000_000, end=end * 1_000_000).get("data", [])
+                update["available_sources"].add("trace")
+                failures = [
+                    (int(span.get("startTime", end * 1_000_000)) // 1_000_000, _span_service(trace, span), str(trace.get("traceID", "unknown")))
+                    for trace in traces
+                    for span in trace.get("spans", [])
+                    if _span_has_failure(span)
+                ]
+                if failures:
+                    timestamp, root, trace_id = min(failures)
+                    update.update(
+                        trace_failure=True,
+                        trace_root_service=root,
+                        trace_failure_timestamp=timestamp,
+                        trace_reference=self.jaeger.trace_ui_url(trace_id),
+                    )
+            except Exception:
+                pass
+        return TelemetryCorroboration(**update)
 
     def _external_evidence(self, candidate: CandidateEvent) -> list[EvidenceItem]:
         items: list[EvidenceItem] = []
@@ -165,6 +220,17 @@ class Enricher:
 
 def _span_has_error(span: dict) -> bool:
     return any(tag.get("key") == "error" and tag.get("value") for tag in span.get("tags", []))
+
+
+def _span_has_failure(span: dict) -> bool:
+    tags = {str(tag.get("key", "")).lower(): tag.get("value") for tag in span.get("tags", [])}
+    status = str(tags.get("otel.status_code", tags.get("status.code", ""))).upper()
+    try:
+        http_error = int(tags.get("http.status_code", tags.get("http.response.status_code", 0))) >= 500
+    except (TypeError, ValueError):
+        http_error = False
+    text = f"{span.get('operationName', '')} {tags}".lower()
+    return _span_has_error(span) or status == "ERROR" or http_error or "timeout" in text or "timed out" in text
 
 
 def _span_service(trace: dict, span: dict) -> str:

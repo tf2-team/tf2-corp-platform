@@ -18,6 +18,7 @@ class HttpApiClient:
         basic_auth: tuple[str, str] | None = None,
         verify_tls: bool | ssl.SSLContext = True,
         transport: httpx.BaseTransport | None = None,
+        timeout: float = 10.0,
     ):
         headers = {}
         if token:
@@ -31,7 +32,7 @@ class HttpApiClient:
             auth=auth,
             verify=verify_tls,
             transport=transport,
-            timeout=10.0,
+            timeout=timeout,
         )
 
     @staticmethod
@@ -52,4 +53,3 @@ class HttpApiClient:
         response = self._client.post(path, json=json)
         response.raise_for_status()
         return self._decode_response(response)
-

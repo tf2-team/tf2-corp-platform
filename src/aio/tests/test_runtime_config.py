@@ -23,8 +23,9 @@ class RuntimeConfigTest(unittest.TestCase):
         self.assertEqual(config.topology.services[0].name, "checkout")
         self.assertEqual(next(signal for signal in config.signals if signal.id == "checkout_bad_ratio_24h").feature_role, "official_slo")
         self.assertEqual(next(signal for signal in config.signals if signal.id == "checkout_payment_error_rate_5m").feature_role, "dependency_signal")
-        self.assertEqual([detector.__class__.__name__ for detector in detectors], ["ThresholdDetector", "NoDataDetector", "DependencyDetector"])
-        self.assertEqual([detector.detector_id for detector in detectors], ["ops01_checkout_slo", "ops02_monitoring_loss", "ops03_checkout_payment_dependency"])
+        detector_ids = {detector.detector_id for detector in detectors}
+        self.assertIn("ops04_checkout_latency_p95", detector_ids)
+        self.assertTrue({detector.id for detector in config.detectors if detector.id.startswith("auto_")} <= detector_ids)
 
     def test_each_service_error_rate_signal_has_auto_detector(self):
         config = load_runtime_config(Path("config/runtime.json"))
@@ -33,7 +34,7 @@ class RuntimeConfigTest(unittest.TestCase):
         detector_signal_ids = {detector.signal_id for detector in auto_detectors}
 
         self.assertEqual(detector_signal_ids, signal_ids)
-        self.assertTrue(all(not detector.enabled for detector in auto_detectors))
+        self.assertTrue(all(detector.enabled for detector in auto_detectors))
 
     def test_prometheus_services_expand_generated_metrics(self):
         raw = json.loads(Path("config/runtime.json").read_text(encoding="utf-8"))

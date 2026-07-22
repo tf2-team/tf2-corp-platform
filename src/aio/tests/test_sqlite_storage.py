@@ -83,10 +83,7 @@ class SQLiteIncidentStoreTest(unittest.TestCase):
         self.assertEqual(len(same_incident.events), 2)
         self.assertEqual(len(incidents), 1)
         self.assertEqual(len(history_rows), 1)
-        self.assertEqual(history_rows[0]["status"], "ready")
-        self.assertEqual(history_rows[0]["incident_id"], incident.incident_id)
-        self.assertEqual(history_rows[0]["service"], "checkout")
-        self.assertEqual(history_rows[0]["runbook_id"], "RB-CHECKOUT-SLO")
+        self.assertEqual(history_rows[0], notifications[0].model_dump(mode="json"))
         self.assertEqual(same_incident.state, "open")
         self.assertEqual(same_incident.last_seen, "1970-01-01T00:03:20+00:00")
         self.assertIsNone(same_incident.recovered_at)
@@ -112,7 +109,7 @@ class SQLiteIncidentStoreTest(unittest.TestCase):
         self.assertEqual(incident.incident_id, repeated.incident_id)
         self.assertEqual([message.incident_id for message in notifications], [incident.incident_id])
         self.assertEqual(outbox_row, ("pending",))
-        self.assertEqual([row["status"] for row in history_rows], ["ready", "ready"])
+        self.assertEqual(history_rows, [notifications[0].model_dump(mode="json")] * 2)
 
     def test_repeated_incident_does_not_reset_notification_cooldown(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -125,7 +122,7 @@ class SQLiteIncidentStoreTest(unittest.TestCase):
             store.close()
 
         self.assertEqual(repeated.cooldown_until, first_cooldown)
-        self.assertEqual([row["status"] for row in history_rows], ["ready"])
+        self.assertEqual(len(history_rows), 1)
 
     def test_same_service_different_incident_is_suppressed_during_service_cooldown(self):
         with tempfile.TemporaryDirectory() as tmp:
