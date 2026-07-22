@@ -48,6 +48,30 @@ BM25 không dùng thư viện NLP nặng cho phần tokenization. Nó dùng rege
 
 Stemming dùng `nltk==3.10.0` với `SnowballStemmer("english")`. Ví dụ `connect`, `connected`, `connecting` được quy về dạng gần nhau. Stemmer này không cần tải thêm NLTK corpus khi container chạy.
 
+### BM25 for Citation Validation
+
+BM25 xuất hiện ở hai thời điểm khác nhau trong pipeline:
+
+1. **Retrieval:** so câu hỏi với toàn bộ review để góp phần xếp hạng review nào được gửi cho Bedrock.
+2. **Grounding validation:** sau khi Bedrock trả về một claim kèm source ID, so claim với toàn bộ review đã retrieve để kiểm tra source được cite có thật sự hỗ trợ claim không.
+
+Ví dụ, Bedrock tạo claim:
+
+```text
+Claim: "Manual controls are tricky at first."
+Sources: ["r3"]
+```
+
+Nếu `r3` chứa review nói về manual controls, BM25 cần nhìn cả tập review đã retrieve — chẳng hạn `r1` đến `r4` — để thấy các từ `manual`, `controls`, `tricky` đặc trưng cho `r3`. Không thể chỉ dùng `r3` làm corpus: khi corpus có đúng một review, mọi từ đều xuất hiện trong 100% corpus và IDF của BM25 không còn có ý nghĩa phân biệt.
+
+Grounding chỉ giữ claim khi source ID tồn tại và ít nhất một check nội dung thành công:
+
+```text
+semantic cosine support OR BM25 lexical support
+```
+
+Vì vậy, BM25 ở bước này không dùng để chọn thêm review; nó là một hàng rào sau Bedrock để chặn claim bịa nhưng không xóa nhầm claim bám sát review được cite.
+
 ### Reciprocal Rank Fusion
 
 Dense score và BM25 score có đơn vị khác nhau, nên không cộng trực tiếp. Thay vào đó, mỗi phương pháp đóng góp theo vị trí xếp hạng:

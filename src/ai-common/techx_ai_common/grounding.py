@@ -41,6 +41,7 @@ from .contracts import (
     SafeReviewSet,
 )
 from .bedrock import converse_json, is_bedrock_provider
+from .retrieval import tokenize
 
 logger = logging.getLogger("grounding")
 
@@ -177,15 +178,38 @@ class GroundingChecker:
         return float(cos_scores.max()) >= threshold
 
     @classmethod
-    def check_bm25(cls, claim_text: str, source_texts: list[str], threshold: float) -> bool:
-        if not source_texts:
+    def check_bm25(
+        cls,
+        claim_text: str,
+        cited_source_ids: list[str],
+        reviews_by_id: dict[str, SafeReview],
+        threshold: float,
+    ) -> bool:
+        """Check lexical support against the retrieved-review corpus.
+
+        BM25 needs multiple documents for meaningful IDF. Scoring only the
+        cited source makes a single-source claim look unsupported even when
+        it closely matches that source.
+        """
+        if not cited_source_ids or not reviews_by_id:
             return False
         from rank_bm25 import BM25Okapi
-        tokenized_corpus = [doc.lower().split() for doc in source_texts]
+
+        reviews = list(reviews_by_id.values())
+        cited_indexes = [
+            index for index, review in enumerate(reviews)
+            if review.source_id in cited_source_ids
+        ]
+        if not cited_indexes:
+            return False
+
+        tokenized_corpus = [tokenize(review.text) for review in reviews]
         bm25 = BM25Okapi(tokenized_corpus)
-        tokenized_query = claim_text.lower().split()
+        tokenized_query = tokenize(claim_text)
+        if not tokenized_query:
+            return False
         scores = bm25.get_scores(tokenized_query)
-        return float(max(scores)) >= threshold
+        return float(max(scores[index] for index in cited_indexes)) >= threshold
 
 
 def _validate_claim(
@@ -221,7 +245,12 @@ def _validate_claim(
             return False
             
     if mode in (GroundingMode.BM25, GroundingMode.HYBRID):
-        bm25_ok = GroundingChecker.check_bm25(claim.text, source_texts, bm25_threshold)
+        bm25_ok = GroundingChecker.check_bm25(
+            claim.text,
+            claim.sources,
+            reviews_by_id,
+            bm25_threshold,
+        )
         if mode == GroundingMode.BM25 and not bm25_ok:
             logger.info(f"Dropping claim failing BM25 check: '{claim.text}'")
             return False
