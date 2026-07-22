@@ -98,7 +98,7 @@ def normal_traffic_growth_decision(
     min_relative_change_ratio: dict[str, float],
     min_absolute_change: dict[str, float],
 ) -> tuple[bool, str]:
-    required_groups = ("request_rate", "latency", "cpu", "memory", "socket_io")
+    required_groups = ("request_rate", "cpu", "memory", "socket_io")
     by_group = {group: [metric for metric in series if metric_group(metric.metric) == group] for group in required_groups}
     missing = [group for group, metrics in by_group.items() if not metrics]
     if missing:

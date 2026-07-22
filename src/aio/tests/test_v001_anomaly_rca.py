@@ -364,7 +364,7 @@ class V001AnomalyRcaTest(unittest.TestCase):
 
         self.assertEqual(engine._suppress_busy_infra(findings, series), findings)
 
-    def test_traffic_driven_latency_and_infra_without_hard_failure_are_suppressed(self):
+    def test_traffic_driven_infra_with_flat_latency_is_suppressed(self):
         engine = anomaly_engine()
         findings = [
             AnomalyFinding(algorithm="weighted_sum", service="checkout", metric="cpu_millicores", signal_id="checkout_cpu_millicores", score=0.5, timestamp=44 * 60),
@@ -375,7 +375,7 @@ class V001AnomalyRcaTest(unittest.TestCase):
             minute_metric("checkout", "cpu_millicores", [100] * 30 + [300] * 15),
             minute_metric("checkout", "memory_usage_bytes", [100_000_000] * 30 + [150_000_000] * 15),
             minute_metric("checkout", "socket_io_bytes_per_second", [1_000_000] * 30 + [3_000_000] * 15),
-            minute_metric("checkout", "p95_latency_5m", [0.05] * 30 + [0.10] * 15),
+            minute_metric("checkout", "p95_latency_5m", [0.05] * 45),
             minute_metric("checkout", "error_rate_5m", [0] * 45),
         ]
 
