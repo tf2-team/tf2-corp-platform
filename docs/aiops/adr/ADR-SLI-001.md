@@ -1,4 +1,4 @@
-﻿# ADR-SLI-001 - Official SLI Mapping
+# ADR-SLI-001 - Official SLI Mapping
 
 > Status: Draft
 > Owner: TBD

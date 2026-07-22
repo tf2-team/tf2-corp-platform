@@ -34,6 +34,7 @@ from aiops.remediation import (
 )
 from aiops.schemas import CandidateEvent, Incident, RemediationDecision, SignalQuality, VerificationResult
 from aiops.shared.series import prepare_detector_series
+from aiops.topology import TopologyGraph
 from aiops.verification import VerificationEngine
 
 
@@ -99,7 +100,9 @@ class AiopsPipeline:
         self.normalizer = Normalizer(normalization_schema)
         self.feature_builder = FeatureBuilder(runtime_config)
         self.detector_engine = DetectorEngine(detectors)
-        self.correlator = Correlator(runtime_config, **correlation_hyperparameters) if correlation_hyperparameters else Correlator(runtime_config)
+        self.topology_graph = TopologyGraph(runtime_config) if runtime_config is not None else None
+        correlator_hyperparameters = correlation_hyperparameters or {}
+        self.correlator = Correlator(runtime_config, topology_graph=self.topology_graph, **correlator_hyperparameters)
         self.enricher = enricher or Enricher(runtime_config=runtime_config)
         self.store = store
         self.policy = policy
@@ -282,7 +285,12 @@ class AiopsPipeline:
             float(anomaly_config["single_evidence_bonus"]),
             float(anomaly_config["dual_evidence_bonus"]),
         )
-        rca_engine = V001RcaEngine(self.runtime_config, config["graph"], _combined_rca_hyperparameters(config))
+        rca_engine = V001RcaEngine(
+            self.runtime_config,
+            config["graph"],
+            _combined_rca_hyperparameters(config),
+            topology_graph=self.topology_graph,
+        )
         result = rca_engine.rank(findings, detector_series, top_k=int(config["top_k"]), corroboration=corroboration)
         _log_final_root_cause_algorithm_scores(result, getattr(anomaly_engine, "last_algorithm_findings", findings))
         return result
@@ -425,6 +433,7 @@ class AiopsPipeline:
                     self.runtime_config,
                     root_service,
                     int(self.correlation_hyperparameters.get("topology_max_hops", 2)),
+                    self.topology_graph,
                 )
                 affected_services -= {incident.service for incident in incidents if incident.severity == "SEV1"}
                 register = getattr(self.store, "register_active_root_cause", None)
@@ -584,19 +593,10 @@ def _unique_incidents(incidents: list[Incident]) -> list[Incident]:
     return list({incident.incident_id: incident for incident in incidents}.values())
 
 
-def _blast_radius_services(config: RuntimeConfig, root_service: str, max_hops: int = 2) -> set[str]:
-    services = {service.name: service for service in config.topology.services}
-    if root_service not in services:
-        return {root_service}
-    graph = {name: set(service.dependencies) for name, service in services.items()}
-    for service in services.values():
-        for dependency in service.dependencies:
-            graph.setdefault(dependency, set()).add(service.name)
-    seen = {root_service}
-    frontier = {root_service}
-    for _ in range(max_hops):
-        frontier = {neighbor for service in frontier for neighbor in graph.get(service, set()) if neighbor not in seen}
-        seen.update(frontier)
-        if not frontier:
-            break
-    return seen
+def _blast_radius_services(
+    config: RuntimeConfig,
+    root_service: str,
+    max_hops: int = 2,
+    topology_graph: TopologyGraph | None = None,
+) -> set[str]:
+    return (topology_graph or TopologyGraph(config)).blast_radius(root_service, max_hops)

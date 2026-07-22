@@ -3,6 +3,7 @@
 # SPDX-License-Identifier: Apache-2.0
 from __future__ import annotations
 
+from collections import Counter
 from typing import Literal
 
 from pydantic import Field, model_validator
@@ -20,7 +21,10 @@ class TopologyService(AiopsModel):
     kind: str
     owner: str
     flow: str
-    dependencies: list[str] = Field(default_factory=list)
+    dependencies: list[str] = Field(
+        default_factory=list,
+        description="RCA-impacting dependencies, directed from the service to the dependency.",
+    )
 
 
 class TopologyConfig(AiopsModel):
@@ -89,8 +93,12 @@ class RuntimeConfig(AiopsModel):
     @model_validator(mode="after")
     def validate_references(self) -> "RuntimeConfig":
         signal_ids = {signal.id for signal in self.signals}
-        service_names = {service.name for service in self.topology.services}
-        unknown_prometheus_services = set(self.prometheus_services) - service_names
+        service_names = [service.name for service in self.topology.services]
+        duplicate_services = sorted(name for name, count in Counter(service_names).items() if count > 1)
+        if duplicate_services:
+            raise ValueError(f"duplicate topology services: {duplicate_services}")
+        service_name_set = set(service_names)
+        unknown_prometheus_services = set(self.prometheus_services) - service_name_set
         if unknown_prometheus_services:
             raise ValueError(f"unknown prometheus services: {sorted(unknown_prometheus_services)}")
         missing_prometheus_queries = {signal.query_id for signal in self.signals if signal.source == "prometheus"} - set(self.prometheus_queries)
@@ -100,7 +108,14 @@ class RuntimeConfig(AiopsModel):
         if missing_prometheus_specs:
             raise ValueError(f"missing prometheus query specs: {sorted(missing_prometheus_specs)}")
         for service in self.topology.services:
-            missing = set(service.dependencies) - service_names
+            duplicate_dependencies = sorted(
+                name for name, count in Counter(service.dependencies).items() if count > 1
+            )
+            if duplicate_dependencies:
+                raise ValueError(f"duplicate dependencies for {service.name}: {duplicate_dependencies}")
+            if service.name in service.dependencies:
+                raise ValueError(f"self dependency for {service.name}")
+            missing = set(service.dependencies) - service_name_set
             if missing:
                 raise ValueError(f"unknown dependencies for {service.name}: {sorted(missing)}")
         for detector in self.detectors:

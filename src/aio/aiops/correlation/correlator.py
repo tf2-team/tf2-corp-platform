@@ -6,6 +6,7 @@ from __future__ import annotations
 import logging
 
 from aiops.schemas import CandidateEvent, RuntimeConfig, SignalQuality
+from aiops.topology import TopologyGraph
 
 
 logger = logging.getLogger(__name__)
@@ -21,6 +22,7 @@ class Correlator:
         topology_max_hops: int = 2,
         confidence_threshold: float = 0.0,
         weights: dict[str, float] | None = None,
+        topology_graph: TopologyGraph | None = None,
     ):
         self.environment = runtime_config.environment if runtime_config else "unknown"
         self.window_seconds = window_seconds
@@ -29,7 +31,7 @@ class Correlator:
         self.topology_max_hops = topology_max_hops
         self.confidence_threshold = confidence_threshold
         self.weights = weights or {}
-        self.topology = {item.name: set(item.dependencies) for item in runtime_config.topology.services} if runtime_config else {}
+        self.topology_graph = topology_graph or (TopologyGraph(runtime_config) if runtime_config else None)
 
     def correlate(self, candidates: list[CandidateEvent]) -> list[CandidateEvent]:
         grouped: dict[tuple[str, str, str, int], list[CandidateEvent]] = {}
@@ -90,7 +92,12 @@ class Correlator:
             components["verified_primary_signal"] = self.weights.get("verified_primary_signal", 0.0)
         if candidate.timestamp and primary.timestamp and candidate.timestamp <= primary.timestamp:
             components["temporal_precedence"] = self.weights.get("temporal_precedence", 0.0)
-        if candidate.likely_dependency in self.topology.get(candidate.service, set()):
+        topology_distance = (
+            self.topology_graph.dependency_distance(candidate.service, candidate.likely_dependency, self.topology_max_hops)
+            if self.topology_graph is not None
+            else None
+        )
+        if topology_distance is not None and topology_distance > 0:
             components["topology_path"] = self.weights.get("topology_path", 0.0)
         if {"operation", "rpc", "method", "span"} & candidate.labels.keys():
             components["operation_specificity"] = self.weights.get("operation_specificity", 0.0)

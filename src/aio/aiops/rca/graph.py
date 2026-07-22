@@ -4,11 +4,19 @@
 from __future__ import annotations
 
 from aiops.schemas import AnomalyFinding, RuntimeConfig
+from aiops.topology import TopologyGraph
 
 
 class GraphTraversalRca:
-    def __init__(self, config: RuntimeConfig, damping: float, pagerank_weight: float, timestamp_weight: float):
-        self.config = config
+    def __init__(
+        self,
+        config: RuntimeConfig,
+        damping: float,
+        pagerank_weight: float,
+        timestamp_weight: float,
+        topology_graph: TopologyGraph | None = None,
+    ):
+        self.topology_graph = topology_graph or TopologyGraph(config)
         self.damping = damping
         self.pagerank_weight = pagerank_weight
         self.timestamp_weight = timestamp_weight
@@ -24,32 +32,15 @@ class GraphTraversalRca:
         if not seed_scores:
             return {}
 
-        graph = {item.name: item.dependencies for item in self.config.topology.services}
-        for service in seed_scores:
-            graph.setdefault(service, [])
-        pagerank = self._pagerank(graph, seed_scores)
+        pagerank = self.topology_graph.personalized_pagerank(seed_scores, self.damping)
         timestamp_scores = self._timestamp_scores(timestamps)
         max_seed = max(seed_scores.values())
         combined = {
             service: max_seed * (self.pagerank_weight * pagerank.get(service, 0.0) + self.timestamp_weight * timestamp_scores.get(service, 0.0))
-            for service in graph
+            for service in pagerank.keys() | timestamp_scores.keys()
             if pagerank.get(service, 0.0) or timestamp_scores.get(service, 0.0)
         }
         return dict(sorted(combined.items(), key=lambda item: item[1], reverse=True))
-
-    def _pagerank(self, graph: dict[str, list[str]], seed_scores: dict[str, float]) -> dict[str, float]:
-        total_seed = sum(seed_scores.values())
-        personalization = {service: seed_scores.get(service, 0.0) / total_seed for service in graph}
-        rank = personalization.copy()
-        for _ in range(20):
-            next_rank = {service: (1 - self.damping) * personalization[service] for service in graph}
-            for service, dependencies in graph.items():
-                targets = [dependency for dependency in dependencies if dependency in graph] or list(graph)
-                share = self.damping * rank[service] / len(targets)
-                for target in targets:
-                    next_rank[target] += share
-            rank = next_rank
-        return rank
 
     def _timestamp_scores(self, timestamps: dict[str, int]) -> dict[str, float]:
         newest = max(timestamps.values())

@@ -134,6 +134,24 @@ class RuntimeConfigTest(unittest.TestCase):
         with self.assertRaises(ValidationError):
             RuntimeConfig.model_validate(config)
 
+    def test_rejects_duplicate_topology_services(self):
+        config = json.loads(Path("config/runtime.json").read_text(encoding="utf-8"))
+        config["topology"]["services"].append(config["topology"]["services"][0])
+
+        with self.assertRaisesRegex(ValidationError, "duplicate topology services"):
+            RuntimeConfig.model_validate(config)
+
+    def test_rejects_duplicate_and_self_dependencies(self):
+        config = json.loads(Path("config/runtime.json").read_text(encoding="utf-8"))
+        config["topology"]["services"][0]["dependencies"].append("cart")
+        with self.assertRaisesRegex(ValidationError, "duplicate dependencies for checkout"):
+            RuntimeConfig.model_validate(config)
+
+        config = json.loads(Path("config/runtime.json").read_text(encoding="utf-8"))
+        config["topology"]["services"][0]["dependencies"].append("checkout")
+        with self.assertRaisesRegex(ValidationError, "self dependency for checkout"):
+            RuntimeConfig.model_validate(config)
+
     def test_api_markdown_json_schemas_are_parseable(self):
         text = Path("docs/các API cần kết nối.md").read_text(encoding="utf-8")
         blocks = re.findall(r"```json[^\n]*\n(.*?)\n```", text, re.S)

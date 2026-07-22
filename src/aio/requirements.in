@@ -1,5 +1,7 @@
 fastapi>=0.110,<1
 httpx>=0.28,<1
+networkx>=3.6,<4
+pandas>=2.2,<3
 pydantic>=2,<3
 pydantic-settings>=2,<3
 statsmodels>=0.14,<1
