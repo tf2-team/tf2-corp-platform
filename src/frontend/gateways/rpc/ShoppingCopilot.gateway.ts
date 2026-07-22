@@ -1,7 +1,7 @@
 // Copyright The OpenTelemetry Authors
 // SPDX-License-Identifier: Apache-2.0
 
-import { ChannelCredentials } from '@grpc/grpc-js';
+import { ChannelCredentials, Metadata } from '@grpc/grpc-js';
 import {
   CopilotSearchResponse,
   ConfirmCartActionResponse,
@@ -16,9 +16,11 @@ const client = new ShoppingCopilotServiceClient(
 );
 
 const ShoppingCopilotGateway = () => ({
-  search(userMessage: string) {
+  search(userMessage: string, userId: string) {
+    const metadata = new Metadata();
+    metadata.set('x-copilot-user-id', userId);
     return new Promise<CopilotSearchResponse>((resolve, reject) =>
-      client.search({ userMessage }, (error, response) =>
+      client.search({ userMessage }, metadata, (error, response) =>
         error ? reject(error) : resolve(response)
       )
     );

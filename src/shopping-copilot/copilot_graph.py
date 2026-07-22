@@ -53,6 +53,7 @@ logger = logging.getLogger("copilot_graph")
 
 class CopilotState(TypedDict):
     user_message: str
+    user_id: str
     # Sanitized version of the message (after PII redaction).
     safe_message: str
     intent: Optional[ShoppingIntent]
@@ -96,10 +97,9 @@ def make_nodes(deps: CopilotDeps):
 
     def input_guardrail_node(state: CopilotState) -> CopilotState:
         """Block prompt injection, PII, and enforce rate limits in the user message."""
-        user_id = state.get("user_message", "anonymous")
         allowed, limit_reason = check_rate_limit(
             valkey_client=deps.valkey_client,
-            client_id="default_user",
+            client_id=state["user_id"],
             cooldown_seconds=2,
             max_requests_per_minute=10,
         )
@@ -259,7 +259,7 @@ def make_nodes(deps: CopilotDeps):
             target_product_id = state["catalog_results"][0].product_id
         try:
             action = create_pending_token(
-                user_id="anonymous",  # replaced by real user_id from frontend in ConfirmCartAction
+                user_id=state["user_id"],
                 product_id=target_product_id,
                 quantity=1,
                 valkey_client=deps.valkey_client,
@@ -393,7 +393,7 @@ GRAPH_RECURSION_LIMIT = 10
 
 
 
-def run_copilot(user_message: str, deps: CopilotDeps) -> CopilotState:
+def run_copilot(user_message: str, deps: CopilotDeps, user_id: str = "anonymous") -> CopilotState:
     """Run the Shopping Copilot graph synchronously with timeout.
 
     Wraps asyncio execution and applies a hard deadline. Any exception
@@ -402,6 +402,7 @@ def run_copilot(user_message: str, deps: CopilotDeps) -> CopilotState:
     graph = build_graph(deps)
     initial_state: CopilotState = {
         "user_message": user_message,
+        "user_id": user_id or "anonymous",
         "safe_message": user_message,
         "intent": None,
         "allowed_product_ids": [],
