@@ -100,6 +100,10 @@ class SettingsTest(unittest.TestCase):
         self.assertEqual(config["incident"]["notification_cooldown_seconds"], 900)
         self.assertEqual(config["incident"]["direct_slo_suppress_seconds"], 900)
         self.assertEqual(config["detectors"]["latency_slo_seconds"], 1.0)
+        self.assertEqual(
+            config["detectors"]["latency_slo_overrides"],
+            {"frontend": 0.5, "checkout": 1.0, "payment": 1.0, "cart": 0.3, "currency": 0.3, "product-catalog": 0.5, "recommendation": 0.8},
+        )
         self.assertEqual(config["correlation"]["suppress_min_root_score"], 0.8)
         self.assertEqual(config["correlation"]["topology_max_hops"], 1)
         self.assertEqual(

@@ -36,7 +36,7 @@ class RuntimeConfigTest(unittest.TestCase):
         self.assertEqual(detector_signal_ids, signal_ids)
         self.assertTrue(all(detector.enabled for detector in auto_detectors))
 
-    def test_each_service_p95_latency_signal_has_one_second_slo_detector(self):
+    def test_each_service_p95_latency_signal_has_configured_slo_detector(self):
         config = load_runtime_config(Path("config/runtime.json"))
         hyperparameters = load_hyperparameters(Settings().hyperparameters_path)
         detectors = build_detectors(config, Settings(), hyperparameters["no_data"], hyperparameters["detectors"])
@@ -44,7 +44,12 @@ class RuntimeConfigTest(unittest.TestCase):
         latency_detectors = [detector for detector in detectors if detector.detector_id.endswith("_latency_p95")]
 
         self.assertEqual({detector.signal_id for detector in latency_detectors}, signal_ids)
-        self.assertTrue(all(detector.threshold == 1.0 for detector in latency_detectors))
+        thresholds = {detector.service: detector.threshold for detector in latency_detectors}
+        self.assertEqual(thresholds["cart"], 0.3)
+        self.assertEqual(thresholds["frontend"], 0.5)
+        self.assertEqual(thresholds["recommendation"], 0.8)
+        self.assertEqual(thresholds["payment"], 1.0)
+        self.assertEqual(thresholds["shipping"], 1.0)
 
     def test_prometheus_services_expand_generated_metrics(self):
         raw = json.loads(Path("config/runtime.json").read_text(encoding="utf-8"))

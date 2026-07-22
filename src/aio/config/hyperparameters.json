@@ -103,6 +103,15 @@
   },
   "detectors": {
     "latency_slo_seconds": 1.0,
+    "latency_slo_overrides": {
+      "frontend": 0.5,
+      "checkout": 1.0,
+      "payment": 1.0,
+      "cart": 0.3,
+      "currency": 0.3,
+      "product-catalog": 0.5,
+      "recommendation": 0.8
+    },
     "thresholds": {
       "ops03_checkout_payment_dependency": 0.05,
       "auto_checkout_error_rate": 0.05,
