@@ -50,6 +50,10 @@ ABSTAIN_MESSAGE = "The current reviews do not provide enough information."
 _SYSTEM_PROMPT = """\
 You answer product-review questions using only the supplied reviews.
 
+The supplied reviews may be a selected subset, not the complete set of product reviews.
+Do not make absolute claims about all reviews or the product as a whole from this subset.
+For absence or aggregate questions, use scoped wording such as "The supplied reviews do not mention X"; never say "There are no X reviews" unless the prompt explicitly states that the complete review set was provided.
+
 Return exactly one JSON object. Do not use Markdown or add commentary:
 
 {
@@ -65,7 +69,7 @@ Rules:
 - Use source IDs exactly as provided. Never invent a source ID.
 - Do not put citations such as "[r1]" inside answer or claim text. Put source IDs only in sources.
 - Do not add facts, numbers, comparisons, or opinions not stated in a review.
-- If the reviews do not support an answer, return {"answer":"","claims":[]}.
+- If the supplied reviews do not support a scoped answer, return {"answer":"","claims":[]}.
 - Write all text in English.
 
 Example:

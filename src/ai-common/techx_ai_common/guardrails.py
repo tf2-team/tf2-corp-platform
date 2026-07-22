@@ -96,10 +96,6 @@ COMBINATION_PATTERNS = [
     re.compile(r"\bact\s+as\b.*\b(unrestricted|dan|jailbreak)\b", re.IGNORECASE),
 ]
 
-# Kept for backward compatibility
-SYSTEM_PROMPT_KEYWORDS = HARD_INJECTION_KEYWORDS
-
-
 @lru_cache(maxsize=1)
 def _get_presidio_engines():
     from presidio_analyzer import AnalyzerEngine
@@ -316,18 +312,9 @@ def validate_tool_call(request_product_id: str, tool_name: str, arguments: dict)
 
 
 def scan_output(text: str) -> GuardrailResult:
-    """Scans response content for system prompt leaks or PII."""
+    """Blocks PII in a model response before it reaches the user."""
     if not text:
         return GuardrailResult(action=GuardrailAction.ALLOW)
-
-    # Check for leaked system instructions or secrets
-    text_lower = text.lower()
-    for kw in SYSTEM_PROMPT_KEYWORDS:
-        if kw in text_lower:
-            return GuardrailResult(
-                action=GuardrailAction.BLOCK,
-                reason="Response blocked: Leaked system instructions or sensitive data detected."
-            )
 
     # Detect PII in output
     try:

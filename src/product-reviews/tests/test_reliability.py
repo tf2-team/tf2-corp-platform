@@ -50,6 +50,20 @@ def test_llm_timeout_fallback(mocker):
     assert data["status"] == "FALLBACK"
     assert "timeout" in data["reason"].lower() or "apitimeouterror" in data["reason"].lower()
 
+
+def test_rate_limit_stops_request_before_model_call(mocker):
+    rate_limit = mocker.patch(
+        "product_reviews_server.check_rate_limit",
+        return_value=(False, "Rate limit exceeded (maximum 10 messages per minute). Please try again later."),
+    )
+
+    response = get_ai_assistant_response("TEST_ID", "What are the reviews saying?", "shopper-1")
+
+    data = json.loads(response.response)
+    assert data["status"] == "RATE_LIMITED"
+    assert "Rate limit exceeded" in data["reason"]
+    assert rate_limit.call_args.kwargs["client_id"] == "product-reviews:shopper-1"
+
 def test_llm_connection_error_fallback(mocker):
     """Test that an APIConnectionError from OpenAI returns a FALLBACK response."""
     mock_client = mocker.MagicMock()
