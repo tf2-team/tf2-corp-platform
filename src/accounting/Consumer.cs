@@ -30,6 +30,8 @@ internal class Consumer : IDisposable
 
     private ILogger _logger;
     private IConsumer<string, byte[]> _consumer;
+    private IProducer<string, byte[]> _producer;
+    private OutboxReconciler? _outboxReconciler;
     private bool _isListening;
     private static readonly ActivitySource MyActivitySource = new("Accounting.Consumer");
 
@@ -41,6 +43,13 @@ internal class Consumer : IDisposable
             ?? throw new InvalidOperationException("The KAFKA_ADDR environment variable is not set.");
 
         _consumer = BuildConsumer(servers);
+        _producer = BuildProducer(servers);
+        var outboxTable = Environment.GetEnvironmentVariable("CHECKOUT_OUTBOX_TABLE");
+        if (!string.IsNullOrEmpty(outboxTable))
+        {
+            _outboxReconciler = new OutboxReconciler(outboxTable, logger, PublishPersistenceAck);
+            _outboxReconciler.Start();
+        }
         _consumer.Subscribe(SubscribedTopics);
 
        if (_logger.IsEnabled(LogLevel.Information))
@@ -61,17 +70,32 @@ internal class Consumer : IDisposable
                 {
                     using var activity = MyActivitySource.StartActivity("order-consumed",  ActivityKind.Internal);
                     var consumeResult = _consumer.Consume();
+                    bool processed;
                     if (consumeResult.Topic == "orders")
                     {
-                        ProcessMessage(consumeResult.Message);
+                        processed = ProcessMessage(consumeResult.Message);
                     }
                     else if (consumeResult.Topic == "orders-cancelled")
                     {
-                        ProcessCancelledMessage(consumeResult.Message);
+                        processed = ProcessCancelledMessage(consumeResult.Message);
                     }
                     else if (consumeResult.Topic == "orders-shipped")
                     {
-                        ProcessShippedMessage(consumeResult.Message);
+                        processed = ProcessShippedMessage(consumeResult.Message);
+                    }
+                    else
+                    {
+                        processed = true;
+                    }
+
+                    if (processed)
+                    {
+                        _consumer.Commit(consumeResult);
+                    }
+                    else
+                    {
+                        _consumer.Seek(consumeResult.TopicPartitionOffset);
+                        Thread.Sleep(TimeSpan.FromSeconds(1));
                     }
                 }
                 catch (ConsumeException e)
@@ -91,7 +115,7 @@ internal class Consumer : IDisposable
         }
     }
 
-    private void ProcessMessage(Message<string, byte[]> message)
+    private bool ProcessMessage(Message<string, byte[]> message)
     {
         try
         {
@@ -100,7 +124,7 @@ internal class Consumer : IDisposable
 
             if (Environment.GetEnvironmentVariable("DB_CONNECTION_STRING") == null)
             {
-                return;
+                return true;
             }
 
             using var dbContext = new DBContext();
@@ -108,7 +132,8 @@ internal class Consumer : IDisposable
             if (existingOrder != null)
             {
                 _logger.LogWarning("Order {orderId} already exists in database. Skipping duplicate processing.", order.OrderId);
-                return;
+                PublishPersistenceAck(order.OrderId);
+                return true;
             }
 
             var orderEntity = new OrderEntity
@@ -149,14 +174,17 @@ internal class Consumer : IDisposable
             };
             dbContext.Add(shipping);
             dbContext.SaveChanges();
+            PublishPersistenceAck(order.OrderId);
+            return true;
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Order parsing failed:");
+            return false;
         }
     }
 
-    private void ProcessCancelledMessage(Message<string, byte[]> message)
+    private bool ProcessCancelledMessage(Message<string, byte[]> message)
     {
         try
         {
@@ -168,7 +196,7 @@ internal class Consumer : IDisposable
 
             if (Environment.GetEnvironmentVariable("DB_CONNECTION_STRING") == null)
             {
-                return;
+                return true;
             }
 
             using var dbContext = new DBContext();
@@ -176,13 +204,13 @@ internal class Consumer : IDisposable
             if (order == null)
             {
                 _logger.LogWarning("Order {orderId} not found in database for cancellation.", cancelled.OrderId);
-                return;
+                return true;
             }
 
             if (order.Status == "CANCELLED" || order.Status == "REFUNDED")
             {
                 _logger.LogWarning("Order {orderId} is already in status {status}. Skipping duplicate cancellation.", cancelled.OrderId, order.Status);
-                return;
+                return true;
             }
 
             order.Status = "CANCELLED";
@@ -194,7 +222,7 @@ internal class Consumer : IDisposable
             if (originalItems.Count == 0 && originalShipping.Count == 0)
             {
                 _logger.LogWarning("Original order items or shipping not found for cancelled order: {orderId}", cancelled.OrderId);
-                return;
+                return true;
             }
 
             foreach (var item in originalItems)
@@ -236,14 +264,16 @@ internal class Consumer : IDisposable
             {
                 _logger.LogInformation("Successfully recorded compensating transaction (REFUND) for order: {orderId}", cancelled.OrderId);
             }
+            return true;
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Failed to process cancelled order message:");
+            return false;
         }
     }
 
-    private void ProcessShippedMessage(Message<string, byte[]> message)
+    private bool ProcessShippedMessage(Message<string, byte[]> message)
     {
         try
         {
@@ -255,7 +285,7 @@ internal class Consumer : IDisposable
 
             if (Environment.GetEnvironmentVariable("DB_CONNECTION_STRING") == null)
             {
-                return;
+                return true;
             }
 
             using var dbContext = new DBContext();
@@ -263,13 +293,13 @@ internal class Consumer : IDisposable
             if (orderEntity == null)
             {
                 _logger.LogWarning("Order {orderId} not found for shipment completion.", order.OrderId);
-                return;
+                return true;
             }
 
             if (orderEntity.Status == "COMPLETED" || orderEntity.Status == "CANCELLED")
             {
                 _logger.LogWarning("Order {orderId} is already in status {status}. Skipping shipment update.", order.OrderId, orderEntity.Status);
-                return;
+                return true;
             }
 
             orderEntity.Status = "COMPLETED";
@@ -283,11 +313,23 @@ internal class Consumer : IDisposable
 
             dbContext.SaveChanges();
             Log.ShipmentCompleted(_logger, order.OrderId);
+            return true;
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Failed to process shipped order message:");
+            return false;
         }
+    }
+
+    private void PublishPersistenceAck(string orderId)
+    {
+        _producer.ProduceAsync("orders-persisted", new Message<string, byte[]>
+        {
+            Key = orderId,
+            Value = System.Text.Encoding.UTF8.GetBytes(orderId)
+        }).GetAwaiter().GetResult();
+        _logger.LogInformation("Published RDS persistence acknowledgement for order {orderId}", orderId);
     }
 
     private static IConsumer<string, byte[]> BuildConsumer(string servers)
@@ -298,9 +340,31 @@ internal class Consumer : IDisposable
             BootstrapServers = servers,
             // https://github.com/confluentinc/confluent-kafka-dotnet/tree/07de95ed647af80a0db39ce6a8891a630423b952#basic-consumer-example
             AutoOffsetReset = AutoOffsetReset.Earliest,
-            EnableAutoCommit = true
+            EnableAutoCommit = false,
+            EnableAutoOffsetStore = false
         };
 
+        ConfigureSecurity(conf);
+
+        return new ConsumerBuilder<string, byte[]>(conf)
+            .Build();
+    }
+
+    private static IProducer<string, byte[]> BuildProducer(string servers)
+    {
+        var conf = new ProducerConfig
+        {
+            BootstrapServers = servers,
+            Acks = Acks.All,
+            EnableIdempotence = true
+        };
+
+        ConfigureSecurity(conf);
+        return new ProducerBuilder<string, byte[]>(conf).Build();
+    }
+
+    private static void ConfigureSecurity(ClientConfig conf)
+    {
         if (Environment.GetEnvironmentVariable("KAFKA_TLS") == "true")
         {
             conf.SecurityProtocol = SecurityProtocol.Ssl;
@@ -317,21 +381,16 @@ internal class Consumer : IDisposable
             conf.SaslMechanism = SaslMechanism.ScramSha512;
             conf.SaslUsername = saslUsername;
             conf.SaslPassword = saslPassword;
-            // Allow librdkafka to discover system CA bundle in the container image.
-            // MSK brokers present certs signed by Amazon Root CA which is trusted by
-            // the .NET base image but librdkafka won't find it automatically on Linux
-            // unless SslCaLocation is set to "probe".
             conf.SslCaLocation = "probe";
         }
-
-        return new ConsumerBuilder<string, byte[]>(conf)
-            .Build();
     }
 
     public void Dispose()
     {
         _isListening = false;
         _consumer?.Dispose();
+        _producer?.Dispose();
+        _outboxReconciler?.Dispose();
     }
 }
 
