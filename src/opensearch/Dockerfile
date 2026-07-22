@@ -70,36 +70,51 @@ RUN rm -rf \
     /usr/share/opensearch/plugins/opensearch-ubi \
     /usr/share/opensearch/plugins/query-insights
 
-# Replace vulnerable jackson-core (2.21.3 / 3.1.3) wherever OpenSearch ships them (lib, modules, plugins).
-RUN set -eu \
+# Replace vulnerable jackson-core (2.21.3 / 3.1.3) wherever OpenSearch ships them.
+# Recurse under the tree: vendor layout is deeper than one glob level.
+# Patch whichever lines are present (2.x and/or 3.x); fail if none found or vuln jars remain.
+# Use $$ so Docker does not eat shell ${vars} / $(cmd) during Dockerfile interpolation.
+RUN echo "jackson-core jars before pin:" \
+    && find /usr/share/opensearch -type f -name 'jackson-core-*.jar' -print \
     && found2=0 \
     && found3=0 \
-    && for jar in \
-         /usr/share/opensearch/lib/jackson-core-*.jar \
-         /usr/share/opensearch/modules/*/jackson-core-*.jar \
-         /usr/share/opensearch/plugins/*/jackson-core-*.jar; do \
-         [ -e "${jar}" ] || continue; \
-         dir=$(dirname "${jar}"); \
-         base=$(basename "${jar}"); \
-         case "${base}" in \
+    && for jar in $$(find /usr/share/opensearch -type f -name 'jackson-core-*.jar'); do \
+         dir=$$(dirname "$$jar"); \
+         base=$$(basename "$$jar"); \
+         case "$$base" in \
            jackson-core-2.*) \
-             rm -f "${jar}"; \
-             cp /tmp/jackson-core-2.21.4.jar "${dir}/jackson-core-2.21.4.jar"; \
+             rm -f "$$jar"; \
+             cp /tmp/jackson-core-2.21.4.jar "$$dir/jackson-core-2.21.4.jar"; \
              found2=1 ;; \
            jackson-core-3.*) \
-             rm -f "${jar}"; \
-             cp /tmp/jackson-core-3.1.4.jar "${dir}/jackson-core-3.1.4.jar"; \
+             rm -f "$$jar"; \
+             cp /tmp/jackson-core-3.1.4.jar "$$dir/jackson-core-3.1.4.jar"; \
              found3=1 ;; \
            *) \
-             echo "Unexpected jackson-core jar: ${jar}" >&2; \
+             echo "Unexpected jackson-core jar: $$jar" >&2; \
              exit 1 ;; \
          esac; \
        done \
-    && test "${found2}" -eq 1 \
-    && test "${found3}" -eq 1 \
-    && test -z "$(find /usr/share/opensearch \( -name 'jackson-core-2.21.3.jar' -o -name 'jackson-core-3.1.3.jar' \) -print -quit)" \
-    && test -n "$(find /usr/share/opensearch -name 'jackson-core-2.21.4.jar' -print -quit)" \
-    && test -n "$(find /usr/share/opensearch -name 'jackson-core-3.1.4.jar' -print -quit)" \
+    && if [ "$$found2" -eq 0 ] && [ "$$found3" -eq 0 ]; then \
+         echo "No jackson-core jars found to pin" >&2; \
+         exit 1; \
+       fi \
+    && if [ "$$found2" -eq 1 ]; then \
+         test -n "$$(find /usr/share/opensearch -type f -name 'jackson-core-2.21.4.jar' -print)"; \
+       fi \
+    && if [ "$$found3" -eq 1 ]; then \
+         test -n "$$(find /usr/share/opensearch -type f -name 'jackson-core-3.1.4.jar' -print)"; \
+       fi \
+    && if [ -n "$$(find /usr/share/opensearch -type f -name 'jackson-core-2.21.3.jar' -print)" ]; then \
+         echo "Vulnerable jackson-core-2.21.3.jar still present" >&2; \
+         exit 1; \
+       fi \
+    && if [ -n "$$(find /usr/share/opensearch -type f -name 'jackson-core-3.1.3.jar' -print)" ]; then \
+         echo "Vulnerable jackson-core-3.1.3.jar still present" >&2; \
+         exit 1; \
+       fi \
+    && echo "jackson-core jars after pin:" \
+    && find /usr/share/opensearch -type f -name 'jackson-core-*.jar' -print \
     && rm -f /tmp/jackson-core-*.jar
 
 RUN rm -f /usr/share/opensearch/lib/jackson-databind-*.jar \
@@ -122,4 +137,4 @@ RUN rm -f /usr/share/opensearch/lib/jackson-databind-*.jar \
 # - opensearch-job-scheduler (task scheduling)
 
 USER 1000
-# Change trail: @hungxqt - 2026-07-22 - Pin jackson-core 2.21.4 and 3.1.4 for GHSA-r7wm-3cxj-wff9
+# Change trail: @hungxqt - 2026-07-22 - Pin jackson-core with $$ shell escaping for GHSA-r7wm-3cxj-wff9
