@@ -31,6 +31,7 @@ from langgraph.graph import StateGraph, START, END
 import valkey as valkeylib
 from techx_ai_common.contracts import GroundedResponse, GuardrailAction, ResponseStatus
 from techx_ai_common.guardrails import sanitize_request, scan_output
+from techx_ai_common.rate_limiter import check_rate_limit
 from techx_ai_common.proto import demo_pb2_grpc
 from copilot_contracts import (
     CopilotStatus,
@@ -94,7 +95,23 @@ class CopilotDeps:
 def make_nodes(deps: CopilotDeps):
 
     def input_guardrail_node(state: CopilotState) -> CopilotState:
-        """Block prompt injection and PII in the user message."""
+        """Block prompt injection, PII, and enforce rate limits in the user message."""
+        user_id = state.get("user_message", "anonymous")
+        allowed, limit_reason = check_rate_limit(
+            valkey_client=deps.valkey_client,
+            client_id="default_user",
+            cooldown_seconds=2,
+            max_requests_per_minute=10,
+        )
+        if not allowed:
+            logger.info("Request rate limited: %s", limit_reason)
+            return {
+                **state,
+                "status": CopilotStatus.BLOCKED,
+                "reason": limit_reason or "Rate limit exceeded. Please wait before retrying.",
+                "error": "RATE_LIMITED",
+            }
+
         result = sanitize_request(product_id="", question=state["user_message"])
         if result.action == GuardrailAction.BLOCK:
             logger.info("Input blocked by guardrail: %s", result.reason)
