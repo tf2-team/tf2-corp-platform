@@ -54,11 +54,13 @@ The customized OpenSearch image still shipped vulnerable `jackson-core` JARs fro
 ## Implementation Details
 
 1. `ADD` fixed `jackson-core` 2.21.4 and 3.1.4 from Maven Central next to the existing databind download.
-2. After plugin stripping, iterate OpenSearch `lib`, `modules`, and remaining `plugins` for `jackson-core-*.jar`.
+2. After plugin stripping, recursively `find` all `jackson-core-*.jar` under `/usr/share/opensearch` (vendor layout is deeper than one glob level).
 3. Route `jackson-core-2.*` → copy 2.21.4; `jackson-core-3.*` → copy 3.1.4; unexpected names fail the build.
-4. Assert vulnerable filenames are gone and fixed filenames are present via `find`.
-5. Leave the existing module-local `jackson-databind` 2.21.4 install unchanged.
-6. Bump `SECURITY_UPDATE_EPOCH` for cache invalidation of the OS upgrade layer.
+4. Require at least one line present; only assert the fixed version for lines that were found (do not require both 2.x and 3.x if the vendor ships one).
+5. Fail if vulnerable `2.21.3` / `3.1.3` filenames remain; print before/after jar inventory.
+6. Escape shell variables and command substitutions as `$$` / `$${...}` / `$$(...)` so Docker does not empty them during Dockerfile interpolation (this broke the first pin attempt: `test "" -eq 1`).
+7. Leave the existing module-local `jackson-databind` 2.21.4 install unchanged.
+8. Bump `SECURITY_UPDATE_EPOCH` for cache invalidation of the OS upgrade layer.
 
 ## Files Changed
 
@@ -144,4 +146,4 @@ Expected: only `jackson-core-2.21.4.jar` and `jackson-core-3.1.4.jar` (no `2.21.
 2. Rebuild and push OpenSearch with a new tag; promote chart tag.
 3. Note: rollback reintroduces Trivy HIGH GHSA-r7wm-3cxj-wff9 on OpenSearch.
 
-<!-- Change trail: @hungxqt - 2026-07-22 - Document OpenSearch jackson-core 2.21.4/3.1.4 pin for GHSA-r7wm-3cxj-wff9 -->
+<!-- Change trail: @hungxqt - 2026-07-22 - Document jackson-core pin and Dockerfile $$ shell-escape build fix -->
