@@ -17,75 +17,31 @@ from locust_plugins.users.playwright import PlaywrightUser, pw, PageWithRetry, e
 # Without this, the master UI shows worker_count=0 until the master process restarts.
 def _install_master_stale_worker_guard():
     try:
-        from locust.runners import MasterRunner, STATE_RUNNING
+        from locust.runners import MasterRunner
     except ImportError:
         return
     if getattr(MasterRunner, "_techx_stale_worker_guard", False):
         return
 
     _orig_handle_message = MasterRunner.handle_message
-    _orig_start = MasterRunner.start
-
-    def _safe_start(self, user_count, spawn_rate):
-        try:
-            return _orig_start(self, user_count, spawn_rate)
-        except ValueError as err:
-            logging.warning("Locust start deferred (generator busy): %s", err)
-            return None
 
     def _safe_handle_message(self, client_id, msg):
-        msg_type = getattr(msg, "type", None)
         try:
-            res = _orig_handle_message(self, client_id, msg)
+            return _orig_handle_message(self, client_id, msg)
         except KeyError:
             node_id = getattr(msg, "node_id", None) or client_id
             logging.warning(
                 "Ignoring message from unknown/disconnected Locust worker node_id=%s type=%s",
                 node_id,
-                msg_type,
+                getattr(msg, "type", None),
             )
-            res = None
-
-        # Dynamic Load Rebalancing: only rebalance during steady STATE_RUNNING to prevent mid-spawn generator collisions
-        if msg_type in ("client_stopped", "client_ready") and getattr(self, "state", None) == STATE_RUNNING:
-            target_users = getattr(self, "target_user_count", 0) or 0
-            if target_users > 0 and not getattr(self, "_rebalance_scheduled", False):
-                self._rebalance_scheduled = True
-
-                def _do_rebalance():
-                    try:
-                        import gevent
-                        gevent.sleep(0.5)
-                        if getattr(self, "state", None) == STATE_RUNNING:
-                            t_users = getattr(self, "target_user_count", 0) or 0
-                            s_rate = getattr(self, "spawn_rate", 10) or 10
-                            n_workers = len(getattr(self.clients, "ready", {}))
-                            if t_users > 0 and n_workers > 0:
-                                logging.info(
-                                    "Rebalancing Locust load: %d users across %d active workers...",
-                                    t_users, n_workers
-                                )
-                                self.start(t_users, s_rate)
-                    except Exception as err:
-                        logging.warning("Locust rebalance deferred: %s", err)
-                    finally:
-                        self._rebalance_scheduled = False
-
-                try:
-                    import gevent
-                    gevent.spawn(_do_rebalance)
-                except Exception as err:
-                    self._rebalance_scheduled = False
-                    logging.warning("Failed to schedule Locust rebalance: %s", err)
-        return res
+            return None
 
     MasterRunner.handle_message = _safe_handle_message
-    MasterRunner.start = _safe_start
     MasterRunner._techx_stale_worker_guard = True
 
 
 _install_master_stale_worker_guard()
-
 
 from opentelemetry import context, baggage, trace
 from opentelemetry.context import Context
