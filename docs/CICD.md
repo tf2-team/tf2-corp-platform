@@ -197,7 +197,7 @@ Defined in `docker-bake.hcl` group `release` (layered over `docker-compose.yml`)
 | image-provider, kafka, llm, load-generator, mem0, opensearch, payment |
 | product-catalog, product-reviews, quote, recommendation, shipping, shopping-copilot |
 
-`opensearch` is a **customized** image (`src/opensearch/Dockerfile`, based on `opensearchproject/opensearch:3.7.0` with unused plugins removed). **`opensearch-security` is retained** so chart SEC-06 can serve HTTPS + basic auth (`https://opensearch:9200`); other heavy plugins (ML, k-NN, alerting, etc.) stay stripped. CI pushes it to ECR; Helm’s first-party OpenSearch component pulls that image (not the public Docker Hub image).
+`opensearch` is a **customized** image (`src/opensearch/Dockerfile`, based on `opensearchproject/opensearch:3.2.0` with unused plugins removed). CI pushes it to ECR; Helm’s OpenSearch subchart pulls that image (not the public Docker Hub image).
 
 `mem0` is a normal matrix service. Its FastEmbed model cache is rebuilt and published separately to S3 only when mem0 is in `BUILD_SET`.
 
@@ -652,4 +652,4 @@ See chart runbook: `techx-corp-chart/docs/operations/gitops-argocd.md`.
 - Native multi-arch runners
 - Full e2e / tracetest in PR CI
 
-<!-- Change trail: @hungxqt - 2026-07-22 - Document local Trivy gate before ECR push in build matrix. -->
+<!-- Change trail: @hungxqt - 2026-07-19 - Document shopping-copilot in 23-image release catalog and CI tests. -->
