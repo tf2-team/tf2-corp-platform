@@ -88,6 +88,7 @@ class SettingsTest(unittest.TestCase):
         self.assertEqual(config["rca"]["anomaly"]["min_tail_anomaly_buckets"]["socket_io"], 3)
         self.assertEqual(config["rca"]["anomaly"]["min_relative_change_ratio"]["socket_io"], 0.5)
         self.assertEqual(config["rca"]["anomaly"]["min_absolute_change"]["socket_io"], 1048576.0)
+        self.assertEqual(config["rca"]["anomaly"]["correlation_lag_buckets"], {"cpu": 1, "socket_io": 1, "memory": 4})
         self.assertEqual(config["rca"]["min_points"], 30)
         self.assertEqual(config["rca"]["anomaly"]["log_correlation_window_seconds"], 120)
         self.assertEqual(config["rca"]["anomaly"]["log_history_buckets"], 45)

@@ -97,6 +97,7 @@ def normal_traffic_growth_decision(
     min_tail_anomaly_buckets: dict[str, int],
     min_relative_change_ratio: dict[str, float],
     min_absolute_change: dict[str, float],
+    correlation_lag_buckets: dict[str, int],
 ) -> tuple[bool, str]:
     required_groups = ("request_rate", "cpu", "memory", "socket_io")
     by_group = {group: [metric for metric in series if metric_group(metric.metric) == group] for group in required_groups}
@@ -116,7 +117,7 @@ def normal_traffic_growth_decision(
             group = metric_group(metric.metric)
             if decreased >= min_tail_anomaly_buckets[group] and change.indexes and median(change.values[index] for index in change.indexes) < change.baseline:
                 return False, "reason=ready_pods_decreased"
-    tolerance = max(series_step_seconds(metric) for metrics in by_group.values() for metric in metrics)
+    base_tolerance = max(series_step_seconds(metric) for metrics in by_group.values() for metric in metrics)
     required = max(min_tail_anomaly_buckets[group] for group in required_groups)
     failures = []
     for direction, label in ((1, "growth"), (-1, "decline")):
@@ -141,10 +142,12 @@ def normal_traffic_growth_decision(
         if below_threshold:
             failures.append(f"{label}:{','.join(below_threshold)}")
             continue
-        simultaneous = sum(
-            all(any(abs(timestamp - other) <= tolerance for other in timestamps[group]) for group in required_groups[1:])
-            for timestamp in timestamps["request_rate"]
+        request_onset = min(timestamps["request_rate"])
+        aligned = all(
+            -base_tolerance <= min(timestamps[group]) - request_onset <= base_tolerance * correlation_lag_buckets[group]
+            for group in required_groups[1:]
         )
+        simultaneous = min(len(changed_at) for changed_at in timestamps.values()) if aligned else 0
         if simultaneous >= required:
             return True, f"reason=coordinated_{label} common={simultaneous}"
         failures.append(f"{label}:common={simultaneous}")

@@ -282,6 +282,7 @@ class V001AnomalyEngine:
         min_tail_anomaly_buckets: dict[str, int],
         min_relative_change_ratio: dict[str, float],
         min_absolute_change: dict[str, float],
+        correlation_lag_buckets: dict[str, int],
         detection_window_seconds: int | None,
     ):
         self.algorithm_weights = algorithm_weights
@@ -292,6 +293,7 @@ class V001AnomalyEngine:
         self.min_tail_anomaly_buckets = min_tail_anomaly_buckets
         self.min_relative_change_ratio = min_relative_change_ratio
         self.min_absolute_change = min_absolute_change
+        self.correlation_lag_buckets = correlation_lag_buckets
         self.detection_window_seconds = detection_window_seconds
         self.thresholds = {
             "robust_drift": robust_drift_threshold,
@@ -418,6 +420,7 @@ class V001AnomalyEngine:
             self.min_tail_anomaly_buckets,
             self.min_relative_change_ratio,
             self.min_absolute_change,
+            self.correlation_lag_buckets,
         )
 
     def _increase_timestamps(self, metric: MetricSeries, group: str) -> set[int]:
@@ -477,8 +480,17 @@ def _normal_traffic_growth_decision(
     min_tail_anomaly_buckets: dict[str, int],
     min_relative_change_ratio: dict[str, float],
     min_absolute_change: dict[str, float],
+    correlation_lag_buckets: dict[str, int],
 ) -> tuple[bool, str]:
-    return normal_traffic_growth_decision(series, detection_window_seconds, start, min_tail_anomaly_buckets, min_relative_change_ratio, min_absolute_change)
+    return normal_traffic_growth_decision(
+        series,
+        detection_window_seconds,
+        start,
+        min_tail_anomaly_buckets,
+        min_relative_change_ratio,
+        min_absolute_change,
+        correlation_lag_buckets,
+    )
 
 
 def _tail_increase_timestamps(
@@ -534,5 +546,6 @@ def build_v001_anomaly_engine(config: dict, **overrides) -> V001AnomalyEngine:
         min_tail_anomaly_buckets={key: int(value) for key, value in anomaly["min_tail_anomaly_buckets"].items()},
         min_relative_change_ratio={key: float(value) for key, value in anomaly["min_relative_change_ratio"].items()},
         min_absolute_change={key: float(value) for key, value in anomaly["min_absolute_change"].items()},
+        correlation_lag_buckets={key: int(value) for key, value in anomaly["correlation_lag_buckets"].items()},
         detection_window_seconds=int(anomaly["detection_window_seconds"]) or None,
     )

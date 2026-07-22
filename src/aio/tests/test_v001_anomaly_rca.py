@@ -63,6 +63,7 @@ def rca_engine(config: RuntimeConfig, **combined_overrides) -> V001RcaEngine:
         "min_tail_anomaly_buckets": hyperparameters["anomaly"]["min_tail_anomaly_buckets"],
         "min_relative_change_ratio": hyperparameters["anomaly"]["min_relative_change_ratio"],
         "min_absolute_change": hyperparameters["anomaly"]["min_absolute_change"],
+        "correlation_lag_buckets": hyperparameters["anomaly"]["correlation_lag_buckets"],
         **combined_overrides,
     }
     return V001RcaEngine(config, hyperparameters["graph"], combined)
@@ -307,6 +308,14 @@ class V001AnomalyRcaTest(unittest.TestCase):
         with self.assertRaises(KeyError):
             build_v001_anomaly_engine({**config, "anomaly": anomaly})
 
+    def test_anomaly_builder_requires_correlation_lag_buckets(self):
+        config = rca_hyperparameters()
+        anomaly = dict(config["anomaly"])
+        del anomaly["correlation_lag_buckets"]
+
+        with self.assertRaises(KeyError):
+            build_v001_anomaly_engine({**config, "anomaly": anomaly})
+
     def test_weighted_sum_ignores_weak_single_algorithm_without_corroboration(self):
         engine = anomaly_engine()
 
@@ -447,6 +456,23 @@ class V001AnomalyRcaTest(unittest.TestCase):
             skewed("socket_io_bytes_per_second", 1_000_000, 3_000_000, 30),
             skewed("p95_latency_5m", 0.05, 0.10, 40),
             skewed("error_rate_5m", 0, 0, 0),
+        ]
+
+        self.assertEqual([item.metric for item in engine._filter_normal_traffic_growth(series)], ["error_rate_5m"])
+
+    def test_normal_growth_allows_configured_memory_lag(self):
+        engine = anomaly_engine()
+
+        def shifted(name: str, baseline: float, increased: float, offset: int = 0) -> MetricSeries:
+            item = minute_metric("checkout", name, [baseline] * 30 + [increased] * 15)
+            return item.model_copy(update={"points": [point.model_copy(update={"timestamp": point.timestamp + offset}) for point in item.points]})
+
+        series = [
+            shifted("request_rate_5m", 10, 30),
+            shifted("cpu_millicores", 100, 300),
+            shifted("memory_usage_bytes", 100_000_000, 150_000_000, 4 * 60),
+            shifted("socket_io_bytes_per_second", 1_000_000, 3_000_000),
+            shifted("error_rate_5m", 0, 0),
         ]
 
         self.assertEqual([item.metric for item in engine._filter_normal_traffic_growth(series)], ["error_rate_5m"])

@@ -52,6 +52,11 @@
         "request_rate": 5.0,
         "default": 1.0
       },
+      "correlation_lag_buckets": {
+        "cpu": 1,
+        "socket_io": 1,
+        "memory": 4
+      },
       "drain3_config_path": "config/drain3.ini",
       "log_bucket_seconds": 60,
       "log_correlation_window_seconds": 120,

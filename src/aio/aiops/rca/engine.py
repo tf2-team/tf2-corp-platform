@@ -23,6 +23,7 @@ class V001RcaEngine:
         self.min_tail_anomaly_buckets = {key: int(value) for key, value in combined_hyperparameters["min_tail_anomaly_buckets"].items()}
         self.min_relative_change_ratio = {key: float(value) for key, value in combined_hyperparameters["min_relative_change_ratio"].items()}
         self.min_absolute_change = {key: float(value) for key, value in combined_hyperparameters["min_absolute_change"].items()}
+        self.correlation_lag_buckets = {key: int(value) for key, value in combined_hyperparameters["correlation_lag_buckets"].items()}
         self.canonical_service_suffixes = tuple(combined_hyperparameters["canonical_service_suffixes"])
         self.metric_aliases = combined_hyperparameters["metric_aliases"]
         self.graph = GraphTraversalRca(
@@ -323,6 +324,7 @@ class V001RcaEngine:
             self.min_tail_anomaly_buckets,
             self.min_relative_change_ratio,
             self.min_absolute_change,
+            self.correlation_lag_buckets,
         )
         return normal and not self._failure_signal_increased(service, timestamp, series, findings)
 
