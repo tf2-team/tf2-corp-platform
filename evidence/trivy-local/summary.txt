@@ -1,0 +1,27 @@
+
+Service         Build Trivy
+-------         ----- -----
+accounting      PASS  PASS
+ad              FAIL  NOT RUN
+cart            PASS  PASS
+checkout        PASS  PASS
+currency        PASS  PASS
+email           FAIL  NOT RUN
+flagd-ui        PASS  FAIL
+fraud-detection PASS  PASS
+frontend        PASS  FAIL
+frontend-proxy  PASS  PASS
+image-provider  PASS  PASS
+kafka           PASS  FAIL
+llm             PASS  PASS
+load-generator  PASS  FAIL
+mem0            FAIL  NOT RUN
+opensearch      PASS  FAIL
+payment         PASS  FAIL
+product-catalog PASS  PASS
+product-reviews PASS  FAIL
+quote           FAIL  NOT RUN
+recommendation  PASS  PASS
+shipping        PASS  PASS
+
+

@@ -1,0 +1,60 @@
+#0 building with "desktop-linux" instance using docker driver
+
+#1 [internal] load local bake definitions
+#1 reading docker-compose.yml 31.23kB / 31.23kB done
+#1 reading docker-bake.hcl 6.69kB / 6.69kB done
+#1 DONE 0.0s
+
+#2 [internal] load build definition from Dockerfile
+#2 transferring dockerfile: 1.87kB 0.0s done
+#2 DONE 0.0s
+
+#3 [internal] load metadata for docker.io/library/eclipse-temurin:21-jre@sha256:273396ed5998598ed1091e8d72711c2d36980a0e65103859c55a4e977a41ffd3
+#3 ...
+
+#4 [auth] library/eclipse-temurin:pull token for registry-1.docker.io
+#4 DONE 0.0s
+
+#5 [internal] load metadata for docker.io/library/eclipse-temurin:21-jdk@sha256:da9d3a4f7650db39b918fc5a2c3da76556fb8cc8e5f3767cdea0bb409286951a
+#5 DONE 4.4s
+
+#3 [internal] load metadata for docker.io/library/eclipse-temurin:21-jre@sha256:273396ed5998598ed1091e8d72711c2d36980a0e65103859c55a4e977a41ffd3
+#3 DONE 4.4s
+
+#6 [internal] load .dockerignore
+#6 transferring context: 464B 0.0s done
+#6 DONE 0.0s
+
+#7 [stage-1 1/7] FROM docker.io/library/eclipse-temurin:21-jre@sha256:273396ed5998598ed1091e8d72711c2d36980a0e65103859c55a4e977a41ffd3
+#7 resolve docker.io/library/eclipse-temurin:21-jre@sha256:273396ed5998598ed1091e8d72711c2d36980a0e65103859c55a4e977a41ffd3 0.0s done
+#7 ...
+
+#8 [stage-1 6/7] ADD --chmod=644 --chown=appuser:appgroup https://github.com/open-telemetry/opentelemetry-java-instrumentation/releases/download/v2.29.0/opentelemetry-javaagent.jar /usr/src/app/opentelemetry-javaagent.jar
+#8 ERROR: Get "https://release-assets.githubusercontent.com/github-production-release-asset/210933087/4e5e32c9-a876-4eee-88e6-48da7b3ce09c?sp=r&sv=2018-11-09&sr=b&spr=https&se=2026-07-20T12%3A01%3A39Z&rscd=attachment%3B+filename%3Dopentelemetry-javaagent.jar&rsct=application%2Foctet-stream&skoid=96c2d410-5711-43a1-aedd-ab1947aa7ab0&sktid=398a6654-997b-47e9-b12b-9515b896b4de&skt=2026-07-20T11%3A01%3A28Z&ske=2026-07-20T12%3A01%3A39Z&sks=b&skv=2018-11-09&sig=RSBHnK8da%2BcKFD5J8WJ%2BGVKCO3SN%2Fks7mQdYWl%2Fk%2FlE%3D&jwt=eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJnaXRodWIuY29tIiwiYXVkIjoicmVsZWFzZS1hc3NldHMuZ2l0aHVidXNlcmNvbnRlbnQuY29tIiwia2V5Ijoia2V5MSIsImV4cCI6MTc4NDU0Nzg4NCwibmJmIjoxNzg0NTQ2MDg0LCJwYXRoIjoicmVsZWFzZWFzc2V0cHJvZHVjdGlvbi5ibG9iLmNvcmUud2luZG93cy5uZXQifQ.6e5J26-_iWAF-zaRmzYG2feXUIJgalxf5ucZ-gZXwbU&response-content-disposition=attachment%3B%20filename%3Dopentelemetry-javaagent.jar&response-content-type=application%2Foctet-stream": EOF
+
+#7 [stage-1 1/7] FROM docker.io/library/eclipse-temurin:21-jre@sha256:273396ed5998598ed1091e8d72711c2d36980a0e65103859c55a4e977a41ffd3
+#7 DONE 1.4s
+
+#9 [stage-1 2/7] RUN apt-get update     && apt-get upgrade -y --no-install-recommends     && rm -rf /var/lib/apt/lists/*     && rm -f /usr/bin/pebble
+#9 CANCELED
+
+#10 [builder  1/11] FROM docker.io/library/eclipse-temurin:21-jdk@sha256:da9d3a4f7650db39b918fc5a2c3da76556fb8cc8e5f3767cdea0bb409286951a
+#10 resolve docker.io/library/eclipse-temurin:21-jdk@sha256:da9d3a4f7650db39b918fc5a2c3da76556fb8cc8e5f3767cdea0bb409286951a 0.0s done
+#10 sha256:e63eba57ddc424b15a573be1b9e4fc5b4deb06d9ef675e89daf538c217043678 2.28kB / 2.28kB 0.5s done
+#10 sha256:c89d2c157c250dd818c34df99286554acfeb74cdd9a222c123711716f520a577 159B / 159B 0.5s done
+#10 sha256:abb9a19f45624a8b5405a36baa50319ed11858d87c7b3a5b2f82ed38fdea418b 0B / 158.17MB 1.1s
+#10 sha256:3527129d2410cf648456262475ba8b03ff951d4717ff900d4d9887d68d178b16 15.78kB / 24.04MB 1.0s
+#10 sha256:a3679419df184857c0d317d7cdaad6187f6c0f0b68dd2ed58becf174e28f4c1b 0B / 393B 0.5s
+#10 sha256:ed819469700fe2cd94f44a7c218a84e40cda16dd2e7e5238cbdef33e6153d536 0B / 41.58MB 0.5s
+#10 ...
+
+#11 [builder  2/11] WORKDIR /usr/src/app/
+#11 CANCELED
+
+#12 [internal] load build context
+#12 transferring context: 950.27kB 1.3s done
+#12 CANCELED
+------
+ > [stage-1 6/7] ADD --chmod=644 --chown=appuser:appgroup https://github.com/open-telemetry/opentelemetry-java-instrumentation/releases/download/v2.29.0/opentelemetry-javaagent.jar /usr/src/app/opentelemetry-javaagent.jar:
+------
+ERROR: failed to solve: failed to load cache key: Get "https://release-assets.githubusercontent.com/github-production-release-asset/210933087/4e5e32c9-a876-4eee-88e6-48da7b3ce09c?sp=r&sv=2018-11-09&sr=b&spr=https&se=2026-07-20T12%3A01%3A39Z&rscd=attachment%3B+filename%3Dopentelemetry-javaagent.jar&rsct=application%2Foctet-stream&skoid=96c2d410-5711-43a1-aedd-ab1947aa7ab0&sktid=398a6654-997b-47e9-b12b-9515b896b4de&skt=2026-07-20T11%3A01%3A28Z&ske=2026-07-20T12%3A01%3A39Z&sks=b&skv=2018-11-09&sig=RSBHnK8da%2BcKFD5J8WJ%2BGVKCO3SN%2Fks7mQdYWl%2Fk%2FlE%3D&jwt=eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJnaXRodWIuY29tIiwiYXVkIjoicmVsZWFzZS1hc3NldHMuZ2l0aHVidXNlcmNvbnRlbnQuY29tIiwia2V5Ijoia2V5MSIsImV4cCI6MTc4NDU0Nzg4NCwibmJmIjoxNzg0NTQ2MDg0LCJwYXRoIjoicmVsZWFzZWFzc2V0cHJvZHVjdGlvbi5ibG9iLmNvcmUud2luZG93cy5uZXQifQ.6e5J26-_iWAF-zaRmzYG2feXUIJgalxf5ucZ-gZXwbU&response-content-disposition=attachment%3B%20filename%3Dopentelemetry-javaagent.jar&response-content-type=application%2Foctet-stream": EOF
