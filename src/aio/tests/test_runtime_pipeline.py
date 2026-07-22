@@ -425,7 +425,7 @@ class RuntimePipelineTest(unittest.TestCase):
         self.assertNotIn("AIOPS_RCA_SYNTHETIC_CANDIDATE", text)
         self.assertIn("AIOPS_DEDUP_RESULT input_candidates=0 incidents=0", text)
 
-    def test_pipeline_enriches_slo_incident_without_creating_rca_incident(self):
+    def test_pipeline_keeps_direct_slo_notification_independent_from_rca(self):
         settings = Settings()
         with TemporaryDirectory() as tmp:
             store = SQLiteIncidentStore(Path(tmp) / "aiops.sqlite3", environment=settings.environment)
@@ -468,7 +468,7 @@ class RuntimePipelineTest(unittest.TestCase):
         self.assertEqual([incident.service for incident in result.incidents], ["checkout"])
         self.assertEqual([message.service for message in result.notifications], ["checkout"])
         checkout = result.notifications[0]
-        self.assertIn("likely root cause: payment (cpu_millicores)", checkout.summary)
+        self.assertEqual(checkout.summary, "threshold_breached on checkout_bad_ratio_24h")
 
     def test_pipeline_flushes_notification_outbox_to_sender(self):
         settings = Settings()
@@ -609,6 +609,45 @@ class RuntimePipelineTest(unittest.TestCase):
 
         self.assertEqual(outbox_row, ("retry", 1, "grafana webhook down"))
         self.assertEqual(attempt_row, ("failed", 1, "grafana webhook down"))
+
+    def test_slo_notification_failure_does_not_create_retry_or_history(self):
+        settings = Settings()
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            store = SQLiteIncidentStore(root / "aiops.sqlite3", environment=settings.environment)
+            pipeline = AiopsPipeline(
+                collector=StaticCollector(
+                    [Observation(signal_id="checkout_p95_latency_5m", value=16.0, unit="seconds", window="5m", quality=SignalQuality.VERIFIED)]
+                ),
+                detectors=[
+                    ThresholdDetector(
+                        detector_id="ops04_checkout_latency_p95",
+                        signal_id="checkout_p95_latency_5m",
+                        threshold=0.5,
+                        flow="checkout",
+                        service="checkout",
+                        severity="SEV1",
+                        runbook_id="RB-CHECKOUT-LATENCY",
+                    )
+                ],
+                store=store,
+                policy=policy(settings),
+                notification_sender=FakeNotificationSender(fail=True),
+                **runtime_kwargs(settings),
+            )
+
+            with self.assertLogs("aiops.pipeline.runtime", level="WARNING") as logs:
+                result = pipeline.run_once()
+            counts = store._connection.execute(
+                "SELECT (SELECT COUNT(*) FROM incidents), (SELECT COUNT(*) FROM notification_outbox), (SELECT COUNT(*) FROM notification_attempts)"
+            ).fetchone()
+            history_exists = (root / "notification_history.jsonl").exists()
+            store.close()
+
+        self.assertEqual(len(result.notifications), 1)
+        self.assertEqual(counts, (0, 0, 0))
+        self.assertFalse(history_exists)
+        self.assertIn("AIOPS_SLO_NOTIFY_FAILED", " ".join(logs.output))
 
     def test_pipeline_accepts_current_cdo_signal_shape_before_detection(self):
         settings = Settings()
@@ -853,9 +892,9 @@ class RuntimePipelineTest(unittest.TestCase):
             outbox_rows = store._connection.execute("SELECT incident_id, status FROM notification_outbox ORDER BY incident_id").fetchall()
             store.close()
 
-        self.assertEqual({message.service for message in result.notifications}, {"checkout", "valkey-cart"})
-        self.assertEqual({status: [row_status for _, row_status in outbox_rows].count(status) for status in {"pending", "suppressed"}}, {"pending": 2, "suppressed": 1})
-        self.assertEqual(len(result.policy_decisions), 2)
+        self.assertEqual({message.service for message in result.notifications}, {"checkout", "cart", "valkey-cart"})
+        self.assertEqual(outbox_rows, [(next(incident.incident_id for incident in result.incidents if incident.service == "checkout"), "pending")])
+        self.assertEqual(len(result.policy_decisions), 1)
         self.assertEqual(result.policy_decisions[0].result, "dry-run-recorded")
 
     def test_pipeline_does_not_suppress_children_for_low_confidence_root_cause(self):
@@ -921,7 +960,7 @@ class RuntimePipelineTest(unittest.TestCase):
             result = pipeline.run_once()
             store.close()
 
-        self.assertEqual({message.service for message in result.notifications}, {"checkout", "cart"})
+        self.assertEqual({message.service for message in result.notifications}, {"checkout", "cart", "valkey-cart"})
 
     def test_verified_remediation_is_added_to_incident_history(self):
         settings = Settings()

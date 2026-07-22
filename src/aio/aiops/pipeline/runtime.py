@@ -11,6 +11,7 @@ from datetime import UTC, datetime
 from itertools import count
 from pathlib import Path
 from typing import Protocol
+from uuid import uuid4
 
 from aiops.collectors import Collector
 from aiops.correlation import Correlator
@@ -21,6 +22,7 @@ from aiops.anomaly import build_v001_anomaly_engine
 from aiops.rca import V001RcaEngine
 from aiops.schemas import AnomalyFinding, MetricSeries, NotificationMessage, PipelineResult, PolicyDecision, RcaResult, RuntimeConfig
 from aiops.normalization import Normalizer
+from aiops.notifications import NotificationBuilder
 from aiops.qualification import QualificationGate
 from aiops.remediation import (
     ActionCatalog,
@@ -37,7 +39,6 @@ from aiops.verification import VerificationEngine
 from aiops.pipeline.analysis import (
     apply_corroboration as _apply_corroboration,
     blast_radius_services as _blast_radius_services,
-    dependency_path_contains as _dependency_path_contains,
     slo_impact_findings as _slo_impact_findings,
 )
 
@@ -60,8 +61,6 @@ class IncidentStore(Protocol):
         ...
 
     def pending_notifications_for(self, incidents: list[Incident]) -> list[NotificationMessage]: ...
-
-    def update_pending_notification(self, message: NotificationMessage) -> None: ...
 
     def due_notifications(self, limit: int = 100) -> list[NotificationMessage]: ...
 
@@ -140,11 +139,16 @@ class AiopsPipeline:
         logger.debug("AIOPS_BLOCK correlate candidates=%s ids=%s", len(correlated), [candidate.detector_id for candidate in correlated])
         enriched = self.enricher.enrich(correlated, features)
         logger.debug("AIOPS_BLOCK enrich candidates=%s evidence=%s", len(enriched), [len(candidate.evidence) for candidate in enriched])
-        incidents = [self.store.upsert(candidate) for candidate in enriched]
+        slo_candidates = [candidate for candidate in enriched if _is_slo_candidate(candidate)]
+        persisted_candidates = [candidate for candidate in enriched if not _is_slo_candidate(candidate)]
+        slo_incidents = [_transient_slo_incident(candidate) for candidate in slo_candidates]
+        direct_notifications = self._dispatch_slo_notifications(slo_incidents)
+        incidents = [self.store.upsert(candidate) for candidate in persisted_candidates]
+        analysis_incidents = [*incidents, *slo_incidents]
         deduped_incidents = _unique_incidents(incidents)
-        logger.debug("AIOPS_BLOCK incident incidents=%s ids=%s", len(incidents), [incident.incident_id for incident in incidents])
+        logger.debug("AIOPS_BLOCK incident persisted=%s transient_slo=%s ids=%s", len(incidents), len(slo_incidents), [incident.incident_id for incident in analysis_incidents])
 
-        rca_result = self._run_v001_rca(metric_series or [], incidents)
+        rca_result = self._run_v001_rca(metric_series or [], analysis_incidents)
         logger.info(
             "AIOPS_DEDUP_RESULT input_candidates=%s incidents=%s ids=%s services=%s occurrences=%s",
             len(enriched),
@@ -153,19 +157,18 @@ class AiopsPipeline:
             [incident.service for incident in deduped_incidents],
             [incident.occurrence_count for incident in deduped_incidents],
         )
-        verification_results = self.verification.verify(incidents, features)
+        verification_results = self.verification.verify(analysis_incidents, features)
         logger.debug("AIOPS_BLOCK verify results=%s statuses=%s", len(verification_results), [result.status for result in verification_results])
         logger.info(
             "AIOPS_BLOCK rca anomalies=%s root_causes=%s",
             len(rca_result.anomalies),
             [root.service for root in rca_result.root_causes],
         )
-        self._log_failure_conclusion(rca_result, deduped_incidents)
-        self._enrich_slo_notifications(deduped_incidents, rca_result)
+        self._log_failure_conclusion(rca_result, analysis_incidents)
         suppressed_incident_ids = self._suppress_related_notifications(deduped_incidents, rca_result)
         actionable_incidents = [incident for incident in incidents if incident.incident_id not in suppressed_incident_ids]
         self._record_rca_history(rca_result, incidents, enriched, metric_series or [])
-        notifications = self._flush_notifications(incidents)
+        notifications = [*direct_notifications, *self._flush_notifications(incidents)]
         logger.debug("AIOPS_BLOCK notify notifications=%s", len(notifications))
         decisions: list[PolicyDecision] = []
         for incident in actionable_incidents:
@@ -185,7 +188,7 @@ class AiopsPipeline:
             observations=observations,
             features=features,
             candidates=enriched,
-            incidents=incidents,
+            incidents=analysis_incidents,
             notifications=notifications,
             policy_decisions=decisions,
             remediation_decisions=remediation_decisions,
@@ -200,6 +203,24 @@ class AiopsPipeline:
             len(rca_result.root_causes),
         )
         return result
+
+    def _dispatch_slo_notifications(self, incidents: list[Incident]) -> list[NotificationMessage]:
+        notifications = NotificationBuilder().build(incidents)
+        for message in notifications:
+            logger.info(
+                "AIOPS_SLO_NOTIFY_DIRECT incident=%s service=%s severity=%s runbook=%s",
+                message.incident_id,
+                message.service,
+                message.severity,
+                message.runbook_id,
+            )
+            if self.notification_sender is None:
+                continue
+            try:
+                self.notification_sender.send(message)
+            except Exception as exc:
+                logger.warning("AIOPS_SLO_NOTIFY_FAILED incident=%s error=%s", message.incident_id, exc)
+        return notifications
 
     def _flush_notifications(self, incidents: list[Incident]) -> list[NotificationMessage]:
         if self.notification_sender is None:
@@ -238,27 +259,6 @@ class AiopsPipeline:
                     message.runbook_id,
                 )
         return notifications
-
-    def _enrich_slo_notifications(self, incidents: list[Incident], rca_result: RcaResult) -> None:
-        if not rca_result.root_causes or self.runtime_config is None:
-            return
-        slo_incidents = [incident for incident in incidents if any(event.reason == "threshold_breached" for event in incident.events)]
-        for message in self.store.pending_notifications_for(slo_incidents):
-            root = next(
-                (
-                    candidate
-                    for candidate in rca_result.root_causes
-                    if candidate.service == message.service or _dependency_path_contains(self.runtime_config, message.service, candidate.service)
-                ),
-                None,
-            )
-            if root is None:
-                continue
-            metrics = ",".join(root.root_cause_metrics) or "trace"
-            summary = message.summary.split("; likely root cause:", 1)[0]
-            self.store.update_pending_notification(
-                message.model_copy(update={"summary": f"{summary}; likely root cause: {root.service} ({metrics})"})
-            )
 
     def _run_v001_rca(self, metric_series: list[MetricSeries], incidents: list[Incident] | None = None) -> RcaResult:
         log_messages = self._log_messages(incidents or [])
@@ -500,3 +500,23 @@ def _log_count(summary: str) -> int:
 
 def _unique_incidents(incidents: list[Incident]) -> list[Incident]:
     return list({incident.incident_id: incident for incident in incidents}.values())
+
+
+def _is_slo_candidate(candidate: CandidateEvent) -> bool:
+    return candidate.reason == "threshold_breached" and any(
+        marker in candidate.signal_id for marker in ("latency", "error_rate", "error_ratio")
+    )
+
+
+def _transient_slo_incident(candidate: CandidateEvent) -> Incident:
+    token = uuid4().hex
+    return Incident(
+        incident_id=f"slo-{token[:12]}",
+        fingerprint=f"slo-direct:{token}",
+        state="open",
+        severity=candidate.severity,
+        flow=candidate.flow,
+        service=candidate.service,
+        likely_dependency=candidate.likely_dependency,
+        events=[candidate],
+    )

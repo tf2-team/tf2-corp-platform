@@ -321,13 +321,6 @@ class SQLiteIncidentStore:
         ).fetchall()
         return [NotificationMessage.model_validate_json(row[0]) for row in rows]
 
-    def update_pending_notification(self, message: NotificationMessage) -> None:
-        with self._connection:
-            self._connection.execute(
-                "UPDATE notification_outbox SET notification_json = ?, updated_at = ? WHERE incident_id = ? AND status = 'pending'",
-                (message.model_dump_json(), _now(), message.incident_id),
-            )
-
     def suppressed_incident_ids(self, incidents: list[Incident]) -> set[str]:
         return {
             incident.incident_id

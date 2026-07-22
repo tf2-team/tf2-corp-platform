@@ -43,7 +43,7 @@ class FastApiAppTest(unittest.TestCase):
             )
 
         self.assertEqual(result.incidents[0].flow, "checkout")
-        self.assertEqual(result.policy_decisions[0].result, "dry-run-recorded")
+        self.assertEqual(result.policy_decisions, [])
 
     def test_fastapi_app_exposes_expected_routes(self):
         paths = {route.path for route in create_app().routes}

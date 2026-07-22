@@ -266,7 +266,7 @@ class E2EPipelineRegressionTest(unittest.TestCase):
         self.assertEqual(result.candidates[0].reason, "threshold_breached")
         self.assertEqual(result.incidents[0].service, "checkout")
         self.assertEqual(result.notifications[0].runbook_id, "RB-CHECKOUT-LATENCY")
-        self.assertEqual(result.policy_decisions[0].result, "dry-run-recorded")
+        self.assertEqual(result.policy_decisions, [])
 
     def test_dependency_breach_prefers_payment_dependency_incident(self):
         with temp_workspace() as tmp:

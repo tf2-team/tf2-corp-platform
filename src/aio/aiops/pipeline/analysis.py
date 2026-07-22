@@ -76,17 +76,3 @@ def blast_radius_services(config: RuntimeConfig, root_service: str, max_hops: in
         if not frontier:
             break
     return seen
-
-
-def dependency_path_contains(config: RuntimeConfig, source: str, target: str) -> bool:
-    graph = {service.name: service.dependencies for service in config.topology.services}
-    pending = [source]
-    seen = set()
-    while pending:
-        service = pending.pop()
-        if service == target:
-            return True
-        if service not in seen:
-            seen.add(service)
-            pending.extend(graph.get(service, []))
-    return False

@@ -149,7 +149,7 @@ class ProdSimulationTest(unittest.TestCase):
         self.assertEqual(result.rca_result.root_causes[0].service, "payment")
         self.assertEqual(sender.sent, [])
 
-    def test_repeated_incident_notifies_again_after_cooldown(self):
+    def test_repeated_slo_breach_notifies_without_persistence_or_dedup(self):
         with TemporaryDirectory() as tmp:
             sender = FakeNotificationSender()
             root = Path(tmp)
@@ -159,10 +159,16 @@ class ProdSimulationTest(unittest.TestCase):
 
             second = prod_pipeline(root, sender, repeat_seconds=0, observations=[observation("checkout_p95_latency_5m", 17.0)])
             result = second.run_once()
+            counts = second.store._connection.execute(
+                "SELECT (SELECT COUNT(*) FROM incidents), (SELECT COUNT(*) FROM notification_outbox)"
+            ).fetchone()
+            history_exists = (root / "notification_history.jsonl").exists()
             second.store.close()
 
-        self.assertEqual(result.incidents[0].occurrence_count, 2)
-        self.assertEqual([message.incident_id for message in sender.sent], [result.incidents[0].incident_id, result.incidents[0].incident_id])
+        self.assertEqual(result.incidents[0].occurrence_count, 1)
+        self.assertEqual(len({message.incident_id for message in sender.sent}), 2)
+        self.assertEqual(counts, (0, 0))
+        self.assertFalse(history_exists)
 
 
 if __name__ == "__main__":
