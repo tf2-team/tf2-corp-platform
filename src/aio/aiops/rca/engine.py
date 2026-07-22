@@ -7,7 +7,7 @@ from collections import defaultdict
 import math
 
 from aiops.anomaly.stats import median, robust_score
-from aiops.anomaly.v001 import _metric_group, _point_changed
+from aiops.anomaly.v001 import _metric_group, _normal_traffic_growth_decision, _point_changed
 from aiops.rca.graph import GraphTraversalRca
 from aiops.schemas import AnomalyFinding, MetricSeries, RcaResult, RootCauseCandidate, RuntimeConfig
 
@@ -56,6 +56,10 @@ class V001RcaEngine:
             }
         )
         anomaly_services = {finding.service for finding in root_findings if finding.service != "global"}
+        evidence_strength = {
+            service: min(1.0, max(finding.score for finding in root_findings if finding.service == service))
+            for service in anomaly_services
+        }
 
         metrics_by_service: dict[str, list[tuple[str, float, str]]] = defaultdict(list)
         for finding in root_findings:
@@ -68,7 +72,8 @@ class V001RcaEngine:
             metrics_by_service[service].append((metric, score, "drift"))
 
         candidates: list[RootCauseCandidate] = []
-        for service, score in sorted(service_scores.items(), key=lambda item: item[1], reverse=True):
+        for service, rank_score in sorted(service_scores.items(), key=lambda item: item[1] * evidence_strength.get(item[0], 0.0), reverse=True):
+            score = rank_score * evidence_strength.get(service, 0.0)
             if service not in anomaly_services:
                 continue
             if self._excluded_root_cause(service):
@@ -86,7 +91,8 @@ class V001RcaEngine:
                         f"graph_score={graph_scores.get(service, 0.0):.3f}",
                         f"earliest_drift_score={earliest_scores.get(service, 0.0):.3f}",
                         f"correlation_score={correlation_scores.get(service, 0.0):.3f}",
-                        f"weighted_rrf_score={score:.3f}",
+                        f"weighted_rrf_score={rank_score:.3f}",
+                        f"evidence_strength={evidence_strength.get(service, 0.0):.3f}",
                         *[f"{metric} {source}_score={metric_score:.3f}" for metric, metric_score, source in metric_scores],
                     ],
                 )
@@ -227,26 +233,32 @@ class V001RcaEngine:
         if not _is_busy_infra_metric(metric):
             return False
         service = self._canonical_service(service)
-        return self._request_rate_increased(service, timestamp, series) and not self._failure_signal_increased(service, timestamp, series, findings)
-
-    def _request_rate_increased(self, service: str, timestamp: int, series: list[MetricSeries]) -> bool:
-        return any(
-            self._canonical_service(metric.service) == service and "request_rate" in metric.metric and _robust_score_at(metric, timestamp) >= self.drift_score_threshold
-            for metric in series
+        service_series = [item for item in series if self._canonical_service(item.service) == service]
+        normal, _ = _normal_traffic_growth_decision(
+            service_series,
+            self.detection_window_seconds,
+            self.drift_min_points - 1,
+            self.min_tail_anomaly_buckets,
+            self.min_relative_change_ratio,
+            self.min_absolute_change,
         )
+        return normal and not self._failure_signal_increased(service, timestamp, series, findings)
 
     def _failure_signal_increased(self, service: str, timestamp: int, series: list[MetricSeries], findings: list[AnomalyFinding]) -> bool:
         if any(
             self._canonical_service(finding.service) == service
             and finding.timestamp == timestamp
-            and (_is_failure_metric(finding.metric) or _is_oom_metric(finding.metric))
+            and (_is_error_metric(finding.metric) or _is_oom_metric(finding.metric))
             for finding in findings
         ):
             return True
         return any(
             self._canonical_service(metric.service) == service
-            and (_is_failure_metric(metric.metric) or _is_oom_metric(metric.metric))
-            and _robust_score_at(metric, timestamp) >= self.drift_score_threshold
+            and (
+                (_is_error_metric(metric.metric) or _is_oom_metric(metric.metric))
+                and _robust_score_at(metric, timestamp) >= self.drift_score_threshold
+                or "ready_pods" in metric.metric and _decreased_at(metric, timestamp, self.drift_score_threshold)
+            )
             for metric in series
         )
 
@@ -267,10 +279,6 @@ def _is_error_metric(metric: str) -> bool:
     return "error_rate" in metric or "error_ratio" in metric
 
 
-def _is_failure_metric(metric: str) -> bool:
-    return _is_error_metric(metric) or "ready_pods" in metric
-
-
 def _is_oom_metric(metric: str) -> bool:
     return "oom" in metric
 
@@ -287,6 +295,12 @@ def _robust_score_at(metric: MetricSeries, timestamp: int) -> float:
     values = [point.value for point in metric.points]
     index = next((index for index, point in enumerate(metric.points) if point.timestamp >= timestamp), len(metric.points) - 1)
     return robust_score(values[:index], [values[index]]) if index >= 4 else 0.0
+
+
+def _decreased_at(metric: MetricSeries, timestamp: int, threshold: float) -> bool:
+    values = [point.value for point in metric.points]
+    index = next((index for index, point in enumerate(metric.points) if point.timestamp >= timestamp), len(metric.points) - 1)
+    return index >= 4 and values[index] < median(values[:index]) and robust_score(values[:index], [values[index]]) >= threshold
 
 
 def _tail_indexes(metric: MetricSeries, detection_window_seconds: int | None, start: int) -> range:

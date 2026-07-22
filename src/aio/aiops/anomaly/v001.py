@@ -124,12 +124,16 @@ class ServiceIsolationForestDetector:
             eligible = [metric for metric in metrics if len(metric.points) >= self.min_points]
             if len(eligible) < 2:
                 continue
-            rows = self._normalized_rows(self._rows(eligible))
+            timestamps = self._timestamps(eligible)
+            rows = self._rows(eligible, timestamps)
             if len(rows) < self.min_points:
                 continue
-            tail_indexes = list(_tail_indexes(eligible[0], self.detection_window_seconds, self.min_points))
+            cutoff = timestamps[-1] - self.detection_window_seconds if self.detection_window_seconds else None
+            first_tail = next((index for index, timestamp in enumerate(timestamps) if cutoff is not None and timestamp >= cutoff), self.min_points)
+            tail_indexes = list(range(max(self.min_points, first_tail), len(rows)))
             if not tail_indexes:
                 continue
+            rows = self._normalized_rows(rows, tail_indexes[0])
             baseline_rows = rows[: tail_indexes[0]]
             tail_rows = [rows[index] for index in tail_indexes]
             scored = [(score * 10.0, index) for score, index in zip(self._scores(baseline_rows, tail_rows), tail_indexes)]
@@ -147,7 +151,7 @@ class ServiceIsolationForestDetector:
                     metric=top_metric.metric,
                     signal_id=top_metric.signal_id,
                     score=service_score,
-                    timestamp=top_metric.points[service_index].timestamp,
+                    timestamp=timestamps[service_index],
                 )
             )
         return findings
@@ -158,21 +162,26 @@ class ServiceIsolationForestDetector:
         model = IsolationForest(contamination="auto", random_state=0).fit(baseline_rows)
         return [-score for score in model.score_samples(scored_rows)]
 
-    def _rows(self, metrics: list[MetricSeries]) -> list[list[float]]:
+    def _timestamps(self, metrics: list[MetricSeries]) -> list[int]:
         values_by_metric = [{point.timestamp: point.value for point in metric.points} for metric in metrics]
-        timestamps = sorted(set.intersection(*(set(values) for values in values_by_metric)))
+        return sorted(set.intersection(*(set(values) for values in values_by_metric)))
+
+    def _rows(self, metrics: list[MetricSeries], timestamps: list[int] | None = None) -> list[list[float]]:
+        values_by_metric = [{point.timestamp: point.value for point in metric.points} for metric in metrics]
+        timestamps = timestamps if timestamps is not None else sorted(set.intersection(*(set(values) for values in values_by_metric)))
         return [[values[timestamp] for values in values_by_metric] for timestamp in timestamps]
 
-    def _normalized_rows(self, rows: list[list[float]]) -> list[list[float]]:
+    def _normalized_rows(self, rows: list[list[float]], baseline_count: int | None = None) -> list[list[float]]:
         if not rows:
             return []
         columns = list(zip(*rows))
         normalized_columns = []
         for column in columns:
-            low = min(column)
-            high = max(column)
-            spread = high - low
-            normalized_columns.append([0.0 if spread == 0 else (value - low) / spread for value in column])
+            baseline = column[:baseline_count]
+            low = min(baseline)
+            high = max(baseline)
+            spread = high - low or 1.0
+            normalized_columns.append([(value - low) / spread for value in column])
         return [list(row) for row in zip(*normalized_columns)]
 
 
@@ -269,9 +278,6 @@ class V001AnomalyEngine:
         single_algorithm_min_normalized_score: float,
         robust_drift_threshold: float,
         robust_drift_min_baseline_points: int,
-        suppress_cpu_robust_threshold: float,
-        suppress_latency_absolute_threshold_seconds: float,
-        suppress_latency_relative_increase_ratio: float,
         min_tail_anomaly_buckets: dict[str, int],
         min_relative_change_ratio: dict[str, float],
         min_absolute_change: dict[str, float],
@@ -281,9 +287,6 @@ class V001AnomalyEngine:
         self.weighted_score_threshold = weighted_score_threshold
         self.single_algorithm_min_normalized_score = single_algorithm_min_normalized_score
         self.log_correlation_window_seconds = log_correlation_window_seconds
-        self.suppress_cpu_robust_threshold = suppress_cpu_robust_threshold
-        self.suppress_latency_absolute_threshold_seconds = suppress_latency_absolute_threshold_seconds
-        self.suppress_latency_relative_increase_ratio = suppress_latency_relative_increase_ratio
         self.min_points = min_points
         self.min_tail_anomaly_buckets = min_tail_anomaly_buckets
         self.min_relative_change_ratio = min_relative_change_ratio
@@ -382,42 +385,18 @@ class V001AnomalyEngine:
 
     def _suppress_busy_infra(self, findings: list[AnomalyFinding], series: list[MetricSeries]) -> list[AnomalyFinding]:
         by_service_series: dict[str, list[MetricSeries]] = defaultdict(list)
-        by_service_findings: dict[str, list[AnomalyFinding]] = defaultdict(list)
         for metric in series:
             by_service_series[metric.service].append(metric)
-        for finding in findings:
-            by_service_findings[finding.service].append(finding)
-
-        filtered = []
-        for finding in findings:
-            if _is_latency_metric(finding.metric):
-                service_series = by_service_series[finding.service]
-                if _request_rate_increased(service_series, finding.timestamp, self.suppress_cpu_robust_threshold) and not _hard_failure_increased(
-                    service_series, finding.timestamp, self.suppress_cpu_robust_threshold
-                ):
-                    value = _value_at(_series_for_metric(service_series, finding.metric), finding.timestamp)
-                    if value <= self.suppress_latency_absolute_threshold_seconds or _relative_increase(
-                        _series_for_metric(service_series, finding.metric), finding.timestamp
-                    ) <= self.suppress_latency_relative_increase_ratio:
-                        continue
-                filtered.append(finding)
-                continue
-            if not _is_busy_infra_metric(finding.metric):
-                filtered.append(finding)
-                continue
-            service_findings = by_service_findings[finding.service]
-            service_series = by_service_series[finding.service]
-            has_failure_or_oom = any(
-                item.timestamp == finding.timestamp and (_is_hard_failure_metric(item.metric) or _is_oom_metric(item.metric))
-                for item in service_findings
-            )
-            if (
-                has_failure_or_oom
-                or not _request_rate_increased(service_series, finding.timestamp, self.suppress_cpu_robust_threshold)
-                or _hard_failure_increased(service_series, finding.timestamp, self.suppress_cpu_robust_threshold)
-            ):
-                filtered.append(finding)
-        return filtered
+        normal_services = {
+            service
+            for service, service_series in by_service_series.items()
+            if self._normal_traffic_growth_decision(service_series)[0]
+        }
+        return [
+            finding
+            for finding in findings
+            if finding.service not in normal_services or not (_is_busy_infra_metric(finding.metric) or _is_latency_metric(finding.metric))
+        ]
 
     def _filter_normal_traffic_growth(self, series: list[MetricSeries]) -> list[MetricSeries]:
         by_service: dict[str, list[MetricSeries]] = defaultdict(list)
@@ -436,34 +415,14 @@ class V001AnomalyEngine:
         ]
 
     def _normal_traffic_growth_decision(self, series: list[MetricSeries]) -> tuple[bool, str]:
-        required_groups = ("request_rate", "latency", "cpu", "memory", "socket_io")
-        by_group = {group: [metric for metric in series if _metric_group(metric.metric) == group] for group in required_groups}
-        missing = [group for group, metrics in by_group.items() if not metrics]
-        if missing:
-            return False, f"reason=missing_metrics metrics={','.join(missing)}"
-        error_metrics = [metric for metric in series if _is_error_metric(metric.metric)]
-        if any(self._error_increased(metric) for metric in error_metrics):
-            return False, "reason=error_increased"
-        if any("ready_pods" in metric.metric and self._ready_pods_decreased(metric) for metric in series):
-            return False, "reason=ready_pods_decreased"
-        increase_timestamps = {
-            group: set().union(
-                *(self._increase_timestamps(metric, group) for metric in metrics)
-            )
-            for group, metrics in by_group.items()
-        }
-        below_threshold = [group for group, timestamps in increase_timestamps.items() if not timestamps]
-        if below_threshold:
-            return False, f"reason=below_threshold metrics={','.join(below_threshold)}"
-        tolerance = max(_series_step_seconds(metric) for metrics in by_group.values() for metric in metrics)
-        simultaneous = sum(
-            all(any(abs(timestamp - other) <= tolerance for other in increase_timestamps[group]) for group in required_groups[1:])
-            for timestamp in increase_timestamps["request_rate"]
+        return _normal_traffic_growth_decision(
+            series,
+            self.detection_window_seconds,
+            self.min_points - 1,
+            self.min_tail_anomaly_buckets,
+            self.min_relative_change_ratio,
+            self.min_absolute_change,
         )
-        required = max(self.min_tail_anomaly_buckets[group] for group in required_groups)
-        if simultaneous < required:
-            return False, f"reason=insufficient_common_buckets common={simultaneous} required={required}"
-        return True, f"reason=coordinated_growth common={simultaneous}"
 
     def _increase_timestamps(self, metric: MetricSeries, group: str) -> set[int]:
         return _tail_increase_timestamps(
@@ -474,22 +433,6 @@ class V001AnomalyEngine:
             self.min_relative_change_ratio[group],
             self.min_absolute_change[group],
         )
-
-    def _ready_pods_decreased(self, metric: MetricSeries) -> bool:
-        group = _metric_group(metric.metric)
-        indexes, values, baseline = _tail_context(metric, self.detection_window_seconds, self.min_points - 1)
-        if not indexes:
-            return False
-        changed = sum(values[index] < baseline and _point_changed(values[index], baseline, self.min_relative_change_ratio[group], self.min_absolute_change[group]) for index in indexes)
-        return changed >= self.min_tail_anomaly_buckets[group] and median([values[index] for index in indexes]) < baseline
-
-    def _error_increased(self, metric: MetricSeries) -> bool:
-        indexes, values, baseline = _tail_context(metric, self.detection_window_seconds, self.min_points - 1)
-        return any(values[index] > baseline and _point_changed(values[index], baseline, 0.0, self.min_absolute_change["error"]) for index in indexes)
-
-    def _suppress_busy_cpu(self, findings: list[AnomalyFinding], series: list[MetricSeries]) -> list[AnomalyFinding]:
-        return self._suppress_busy_infra(findings, series)
-
 
 def _is_cpu_metric(metric: str) -> bool:
     return "cpu" in metric
@@ -550,6 +493,65 @@ def _point_changed(value: float, baseline: float, min_relative: float, min_absol
     return delta / abs(baseline) >= min_relative
 
 
+def _normal_traffic_growth_decision(
+    series: list[MetricSeries],
+    detection_window_seconds: int | None,
+    start: int,
+    min_tail_anomaly_buckets: dict[str, int],
+    min_relative_change_ratio: dict[str, float],
+    min_absolute_change: dict[str, float],
+) -> tuple[bool, str]:
+    required_groups = ("request_rate", "latency", "cpu", "memory", "socket_io")
+    by_group = {group: [metric for metric in series if _metric_group(metric.metric) == group] for group in required_groups}
+    missing = [group for group, metrics in by_group.items() if not metrics]
+    if missing:
+        return False, f"reason=missing_metrics metrics={','.join(missing)}"
+    for metric in series:
+        indexes, values, baseline = _tail_context(metric, detection_window_seconds, start)
+        if _is_error_metric(metric.metric) and any(
+            values[index] > baseline and _point_changed(values[index], baseline, 0.0, min_absolute_change["error"])
+            for index in indexes
+        ):
+            return False, "reason=error_increased"
+        if "ready_pods" in metric.metric:
+            group = _metric_group(metric.metric)
+            decreased = sum(
+                values[index] < baseline
+                and _point_changed(values[index], baseline, min_relative_change_ratio[group], min_absolute_change[group])
+                for index in indexes
+            )
+            if decreased >= min_tail_anomaly_buckets[group] and indexes and median([values[index] for index in indexes]) < baseline:
+                return False, "reason=ready_pods_decreased"
+    increase_timestamps = {
+        group: set().union(
+            *(
+                _tail_increase_timestamps(
+                    metric,
+                    detection_window_seconds,
+                    start,
+                    min_tail_anomaly_buckets[group],
+                    min_relative_change_ratio[group],
+                    min_absolute_change[group],
+                )
+                for metric in metrics
+            )
+        )
+        for group, metrics in by_group.items()
+    }
+    below_threshold = [group for group, timestamps in increase_timestamps.items() if not timestamps]
+    if below_threshold:
+        return False, f"reason=below_threshold metrics={','.join(below_threshold)}"
+    tolerance = max(_series_step_seconds(metric) for metrics in by_group.values() for metric in metrics)
+    simultaneous = sum(
+        all(any(abs(timestamp - other) <= tolerance for other in increase_timestamps[group]) for group in required_groups[1:])
+        for timestamp in increase_timestamps["request_rate"]
+    )
+    required = max(min_tail_anomaly_buckets[group] for group in required_groups)
+    if simultaneous < required:
+        return False, f"reason=insufficient_common_buckets common={simultaneous} required={required}"
+    return True, f"reason=coordinated_growth common={simultaneous}"
+
+
 def _tail_increase_timestamps(
     metric: MetricSeries,
     detection_window_seconds: int | None,
@@ -589,42 +591,6 @@ def _series_step_seconds(metric: MetricSeries) -> int:
     return int(median(differences)) if differences else 1
 
 
-def _request_rate_increased(series: list[MetricSeries], timestamp: int, threshold: float) -> bool:
-    return any("request_rate" in metric.metric and _robust_score_at(metric, timestamp) >= threshold for metric in series)
-
-
-def _hard_failure_increased(series: list[MetricSeries], timestamp: int, threshold: float) -> bool:
-    return any((_is_hard_failure_metric(metric.metric) or _is_oom_metric(metric.metric)) and _robust_score_at(metric, timestamp) >= threshold for metric in series)
-
-
-def _series_for_metric(series: list[MetricSeries], metric: str) -> MetricSeries | None:
-    return next((item for item in series if item.metric == metric), None)
-
-
-def _value_at(metric: MetricSeries | None, timestamp: int) -> float:
-    if metric is None or not metric.points:
-        return 0.0
-    index = next((index for index, point in enumerate(metric.points) if point.timestamp >= timestamp), len(metric.points) - 1)
-    return metric.points[index].value
-
-
-def _relative_increase(metric: MetricSeries | None, timestamp: int) -> float:
-    if metric is None:
-        return 0.0
-    values = [point.value for point in metric.points]
-    index = next((index for index, point in enumerate(metric.points) if point.timestamp >= timestamp), len(metric.points) - 1)
-    if index < 4:
-        return 0.0
-    baseline = median(values[:index])
-    return (values[index] - baseline) / baseline if baseline > 0 else 0.0
-
-
-def _robust_score_at(metric: MetricSeries, timestamp: int) -> float:
-    values = [point.value for point in metric.points]
-    index = next((index for index, point in enumerate(metric.points) if point.timestamp >= timestamp), len(metric.points) - 1)
-    return robust_score(values[:index], [values[index]]) if index >= 4 else 0.0
-
-
 def _tail_indexes(metric: MetricSeries, detection_window_seconds: int | None, start: int) -> range:
     if not metric.points:
         return range(0)
@@ -655,9 +621,6 @@ def build_v001_anomaly_engine(config: dict, **overrides) -> V001AnomalyEngine:
         single_algorithm_min_normalized_score=float(anomaly["single_algorithm_min_normalized_score"]),
         robust_drift_threshold=float(anomaly["robust_drift_threshold"]),
         robust_drift_min_baseline_points=int(anomaly["robust_drift_min_baseline_points"]),
-        suppress_cpu_robust_threshold=float(anomaly["suppress_cpu_robust_threshold"]),
-        suppress_latency_absolute_threshold_seconds=float(anomaly["suppress_latency_absolute_threshold_seconds"]),
-        suppress_latency_relative_increase_ratio=float(anomaly["suppress_latency_relative_increase_ratio"]),
         min_tail_anomaly_buckets={key: int(value) for key, value in anomaly["min_tail_anomaly_buckets"].items()},
         min_relative_change_ratio={key: float(value) for key, value in anomaly["min_relative_change_ratio"].items()},
         min_absolute_change={key: float(value) for key, value in anomaly["min_absolute_change"].items()},

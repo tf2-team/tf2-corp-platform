@@ -18,9 +18,6 @@
       "robust_drift_threshold": 4.0,
       "robust_drift_min_baseline_points": 30,
       "detection_window_seconds": 900,
-      "suppress_cpu_robust_threshold": 4.0,
-      "suppress_latency_absolute_threshold_seconds": 0.5,
-      "suppress_latency_relative_increase_ratio": 0.25,
       "min_tail_anomaly_buckets": {
         "error": 1,
         "latency": 3,

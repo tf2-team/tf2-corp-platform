@@ -36,6 +36,6 @@ def _bucket(series: MetricSeries) -> MetricSeries:
 def _bucket_value(metric: str, values: list[float]) -> float:
     if "error_rate" in metric or "error_ratio" in metric or "latency" in metric:
         return max(values)
-    if "cpu" in metric or "memory" in metric or "request_rate" in metric:
+    if "cpu" in metric or "memory" in metric or "request_rate" in metric or "socket_io" in metric:
         return sum(values) / len(values)
     return values[-1]
