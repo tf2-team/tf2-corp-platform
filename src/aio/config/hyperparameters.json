@@ -1,105 +1,22 @@
 {
-  "rca": {
-    "enabled": true,
-    "top_k": 5,
-    "min_points": 30,
-    "ewma_alpha": 0.1,
-    "ewma_z_threshold": 4.0,
-    "seasonal_period": 1,
-    "isolation_score_threshold": 5.0,
-    "anomaly": {
-      "algorithm_weights": {
-        "robust_drift": 0.8,
-        "ewma_stl": 0.8,
-        "isolation_forest": 0.2
-      },
-      "weighted_score_threshold": 1.0,
-      "single_algorithm_min_normalized_score": 2.0,
-      "robust_drift_threshold": 4.0,
-      "robust_drift_min_baseline_points": 30,
-      "detection_window_seconds": 900,
-      "evidence_window_seconds": 900,
-      "no_evidence_multiplier": 0.5,
-      "single_evidence_bonus": 0.15,
-      "dual_evidence_bonus": 0.3,
-      "min_tail_anomaly_buckets": {
-        "error": 1,
-        "latency": 3,
-        "cpu": 3,
-        "memory": 3,
-        "disk": 3,
-        "socket_io": 3,
-        "request_rate": 3,
-        "default": 2
-      },
-      "min_relative_change_ratio": {
-        "error": 0.0,
-        "latency": 0.25,
-        "cpu": 0.3,
-        "memory": 0.3,
-        "disk": 0.3,
-        "socket_io": 0.5,
-        "request_rate": 0.5,
-        "default": 0.3
-      },
-      "min_absolute_change": {
-        "error": 0.005,
-        "latency": 0.05,
-        "cpu": 10.0,
-        "memory": 104857600.0,
-        "disk": 1048576.0,
-        "socket_io": 1048576.0,
-        "request_rate": 5.0,
-        "default": 1.0
-      },
-      "correlation_lag_buckets": {
-        "cpu": 1,
-        "socket_io": 1,
-        "memory": 4
-      },
-      "drain3_config_path": "config/drain3.ini",
-      "log_bucket_seconds": 60,
-      "log_correlation_window_seconds": 120,
-      "log_history_buckets": 45,
-      "log_min_nonzero_buckets": 3,
-      "log_max_templates_per_service": 20,
-      "log_max_events_per_evidence": 100
-    },
-    "graph": {
-      "damping": 0.85,
-      "pagerank_weight": 0.7,
-      "timestamp_weight": 0.3
-    },
-    "combined": {
-      "rrf_k": 20,
-      "drift_min_points": 30,
-      "drift_score_threshold": 4.0,
-      "detection_window_seconds": 900,
-      "canonical_service_suffixes": [],
-      "metric_aliases": {},
-      "ranker_weights": {
-        "graph": 0.3,
-        "earliest_drift": 0.5,
-        "correlation": 0.1
-      }
-    }
+  "incident": {
+    "notification_cooldown_seconds": 900,
+    "slo_dedup_seconds": 300
   },
-  "remediation": {
-    "history_top_k": 3,
-    "ood_threshold": 0.2,
-    "cost_page": 20.0,
-    "blast_radius_limit": 3,
-    "confidence_threshold": 0.7,
-    "similarity_weights": {
-      "service": 0.35,
-      "log": 0.25,
-      "trace": 0.2,
-      "metric": 0.2
+  "correlation": {
+    "window_seconds": 300,
+    "confidence_threshold": 0.5,
+    "topology_max_hops": 1,
+    "suppress_min_root_score": 0.8,
+    "suppress_window_seconds": 900,
+    "weights": {
+      "verified_primary_signal": 0.25,
+      "temporal_precedence": 0.2,
+      "topology_path": 0.25,
+      "operation_specificity": 0.1,
+      "trace_log_kubernetes_corroboration": 0.2,
+      "stale_or_missing_evidence_penalty": -0.3
     }
-  },
-  "no_data": {
-    "missing_confidence": 1.0,
-    "unknown_confidence": 0.7
   },
   "detectors": {
     "latency_slo_overrides": {
@@ -141,23 +58,106 @@
       "ops03_checkout_payment_dependency": 0.8
     }
   },
-  "correlation": {
-    "window_seconds": 300,
-    "suppress_window_seconds": 900,
-    "suppress_min_root_score": 0.8,
-    "topology_max_hops": 1,
-    "confidence_threshold": 0.5,
-    "weights": {
-      "verified_primary_signal": 0.25,
-      "temporal_precedence": 0.2,
-      "topology_path": 0.25,
-      "operation_specificity": 0.1,
-      "trace_log_kubernetes_corroboration": 0.2,
-      "stale_or_missing_evidence_penalty": -0.3
+  "no_data": {
+    "missing_confidence": 1.0,
+    "unknown_confidence": 0.7
+  },
+  "remediation": {
+    "history_top_k": 3,
+    "ood_threshold": 0.2,
+    "confidence_threshold": 0.7,
+    "blast_radius_limit": 3,
+    "cost_page": 20.0,
+    "similarity_weights": {
+      "service": 0.35,
+      "log": 0.25,
+      "trace": 0.2,
+      "metric": 0.2
     }
   },
-  "incident": {
-    "notification_cooldown_seconds": 900,
-    "slo_dedup_seconds": 300
+  "rca": {
+    "enabled": true,
+    "top_k": 5,
+    "min_points": 30,
+    "seasonal_period": 1,
+    "ewma_alpha": 0.1,
+    "ewma_z_threshold": 4.0,
+    "isolation_score_threshold": 5.0,
+    "anomaly": {
+      "algorithm_weights": {
+        "robust_drift": 0.8,
+        "ewma_stl": 0.8,
+        "isolation_forest": 0.2
+      },
+      "weighted_score_threshold": 1.0,
+      "single_algorithm_min_normalized_score": 2.0,
+      "robust_drift_threshold": 4.0,
+      "robust_drift_min_baseline_points": 30,
+      "detection_window_seconds": 900,
+      "evidence_window_seconds": 900,
+      "no_evidence_multiplier": 0.5,
+      "single_evidence_bonus": 0.15,
+      "dual_evidence_bonus": 0.3,
+      "drain3_config_path": "config/drain3.ini",
+      "log_bucket_seconds": 60,
+      "log_correlation_window_seconds": 120,
+      "log_history_buckets": 45,
+      "log_min_nonzero_buckets": 3,
+      "log_max_templates_per_service": 20,
+      "log_max_events_per_evidence": 100,
+      "min_tail_anomaly_buckets": {
+        "error": 1,
+        "latency": 3,
+        "cpu": 3,
+        "memory": 3,
+        "disk": 3,
+        "socket_io": 3,
+        "request_rate": 3,
+        "default": 2
+      },
+      "min_relative_change_ratio": {
+        "error": 0.0,
+        "latency": 0.25,
+        "cpu": 0.3,
+        "memory": 0.3,
+        "disk": 0.3,
+        "socket_io": 0.5,
+        "request_rate": 0.5,
+        "default": 0.3
+      },
+      "min_absolute_change": {
+        "error": 0.005,
+        "latency": 0.05,
+        "cpu": 10.0,
+        "memory": 104857600.0,
+        "disk": 1048576.0,
+        "socket_io": 1048576.0,
+        "request_rate": 5.0,
+        "default": 1.0
+      },
+      "correlation_lag_buckets": {
+        "cpu": 1,
+        "socket_io": 1,
+        "memory": 4
+      }
+    },
+    "graph": {
+      "damping": 0.85,
+      "pagerank_weight": 0.7,
+      "timestamp_weight": 0.3
+    },
+    "combined": {
+      "rrf_k": 20,
+      "drift_min_points": 30,
+      "drift_score_threshold": 4.0,
+      "detection_window_seconds": 900,
+      "canonical_service_suffixes": [],
+      "metric_aliases": {},
+      "ranker_weights": {
+        "graph": 0.3,
+        "earliest_drift": 0.5,
+        "correlation": 0.1
+      }
+    }
   }
 }

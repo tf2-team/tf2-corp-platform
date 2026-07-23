@@ -137,9 +137,10 @@ IDs, query IDs, units, windows, and required labels are validated against
 
 ## Configuration
 
-Runtime secrets, URLs, paths, and numeric hyperparameters are loaded from
-`AIOPS_*` environment variables through `aiops.config.Settings`. Local
-development may source them from `.env`.
+Runtime secrets, URLs, paths, and operational switches are loaded from
+`AIOPS_*` environment variables through `aiops.config.Settings`. Numeric
+pipeline tuning lives in `config/hyperparameters.json`; select another file
+with `AIOPS_HYPERPARAMETERS_PATH` instead of putting tuning values in `.env`.
 Set `AIOPS_ENV_FILE=.env.live` to select the ignored live file without copying
 secrets into the tracked template.
 Infrastructure topology, signal IDs, detector definitions, and policy lists are loaded from `config/runtime.json`.
@@ -149,18 +150,13 @@ Operator-only proxy routes and telemetry fan-out do not belong in this business-
 Detector thresholds and detector confidences are intentionally kept in `config/runtime.json` beside detector IDs.
 RCA, remediation, no-data, and correlation hyperparameters are loaded from `config/hyperparameters.json`.
 
-- Hyperparameters: RCA, remediation, no-data, correlation.
+- Hyperparameters: incident cooldowns, correlation, detector thresholds, no-data confidence, remediation, RCA.
 - Runtime paths: API paths, evidence dir, state store path.
 - Operational IDs: detector IDs, signal IDs, runbook IDs, severity, environment.
 - Safety policy values: protected targets, stateful kinds, non-actionable flows.
 - Integration credentials: Prometheus, Grafana webhook, Jaeger, OpenSearch, Kubernetes API, notification webhook, AIE status, CDO cost feed, live executor.
 
-List/set/map values use JSON syntax in `.env`:
-
-```env
-AIOPS_NO_DATA_REQUIRED_SIGNAL_IDS=["checkout_bad_ratio_24h"]
-AIOPS_PROTECTED_TARGETS=["flagd","openfeature","secrets","btc-incident"]
-```
+Detector IDs, required signal lists, protected targets, stateful kinds, and non-actionable flows are runtime config, not env overrides.
 
 ## Current Scope
 
