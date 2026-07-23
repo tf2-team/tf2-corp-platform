@@ -549,8 +549,12 @@ func (cs *checkout) prepareOrderItemsAndShippingQuoteFromCart(ctx context.Contex
 }
 
 func mustCreateClient(svcAddr string) *grpc.ClientConn {
+	target := svcAddr
+	if !strings.HasPrefix(target, "dns:///") && !strings.HasPrefix(target, "http://") && !strings.HasPrefix(target, "https://") {
+		target = "dns:///" + target
+	}
 	serviceConfig := `{"loadBalancingConfig": [{"round_robin": {}}]}`
-	c, err := grpc.NewClient(svcAddr,
+	c, err := grpc.NewClient(target,
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
 		grpc.WithStatsHandler(otelgrpc.NewClientHandler()),
 		grpc.WithDefaultServiceConfig(serviceConfig),
