@@ -180,6 +180,21 @@ def _expand_detector_signal_groups(raw: dict) -> None:
     for detector in raw.get("detectors", []):
         if "__all_prometheus__" in detector.get("signal_ids", []):
             detector["signal_ids"] = prometheus_signal_ids
+    existing_signal_ids = {detector.get("signal_id") for detector in raw.get("detectors", [])}
+    raw.setdefault("detectors", []).extend(
+        {
+            "id": f"auto_{spec['service'].replace('-', '_')}_latency_{spec['metric'].split('_', 1)[0]}",
+            "type": "threshold",
+            "enabled": True,
+            "signal_id": spec["signal_id"],
+            "flow": spec["flow"],
+            "service": spec["service"],
+            "severity": "SEV1",
+            "runbook_id": "RB-SERVICE-LATENCY",
+        }
+        for spec in raw.get("prometheus_query_specs", {}).values()
+        if spec.get("metric") in {"p95_latency_5m", "p99_latency_5m"} and spec.get("signal_id") not in existing_signal_ids
+    )
 
 
 def build_detectors(
@@ -196,11 +211,16 @@ def build_detectors(
         if not item.enabled:
             continue
         if item.type == "threshold":
+            threshold = (
+                detector_hyperparameters["latency_slo_overrides"][item.service]
+                if item.id.endswith(("_latency_p95", "_latency_p99"))
+                else thresholds[item.id]
+            )
             detectors.append(
                 ThresholdDetector(
                     detector_id=item.id,
                     signal_id=item.signal_id or "",
-                    threshold=thresholds[item.id],
+                    threshold=threshold,
                     flow=item.flow,
                     service=item.service,
                     severity=item.severity,

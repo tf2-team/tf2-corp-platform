@@ -11,7 +11,7 @@ from aiops.normalization import load_normalization_schema
 from aiops.pipeline import AiopsPipeline
 from aiops.qualification import load_qualification_schema
 from aiops.remediation import PolicyEngine
-from aiops.schemas import MetricPoint, MetricSeries, Observation, SignalQuality
+from aiops.schemas import MetricPoint, MetricSeries, NotificationMessage, Observation, SignalQuality
 from aiops.storage import SQLiteIncidentStore
 
 
@@ -77,14 +77,15 @@ def prod_pipeline(root: Path, sender: FakeNotificationSender, repeat_seconds: in
 
 class ProdSimulationTest(unittest.TestCase):
     def test_checkout_latency_slo_breach_sends_notification(self):
-        with TemporaryDirectory() as tmp:
-            sender = FakeNotificationSender()
-            pipeline = prod_pipeline(Path(tmp), sender, observations=[observation("checkout_p95_latency_5m", 16.0)])
+        for percentile in (95, 99):
+            with self.subTest(percentile=percentile), TemporaryDirectory() as tmp:
+                sender = FakeNotificationSender()
+                pipeline = prod_pipeline(Path(tmp), sender, observations=[observation(f"checkout_p{percentile}_latency_5m", 16.0)])
 
-            pipeline.run_once()
-            pipeline.store.close()
+                pipeline.run_once()
+                pipeline.store.close()
 
-        self.assertEqual([message.runbook_id for message in sender.sent], ["RB-CHECKOUT-LATENCY"])
+                self.assertEqual([message.runbook_id for message in sender.sent], ["RB-SERVICE-LATENCY"])
 
     def test_service_error_rate_slo_breach_sends_notification(self):
         with TemporaryDirectory() as tmp:
@@ -96,16 +97,16 @@ class ProdSimulationTest(unittest.TestCase):
 
         self.assertEqual([message.runbook_id for message in sender.sent], ["RB-SERVICE-ERROR-RATE"])
 
-    def test_checkout_slo_breach_pages_once(self):
+    def test_checkout_latency_breach_pages_once(self):
         with TemporaryDirectory() as tmp:
             sender = FakeNotificationSender()
-            pipeline = prod_pipeline(Path(tmp), sender, observations=[observation("checkout_bad_ratio_24h", 0.2)])
+            pipeline = prod_pipeline(Path(tmp), sender, observations=[observation("checkout_p95_latency_5m", 16.0)])
 
             result = pipeline.run_once()
             pipeline.store.close()
 
         self.assertEqual([incident.service for incident in result.incidents], ["checkout"])
-        self.assertEqual([message.runbook_id for message in sender.sent], ["RB-CHECKOUT-SLO"])
+        self.assertEqual([message.runbook_id for message in sender.sent], ["RB-SERVICE-LATENCY"])
 
     def test_checkout_payment_dependency_breach_pages_dependency_runbook(self):
         with TemporaryDirectory() as tmp:
@@ -129,7 +130,7 @@ class ProdSimulationTest(unittest.TestCase):
         self.assertEqual(result.incidents[0].service, "aiops")
         self.assertEqual(sender.sent[0].runbook_id, "RB-MONITORING-LOSS")
 
-    def test_metric_only_rca_creates_synthetic_incident_and_notification(self):
+    def test_metric_only_rca_does_not_create_incident_or_notification(self):
         with TemporaryDirectory() as tmp:
             sender = FakeNotificationSender()
             pipeline = prod_pipeline(Path(tmp), sender)
@@ -144,24 +145,33 @@ class ProdSimulationTest(unittest.TestCase):
             )
             pipeline.store.close()
 
-        self.assertEqual(result.candidates[0].detector_id, "rca_root_cause")
+        self.assertEqual(result.candidates, [])
+        self.assertEqual(result.incidents, [])
         self.assertEqual(result.rca_result.root_causes[0].service, "payment")
-        self.assertEqual(sender.sent[0].runbook_id, "RB-SERVICE-ERROR-RATE")
+        self.assertEqual(sender.sent, [])
 
-    def test_repeated_incident_notifies_again_after_cooldown(self):
+    def test_repeated_slo_breach_is_deduped_by_incident(self):
         with TemporaryDirectory() as tmp:
             sender = FakeNotificationSender()
             root = Path(tmp)
-            first = prod_pipeline(root, sender, repeat_seconds=0, observations=[observation("checkout_bad_ratio_24h", 0.2)])
+            first = prod_pipeline(root, sender, repeat_seconds=0, observations=[observation("checkout_p95_latency_5m", 16.0)])
             first.run_once()
             first.store.close()
 
-            second = prod_pipeline(root, sender, repeat_seconds=0, observations=[observation("checkout_bad_ratio_24h", 0.3)])
+            second = prod_pipeline(root, sender, repeat_seconds=0, observations=[observation("checkout_p95_latency_5m", 17.0)])
             result = second.run_once()
+            counts = second.store._connection.execute(
+                "SELECT (SELECT COUNT(*) FROM incidents), (SELECT COUNT(*) FROM notification_outbox)"
+            ).fetchone()
             second.store.close()
+            history_rows = (root / "notification_history.jsonl").read_text(encoding="utf-8").splitlines()
 
         self.assertEqual(result.incidents[0].occurrence_count, 2)
-        self.assertEqual([message.incident_id for message in sender.sent], [result.incidents[0].incident_id, result.incidents[0].incident_id])
+        self.assertEqual(len(sender.sent), 1)
+        self.assertEqual(result.notifications, [])
+        self.assertEqual(counts, (1, 1))
+        self.assertEqual(len(history_rows), 1)
+        self.assertTrue(all(NotificationMessage.model_validate_json(row) for row in history_rows))
 
 
 if __name__ == "__main__":

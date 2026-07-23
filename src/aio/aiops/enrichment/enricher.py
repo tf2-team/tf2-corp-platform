@@ -102,18 +102,23 @@ class Enricher:
                 traces = self.jaeger.search_traces(service, limit=20, start=(end - window_seconds) * 1_000_000, end=end * 1_000_000).get("data", [])
                 update["available_sources"].add("trace")
                 failures = [
-                    (int(span.get("startTime", end * 1_000_000)) // 1_000_000, _span_service(trace, span), str(trace.get("traceID", "unknown")))
+                    (int(span.get("startTime", end * 1_000_000)) // 1_000_000, trace, span)
                     for trace in traces
                     for span in trace.get("spans", [])
                     if _span_has_failure(span)
                 ]
                 if failures:
-                    timestamp, root, trace_id = min(failures)
+                    timestamp, trace, span = min(failures, key=lambda item: item[0])
+                    trace_id = str(trace.get("traceID", "unknown"))
                     update.update(
                         trace_failure=True,
-                        trace_root_service=root,
+                        trace_root_service=_span_service(trace, span),
                         trace_failure_timestamp=timestamp,
                         trace_reference=self.jaeger.trace_ui_url(trace_id),
+                        trace_id=trace_id,
+                        trace_operation=str(span.get("operationName", "unknown")),
+                        trace_status=_span_failure_status(span),
+                        trace_duration_ms=float(span.get("duration", 0)) / 1000,
                     )
             except Exception:
                 pass
@@ -231,6 +236,15 @@ def _span_has_failure(span: dict) -> bool:
         http_error = False
     text = f"{span.get('operationName', '')} {tags}".lower()
     return _span_has_error(span) or status == "ERROR" or http_error or "timeout" in text or "timed out" in text
+
+
+def _span_failure_status(span: dict) -> str:
+    tags = {str(tag.get("key", "")).lower(): tag.get("value") for tag in span.get("tags", [])}
+    status = str(tags.get("otel.status_code", tags.get("status.code", ""))).upper()
+    if status:
+        return status
+    http_status = tags.get("http.status_code", tags.get("http.response.status_code"))
+    return f"HTTP_{http_status}" if http_status else ("ERROR" if _span_has_error(span) else "TIMEOUT")
 
 
 def _span_service(trace: dict, span: dict) -> str:

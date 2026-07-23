@@ -88,6 +88,7 @@ class SettingsTest(unittest.TestCase):
         self.assertEqual(config["rca"]["anomaly"]["min_tail_anomaly_buckets"]["socket_io"], 3)
         self.assertEqual(config["rca"]["anomaly"]["min_relative_change_ratio"]["socket_io"], 0.5)
         self.assertEqual(config["rca"]["anomaly"]["min_absolute_change"]["socket_io"], 1048576.0)
+        self.assertEqual(config["rca"]["anomaly"]["correlation_lag_buckets"], {"cpu": 1, "socket_io": 1, "memory": 4})
         self.assertEqual(config["rca"]["min_points"], 30)
         self.assertEqual(config["rca"]["anomaly"]["log_correlation_window_seconds"], 120)
         self.assertEqual(config["rca"]["anomaly"]["log_history_buckets"], 45)
@@ -95,7 +96,29 @@ class SettingsTest(unittest.TestCase):
         self.assertEqual(config["rca"]["graph"]["damping"], 0.85)
         self.assertEqual(config["rca"]["graph"]["pagerank_weight"], 0.7)
         self.assertEqual(config["rca"]["graph"]["timestamp_weight"], 0.3)
-        self.assertEqual(config["correlation"]["suppress_window_seconds"], 1800)
+        self.assertEqual(config["correlation"]["suppress_window_seconds"], 900)
+        self.assertEqual(config["incident"]["notification_cooldown_seconds"], 900)
+        self.assertEqual(config["incident"]["slo_dedup_seconds"], 300)
+        self.assertNotIn("direct_slo_suppress_seconds", config["incident"])
+        self.assertEqual(
+            config["detectors"]["latency_slo_overrides"],
+            {
+                "frontend": 0.5,
+                "frontend-proxy": 1.0,
+                "checkout": 1.0,
+                "payment": 1.0,
+                "cart": 0.3,
+                "currency": 0.3,
+                "product-catalog": 0.5,
+                "product-reviews": 1.0,
+                "recommendation": 0.8,
+                "ad": 1.0,
+                "shipping": 1.0,
+                "email": 1.0,
+                "quote": 1.0,
+                "fraud-detection": 1.0,
+            },
+        )
         self.assertEqual(config["correlation"]["suppress_min_root_score"], 0.8)
         self.assertEqual(config["correlation"]["topology_max_hops"], 1)
         self.assertEqual(
@@ -113,7 +136,7 @@ class SettingsTest(unittest.TestCase):
         self.assertEqual(config["remediation"]["similarity_weights"]["service"], 0.35)
         self.assertEqual(config["remediation"]["similarity_weights"]["trace"], 0.2)
         self.assertEqual(config["no_data"]["missing_confidence"], 1.0)
-        self.assertEqual(config["detectors"]["thresholds"]["ops01_checkout_slo"], 0.01)
+        self.assertNotIn("ops01_checkout_slo", config["detectors"]["thresholds"])
         profile = load_prometheus_query_registry(Path("config/prometheus_queries.json")).collection_profiles["one_second"]
         self.assertEqual(profile.step_seconds, 1)
         self.assertEqual(profile.lookback_seconds, 3600)
@@ -155,10 +178,10 @@ class SettingsTest(unittest.TestCase):
                 PipelineRunRequest(
                     observations=[
                         Observation(
-                            signal_id="checkout_bad_ratio_24h",
-                            value=0.2,
+                            signal_id="checkout_p95_latency_5m",
+                            value=16.0,
                             unit="count",
-                            window="24h",
+                            window="5m",
                             quality=SignalQuality.VERIFIED,
                         )
                     ]
@@ -192,7 +215,7 @@ class SettingsTest(unittest.TestCase):
         self.assertEqual(result.features[0].unit, "ratio")
         self.assertEqual(result.features[0].window, "24h")
         self.assertEqual(result.features[0].labels["service"], "checkout")
-        self.assertEqual(result.candidates[0].detector_id, "ops01_checkout_slo")
+        self.assertEqual(result.candidates, [])
 
     def test_fastapi_routes_come_from_settings(self):
         settings = Settings(api_health_live_path="/livez", api_pipeline_run_path="/run-now")

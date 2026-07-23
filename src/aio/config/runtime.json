@@ -16,7 +16,8 @@
           "shipping",
           "payment",
           "email",
-          "kafka"
+          "kafka",
+          "flagd"
         ]
       },
       {
@@ -25,7 +26,9 @@
         "kind": "Deployment",
         "owner": "payments-oncall",
         "flow": "checkout",
-        "dependencies": []
+        "dependencies": [
+          "flagd"
+        ]
       },
       {
         "name": "frontend-proxy",
@@ -35,7 +38,7 @@
         "flow": "edge",
         "dependencies": [
           "frontend",
-          "jaeger"
+          "image-provider"
         ]
       },
       {
@@ -50,7 +53,11 @@
           "recommendation",
           "checkout",
           "cart",
-          "ad"
+          "ad",
+          "currency",
+          "shipping",
+          "shopping-copilot",
+          "flagd"
         ]
       },
       {
@@ -60,7 +67,8 @@
         "owner": "catalog-oncall",
         "flow": "catalog",
         "dependencies": [
-          "postgresql"
+          "postgresql",
+          "flagd"
         ]
       },
       {
@@ -71,7 +79,10 @@
         "flow": "catalog",
         "dependencies": [
           "product-catalog",
-          "flagd"
+          "postgresql",
+          "flagd",
+          "llm",
+          "external-llm"
         ]
       },
       {
@@ -155,8 +166,71 @@
         "owner": "checkout-oncall",
         "flow": "checkout",
         "dependencies": [
+          "flagd",
+          "kafka",
+          "valkey-cart"
+        ]
+      },
+      {
+        "name": "accounting",
+        "namespace": "techx-corp-prod",
+        "kind": "Deployment",
+        "owner": "finance-oncall",
+        "flow": "checkout",
+        "dependencies": [
+          "kafka",
+          "postgresql"
+        ]
+      },
+      {
+        "name": "shopping-copilot",
+        "namespace": "techx-corp-prod",
+        "kind": "Deployment",
+        "owner": "aie-oncall",
+        "flow": "shopping-copilot",
+        "dependencies": [
+          "product-catalog",
+          "product-reviews",
+          "cart",
+          "valkey-cart",
+          "aws-bedrock"
+        ]
+      },
+      {
+        "name": "image-provider",
+        "namespace": "techx-corp-prod",
+        "kind": "Deployment",
+        "owner": "frontend-oncall",
+        "flow": "web",
+        "dependencies": [
           "flagd"
         ]
+      },
+      {
+        "name": "llm",
+        "namespace": "techx-corp-prod",
+        "kind": "Deployment",
+        "owner": "aie-oncall",
+        "flow": "catalog",
+        "dependencies": [
+          "flagd"
+        ]
+      },
+      {
+        "name": "external-llm",
+        "namespace": "external",
+        "kind": "ExternalAPI",
+        "owner": "aie-oncall",
+        "flow": "catalog",
+        "dependencies": []
+      },
+      {
+        "name": "aws-bedrock",
+        "namespace": "external",
+        "kind": "ExternalAPI",
+        "owner": "aie-oncall",
+        "flow": "shopping-copilot",
+        "dependencies": []
       },
       {
         "name": "load-generator",
@@ -180,7 +254,7 @@
       {
         "name": "otel-collector",
         "namespace": "techx-corp-prod",
-        "kind": "Deployment",
+        "kind": "DaemonSet",
         "owner": "platform-oncall",
         "flow": "observability",
         "dependencies": []
@@ -188,7 +262,7 @@
       {
         "name": "kafka",
         "namespace": "external",
-        "kind": "StatefulSet",
+        "kind": "ManagedService",
         "owner": "platform-oncall",
         "flow": "platform",
         "dependencies": []
@@ -222,16 +296,6 @@
   "signals": [],
   "detectors": [
     {
-      "id": "ops01_checkout_slo",
-      "type": "threshold",
-      "enabled": true,
-      "signal_id": "checkout_bad_ratio_24h",
-      "flow": "checkout",
-      "service": "checkout",
-      "severity": "SEV1",
-      "runbook_id": "RB-CHECKOUT-SLO"
-    },
-    {
       "id": "ops02_monitoring_loss",
       "type": "no-data",
       "enabled": true,
@@ -253,16 +317,6 @@
       "dependency": "payment",
       "severity": "SEV2",
       "runbook_id": "RB-CHECKOUT-DEPENDENCY"
-    },
-    {
-      "id": "ops04_checkout_latency_p95",
-      "type": "threshold",
-      "enabled": true,
-      "signal_id": "checkout_p95_latency_5m",
-      "flow": "checkout",
-      "service": "checkout",
-      "severity": "SEV1",
-      "runbook_id": "RB-CHECKOUT-LATENCY"
     },
     {
       "id": "ops05_cart_error_rate",
@@ -437,7 +491,9 @@
     ],
     "stateful_kinds": [
       "StatefulSet",
-      "Database"
+      "Database",
+      "ManagedService",
+      "ExternalAPI"
     ],
     "non_actionable_flows": [
       "monitoring",

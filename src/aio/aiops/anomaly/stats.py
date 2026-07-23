@@ -3,28 +3,19 @@
 # SPDX-License-Identifier: Apache-2.0
 from __future__ import annotations
 
-from math import sqrt
+from statistics import mean as _mean, median as _median, stdev as _stdev
 
 
 def mean(values: list[float]) -> float:
-    return sum(values) / len(values) if values else 0.0
-
-
-def stdev(values: list[float]) -> float:
-    if len(values) < 2:
-        return 0.0
-    avg = mean(values)
-    return sqrt(sum((value - avg) ** 2 for value in values) / (len(values) - 1))
+    return _mean(values) if values else 0.0
 
 
 def median(values: list[float]) -> float:
-    if not values:
-        return 0.0
-    ordered = sorted(values)
-    middle = len(ordered) // 2
-    if len(ordered) % 2:
-        return ordered[middle]
-    return (ordered[middle - 1] + ordered[middle]) / 2
+    return _median(values) if values else 0.0
+
+
+def stdev(values: list[float]) -> float:
+    return _stdev(values) if len(values) >= 2 else 0.0
 
 
 def quantile(values: list[float], q: float) -> float:

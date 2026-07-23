@@ -111,6 +111,21 @@ class SQLiteIncidentStoreTest(unittest.TestCase):
         self.assertEqual(outbox_row, ("pending",))
         self.assertEqual(history_rows, [notifications[0].model_dump(mode="json")] * 2)
 
+    def test_slo_incident_requeues_after_dedup_ttl(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            store = SQLiteIncidentStore(Path(tmp) / "aiops.sqlite3", environment="tf2", slo_dedup_seconds=0)
+            incident = store.upsert(service_candidate("product-reviews", "auto_product_reviews_error_rate"))
+            store.mark_notification_sent(incident.incident_id)
+
+            repeated = store.upsert(service_candidate("product-reviews", "auto_product_reviews_error_rate"))
+            notifications = store.pending_notifications_for([repeated])
+            service_cooldowns = store._connection.execute("SELECT COUNT(*) FROM notification_service_cooldowns").fetchone()[0]
+            store.close()
+
+        self.assertEqual(incident.incident_id, repeated.incident_id)
+        self.assertEqual([message.incident_id for message in notifications], [incident.incident_id])
+        self.assertEqual(service_cooldowns, 0)
+
     def test_repeated_incident_does_not_reset_notification_cooldown(self):
         with tempfile.TemporaryDirectory() as tmp:
             store = SQLiteIncidentStore(Path(tmp) / "aiops.sqlite3", environment="tf2", notification_cooldown_seconds=900)
@@ -124,7 +139,7 @@ class SQLiteIncidentStoreTest(unittest.TestCase):
         self.assertEqual(repeated.cooldown_until, first_cooldown)
         self.assertEqual(len(history_rows), 1)
 
-    def test_same_service_different_incident_is_suppressed_during_service_cooldown(self):
+    def test_slo_notification_bypasses_service_cooldown(self):
         with tempfile.TemporaryDirectory() as tmp:
             store = SQLiteIncidentStore(Path(tmp) / "aiops.sqlite3", environment="tf2", notification_cooldown_seconds=900)
             first = store.upsert(service_candidate("product-reviews", "rca_root_cause"))
@@ -135,9 +150,9 @@ class SQLiteIncidentStoreTest(unittest.TestCase):
             store.close()
 
         self.assertNotEqual(first.incident_id, second.incident_id)
-        self.assertEqual([message.incident_id for message in notifications], [first.incident_id])
-        self.assertEqual(outbox_rows, [(first.incident_id,)])
-        self.assertEqual([row["service"] for row in history_rows], ["product-reviews"])
+        self.assertEqual([message.incident_id for message in notifications], [first.incident_id, second.incident_id])
+        self.assertEqual(outbox_rows, [(first.incident_id,), (second.incident_id,)])
+        self.assertEqual([row["service"] for row in history_rows], ["product-reviews", "product-reviews"])
 
     def test_sev1_bypasses_same_service_cooldown(self):
         with tempfile.TemporaryDirectory() as tmp:

@@ -220,7 +220,8 @@ class PrometheusCollector(Collector):
         if dependency:
             labels["dependency"] = dependency
         try:
-            result = self.client.query(spec.promql).get("data", {}).get("result", [])
+            promql = f"max_over_time(({spec.promql})[{spec.window}:{spec.step_seconds}s])" if "latency" in spec.metric else spec.promql
+            result = self.client.query(promql).get("data", {}).get("result", [])
         except Exception as exc:
             return _missing_observation(signal.id, signal.unit, signal.window, labels, type(exc).__name__)
         return _observation_from_result(signal.id, signal.unit, signal.window, labels, result, spec.max_series, SignalQuality.UNQUALIFIED)

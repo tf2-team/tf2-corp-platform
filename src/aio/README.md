@@ -143,6 +143,9 @@ development may source them from `.env`.
 Set `AIOPS_ENV_FILE=.env.live` to select the ignored live file without copying
 secrets into the tracked template.
 Infrastructure topology, signal IDs, detector definitions, and policy lists are loaded from `config/runtime.json`.
+Topology dependencies are directed RCA-impact edges (`service -> dependency`). The runtime builds one shared NetworkX
+`DiGraph` for personalized PageRank, bounded dependency paths, correlation distance, and reverse caller blast radius.
+Operator-only proxy routes and telemetry fan-out do not belong in this business-dependency graph.
 Detector thresholds and detector confidences are intentionally kept in `config/runtime.json` beside detector IDs.
 RCA, remediation, no-data, and correlation hyperparameters are loaded from `config/hyperparameters.json`.
 
@@ -165,7 +168,7 @@ This baseline includes FastAPI routes, SQLite incident persistence, config-drive
 
 - univariate EWMA plus seasonal residual scoring
 - per-service multivariate isolation-style scoring
-- graph traversal RCA plus repo-native robust score ranking
+- NetworkX personalized-PageRank traversal plus repo-native timestamp, drift, correlation, and robust-score ranking
 
 It still does not perform Kubernetes mutation directly.
 

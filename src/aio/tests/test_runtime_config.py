@@ -24,17 +24,36 @@ class RuntimeConfigTest(unittest.TestCase):
         self.assertEqual(next(signal for signal in config.signals if signal.id == "checkout_bad_ratio_24h").feature_role, "official_slo")
         self.assertEqual(next(signal for signal in config.signals if signal.id == "checkout_payment_error_rate_5m").feature_role, "dependency_signal")
         detector_ids = {detector.detector_id for detector in detectors}
-        self.assertIn("ops04_checkout_latency_p95", detector_ids)
+        self.assertIn("auto_checkout_latency_p95", detector_ids)
+        self.assertIn("auto_checkout_latency_p99", detector_ids)
         self.assertTrue({detector.id for detector in config.detectors if detector.id.startswith("auto_")} <= detector_ids)
 
     def test_each_service_error_rate_signal_has_auto_detector(self):
         config = load_runtime_config(Path("config/runtime.json"))
         signal_ids = {signal.id for signal in config.signals if signal.query_id.endswith(".error_rate_5m")}
-        auto_detectors = [detector for detector in config.detectors if detector.id.startswith("auto_")]
+        auto_detectors = [detector for detector in config.detectors if detector.id.startswith("auto_") and detector.id.endswith("_error_rate")]
         detector_signal_ids = {detector.signal_id for detector in auto_detectors}
 
         self.assertEqual(detector_signal_ids, signal_ids)
         self.assertTrue(all(detector.enabled for detector in auto_detectors))
+
+    def test_each_service_latency_signal_has_configured_slo_detector(self):
+        config = load_runtime_config(Path("config/runtime.json"))
+        hyperparameters = load_hyperparameters(Settings().hyperparameters_path)
+        detectors = build_detectors(config, Settings(), hyperparameters["no_data"], hyperparameters["detectors"])
+        signal_ids = {signal.id for signal in config.signals if any(signal.query_id.endswith(f".p{percentile}_latency_5m") for percentile in (95, 99))}
+        latency_detectors = [detector for detector in detectors if detector.detector_id.endswith(("_latency_p95", "_latency_p99"))]
+        configured_thresholds = hyperparameters["detectors"]["latency_slo_overrides"]
+
+        self.assertEqual({detector.signal_id for detector in latency_detectors}, signal_ids)
+        self.assertEqual({detector.service for detector in latency_detectors}, set(configured_thresholds))
+        self.assertEqual(len(latency_detectors), len(configured_thresholds) * 2)
+        thresholds = {detector.service: detector.threshold for detector in latency_detectors}
+        self.assertEqual(thresholds["cart"], 0.3)
+        self.assertEqual(thresholds["frontend"], 0.5)
+        self.assertEqual(thresholds["recommendation"], 0.8)
+        self.assertEqual(thresholds["payment"], 1.0)
+        self.assertEqual(thresholds["shipping"], 1.0)
 
     def test_prometheus_services_expand_generated_metrics(self):
         raw = json.loads(Path("config/runtime.json").read_text(encoding="utf-8"))
@@ -132,6 +151,24 @@ class RuntimeConfigTest(unittest.TestCase):
         config["detectors"][0]["signal_id"] = "missing_signal"
 
         with self.assertRaises(ValidationError):
+            RuntimeConfig.model_validate(config)
+
+    def test_rejects_duplicate_topology_services(self):
+        config = json.loads(Path("config/runtime.json").read_text(encoding="utf-8"))
+        config["topology"]["services"].append(config["topology"]["services"][0])
+
+        with self.assertRaisesRegex(ValidationError, "duplicate topology services"):
+            RuntimeConfig.model_validate(config)
+
+    def test_rejects_duplicate_and_self_dependencies(self):
+        config = json.loads(Path("config/runtime.json").read_text(encoding="utf-8"))
+        config["topology"]["services"][0]["dependencies"].append("cart")
+        with self.assertRaisesRegex(ValidationError, "duplicate dependencies for checkout"):
+            RuntimeConfig.model_validate(config)
+
+        config = json.loads(Path("config/runtime.json").read_text(encoding="utf-8"))
+        config["topology"]["services"][0]["dependencies"].append("checkout")
+        with self.assertRaisesRegex(ValidationError, "self dependency for checkout"):
             RuntimeConfig.model_validate(config)
 
     def test_api_markdown_json_schemas_are_parseable(self):

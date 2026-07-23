@@ -78,7 +78,8 @@ def run_pipeline_with_collector(collector, settings: Settings, runtime_config, m
     store = SQLiteIncidentStore(
         path=settings.state_store_path,
         environment=settings.environment,
-        notification_cooldown_seconds=int(hyperparameters["correlation"]["suppress_window_seconds"]),
+        notification_cooldown_seconds=int(hyperparameters["incident"]["notification_cooldown_seconds"]),
+        slo_dedup_seconds=int(hyperparameters["incident"]["slo_dedup_seconds"]),
     )
     pipeline = AiopsPipeline(
         collector=collector,
@@ -145,11 +146,13 @@ def print_rca_result(result: PipelineResult) -> None:
             flush=True,
         )
     for root in result.rca_result.root_causes:
+        trace = next((item for item in root.evidence if item.startswith("trace_id=")), "")
         print(
             "AIOPS_ROOT_CAUSE "
             f"service={root.service} "
             f"score={root.score:.3f} "
-            f"metrics={','.join(root.root_cause_metrics)}",
+            f"metrics={','.join(root.root_cause_metrics)}"
+            f"{' ' + trace if trace else ''}",
             flush=True,
         )
 

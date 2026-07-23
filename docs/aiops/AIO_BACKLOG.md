@@ -1,4 +1,4 @@
-﻿# AIOps Prioritized Operations Backlog - Week 1 / Sprint 1
+# AIOps Prioritized Operations Backlog - Week 1 / Sprint 1
 
 This backlog ranks the AIOps work for AIO4 / TF2. Requirements and system facts come from the Phase 3 source of truth:
 

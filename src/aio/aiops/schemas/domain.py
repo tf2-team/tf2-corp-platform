@@ -73,6 +73,10 @@ class TelemetryCorroboration(AiopsModel):
     trace_root_service: str | None = None
     trace_failure_timestamp: int | None = None
     trace_reference: str | None = None
+    trace_id: str | None = None
+    trace_operation: str | None = None
+    trace_status: str | None = None
+    trace_duration_ms: float | None = None
 
 
 class RootCauseCandidate(AiopsModel):
