@@ -69,6 +69,11 @@ class TelemetryCorroboration(AiopsModel):
     service: str
     available_sources: set[str] = Field(default_factory=set)
     log_failure: bool = False
+    log_classification: str | None = None
+    log_failure_count: int = 0
+    log_failure_timestamp: int | None = None
+    log_reference: str | None = None
+    log_excerpt: str | None = None
     trace_failure: bool = False
     trace_root_service: str | None = None
     trace_failure_timestamp: int | None = None

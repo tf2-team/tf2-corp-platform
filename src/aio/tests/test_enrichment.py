@@ -45,7 +45,13 @@ class FakeOpenSearch:
         return {
             "hits": {
                 "total": {"value": 1},
-                "hits": [{"_source": {"message": "payment failed token=abc user@example.com"}}],
+                "hits": [
+                    {
+                        "_index": "otel-logs-2026.07.23",
+                        "_id": "log-1",
+                        "_source": {"@timestamp": "1970-01-01T00:15:00Z", "message": "payment failed token=abc user@example.com"},
+                    }
+                ],
             }
         }
 
@@ -190,6 +196,11 @@ class EnricherTest(unittest.TestCase):
 
         self.assertEqual(result.available_sources, {"log", "trace"})
         self.assertTrue(result.log_failure)
+        self.assertEqual(result.log_classification, "hard_failure")
+        self.assertEqual(result.log_failure_count, 1)
+        self.assertEqual(result.log_failure_timestamp, 900)
+        self.assertEqual(result.log_reference, "otel-logs-2026.07.23/log-1")
+        self.assertIn("payment failed", result.log_excerpt)
         self.assertTrue(result.trace_failure)
         self.assertEqual(result.trace_root_service, "payment")
         self.assertEqual(result.trace_failure_timestamp, 900)

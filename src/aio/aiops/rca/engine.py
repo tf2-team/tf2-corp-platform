@@ -109,6 +109,15 @@ class V001RcaEngine:
             for source, evidence in (corroboration or {}).items()
             if evidence.trace_failure and evidence.trace_root_service
         }
+        log_details = {
+            self._canonical_service(service): [
+                f"log_classification={evidence.log_classification or 'unknown'} count={evidence.log_failure_count} "
+                f"timestamp={evidence.log_failure_timestamp or 0} reference={evidence.log_reference or 'unknown'} "
+                f"excerpt={evidence.log_excerpt or 'unknown'}"
+            ]
+            for service, evidence in (corroboration or {}).items()
+            if evidence.log_failure
+        }
         for service, rank_score in sorted(
             service_scores.items(),
             key=lambda item: item[1] * evidence_strength.get(item[0], 0.0),
@@ -134,6 +143,7 @@ class V001RcaEngine:
                         f"correlation_score={correlation_scores.get(service, 0.0):.3f}",
                         f"weighted_rrf_score={rank_score:.3f}",
                         f"evidence_strength={evidence_strength.get(service, 0.0):.3f}",
+                        *log_details.get(service, []),
                         *trace_details.get(service, []),
                         *[f"{metric} {source}_score={metric_score:.3f}" for metric, metric_score, source in metric_scores],
                     ],

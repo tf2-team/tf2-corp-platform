@@ -93,8 +93,20 @@ class Enricher:
                     },
                 )
                 update["available_sources"].add("log")
-                total = data.get("hits", {}).get("total", 0)
-                update["log_failure"] = (total.get("value", 0) if isinstance(total, dict) else total) > 0
+                hits = data.get("hits", {})
+                total = hits.get("total", 0)
+                count = int(total.get("value", 0) if isinstance(total, dict) else total)
+                hit = next(iter(hits.get("hits", [])), {})
+                excerpt = _redact(_hit_text(hit)) if hit else None
+                classification = _classify_log(excerpt or "") if count else None
+                update.update(
+                    log_failure=classification == "hard_failure",
+                    log_classification=classification,
+                    log_failure_count=count,
+                    log_failure_timestamp=_log_timestamp(hit, end) if hit else None,
+                    log_reference=f"{hit.get('_index', self.opensearch_index)}/{hit.get('_id', 'unknown')}" if hit else None,
+                    log_excerpt=excerpt,
+                )
             except Exception:
                 pass
         if self.jaeger is not None:
@@ -259,6 +271,21 @@ def _hit_text(hit: dict) -> str:
         if value:
             return str(value)[:240]
     return str(source)[:240]
+
+
+def _classify_log(text: str) -> str:
+    hard_markers = ("exception", "timeout", "timed out", "failed", "failure", "connection refused", "oom", "panic", "fatal", "unavailable", "retry exhausted")
+    return "hard_failure" if any(marker in text.lower() for marker in hard_markers) else "soft_failure"
+
+
+def _log_timestamp(hit: dict, fallback: int) -> int:
+    value = hit.get("_source", {}).get("@timestamp")
+    if not value:
+        return fallback
+    try:
+        return int(datetime.fromisoformat(str(value).replace("Z", "+00:00")).timestamp())
+    except ValueError:
+        return fallback
 
 
 def _redact(value: str) -> str:

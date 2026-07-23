@@ -958,6 +958,28 @@ class V001AnomalyRcaTest(unittest.TestCase):
         self.assertEqual(result.root_causes[0].service, "checkout")
         self.assertNotIn("trace_failure", result.root_causes[0].root_cause_metrics)
 
+    def test_hard_log_failure_is_rca_evidence_not_root_cause_metric(self):
+        runtime_config = load_runtime_config(Path("config/runtime.json"))
+        findings = [AnomalyFinding(algorithm="weighted_sum", service="payment", metric="cpu_millicores", signal_id="payment_cpu_millicores", score=0.8, timestamp=1000)]
+        corroboration = {
+            "payment": TelemetryCorroboration(
+                service="payment",
+                available_sources={"log"},
+                log_failure=True,
+                log_classification="hard_failure",
+                log_failure_count=12,
+                log_failure_timestamp=950,
+                log_reference="otel-logs-2026.07.23/log-1",
+                log_excerpt="connection refused",
+            )
+        }
+
+        result = rca_engine(runtime_config).rank(findings, [], top_k=5, corroboration=corroboration)
+
+        root = result.root_causes[0]
+        self.assertEqual(root.root_cause_metrics, ["cpu_millicores"])
+        self.assertTrue(any("log_classification=hard_failure" in item and "count=12" in item for item in root.evidence))
+
     def test_trace_root_outside_dependency_path_is_rejected(self):
         runtime_config = load_runtime_config(Path("config/runtime.json"))
         findings = [AnomalyFinding(algorithm="weighted_sum", service="checkout", metric="cpu_millicores", signal_id="checkout_cpu_millicores", score=0.8, timestamp=1000)]
