@@ -19,7 +19,7 @@ from aiops.enrichment import Enricher
 from aiops.features import FeatureBuilder
 from aiops.anomaly import build_v001_anomaly_engine
 from aiops.rca import V001RcaEngine
-from aiops.schemas import AnomalyFinding, MetricSeries, NotificationMessage, PipelineResult, PolicyDecision, RcaResult, RuntimeConfig, SignalQuality
+from aiops.schemas import AnomalyFinding, MetricSeries, NotificationMessage, PipelineResult, PolicyDecision, RcaResult, RootCauseCandidate, RuntimeConfig, SignalQuality
 from aiops.normalization import Normalizer
 from aiops.notifications import is_slo_notification
 from aiops.qualification import QualificationGate
@@ -257,7 +257,7 @@ class AiopsPipeline:
         flow = incidents[0].flow if incidents else "unknown"
         severity = min((incident.severity for incident in incidents), default="SEV2")
         rows = []
-        for root in rca_result.root_causes:
+        for root in self._dedup_rca_root_causes(rca_result.root_causes):
             metric = root.root_cause_metrics[0] if root.root_cause_metrics else "rca_root_cause"
             likely_dependency = self._rca_topology_dependency(root.service, incidents)
             rows.append(
@@ -282,6 +282,40 @@ class AiopsPipeline:
                 )
             )
         return rows
+
+    def _dedup_rca_root_causes(self, root_causes: list[RootCauseCandidate]) -> list[RootCauseCandidate]:
+        kept: list[RootCauseCandidate] = []
+        max_hops = max(2, int(self.correlation_hyperparameters.get("topology_max_hops", 2)))
+        for root in root_causes:
+            duplicate = next((item for item in kept if self._same_rca_topology_scope(root.service, item.service, max_hops)), None)
+            if duplicate is None:
+                kept.append(root)
+                continue
+            logger.info(
+                "AIOPS_RCA_DEDUP_SUPPRESSED service=%s kept_service=%s reason=topology_scope",
+                root.service,
+                duplicate.service,
+            )
+        return kept
+
+    def _same_rca_topology_scope(self, service: str, other: str, max_hops: int) -> bool:
+        if service == other:
+            return True
+        graph = getattr(self.topology_graph, "graph", None)
+        if graph is None or service not in graph or other not in graph:
+            return False
+        seen = {service}
+        frontier = {service}
+        for _ in range(max_hops):
+            neighbors = set()
+            for item in frontier:
+                neighbors.update(graph.successors(item))
+                neighbors.update(graph.predecessors(item))
+            if other in neighbors:
+                return True
+            frontier = neighbors - seen
+            seen.update(neighbors)
+        return False
 
     def _rca_topology_dependency(self, root_service: str, incidents: list[Incident]) -> str:
         if self.topology_graph is None:

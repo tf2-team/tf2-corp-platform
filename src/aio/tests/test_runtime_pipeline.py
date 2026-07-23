@@ -529,6 +529,36 @@ class RuntimePipelineTest(unittest.TestCase):
         self.assertEqual(first.incidents[0].incident_id, second.incidents[0].incident_id)
         self.assertEqual(second.incidents[0].occurrence_count, 2)
 
+    def test_pipeline_dedups_rca_roots_by_topology_before_notification(self):
+        settings = Settings()
+        with TemporaryDirectory() as tmp:
+            store = SQLiteIncidentStore(Path(tmp) / "aiops.sqlite3", environment=settings.environment)
+            pipeline = AiopsPipeline(
+                collector=StaticCollector([]),
+                detectors=[],
+                store=store,
+                policy=policy(settings),
+                **runtime_kwargs(settings),
+            )
+            rca_result = RcaResult(
+                root_causes=[
+                    RootCauseCandidate(service="checkout", score=1.0, root_cause_metrics=["p99_latency_5m"]),
+                    RootCauseCandidate(service="payment", score=0.9, root_cause_metrics=["error_rate_5m"]),
+                    RootCauseCandidate(service="ad", score=0.8, root_cause_metrics=["error_rate_5m"]),
+                ]
+            )
+
+            with self.assertLogs("aiops.pipeline.runtime", level="INFO") as logs:
+                incidents = pipeline._upsert_rca_root_incidents(rca_result, [])
+            notifications = store.pending_notifications_for(incidents)
+            store.close()
+
+        self.assertEqual([incident.service for incident in incidents], ["checkout"])
+        self.assertEqual([message.service for message in notifications], ["checkout"])
+        text = "\n".join(logs.output)
+        self.assertIn("service=payment kept_service=checkout", text)
+        self.assertIn("service=ad kept_service=checkout", text)
+
     def test_pipeline_keeps_slo_notification_and_adds_rca_root_notification(self):
         settings = Settings()
         with TemporaryDirectory() as tmp:
