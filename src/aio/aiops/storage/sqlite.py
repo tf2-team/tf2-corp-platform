@@ -298,12 +298,13 @@ class SQLiteIncidentStore:
 
     def suppress_active_root_notifications(self, incidents: list[Incident], exempt_services: set[str] | None = None) -> set[str]:
         exempt_services = exempt_services or set()
+        incident_services = {incident.service for incident in incidents}
         rows = [
             (incident, parent)
             for incident in incidents
             if incident.service not in exempt_services
             for parent in [self._suppression_parent(incident.service)]
-            if parent is not None
+            if parent in incident_services
         ]
         if not rows:
             return set()
@@ -338,10 +339,11 @@ class SQLiteIncidentStore:
         return [NotificationMessage.model_validate_json(row[0]) for row in rows]
 
     def suppressed_incident_ids(self, incidents: list[Incident]) -> set[str]:
+        incident_services = {incident.service for incident in incidents}
         return {
             incident.incident_id
             for incident in incidents
-            if self._suppression_parent(incident.service) is not None
+            if self._suppression_parent(incident.service) in incident_services
         }
 
     def _suppression_parent(self, service: str) -> str | None:

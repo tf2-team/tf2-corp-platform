@@ -228,8 +228,9 @@ class SQLiteIncidentStoreTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             store = SQLiteIncidentStore(Path(tmp) / "aiops.sqlite3", environment="tf2")
             store.register_active_root_cause("checkout", {"checkout", "cart"}, suppress_seconds=900)
+            root = store.upsert(service_candidate("checkout", "auto_checkout_error_rate"))
             incident = store.upsert(service_candidate("cart", "auto_cart_error_rate").model_copy(update={"severity": "SEV1"}))
-            suppressed = store.suppress_active_root_notifications([incident])
+            suppressed = store.suppress_active_root_notifications([root, incident])
             notifications = store.pending_notifications_for([incident])
             status = store._connection.execute("SELECT status FROM notification_outbox WHERE incident_id = ?", (incident.incident_id,)).fetchone()
             store.close()

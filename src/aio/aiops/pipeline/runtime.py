@@ -379,23 +379,25 @@ class AiopsPipeline:
     def _suppress_related_notifications(self, incidents: list[Incident], rca_result: RcaResult) -> set[str]:
         suppressed = set()
         current_root_service = None
+        incident_services = {incident.service for incident in incidents}
         if self.runtime_config is not None and rca_result.root_causes:
             root = rca_result.root_causes[0]
             if root.score >= float(self.correlation_hyperparameters.get("suppress_min_root_score", 0.8)):
                 root_service = root.service
-                current_root_service = root_service
-                max_hops = int(self.correlation_hyperparameters.get("topology_max_hops", 2))
-                affected_services = (
-                    self.topology_graph.blast_radius(root_service, max_hops)
-                    if self.topology_graph is not None
-                    else _blast_radius_services(self.runtime_config, root_service, max_hops)
-                )
-                register = getattr(self.store, "register_active_root_cause", None)
-                suppress = getattr(self.store, "suppress_related_notifications", None)
-                if register is not None:
-                    register(root_service, affected_services, int(self.correlation_hyperparameters.get("suppress_window_seconds", 900)))
-                if suppress is not None:
-                    suppressed.update(suppress(incidents, root_service, affected_services) or set())
+                if root_service in incident_services:
+                    current_root_service = root_service
+                    max_hops = int(self.correlation_hyperparameters.get("topology_max_hops", 2))
+                    affected_services = (
+                        self.topology_graph.blast_radius(root_service, max_hops)
+                        if self.topology_graph is not None
+                        else _blast_radius_services(self.runtime_config, root_service, max_hops)
+                    )
+                    register = getattr(self.store, "register_active_root_cause", None)
+                    suppress = getattr(self.store, "suppress_related_notifications", None)
+                    if register is not None:
+                        register(root_service, affected_services, int(self.correlation_hyperparameters.get("suppress_window_seconds", 900)))
+                    if suppress is not None:
+                        suppressed.update(suppress(incidents, root_service, affected_services) or set())
         active_suppress = getattr(self.store, "suppress_active_root_notifications", None)
         if active_suppress is not None:
             exempt_services = {current_root_service} if current_root_service else set()

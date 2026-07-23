@@ -118,9 +118,15 @@ class RecoveredDependencyDetector(Detector):
 
 
 class MultiServiceDetector(Detector):
-    def __init__(self, cart_severity: str = "SEV2", cart_signal_id: str = "cart_error_rate_5m"):
+    def __init__(
+        self,
+        cart_severity: str = "SEV2",
+        cart_signal_id: str = "cart_error_rate_5m",
+        valkey_signal_id: str = "valkey_cart_error_rate_5m",
+    ):
         self.cart_severity = cart_severity
         self.cart_signal_id = cart_signal_id
+        self.valkey_signal_id = valkey_signal_id
 
     def evaluate(self, features: list[Feature]) -> list[CandidateEvent]:
         return [
@@ -160,7 +166,7 @@ class MultiServiceDetector(Detector):
                 flow="checkout",
                 service="valkey-cart",
                 severity="SEV2",
-                signal_id="valkey_cart_error_rate_5m",
+                signal_id=self.valkey_signal_id,
                 value=0.2,
                 unit="ratio",
                 window="5m",
@@ -429,7 +435,7 @@ class RuntimePipelineTest(unittest.TestCase):
         self.assertNotIn("AIOPS_RCA_SYNTHETIC_CANDIDATE", text)
         self.assertIn("AIOPS_DEDUP_RESULT input_candidates=0 incidents=0", text)
 
-    def test_pipeline_suppresses_non_slo_sev1_notification_by_rca(self):
+    def test_pipeline_does_not_suppress_when_root_has_no_incident_in_run(self):
         settings = Settings()
         with TemporaryDirectory() as tmp:
             store = SQLiteIncidentStore(Path(tmp) / "aiops.sqlite3", environment=settings.environment)
@@ -470,7 +476,7 @@ class RuntimePipelineTest(unittest.TestCase):
             store.close()
 
         self.assertEqual([incident.service for incident in result.incidents], ["checkout"])
-        self.assertEqual(result.notifications, [])
+        self.assertEqual([message.service for message in result.notifications], ["checkout"])
 
     def test_pipeline_flushes_notification_outbox_to_sender(self):
         settings = Settings()
@@ -938,7 +944,13 @@ class RuntimePipelineTest(unittest.TestCase):
             kwargs["correlation_hyperparameters"] = {**kwargs["correlation_hyperparameters"], "topology_max_hops": 2}
             pipeline = AiopsPipeline(
                 collector=StaticCollector([]),
-                detectors=[MultiServiceDetector(cart_severity="SEV1", cart_signal_id="cart_request_count_5m")],
+                detectors=[
+                    MultiServiceDetector(
+                        cart_severity="SEV1",
+                        cart_signal_id="cart_request_count_5m",
+                        valkey_signal_id="valkey_cart_request_count_5m",
+                    )
+                ],
                 store=store,
                 policy=policy(settings),
                 **kwargs,
