@@ -226,6 +226,16 @@
       "feature_role": "official_slo",
       "modes": ["instant"]
     },
+    "slo.grpc.method_burn_rate": {
+      "query_id_template": "$service.error_budget_burn_rate.24h",
+      "signal_id_template": "${service_id}_error_budget_burn_rate_24h",
+      "promql": "((((sum(increase(rpc_server_duration_milliseconds_count{service_name=\"$service\",rpc_method=\"$method\",rpc_grpc_status_code!=\"0\"}[24h])) or 0 * sum(increase(rpc_server_duration_milliseconds_count{service_name=\"$service\",rpc_method=\"$method\"}[24h]))) / clamp_min(sum(increase(rpc_server_duration_milliseconds_count{service_name=\"$service\",rpc_method=\"$method\"}[24h])), 0.000000001)) and on() (sum(increase(rpc_server_duration_milliseconds_count{service_name=\"$service\",rpc_method=\"$method\"}[24h])) > 0)) / $error_budget)",
+      "unit": "burn_rate",
+      "window": "24h",
+      "metric": "error_budget_burn_rate_24h",
+      "feature_role": "official_slo",
+      "modes": ["instant"]
+    },
     "dependency.grpc_client.error_ratio": {
       "query_id_template": "$service.$dependency.error_rate.5m",
       "signal_id_template": "${service_id}_${dependency_id}_error_rate_5m",
@@ -287,7 +297,7 @@
   },
   "service_groups": [
     {
-      "services": ["frontend", "cart", "quote"],
+      "services": ["frontend", "cart", "quote", "llm"],
       "template_ids": ["red.http.p95_latency", "red.http.p99_latency", "red.http.error_ratio", "red.http.request_rate"]
     },
     {
@@ -299,11 +309,11 @@
       "template_ids": ["red.grpc.p95_latency", "red.grpc.p99_latency", "red.grpc.error_ratio", "red.grpc.request_rate"]
     },
     {
-      "services": ["fraud-detection"],
+      "services": ["fraud-detection", "accounting"],
       "template_ids": ["red.consumer.p95_latency", "red.consumer.p99_latency", "red.consumer.error_ratio", "red.consumer.request_rate"]
     },
     {
-      "services": ["checkout", "payment", "frontend-proxy", "frontend", "product-catalog", "product-reviews", "recommendation", "ad", "currency", "cart", "shipping", "email", "quote", "fraud-detection"],
+      "services": ["checkout", "payment", "frontend-proxy", "frontend", "product-catalog", "product-reviews", "recommendation", "ad", "currency", "cart", "shipping", "email", "quote", "fraud-detection", "accounting", "llm"],
       "template_ids": ["resource.cpu_millicores", "resource.memory_usage_bytes", "resource.disk_io_bytes_per_second", "resource.socket_io_bytes_per_second", "resource.workload_ready_pods", "resource.workload_ready_ratio"]
     }
   ],
@@ -314,6 +324,14 @@
       "template_id": "slo.grpc.method_bad_ratio",
       "service": "checkout",
       "parameters": {"method": "PlaceOrder"}
+    },
+    {
+      "query_id": "checkout.error_budget_burn_rate.24h",
+      "signal_id": "checkout_error_budget_burn_rate_24h",
+      "template_id": "slo.grpc.method_burn_rate",
+      "service": "checkout",
+      "parameters": {"method": "PlaceOrder", "error_budget": "0.01"},
+      "required_for_monitoring": false
     },
     {
       "query_id": "checkout.payment_error_rate.5m",

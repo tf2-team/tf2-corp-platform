@@ -28,6 +28,25 @@ class RuntimeConfigTest(unittest.TestCase):
         self.assertIn("auto_checkout_latency_p99", detector_ids)
         self.assertTrue({detector.id for detector in config.detectors if detector.id.startswith("auto_")} <= detector_ids)
 
+    def test_checkout_burn_rate_signal_and_detector_use_official_error_budget(self):
+        config = load_runtime_config(Path("config/runtime.json"))
+        hyperparameters = load_hyperparameters(Settings().hyperparameters_path)
+        detectors = build_detectors(config, Settings(), hyperparameters["no_data"], hyperparameters["detectors"])
+
+        signal = next(item for item in config.signals if item.id == "checkout_error_budget_burn_rate_24h")
+        detector = next(item for item in detectors if item.detector_id == "ops01_checkout_slo_burn_rate")
+        query = config.prometheus_queries[signal.query_id]
+
+        self.assertEqual(signal.feature_role, "official_slo")
+        self.assertEqual(signal.window, "24h")
+        self.assertEqual(signal.unit, "burn_rate")
+        self.assertIn('rpc_method="PlaceOrder"', query)
+        self.assertIn("/ 0.01", query)
+        self.assertEqual(detector.signal_id, signal.id)
+        self.assertEqual(detector.threshold, 1.0)
+        self.assertEqual(detector.severity, "SEV1")
+        self.assertEqual(detector.runbook_id, "RB-CHECKOUT-SLO")
+
     def test_each_service_error_rate_signal_has_auto_detector(self):
         config = load_runtime_config(Path("config/runtime.json"))
         signal_ids = {signal.id for signal in config.signals if signal.query_id.endswith(".error_rate_5m")}

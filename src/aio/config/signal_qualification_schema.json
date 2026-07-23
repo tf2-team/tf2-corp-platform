@@ -13,6 +13,7 @@
     "bytes_per_second": {"min": 0.0},
     "millicores": {"min": 0.0},
     "percent": {"min": 0.0, "max": 100.0},
-    "boolean": {"allowed": [0.0, 1.0]}
+    "boolean": {"allowed": [0.0, 1.0]},
+    "burn_rate": {"min": 0.0}
   }
 }
