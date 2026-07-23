@@ -3,6 +3,7 @@
 # SPDX-License-Identifier: Apache-2.0
 from __future__ import annotations
 
+from datetime import UTC, datetime
 from typing import Any, Protocol
 from urllib.parse import urlparse
 
@@ -122,6 +123,7 @@ def _discord_payload(message: NotificationMessage) -> dict[str, Any]:
                 "title": _truncate(f"[{message.severity}] {message.title}", 256),
                 "description": _truncate(message.summary, 3500),
                 "color": DISCORD_COLORS.get(message.severity.upper(), 0x95A5A6),
+                "timestamp": datetime.now(UTC).isoformat(),
                 "fields": [
                     {
                         "name": name,

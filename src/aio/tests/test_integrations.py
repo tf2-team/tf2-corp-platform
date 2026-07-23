@@ -4,6 +4,7 @@
 import base64
 import json
 import unittest
+from datetime import UTC, datetime
 
 import httpx
 
@@ -156,7 +157,9 @@ class IntegrationClientTest(unittest.TestCase):
             runbook_id="RB-CHECKOUT-SLO",
         )
 
+        before_send = datetime.now(UTC)
         response = NotificationClient(cfg, transport=httpx.MockTransport(handler)).send(message)
+        after_send = datetime.now(UTC)
 
         self.assertEqual(response, {"status_code": 204})
         self.assertEqual(str(seen[0].url), "https://discord.com/api/webhooks/123/secret-token")
@@ -166,6 +169,9 @@ class IntegrationClientTest(unittest.TestCase):
         self.assertEqual(payload["allowed_mentions"], {"parse": []})
         self.assertEqual(payload["embeds"][0]["title"], "[SEV1] checkout unavailable")
         self.assertEqual(payload["embeds"][0]["color"], 0xE74C3C)
+        sent_at = datetime.fromisoformat(payload["embeds"][0]["timestamp"])
+        self.assertLessEqual(before_send, sent_at)
+        self.assertLessEqual(sent_at, after_send)
         fields = {field["name"]: field["value"] for field in payload["embeds"][0]["fields"]}
         self.assertEqual(fields["Likely dependency"], "postgresql")
         self.assertEqual(fields["Runbook"], "RB-CHECKOUT-SLO")
