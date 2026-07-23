@@ -347,6 +347,31 @@ class IncidentManagerTest(unittest.TestCase):
         self.assertEqual(incident.incident_id, same_incident.incident_id)
         self.assertEqual(same_incident.occurrence_count, 2)
 
+    def test_slo_fingerprint_does_not_dedup_by_topology_dependency(self):
+        graph = TopologyGraph(load_runtime_config(Path("config/runtime.json")))
+        manager = IncidentManager(environment="tf2", topology_graph=graph)
+        checkout = CandidateEvent(
+            detector_id="ops01_checkout_slo",
+            flow="checkout",
+            service="checkout",
+            severity="SEV1",
+            signal_id="checkout_bad_ratio_24h",
+            value=0.2,
+            unit="ratio",
+            window="24h",
+            threshold=0.01,
+            quality=SignalQuality.VERIFIED,
+            reason="threshold_breached",
+            runbook_id="RB-CHECKOUT-SLO",
+            likely_dependency="product-catalog",
+        )
+        frontend = checkout.model_copy(update={"service": "frontend", "signal_id": "frontend_bad_ratio_24h"})
+
+        incident = manager.upsert(checkout)
+        other_incident = manager.upsert(frontend)
+
+        self.assertNotEqual(incident.incident_id, other_incident.incident_id)
+
     def test_rca_root_cause_fingerprint_includes_primary_metric(self):
         manager = IncidentManager(environment="tf2")
         latency = CandidateEvent(

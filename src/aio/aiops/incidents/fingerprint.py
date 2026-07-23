@@ -6,6 +6,7 @@ from __future__ import annotations
 from hashlib import sha256
 from typing import Protocol
 
+from aiops.notifications import is_slo_notification
 from aiops.schemas import CandidateEvent
 
 
@@ -18,6 +19,7 @@ def incident_fingerprint(environment: str, candidate: CandidateEvent, topology_g
     scope = f"service:{candidate.service}"
     if (
         topology_graph is not None
+        and not is_slo_notification(candidate)
         and candidate.likely_dependency != "unknown"
         and topology_graph.has_dependency_path(candidate.service, candidate.likely_dependency)
     ):
