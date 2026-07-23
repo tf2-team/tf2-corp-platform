@@ -1134,13 +1134,29 @@ class RuntimePipelineTest(unittest.TestCase):
             suppressed = pipeline._suppress_related_notifications(
                 [incident],
                 RcaResult(
-                    anomalies=[
+                    algorithm_findings=[
                         AnomalyFinding(
-                            algorithm="weighted_sum",
+                            algorithm="robust_drift",
                             service="cart",
                             metric="cpu_millicores",
                             signal_id="cart_cpu_millicores",
-                            score=1.5,
+                            score=0.5,
+                            timestamp=10,
+                        ),
+                        AnomalyFinding(
+                            algorithm="ewma_stl",
+                            service="cart",
+                            metric="cpu_millicores",
+                            signal_id="cart_cpu_millicores",
+                            score=0.5,
+                            timestamp=10,
+                        ),
+                        AnomalyFinding(
+                            algorithm="isolation_forest",
+                            service="cart",
+                            metric="cpu_millicores",
+                            signal_id="cart_cpu_millicores",
+                            score=0.5,
                             timestamp=10,
                         )
                     ]
@@ -1184,13 +1200,29 @@ class RuntimePipelineTest(unittest.TestCase):
             suppressed = pipeline._suppress_related_notifications(
                 [incident],
                 RcaResult(
-                    anomalies=[
+                    algorithm_findings=[
                         AnomalyFinding(
-                            algorithm="weighted_sum",
+                            algorithm="robust_drift",
                             service="cart",
                             metric="cpu_millicores",
                             signal_id="cart_cpu_millicores",
-                            score=1.49,
+                            score=0.49,
+                            timestamp=10,
+                        ),
+                        AnomalyFinding(
+                            algorithm="ewma_stl",
+                            service="cart",
+                            metric="cpu_millicores",
+                            signal_id="cart_cpu_millicores",
+                            score=0.5,
+                            timestamp=10,
+                        ),
+                        AnomalyFinding(
+                            algorithm="isolation_forest",
+                            service="cart",
+                            metric="cpu_millicores",
+                            signal_id="cart_cpu_millicores",
+                            score=0.5,
                             timestamp=10,
                         )
                     ]

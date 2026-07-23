@@ -88,6 +88,7 @@ class RootCauseCandidate(AiopsModel):
 
 class RcaResult(AiopsModel):
     anomalies: list[AnomalyFinding] = Field(default_factory=list)
+    algorithm_findings: list[AnomalyFinding] = Field(default_factory=list)
     root_causes: list[RootCauseCandidate] = Field(default_factory=list)
 
 

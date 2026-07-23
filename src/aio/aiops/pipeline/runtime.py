@@ -357,8 +357,9 @@ class AiopsPipeline:
             topology_graph=self.topology_graph,
         )
         result = rca_engine.rank(findings, detector_series, top_k=int(config["top_k"]), corroboration=corroboration)
-        _log_final_root_cause_algorithm_scores(result, getattr(anomaly_engine, "last_algorithm_findings", findings))
-        return result
+        algorithm_findings = list(getattr(anomaly_engine, "last_algorithm_findings", []) or [])
+        _log_final_root_cause_algorithm_scores(result, algorithm_findings)
+        return result.model_copy(update={"algorithm_findings": algorithm_findings})
 
     def _record_rca_history(
         self,
@@ -459,7 +460,7 @@ class AiopsPipeline:
     def _suppress_related_notifications(self, incidents: list[Incident], rca_result: RcaResult) -> set[str]:
         suppressed = set()
         current_root_service = None
-        service_scores = _weighted_service_scores(rca_result.anomalies)
+        service_scores = _algorithm_service_scores(rca_result.algorithm_findings)
         affected_services: set[str] = set()
         if self.runtime_config is not None and rca_result.root_causes:
             root = rca_result.root_causes[0]
@@ -524,12 +525,14 @@ def _counts(values) -> dict[str, int]:
     return counts
 
 
-def _weighted_service_scores(findings: list[AnomalyFinding]) -> dict[str, float]:
-    scores: dict[str, float] = {}
+def _algorithm_service_scores(findings: list[AnomalyFinding]) -> dict[str, float]:
+    algorithms = {"robust_drift", "ewma_stl", "isolation_forest"}
+    maxima: dict[str, dict[str, float]] = {}
     for finding in findings:
-        if finding.algorithm == "weighted_sum":
-            scores[finding.service] = max(scores.get(finding.service, 0.0), finding.score)
-    return scores
+        if finding.algorithm in algorithms:
+            service_scores = maxima.setdefault(finding.service, {})
+            service_scores[finding.algorithm] = max(service_scores.get(finding.algorithm, 0.0), finding.score)
+    return {service: sum(scores.values()) for service, scores in maxima.items()}
 
 
 def _log_final_root_cause_algorithm_scores(result: RcaResult, findings: list[AnomalyFinding]) -> None:
