@@ -549,15 +549,13 @@ func (cs *checkout) prepareOrderItemsAndShippingQuoteFromCart(ctx context.Contex
 }
 
 func mustCreateClient(svcAddr string) *grpc.ClientConn {
-	target := svcAddr
-	if !strings.HasPrefix(target, "dns:///") && !strings.HasPrefix(target, "http://") && !strings.HasPrefix(target, "https://") {
-		target = "dns:///" + target
-	}
-	serviceConfig := `{"loadBalancingConfig": [{"round_robin": {}}]}`
-	c, err := grpc.NewClient(target,
+	// Linkerd sidecar proxy (linkerd-proxy) intercepts this connection and performs
+	// L7 (per-request) load balancing across all destination pod replicas automatically.
+	// No dns:/// scheme or client-side round_robin config needed — the proxy handles it.
+	// Change trail: @chinhgithub04 - 2026-07-24 - Revert gRPC resolver hack; use Linkerd for L7 LB (M16).
+	c, err := grpc.NewClient(svcAddr,
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
 		grpc.WithStatsHandler(otelgrpc.NewClientHandler()),
-		grpc.WithDefaultServiceConfig(serviceConfig),
 	)
 	if err != nil {
 		logger.Error(fmt.Sprintf("could not connect to %s service, err: %+v", svcAddr, err))
