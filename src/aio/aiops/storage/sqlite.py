@@ -135,7 +135,14 @@ class SQLiteIncidentStore:
         slo_notification = is_slo_notification(candidate)
         notification_due = self._notification_due(incident, is_new, now)
         can_enqueue_incident = notification_due and self._can_enqueue_notification(incident.incident_id)
-        service_notification_due = (slo_notification or self._service_notification_due(incident.service, incident.severity, now)) if can_enqueue_incident else False
+        service_notification_due = False
+        if can_enqueue_incident:
+            service_notification_due = self._service_notification_due(
+                _slo_cooldown_key(incident.service) if slo_notification else incident.service,
+                incident.severity,
+                now,
+                bypass_sev1=not slo_notification,
+            )
         notification = (
             NotificationBuilder().build([incident])[0]
             if can_enqueue_incident and service_notification_due
@@ -180,8 +187,8 @@ class SQLiteIncidentStore:
                 )
                 notification_enqueued = cursor.rowcount > 0
                 if notification_enqueued:
-                    if not slo_notification:
-                        self._set_service_notification_cooldown(incident.service, incident.cooldown_until or _now())
+                    cooldown_key = _slo_cooldown_key(incident.service) if slo_notification else incident.service
+                    self._set_service_notification_cooldown(cooldown_key, incident.cooldown_until or _now())
                     self._last_enqueued_incident_ids.add(incident.incident_id)
                     logger.info(
                         "AIOPS_NOTIFY_ENQUEUED_READY incident=%s service=%s severity=%s runbook=%s status=pending",
@@ -227,8 +234,8 @@ class SQLiteIncidentStore:
         ).fetchone()
         return row is None or row[0] in {"sent", "suppressed"}
 
-    def _service_notification_due(self, service: str, severity: str, now: datetime) -> bool:
-        if severity == "SEV1":
+    def _service_notification_due(self, service: str, severity: str, now: datetime, bypass_sev1: bool = True) -> bool:
+        if bypass_sev1 and severity == "SEV1":
             return True
         row = self._connection.execute(
             "SELECT cooldown_until FROM notification_service_cooldowns WHERE service = ?",
@@ -424,6 +431,10 @@ def _candidate_seen_at(candidate: CandidateEvent) -> datetime:
 
 def _now() -> str:
     return datetime.now(UTC).isoformat()
+
+
+def _slo_cooldown_key(service: str) -> str:
+    return f"slo:{service}"
 
 
 def _default_runbooks_dir() -> Path:
