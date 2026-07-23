@@ -95,6 +95,34 @@ def anomaly(name: str, score: float = 0.5, timestamp: int = 5) -> AnomalyFinding
     return AnomalyFinding(algorithm="weighted_sum", service="checkout", metric=name, signal_id=f"checkout_{name}", score=score, timestamp=timestamp)
 
 
+def impact_incident(service: str = "checkout", severity: str = "SEV1") -> Incident:
+    event = CandidateEvent(
+        timestamp=10,
+        detector_id=f"auto_{service.replace('-', '_')}_latency_p95",
+        flow="checkout",
+        service=service,
+        severity=severity,
+        signal_id=f"{service.replace('-', '_')}_p95_latency_5m",
+        value=2.0,
+        unit="seconds",
+        window="5m",
+        threshold=1.0,
+        quality=SignalQuality.VERIFIED,
+        reason="threshold_breached",
+        runbook_id="RB-SERVICE-LATENCY",
+    )
+    return Incident(
+        incident_id=f"inc-impact-{service}",
+        fingerprint=f"sha256:impact-{service}",
+        state="open",
+        severity=severity,
+        flow="checkout",
+        service=service,
+        likely_dependency="unknown",
+        events=[event],
+    )
+
+
 class RecoveredDependencyDetector(Detector):
     def evaluate(self, features: list[Feature]) -> list[CandidateEvent]:
         return [
@@ -471,7 +499,7 @@ class RuntimePipelineTest(unittest.TestCase):
         self.assertEqual(result.policy_decisions[0].result, "dry-run-recorded")
         self.assertEqual(result.verification_results[0].status, "not_recovered")
 
-    def test_pipeline_notifies_metric_only_rca_root(self):
+    def test_pipeline_keeps_metric_only_rca_for_analysis_without_notification(self):
         settings = Settings()
         with TemporaryDirectory() as tmp:
             store = SQLiteIncidentStore(Path(tmp) / "aiops.sqlite3", environment=settings.environment)
@@ -508,14 +536,12 @@ class RuntimePipelineTest(unittest.TestCase):
             store.close()
 
         self.assertEqual(result.candidates, [])
-        self.assertEqual([incident.service for incident in result.incidents], ["frontend"])
-        self.assertEqual([message.service for message in result.notifications], ["frontend"])
-        self.assertEqual(result.notifications[0].flow, "web")
-        self.assertEqual(result.notifications[0].title, "RCA root cause: frontend")
-        self.assertEqual(result.notifications[0].likely_dependency, "unknown")
+        self.assertEqual(result.incidents, [])
+        self.assertEqual(result.notifications, [])
         self.assertEqual(result.rca_result.root_causes[0].service, "frontend")
         text = "\n".join(logs.output)
         self.assertIn("AIOPS_DEDUP_RESULT input_candidates=0 incidents=0", text)
+        self.assertIn("service=frontend score=0.882 reason=no_causal_user_impact", text)
 
     def test_pipeline_dedups_repeated_rca_root_notification(self):
         settings = Settings()
@@ -530,17 +556,20 @@ class RuntimePipelineTest(unittest.TestCase):
                 notification_sender=sender,
                 **runtime_kwargs(settings),
             )
-            pipeline._run_v001_rca = lambda metric_series, incidents: RcaResult(
+            rca_result = RcaResult(
                 root_causes=[RootCauseCandidate(service="payment", score=1.0, root_cause_metrics=["cpu_millicores"])]
             )
 
-            first = pipeline.run_once(metric_series=[metric("payment", "cpu_millicores", [100.0] * 31)])
-            second = pipeline.run_once(metric_series=[metric("payment", "cpu_millicores", [100.0] * 31)])
+            first = pipeline._upsert_rca_root_incidents(rca_result, [impact_incident()])
+            pipeline._flush_notifications(first)
+            second = pipeline._upsert_rca_root_incidents(rca_result, [impact_incident()])
+            pipeline._flush_notifications(second)
             store.close()
 
         self.assertEqual([message.service for message in sender.sent], ["payment"])
-        self.assertEqual(first.incidents[0].incident_id, second.incidents[0].incident_id)
-        self.assertEqual(second.incidents[0].occurrence_count, 2)
+        self.assertEqual(first[0].incident_id, second[0].incident_id)
+        self.assertEqual(second[0].occurrence_count, 2)
+        self.assertEqual(sender.sent[0].runbook_id, "RB-SERVICE-RESOURCE-SATURATION")
 
     def test_pipeline_dedups_rca_roots_by_topology_before_notification(self):
         settings = Settings()
@@ -562,7 +591,7 @@ class RuntimePipelineTest(unittest.TestCase):
             )
 
             with self.assertLogs("aiops.pipeline.runtime", level="INFO") as logs:
-                incidents = pipeline._upsert_rca_root_incidents(rca_result, [])
+                incidents = pipeline._upsert_rca_root_incidents(rca_result, [impact_incident()])
             notifications = store.pending_notifications_for(incidents)
             store.close()
 
@@ -570,7 +599,34 @@ class RuntimePipelineTest(unittest.TestCase):
         self.assertEqual([message.service for message in notifications], ["checkout"])
         text = "\n".join(logs.output)
         self.assertIn("service=payment kept_service=checkout", text)
-        self.assertIn("service=ad kept_service=checkout", text)
+        self.assertIn("service=ad score=0.800 reason=no_causal_user_impact", text)
+
+    def test_pipeline_suppresses_rca_roots_outside_impact_dependency_path(self):
+        settings = Settings()
+        with TemporaryDirectory() as tmp:
+            store = SQLiteIncidentStore(Path(tmp) / "aiops.sqlite3", environment=settings.environment)
+            pipeline = AiopsPipeline(
+                collector=StaticCollector([]),
+                detectors=[],
+                store=store,
+                policy=policy(settings),
+                **runtime_kwargs(settings),
+            )
+            rca_result = RcaResult(
+                root_causes=[
+                    RootCauseCandidate(service="frontend-proxy", score=0.95, root_cause_metrics=["cpu_millicores"]),
+                    RootCauseCandidate(service="product-reviews", score=0.92, root_cause_metrics=["cpu_millicores"]),
+                ]
+            )
+
+            with self.assertLogs("aiops.pipeline.runtime", level="INFO") as logs:
+                incidents = pipeline._upsert_rca_root_incidents(rca_result, [impact_incident("checkout")])
+            store.close()
+
+        self.assertEqual(incidents, [])
+        text = "\n".join(logs.output)
+        self.assertIn("service=frontend-proxy score=0.950 reason=no_causal_user_impact", text)
+        self.assertIn("service=product-reviews score=0.920 reason=no_causal_user_impact", text)
 
     def test_pipeline_keeps_slo_notification_and_adds_rca_root_notification(self):
         settings = Settings()
@@ -623,6 +679,12 @@ class RuntimePipelineTest(unittest.TestCase):
         self.assertEqual(result.incidents[1].likely_dependency, "unknown")
         self.assertEqual([message.service for message in result.notifications], ["checkout", "payment"])
         self.assertEqual(result.notifications[1].likely_dependency, "unknown")
+        self.assertEqual(result.notifications[1].severity, "SEV1")
+        self.assertEqual(result.notifications[1].runbook_id, "RB-SERVICE-RESOURCE-SATURATION")
+        self.assertEqual(
+            result.notifications[1].summary,
+            "Impact-correlated RCA score 1.000 (minimum 0.800) from cpu_millicores",
+        )
 
     def test_pipeline_does_not_notify_invalid_rca_roots(self):
         settings = Settings()
@@ -643,7 +705,7 @@ class RuntimePipelineTest(unittest.TestCase):
                         RootCauseCandidate(service="accounting", score=1.0, root_cause_metrics=[]),
                     ]
                 ),
-                [],
+                [impact_incident()],
             )
             store.close()
 

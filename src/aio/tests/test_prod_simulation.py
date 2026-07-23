@@ -130,7 +130,7 @@ class ProdSimulationTest(unittest.TestCase):
         self.assertEqual(result.incidents[0].service, "aiops")
         self.assertEqual(sender.sent[0].runbook_id, "RB-MONITORING-LOSS")
 
-    def test_metric_only_rca_creates_root_incident_notification(self):
+    def test_metric_only_rca_does_not_create_operator_notification(self):
         with TemporaryDirectory() as tmp:
             sender = FakeNotificationSender()
             pipeline = prod_pipeline(Path(tmp), sender)
@@ -146,9 +146,9 @@ class ProdSimulationTest(unittest.TestCase):
             pipeline.store.close()
 
         self.assertEqual(result.candidates, [])
-        self.assertEqual([incident.service for incident in result.incidents], ["payment"])
+        self.assertEqual(result.incidents, [])
         self.assertEqual(result.rca_result.root_causes[0].service, "payment")
-        self.assertEqual([message.service for message in sender.sent], ["payment"])
+        self.assertEqual(sender.sent, [])
 
     def test_repeated_slo_breach_is_deduped_by_incident(self):
         with TemporaryDirectory() as tmp:

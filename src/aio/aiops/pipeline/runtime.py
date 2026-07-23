@@ -259,12 +259,34 @@ class AiopsPipeline:
         return notifications
 
     def _upsert_rca_root_incidents(self, rca_result: RcaResult, incidents: list[Incident]) -> list[Incident]:
-        severity = min((incident.severity for incident in incidents), default="SEV2")
         threshold = float(self.correlation_hyperparameters.get("suppress_min_root_score", 0.8))
         valid_roots = [root for root in rca_result.root_causes if root.score >= threshold and root.root_cause_metrics]
+        impact_incidents = [incident for incident in incidents if any(_is_user_impact_event(event) for event in incident.events)]
+        scoped_roots: list[tuple[RootCauseCandidate, list[Incident]]] = []
+        for root in valid_roots:
+            related_impacts = [
+                incident
+                for incident in impact_incidents
+                if self._is_causal_root_for_impact(root.service, incident.service)
+            ]
+            if related_impacts:
+                scoped_roots.append((root, related_impacts))
+            else:
+                logger.info(
+                    "AIOPS_RCA_NOTIFICATION_SUPPRESSED service=%s score=%.3f reason=no_causal_user_impact",
+                    root.service,
+                    root.score,
+                )
+
+        related_impacts_by_service = {
+            root.service: related_impacts
+            for root, related_impacts in scoped_roots
+        }
         rows = []
-        for root in self._dedup_rca_root_causes(valid_roots):
+        for root in self._dedup_rca_root_causes([root for root, _ in scoped_roots]):
             metric = root.root_cause_metrics[0]
+            related_impacts = related_impacts_by_service[root.service]
+            severity = min(incident.severity for incident in related_impacts)
             flow = next((service.flow for service in self.runtime_config.topology.services if service.name == root.service), "unknown") if self.runtime_config else "unknown"
             rows.append(
                 self.store.upsert(
@@ -280,7 +302,7 @@ class AiopsPipeline:
                         threshold=threshold,
                         quality=SignalQuality.VERIFIED,
                         reason="rca_root_cause",
-                        runbook_id="RB-SERVICE-ERROR-RATE",
+                        runbook_id=_rca_runbook_id(root.root_cause_metrics),
                         likely_dependency="unknown",
                         confidence=root.score,
                         contributing_signals=tuple(root.root_cause_metrics),
@@ -288,6 +310,14 @@ class AiopsPipeline:
                 )
             )
         return rows
+
+    def _is_causal_root_for_impact(self, root_service: str, impact_service: str) -> bool:
+        if root_service == impact_service:
+            return True
+        if self.topology_graph is None:
+            return False
+        max_hops = max(1, int(self.correlation_hyperparameters.get("topology_max_hops", 1)))
+        return self.topology_graph.has_dependency_path(impact_service, root_service, max_hops=max_hops)
 
     def _dedup_rca_root_causes(self, root_causes: list[RootCauseCandidate]) -> list[RootCauseCandidate]:
         kept: list[RootCauseCandidate] = []
@@ -591,3 +621,26 @@ def _log_count(summary: str) -> int:
 
 def _unique_incidents(incidents: list[Incident]) -> list[Incident]:
     return list({incident.incident_id: incident for incident in incidents}.values())
+
+
+def _is_user_impact_event(event: CandidateEvent) -> bool:
+    signal_id = event.signal_id.lower()
+    return is_slo_notification(event) or (
+        event.reason == "threshold_breached"
+        and any(marker in signal_id for marker in ("latency", "error_rate", "error_ratio", "bad_ratio", "burn_rate"))
+    )
+
+
+def _rca_runbook_id(metrics: list[str]) -> str:
+    normalized = [metric.lower() for metric in metrics]
+    if any("latency" in metric for metric in normalized):
+        return "RB-SERVICE-LATENCY"
+    if any(marker in metric for metric in normalized for marker in ("error_rate", "error_ratio", "bad_ratio")):
+        return "RB-SERVICE-ERROR-RATE"
+    if any(
+        marker in metric
+        for metric in normalized
+        for marker in ("cpu", "memory", "disk", "socket", "saturation", "ready_pod", "workload")
+    ):
+        return "RB-SERVICE-RESOURCE-SATURATION"
+    return "RB-SERVICE-RCA"

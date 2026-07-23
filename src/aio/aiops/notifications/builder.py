@@ -24,12 +24,20 @@ class NotificationBuilder:
         if last_event.detector_id != "rca_root_cause" and dependency != "unknown":
             title = f"{incident.flow} likely dependency: {dependency}"
         signals = tuple(dict.fromkeys(signal for event in incident.events for signal in (event.contributing_signals or (event.signal_id,))))
+        summary = f"{last_event.reason} on {', '.join(signals)}"
+        if last_event.detector_id == "rca_root_cause":
+            score = f"{last_event.value:.3f}" if last_event.value is not None else "unknown"
+            minimum = f"{last_event.threshold:.3f}" if last_event.threshold is not None else "unknown"
+            summary = (
+                f"Impact-correlated RCA score {score} "
+                f"(minimum {minimum}) from {', '.join(signals)}"
+            )
         return NotificationMessage(
             incident_id=incident.incident_id,
             severity=incident.severity,
             state=incident.state,
             title=title,
-            summary=f"{last_event.reason} on {', '.join(signals)}",
+            summary=summary,
             flow=incident.flow,
             service=incident.service,
             likely_dependency=dependency,
