@@ -50,10 +50,10 @@ class Correlator:
                 components,
             )
             if dependency is None:
-                correlated.extend(group)
+                correlated.append(_merge_service_group(group, primary_signal))
                 continue
             primary = dependency or primary_signal
-            contributing = tuple(dict.fromkeys(signal for item in group for signal in item.contributing_signals))
+            contributing = tuple(dict.fromkeys(signal for item in group for signal in _candidate_signals(item)))
             confidence = max(dependency.confidence, sum(components.values())) if dependency else max(item.confidence for item in group)
             confidence = max(0.0, min(1.0, confidence))
             correlated.append(
@@ -102,3 +102,19 @@ class Correlator:
         if candidate.quality != SignalQuality.VERIFIED:
             components["stale_or_missing_evidence_penalty"] = self.weights.get("stale_or_missing_evidence_penalty", 0.0)
         return components
+
+
+def _merge_service_group(group: list[CandidateEvent], primary: CandidateEvent) -> CandidateEvent:
+    if len(group) == 1:
+        return primary
+    return primary.model_copy(
+        update={
+            "contributing_signals": tuple(dict.fromkeys(signal for item in group for signal in _candidate_signals(item))),
+            "severity": min(item.severity for item in group),
+            "confidence": max(item.confidence for item in group),
+        }
+    )
+
+
+def _candidate_signals(candidate: CandidateEvent) -> tuple[str, ...]:
+    return candidate.contributing_signals or (candidate.signal_id,)

@@ -172,6 +172,63 @@ class MultiServiceDetector(Detector):
         ]
 
 
+class ServiceSignalDetector(Detector):
+    def evaluate(self, features: list[Feature]) -> list[CandidateEvent]:
+        return [
+            CandidateEvent(
+                detector_id="auto_frontend_proxy_latency_p99",
+                timestamp=10,
+                flow="checkout",
+                service="frontend-proxy",
+                severity="SEV1",
+                signal_id="frontend_proxy_p99_latency_5m",
+                value=2.4,
+                unit="seconds",
+                window="5m",
+                threshold=1.5,
+                quality=SignalQuality.VERIFIED,
+                reason="threshold_breached",
+                runbook_id="RB-CHECKOUT-SLO",
+                confidence=1.0,
+                contributing_signals=("frontend_proxy_p99_latency_5m",),
+            ),
+            CandidateEvent(
+                detector_id="auto_checkout_latency_p95",
+                timestamp=10,
+                flow="checkout",
+                service="checkout",
+                severity="SEV1",
+                signal_id="checkout_p95_latency_5m",
+                value=4.8,
+                unit="seconds",
+                window="5m",
+                threshold=2.0,
+                quality=SignalQuality.VERIFIED,
+                reason="threshold_breached",
+                runbook_id="RB-CHECKOUT-SLO",
+                confidence=1.0,
+                contributing_signals=("checkout_p95_latency_5m",),
+            ),
+            CandidateEvent(
+                detector_id="auto_checkout_latency_p99",
+                timestamp=10,
+                flow="checkout",
+                service="checkout",
+                severity="SEV1",
+                signal_id="checkout_p99_latency_5m",
+                value=7.4,
+                unit="seconds",
+                window="5m",
+                threshold=2.0,
+                quality=SignalQuality.VERIFIED,
+                reason="threshold_breached",
+                runbook_id="RB-CHECKOUT-SLO",
+                confidence=1.0,
+                contributing_signals=("checkout_p99_latency_5m",),
+            ),
+        ]
+
+
 class FakeNotificationSender:
     def __init__(self, fail: bool = False):
         self.fail = fail
@@ -185,6 +242,25 @@ class FakeNotificationSender:
 
 
 class RuntimePipelineTest(unittest.TestCase):
+    def test_pipeline_wraps_same_service_signals_into_one_notification(self):
+        settings = Settings()
+        with TemporaryDirectory() as tmp:
+            store = SQLiteIncidentStore(Path(tmp) / "aiops.sqlite3", environment=settings.environment)
+            pipeline = AiopsPipeline(
+                collector=StaticCollector([]),
+                detectors=[ServiceSignalDetector()],
+                store=store,
+                policy=policy(settings),
+                **runtime_kwargs(settings),
+            )
+
+            result = pipeline.run_once()
+            store.close()
+
+        self.assertEqual([message.service for message in result.notifications], ["frontend-proxy", "checkout"])
+        self.assertEqual(result.notifications[0].summary, "threshold_breached on frontend_proxy_p99_latency_5m")
+        self.assertEqual(result.notifications[1].summary, "threshold_breached on checkout_p95_latency_5m, checkout_p99_latency_5m")
+
     def test_bad_ratio_slo_incident_is_added_to_rca_anomalies(self):
         event = CandidateEvent(
             timestamp=44,

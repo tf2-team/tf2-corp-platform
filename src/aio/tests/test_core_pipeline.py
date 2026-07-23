@@ -254,7 +254,7 @@ class DetectorEngineTest(unittest.TestCase):
             {"verified_primary_signal", "temporal_precedence", "topology_path", "operation_specificity", "trace_log_kubernetes_corroboration"},
         )
 
-    def test_correlator_keeps_independent_same_service_candidates(self):
+    def test_correlator_wraps_same_service_signals(self):
         slo = CandidateEvent(
             environment="tf2",
             timestamp=100,
@@ -288,7 +288,8 @@ class DetectorEngineTest(unittest.TestCase):
 
         candidates = Correlator(load_runtime_config(Path("config/runtime.json"))).correlate([slo, latency])
 
-        self.assertEqual([candidate.signal_id for candidate in candidates], ["checkout_bad_ratio_24h", "checkout_p95_latency_5m"])
+        self.assertEqual([candidate.service for candidate in candidates], ["checkout"])
+        self.assertEqual(candidates[0].contributing_signals, ("checkout_bad_ratio_24h", "checkout_p95_latency_5m"))
 
 
 class IncidentManagerTest(unittest.TestCase):
