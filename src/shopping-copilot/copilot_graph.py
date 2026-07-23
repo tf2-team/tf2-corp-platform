@@ -30,7 +30,8 @@ from typing import Optional, TypedDict
 from langgraph.graph import StateGraph, START, END
 import valkey as valkeylib
 from techx_ai_common.contracts import GroundedResponse, GuardrailAction, ResponseStatus
-from techx_ai_common.guardrails import sanitize_request
+from techx_ai_common.guardrails import sanitize_request, scan_output
+from techx_ai_common.rate_limiter import check_rate_limit
 from techx_ai_common.proto import demo_pb2_grpc
 from copilot_contracts import (
     CopilotStatus,
@@ -52,6 +53,7 @@ logger = logging.getLogger("copilot_graph")
 
 class CopilotState(TypedDict):
     user_message: str
+    user_id: str
     # Sanitized version of the message (after PII redaction).
     safe_message: str
     intent: Optional[ShoppingIntent]
@@ -59,6 +61,7 @@ class CopilotState(TypedDict):
     allowed_product_ids: list[str]
     catalog_results: list[CopilotProductResult]
     qa_result: Optional[GroundedResponse]
+    safe_reviews: Optional[dict]
     pending_action: Optional[PendingCartAction]
     status: CopilotStatus
     interpreted_criteria: str
@@ -93,7 +96,22 @@ class CopilotDeps:
 def make_nodes(deps: CopilotDeps):
 
     def input_guardrail_node(state: CopilotState) -> CopilotState:
-        """Block prompt injection and PII in the user message."""
+        """Block prompt injection, PII, and enforce rate limits in the user message."""
+        allowed, limit_reason = check_rate_limit(
+            valkey_client=deps.valkey_client,
+            client_id=state["user_id"],
+            cooldown_seconds=2,
+            max_requests_per_minute=10,
+        )
+        if not allowed:
+            logger.info("Request rate limited: %s", limit_reason)
+            return {
+                **state,
+                "status": CopilotStatus.BLOCKED,
+                "reason": limit_reason or "Rate limit exceeded. Please wait before retrying.",
+                "error": "RATE_LIMITED",
+            }
+
         result = sanitize_request(product_id="", question=state["user_message"])
         if result.action == GuardrailAction.BLOCK:
             logger.info("Input blocked by guardrail: %s", result.reason)
@@ -114,6 +132,14 @@ def make_nodes(deps: CopilotDeps):
         """Parse safe_message into a ShoppingIntent."""
         try:
             intent = intent_parser.parse_intent(state["safe_message"])
+            if intent.is_greeting:
+                logger.info("Greeting request received: %r", state["safe_message"])
+                return {
+                    **state,
+                    "intent": intent,
+                    "status": CopilotStatus.GROUNDED,
+                    "reason": "Hello! How can I help you today?",
+                }
             if not intent.is_shopping_related:
                 logger.info("Out-of-scope request blocked: %r", state["safe_message"])
                 return {
@@ -173,26 +199,45 @@ def make_nodes(deps: CopilotDeps):
             }
 
     def qa_node(state: CopilotState) -> CopilotState:
-        """Ground-answer a review question for the first catalog result."""
+        """Ground-answer a review question for the matched catalog result."""
         if state.get("status") in (CopilotStatus.BLOCKED, CopilotStatus.FALLBACK, CopilotStatus.NO_RESULTS):
             return state
         intent = state["intent"]
         if not intent or not intent.needs_review_qa or not intent.follow_up_question:
             return state
-        # Default to the first/highest-ranked catalog result for Q&A.
-        target_product_id = state["catalog_results"][0].product_id
+
+        # Match target_product_id against catalog_results using hints or query if available.
+        target_product_id = None
+        search_terms = []
+        if intent.cart_product_hint:
+            search_terms.append(intent.cart_product_hint.lower())
+        if intent.query:
+            search_terms.append(intent.query.lower())
+
+        for p in state["catalog_results"]:
+            p_name_lower = p.name.lower()
+            for term in search_terms:
+                if term in p_name_lower or p_name_lower in term:
+                    target_product_id = p.product_id
+                    break
+            if target_product_id:
+                break
+
+        if not target_product_id:
+            target_product_id = state["catalog_results"][0].product_id
+
         try:
-            grounded = answer_with_reviews(
+            grounded, safe_revs = answer_with_reviews(
                 product_id=target_product_id,
                 question=intent.follow_up_question,
                 allowed_product_ids=state["allowed_product_ids"],
                 product_reviews_stub=deps.reviews_stub,
             )
-            return {**state, "qa_result": grounded}
+            return {**state, "qa_result": grounded, "safe_reviews": safe_revs}
         except Exception as exc:
             logger.error("Review Q&A failed: %s", exc)
             # Non-fatal: fall through with no qa_result rather than FALLBACK.
-            return {**state, "qa_result": None}
+            return {**state, "qa_result": None, "safe_reviews": None}
 
     def cart_node(state: CopilotState) -> CopilotState:
         """Prepare a pending add-to-cart token (does NOT write to cart)."""
@@ -214,7 +259,7 @@ def make_nodes(deps: CopilotDeps):
             target_product_id = state["catalog_results"][0].product_id
         try:
             action = create_pending_token(
-                user_id="anonymous",  # replaced by real user_id from frontend in ConfirmCartAction
+                user_id=state["user_id"],
                 product_id=target_product_id,
                 quantity=1,
                 valkey_client=deps.valkey_client,
@@ -237,7 +282,29 @@ def make_nodes(deps: CopilotDeps):
         if qa_result and qa_result.status == ResponseStatus.ABSTAINED:
             return {**state, "status": CopilotStatus.ABSTAINED, "reason": qa_result.reason or ""}
 
-        return {**state, "status": CopilotStatus.GROUNDED}
+        intent = state.get("intent")
+        reason_text = state.get("reason", "")
+        if intent and intent.wants_description and state.get("catalog_results"):
+            target_p = state["catalog_results"][0]
+            desc = target_p.description or target_p.name
+            reason_text = f"Product Description ({target_p.name}): {desc}"
+
+        text_to_scan = reason_text
+        if qa_result and qa_result.answer:
+            text_to_scan = f"{text_to_scan}\n{qa_result.answer}".strip()
+
+        output_guard = scan_output(text_to_scan or "")
+        if output_guard.action == GuardrailAction.BLOCK:
+            logger.info("Output blocked by guardrail: %s", output_guard.reason)
+            return {
+                **state,
+                "status": CopilotStatus.BLOCKED,
+                "reason": output_guard.reason or "Output blocked by guardrail",
+            }
+        if output_guard.action == GuardrailAction.SANITIZED and output_guard.sanitized_text:
+            reason_text = output_guard.sanitized_text
+
+        return {**state, "status": CopilotStatus.GROUNDED, "reason": reason_text}
 
     def fallback_node(state: CopilotState) -> CopilotState:
         """Safety net: ensure status is FALLBACK and reason is set."""
@@ -263,7 +330,9 @@ def make_nodes(deps: CopilotDeps):
 # ---------------------------------------------------------------------------
 
 def _should_skip(state: CopilotState) -> str:
-    """Route to 'skip' (build_response) if a terminal status is already set."""
+    """Route to 'skip' (build_response) if a terminal status is already set or if greeting."""
+    if state.get("intent") and state["intent"].is_greeting:
+        return "skip"
     if state.get("status") in (
         CopilotStatus.BLOCKED, CopilotStatus.FALLBACK,
         CopilotStatus.NO_RESULTS,
@@ -324,7 +393,7 @@ GRAPH_RECURSION_LIMIT = 10
 
 
 
-def run_copilot(user_message: str, deps: CopilotDeps) -> CopilotState:
+def run_copilot(user_message: str, deps: CopilotDeps, user_id: str = "anonymous") -> CopilotState:
     """Run the Shopping Copilot graph synchronously with timeout.
 
     Wraps asyncio execution and applies a hard deadline. Any exception
@@ -333,6 +402,7 @@ def run_copilot(user_message: str, deps: CopilotDeps) -> CopilotState:
     graph = build_graph(deps)
     initial_state: CopilotState = {
         "user_message": user_message,
+        "user_id": user_id or "anonymous",
         "safe_message": user_message,
         "intent": None,
         "allowed_product_ids": [],

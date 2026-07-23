@@ -22,6 +22,12 @@ that belongs to the safety layer (A1.2 / guardrails.py).
 import logging
 import os
 import re
+from enum import Enum
+
+class GroundingMode(str, Enum):
+    SEMANTICS = "semantics"
+    BM25 = "bm25"
+    HYBRID = "hybrid"
 
 import instructor
 from openai import OpenAI
@@ -35,6 +41,7 @@ from .contracts import (
     SafeReviewSet,
 )
 from .bedrock import converse_json, is_bedrock_provider
+from .retrieval import tokenize
 
 logger = logging.getLogger("grounding")
 
@@ -43,6 +50,10 @@ ABSTAIN_MESSAGE = "The current reviews do not provide enough information."
 
 _SYSTEM_PROMPT = """\
 You answer product-review questions using only the supplied reviews.
+
+The supplied reviews may be a selected subset, not the complete set of product reviews.
+Do not make absolute claims about all reviews or the product as a whole from this subset.
+For absence or aggregate questions, use scoped wording such as "The supplied reviews do not mention X"; never say "There are no X reviews" unless the prompt explicitly states that the complete review set was provided.
 
 Return exactly one JSON object. Do not use Markdown or add commentary:
 
@@ -59,7 +70,7 @@ Rules:
 - Use source IDs exactly as provided. Never invent a source ID.
 - Do not put citations such as "[r1]" inside answer or claim text. Put source IDs only in sources.
 - Do not add facts, numbers, comparisons, or opinions not stated in a review.
-- If the reviews do not support an answer, return {"answer":"","claims":[]}.
+- If the supplied reviews do not support a scoped answer, return {"answer":"","claims":[]}.
 - Write all text in English.
 
 Example:
@@ -72,11 +83,6 @@ Reviews:
 JSON: {"answer":"The kit cleans glasses well and includes a microfiber cloth.","claims":[{"text":"The kit cleans glasses well and includes a microfiber cloth.","sources":["r1"]}]}
 """
 
-_MIN_KEYWORD_LENGTH = 4
-_GENERIC_WORDS = {
-    "dung", "duoc", "khong", "nhung", "cung", "voi", "cho", "rat",
-    "tot", "san", "pham", "nay", "ngay", "lien", "tuc", "hoac",
-}
 _NUMBER_PATTERN = re.compile(r"\d+")
 
 
@@ -148,31 +154,71 @@ def _claim_has_fabricated_number(claim_text: str, source_texts: list[str]) -> bo
     return not claim_numbers.issubset(source_numbers)
 
 
-def _content_supported(claim_text: str, source_texts: list[str]) -> bool:
-    """Cheap keyword-overlap check: does at least one cited review share a
-    meaningful, non-generic word with the claim? Structural safety net,
-    not a semantic guarantee — catches claims that cite a real source_id
-    but talk about something that source never mentions at all. Number
-    fabrication is handled separately by _claim_has_fabricated_number,
-    since a shared generic word can otherwise mask a fabricated number.
-    """
-    claim_words = {
-        w for w in claim_text.lower().split()
-        if len(w) >= _MIN_KEYWORD_LENGTH and w not in _GENERIC_WORDS
-    }
-    if not claim_words:
-        return True
-    for text in source_texts:
-        source_words = {
-            w for w in text.lower().split()
-            if len(w) >= _MIN_KEYWORD_LENGTH and w not in _GENERIC_WORDS
-        }
-        if claim_words & source_words:
-            return True
-    return False
+class GroundingChecker:
+    _model = None
+
+    @classmethod
+    def _get_model(cls):
+        if cls._model is None:
+            # Lazy load to prevent slow startup
+            from sentence_transformers import SentenceTransformer
+            # Using a fast, lightweight sentence transformer model
+            cls._model = SentenceTransformer('all-MiniLM-L6-v2')
+        return cls._model
+
+    @classmethod
+    def check_semantics(cls, claim_text: str, source_texts: list[str], threshold: float) -> bool:
+        if not source_texts:
+            return False
+        model = cls._get_model()
+        from sentence_transformers import util
+        claim_emb = model.encode(claim_text, convert_to_tensor=True)
+        source_embs = model.encode(source_texts, convert_to_tensor=True)
+        cos_scores = util.cos_sim(claim_emb, source_embs)[0]
+        return float(cos_scores.max()) >= threshold
+
+    @classmethod
+    def check_bm25(
+        cls,
+        claim_text: str,
+        cited_source_ids: list[str],
+        reviews_by_id: dict[str, SafeReview],
+        threshold: float,
+    ) -> bool:
+        """Check lexical support against the retrieved-review corpus.
+
+        BM25 needs multiple documents for meaningful IDF. Scoring only the
+        cited source makes a single-source claim look unsupported even when
+        it closely matches that source.
+        """
+        if not cited_source_ids or not reviews_by_id:
+            return False
+        from rank_bm25 import BM25Okapi
+
+        reviews = list(reviews_by_id.values())
+        cited_indexes = [
+            index for index, review in enumerate(reviews)
+            if review.source_id in cited_source_ids
+        ]
+        if not cited_indexes:
+            return False
+
+        tokenized_corpus = [tokenize(review.text) for review in reviews]
+        bm25 = BM25Okapi(tokenized_corpus)
+        tokenized_query = tokenize(claim_text)
+        if not tokenized_query:
+            return False
+        scores = bm25.get_scores(tokenized_query)
+        return float(max(scores[index] for index in cited_indexes)) >= threshold
 
 
-def _validate_claim(claim: GroundedClaim, reviews_by_id: dict[str, SafeReview]) -> bool:
+def _validate_claim(
+    claim: GroundedClaim, 
+    reviews_by_id: dict[str, SafeReview],
+    mode: GroundingMode = GroundingMode.HYBRID,
+    semantic_threshold: float = 0.65,
+    bm25_threshold: float = 1.0,
+) -> bool:
     # Layer 1 - citation: every cited source_id must exist in this
     # SafeReviewSet. Also implicitly enforces product scoping, since
     # SafeReviewSet only ever contains reviews for one product_id.
@@ -187,10 +233,32 @@ def _validate_claim(claim: GroundedClaim, reviews_by_id: dict[str, SafeReview]) 
         logger.info(f"Dropping claim with a number not present in its sources: '{claim.text}'")
         return False
 
-    # Layer 3 - general content-overlap check.
-    if not _content_supported(claim.text, source_texts):
-        logger.info(f"Dropping claim not supported by source content: '{claim.text}'")
-        return False
+    # Layer 3 - Mode-specific content support check.
+        
+    sem_ok = False
+    bm25_ok = False
+    
+    if mode in (GroundingMode.SEMANTICS, GroundingMode.HYBRID):
+        sem_ok = GroundingChecker.check_semantics(claim.text, source_texts, semantic_threshold)
+        if mode == GroundingMode.SEMANTICS and not sem_ok:
+            logger.info(f"Dropping claim failing semantic check: '{claim.text}'")
+            return False
+            
+    if mode in (GroundingMode.BM25, GroundingMode.HYBRID):
+        bm25_ok = GroundingChecker.check_bm25(
+            claim.text,
+            claim.sources,
+            reviews_by_id,
+            bm25_threshold,
+        )
+        if mode == GroundingMode.BM25 and not bm25_ok:
+            logger.info(f"Dropping claim failing BM25 check: '{claim.text}'")
+            return False
+            
+    if mode == GroundingMode.HYBRID:
+        if not (sem_ok or bm25_ok):
+            logger.info(f"Dropping claim failing hybrid check (both semantic and BM25 failed): '{claim.text}'")
+            return False
 
     return True
 
@@ -198,12 +266,18 @@ def _validate_claim(claim: GroundedClaim, reviews_by_id: dict[str, SafeReview]) 
 def validate_grounded_summary(
     draft: GroundedDraft,
     safe_reviews: SafeReviewSet,
+    mode: GroundingMode = GroundingMode.HYBRID,
+    semantic_threshold: float = 0.65,
+    bm25_threshold: float = 1.0,
 ) -> GroundedResponse:
     """Never returns model output directly. Filters draft.claims against
     safe_reviews and re-derives the answer from surviving claims only.
     """
     reviews_by_id = {review.source_id: review for review in safe_reviews.reviews}
-    surviving_claims = [claim for claim in draft.claims if _validate_claim(claim, reviews_by_id)]
+    surviving_claims = [
+        claim for claim in draft.claims 
+        if _validate_claim(claim, reviews_by_id, mode, semantic_threshold, bm25_threshold)
+    ]
 
     if not surviving_claims:
         return GroundedResponse(status=ResponseStatus.ABSTAINED, reason=ABSTAIN_MESSAGE)

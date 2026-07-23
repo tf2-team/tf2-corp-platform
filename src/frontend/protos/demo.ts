@@ -92,6 +92,7 @@ export interface SearchProductsResponse {
 
 export interface CopilotSearchRequest {
   userMessage: string;
+  userId: string;
 }
 
 export interface CopilotProduct {
@@ -111,6 +112,9 @@ export interface CopilotSource {
   sourceId: string;
   sourceType: string;
   productId: string;
+  username?: string;
+  score?: number;
+  description?: string;
 }
 
 export interface CopilotSearchResponse {
@@ -1249,13 +1253,16 @@ export const SearchProductsResponse: MessageFns<SearchProductsResponse> = {
 };
 
 function createBaseCopilotSearchRequest(): CopilotSearchRequest {
-  return { userMessage: "" };
+  return { userMessage: "", userId: "" };
 }
 
 export const CopilotSearchRequest: MessageFns<CopilotSearchRequest> = {
   encode(message: CopilotSearchRequest, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
     if (message.userMessage !== "") {
       writer.uint32(10).string(message.userMessage);
+    }
+    if (message.userId !== "") {
+      writer.uint32(18).string(message.userId);
     }
     return writer;
   },
@@ -1272,6 +1279,11 @@ export const CopilotSearchRequest: MessageFns<CopilotSearchRequest> = {
           message.userMessage = reader.string();
           continue;
         }
+        case 2: {
+          if (tag !== 18) break;
+          message.userId = reader.string();
+          continue;
+        }
       }
       if ((tag & 7) === 4 || tag === 0) break;
       reader.skip(tag & 7);
@@ -1280,12 +1292,16 @@ export const CopilotSearchRequest: MessageFns<CopilotSearchRequest> = {
   },
 
   fromJSON(object: any): CopilotSearchRequest {
-    return { userMessage: isSet(object.userMessage) ? globalThis.String(object.userMessage) : "" };
+    return {
+      userMessage: isSet(object.userMessage) ? globalThis.String(object.userMessage) : "",
+      userId: isSet(object.userId) ? globalThis.String(object.userId) : "",
+    };
   },
 
   toJSON(message: CopilotSearchRequest): unknown {
     const obj: any = {};
     if (message.userMessage !== "") obj.userMessage = message.userMessage;
+    if (message.userId !== "") obj.userId = message.userId;
     return obj;
   },
 
@@ -1295,6 +1311,7 @@ export const CopilotSearchRequest: MessageFns<CopilotSearchRequest> = {
   fromPartial<I extends Exact<DeepPartial<CopilotSearchRequest>, I>>(object: I): CopilotSearchRequest {
     const message = createBaseCopilotSearchRequest();
     message.userMessage = object.userMessage ?? "";
+    message.userId = object.userId ?? "";
     return message;
   },
 };
@@ -1461,7 +1478,7 @@ export const CopilotClaim: MessageFns<CopilotClaim> = {
 };
 
 function createBaseCopilotSource(): CopilotSource {
-  return { sourceId: "", sourceType: "", productId: "" };
+  return { sourceId: "", sourceType: "", productId: "", username: "", score: 0, description: "" };
 }
 
 export const CopilotSource: MessageFns<CopilotSource> = {
@@ -1474,6 +1491,15 @@ export const CopilotSource: MessageFns<CopilotSource> = {
     }
     if (message.productId !== "") {
       writer.uint32(26).string(message.productId);
+    }
+    if (message.username !== undefined && message.username !== "") {
+      writer.uint32(34).string(message.username);
+    }
+    if (message.score !== undefined && message.score !== 0) {
+      writer.uint32(45).float(message.score);
+    }
+    if (message.description !== undefined && message.description !== "") {
+      writer.uint32(50).string(message.description);
     }
     return writer;
   },
@@ -1500,6 +1526,21 @@ export const CopilotSource: MessageFns<CopilotSource> = {
           message.productId = reader.string();
           continue;
         }
+        case 4: {
+          if (tag !== 34) break;
+          message.username = reader.string();
+          continue;
+        }
+        case 5: {
+          if (tag !== 45) break;
+          message.score = reader.float();
+          continue;
+        }
+        case 6: {
+          if (tag !== 50) break;
+          message.description = reader.string();
+          continue;
+        }
       }
       if ((tag & 7) === 4 || tag === 0) break;
       reader.skip(tag & 7);
@@ -1512,6 +1553,9 @@ export const CopilotSource: MessageFns<CopilotSource> = {
       sourceId: isSet(object.sourceId) ? globalThis.String(object.sourceId) : "",
       sourceType: isSet(object.sourceType) ? globalThis.String(object.sourceType) : "",
       productId: isSet(object.productId) ? globalThis.String(object.productId) : "",
+      username: isSet(object.username) ? globalThis.String(object.username) : "",
+      score: isSet(object.score) ? globalThis.Number(object.score) : 0,
+      description: isSet(object.description) ? globalThis.String(object.description) : "",
     };
   },
 
@@ -1520,6 +1564,9 @@ export const CopilotSource: MessageFns<CopilotSource> = {
     if (message.sourceId !== "") obj.sourceId = message.sourceId;
     if (message.sourceType !== "") obj.sourceType = message.sourceType;
     if (message.productId !== "") obj.productId = message.productId;
+    if (message.username !== undefined && message.username !== "") obj.username = message.username;
+    if (message.score !== undefined && message.score !== 0) obj.score = message.score;
+    if (message.description !== undefined && message.description !== "") obj.description = message.description;
     return obj;
   },
 
@@ -1531,6 +1578,9 @@ export const CopilotSource: MessageFns<CopilotSource> = {
     message.sourceId = object.sourceId ?? "";
     message.sourceType = object.sourceType ?? "";
     message.productId = object.productId ?? "";
+    message.username = object.username ?? "";
+    message.score = object.score ?? 0;
+    message.description = object.description ?? "";
     return message;
   },
 };

@@ -72,14 +72,28 @@ PHONE_REGEX = re.compile(r"\+?\b(?:\d{1,3}[-.\s]?)?\(?\d{3}\)?[-.\s]?\d{3}[-.\s]
 # Credit card pattern: 12 to 19 digits, possibly separated by spaces or hyphens
 CARD_REGEX = re.compile(r"\b(?:\d[- ]*){12,19}\b")
 
-# System Prompt keywords for detection
-SYSTEM_PROMPT_KEYWORDS = [
-    "system prompt", "system instructions", "system rules", "system message",
-    "ignore previous instructions", "ignore all previous", "ignore rules",
-    "bypass instruction", "disregard previous", "forget previous",
-    "dan mode", "do anything now", "developer mode", "jailbreak",
-    "you are now", "act as", "pretend to be",
-    "secret key", "internal state", "api key", "password"
+# High-confidence hard-block keywords (Layer 1)
+HARD_INJECTION_KEYWORDS = [
+    "ignore previous instructions",
+    "ignore all previous instructions",
+    "reveal system prompt",
+    "show system prompt",
+    "output system prompt",
+    "display system prompt",
+    "reveal api key",
+    "show api key",
+    "output api key",
+    "developer mode",
+    "dan mode",
+    "do anything now",
+    "bypass instructions",
+    "bypass safety",
+]
+
+# Regex patterns for dangerous combinations (Layer 1)
+COMBINATION_PATTERNS = [
+    # Match "act as" combined with dangerous modifiers like "unrestricted", "dan", "jailbreak"
+    re.compile(r"\bact\s+as\b.*\b(unrestricted|dan|jailbreak)\b", re.IGNORECASE),
 ]
 
 @lru_cache(maxsize=1)
@@ -131,23 +145,40 @@ def redact_pii(text: str) -> str:
 
 
 def check_prompt_injection(text: str) -> bool:
-    """Returns True if text is clean/valid, False if injection is detected."""
-    # 1. Try using LLM Guard Input Scanner
+    """Returns True if text is clean/valid, False if injection is detected.
+    
+    Implements a Hybrid 2-Layer check:
+    - Layer 1: Fast Hard Keywords & Combination Patterns check (instantly blocks high-confidence threats).
+    - Layer 2: LLM Guard Input Scanner model check (evaluates ambiguous / remaining texts).
+    """
+    if not text:
+        return True
+
+    text_clean = text.lower().strip()
+
+    # --- LAYER 1: Hard Keywords & Dangerous Combinations Check ---
+    for kw in HARD_INJECTION_KEYWORDS:
+        if kw in text_clean:
+            logger.info(f"Prompt injection detected by Layer 1 Hard Keyword: '{kw}'")
+            return False
+
+    for pattern in COMBINATION_PATTERNS:
+        if pattern.search(text):
+            logger.info(f"Prompt injection detected by Layer 1 Combination Pattern: '{pattern.pattern}'")
+            return False
+
+    # --- LAYER 2: LLM Guard Model Scan ---
     try:
         scanner = _prompt_injection_scanner()
-        _, is_valid, _ = scanner.scan(text)
-        if not is_valid:
-            return False
+        if scanner is not None:
+            _, is_valid, _ = scanner.scan(text)
+            if not is_valid:
+                logger.info("Prompt injection detected by Layer 2 LLM Guard Model Scanner")
+                return False
     except Exception as e:
         if _model_is_required():
             raise RuntimeError("Required prompt-injection model is unavailable") from e
-        logger.warning(f"LLM Guard prompt injection check failed or not installed. Using keyword fallback. Error: {e}")
-
-    # 2. Keyword fallback check
-    text_lower = text.lower()
-    for kw in SYSTEM_PROMPT_KEYWORDS:
-        if kw in text_lower:
-            return False
+        logger.warning(f"LLM Guard prompt injection model scan failed. Error: {e}")
 
     return True
 
@@ -233,11 +264,15 @@ def sanitize_reviews(product_id: str, reviews) -> SafeReviewSet:
             except Exception:
                 pass
 
+        username_val = item[0] if isinstance(item, (list, tuple)) and len(item) > 0 else (item.get("username") if isinstance(item, dict) else None)
+
         safe_reviews.append(
             SafeReview(
                 source_id=source_id,
                 text=sanitized_text,
-                score=score
+                score=score,
+                username=username_val,
+                description=sanitized_text,
             )
         )
 
@@ -277,18 +312,9 @@ def validate_tool_call(request_product_id: str, tool_name: str, arguments: dict)
 
 
 def scan_output(text: str) -> GuardrailResult:
-    """Scans response content for system prompt leaks or PII."""
+    """Blocks PII in a model response before it reaches the user."""
     if not text:
         return GuardrailResult(action=GuardrailAction.ALLOW)
-
-    # Check for leaked system instructions or secrets
-    text_lower = text.lower()
-    for kw in SYSTEM_PROMPT_KEYWORDS:
-        if kw in text_lower:
-            return GuardrailResult(
-                action=GuardrailAction.BLOCK,
-                reason="Response blocked: Leaked system instructions or sensitive data detected."
-            )
 
     # Detect PII in output
     try:
