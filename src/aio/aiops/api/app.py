@@ -82,6 +82,7 @@ def run_pipeline_with_collector(collector, settings: Settings, runtime_config, m
         environment=settings.environment,
         notification_cooldown_seconds=int(hyperparameters["incident"]["notification_cooldown_seconds"]),
         slo_dedup_seconds=int(hyperparameters["incident"]["slo_dedup_seconds"]),
+        rca_dedup_seconds=int(hyperparameters["incident"]["rca_dedup_seconds"]),
         incident_count_reset_seconds=int(hyperparameters["incident"]["count_reset_seconds"]),
         topology_graph=topology_graph,
     )

@@ -428,6 +428,31 @@ class RuntimePipelineTest(unittest.TestCase):
         text = "\n".join(logs.output)
         self.assertIn("AIOPS_DEDUP_RESULT input_candidates=0 incidents=0", text)
 
+    def test_pipeline_dedups_repeated_rca_root_notification(self):
+        settings = Settings()
+        sender = FakeNotificationSender()
+        with TemporaryDirectory() as tmp:
+            store = SQLiteIncidentStore(Path(tmp) / "aiops.sqlite3", environment=settings.environment, rca_dedup_seconds=900)
+            pipeline = AiopsPipeline(
+                collector=StaticCollector([]),
+                detectors=[],
+                store=store,
+                policy=policy(settings),
+                notification_sender=sender,
+                **runtime_kwargs(settings),
+            )
+            pipeline._run_v001_rca = lambda metric_series, incidents: RcaResult(
+                root_causes=[RootCauseCandidate(service="payment", score=1.0, root_cause_metrics=["cpu_millicores"])]
+            )
+
+            first = pipeline.run_once(metric_series=[metric("payment", "cpu_millicores", [100.0] * 31)])
+            second = pipeline.run_once(metric_series=[metric("payment", "cpu_millicores", [100.0] * 31)])
+            store.close()
+
+        self.assertEqual([message.service for message in sender.sent], ["payment"])
+        self.assertEqual(first.incidents[0].incident_id, second.incidents[0].incident_id)
+        self.assertEqual(second.incidents[0].occurrence_count, 2)
+
     def test_pipeline_keeps_slo_notification_and_adds_rca_root_notification(self):
         settings = Settings()
         with TemporaryDirectory() as tmp:
@@ -857,6 +882,8 @@ class RuntimePipelineTest(unittest.TestCase):
         self.assertEqual(len(rows), 1)
         self.assertEqual(rows[0]["incidents"][0]["service"], "checkout")
         self.assertEqual(rows[0]["incidents"][0]["detectors"], ["ops01_checkout_slo"])
+        self.assertEqual([message.service for message in result.notifications], ["checkout", "checkout"])
+        self.assertEqual([incident.events[-1].detector_id for incident in result.incidents], ["ops01_checkout_slo", "rca_root_cause"])
         self.assertEqual(rows[0]["parameters"]["min_points"], hyperparameters["min_points"])
         self.assertEqual(rows[0]["series_point_count"]["max"], 60)
         self.assertEqual(rows[0]["root_causes"][0]["service"], result.rca_result.root_causes[0].service)
@@ -881,10 +908,9 @@ class RuntimePipelineTest(unittest.TestCase):
             outbox_rows = store._connection.execute("SELECT incident_id, status FROM notification_outbox ORDER BY incident_id").fetchall()
             store.close()
 
-        self.assertEqual({message.service for message in result.notifications}, {"checkout", "valkey-cart"})
+        self.assertEqual([message.service for message in result.notifications], ["checkout", "valkey-cart", "valkey-cart"])
         self.assertEqual([status for _, status in outbox_rows].count("suppressed"), 1)
-        self.assertEqual(len(result.policy_decisions), 1)
-        self.assertEqual(result.policy_decisions[0].result, "blocked")
+        self.assertEqual([decision.result for decision in result.policy_decisions], ["blocked", "blocked"])
 
     def test_pipeline_does_not_suppress_children_for_low_confidence_root_cause(self):
         settings = Settings()

@@ -24,6 +24,7 @@ class SQLiteIncidentStore:
         runbooks_dir: Path | None = None,
         notification_cooldown_seconds: int = 900,
         slo_dedup_seconds: int = 300,
+        rca_dedup_seconds: int = 300,
         incident_count_reset_seconds: int = 900,
         topology_graph=None,
     ):
@@ -32,6 +33,7 @@ class SQLiteIncidentStore:
         self.runbooks_dir = runbooks_dir or _default_runbooks_dir()
         self.notification_cooldown_seconds = notification_cooldown_seconds
         self.slo_dedup_seconds = slo_dedup_seconds
+        self.rca_dedup_seconds = rca_dedup_seconds
         self.incident_count_reset_seconds = incident_count_reset_seconds
         self.topology_graph = topology_graph
         self._last_enqueued_incident_ids: set[str] = set()
@@ -133,15 +135,17 @@ class SQLiteIncidentStore:
 
         now = datetime.now(UTC)
         slo_notification = is_slo_notification(candidate)
+        rca_notification = candidate.detector_id == "rca_root_cause"
         notification_due = self._notification_due(incident, is_new, now)
         can_enqueue_incident = notification_due and self._can_enqueue_notification(incident.incident_id)
+        cooldown_key = _notification_cooldown_key(incident.service, slo_notification, rca_notification)
         service_notification_due = False
         if can_enqueue_incident:
             service_notification_due = self._service_notification_due(
-                _slo_cooldown_key(incident.service) if slo_notification else incident.service,
+                cooldown_key,
                 incident.severity,
                 now,
-                bypass_sev1=not slo_notification,
+                bypass_sev1=not (slo_notification or rca_notification),
             )
         notification = (
             NotificationBuilder().build([incident])[0]
@@ -149,7 +153,7 @@ class SQLiteIncidentStore:
             else None
         )
         if notification is not None:
-            cooldown_seconds = self.slo_dedup_seconds if slo_notification else self.notification_cooldown_seconds
+            cooldown_seconds = self.slo_dedup_seconds if slo_notification else self.rca_dedup_seconds if rca_notification else self.notification_cooldown_seconds
             incident.cooldown_until = (now + timedelta(seconds=cooldown_seconds)).isoformat()
         service_suppressed = can_enqueue_incident and not service_notification_due
         notification_enqueued = False
@@ -187,7 +191,6 @@ class SQLiteIncidentStore:
                 )
                 notification_enqueued = cursor.rowcount > 0
                 if notification_enqueued:
-                    cooldown_key = _slo_cooldown_key(incident.service) if slo_notification else incident.service
                     self._set_service_notification_cooldown(cooldown_key, incident.cooldown_until or _now())
                     self._last_enqueued_incident_ids.add(incident.incident_id)
                     logger.info(
@@ -440,6 +443,14 @@ def _now() -> str:
 
 def _slo_cooldown_key(service: str) -> str:
     return f"slo:{service}"
+
+
+def _notification_cooldown_key(service: str, slo_notification: bool, rca_notification: bool) -> str:
+    if slo_notification:
+        return _slo_cooldown_key(service)
+    if rca_notification:
+        return f"rca:{service}"
+    return service
 
 
 def _default_runbooks_dir() -> Path:

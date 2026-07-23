@@ -150,7 +150,7 @@ class SQLiteIncidentStoreTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             store = SQLiteIncidentStore(Path(tmp) / "aiops.sqlite3", environment="tf2", notification_cooldown_seconds=900)
             first = store.upsert(
-                service_candidate("product-reviews", "rca_root_cause").model_copy(update={"signal_id": "product_reviews_request_count_5m"})
+                service_candidate("product-reviews", "auto_product_reviews_requests").model_copy(update={"signal_id": "product_reviews_request_count_5m"})
             )
             second = store.upsert(service_candidate("product-reviews", "auto_product_reviews_error_rate").model_copy(update={"signal_id": "product_reviews_error_ratio_5m"}))
             notifications = store.pending_notifications_for([first, second])
@@ -178,11 +178,30 @@ class SQLiteIncidentStoreTest(unittest.TestCase):
         self.assertEqual(outbox_rows, [(first.incident_id,)])
         self.assertEqual(cooldown_rows, [("slo:product-reviews",)])
 
+    def test_rca_notification_uses_separate_service_dedup(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            store = SQLiteIncidentStore(Path(tmp) / "aiops.sqlite3", environment="tf2", slo_dedup_seconds=900, rca_dedup_seconds=900)
+            slo = store.upsert(
+                service_candidate("product-reviews", "auto_product_reviews_latency").model_copy(update={"signal_id": "product_reviews_latency_5m"})
+            )
+            rca = store.upsert(
+                service_candidate("product-reviews", "rca_root_cause").model_copy(update={"signal_id": "cpu_millicores", "reason": "rca_root_cause"})
+            )
+            repeat_rca = store.upsert(
+                service_candidate("product-reviews", "rca_root_cause").model_copy(update={"signal_id": "memory_usage", "reason": "rca_root_cause"})
+            )
+            notifications = store.pending_notifications_for([slo, rca, repeat_rca])
+            cooldown_rows = store._connection.execute("SELECT service FROM notification_service_cooldowns ORDER BY service").fetchall()
+            store.close()
+
+        self.assertEqual({message.incident_id for message in notifications}, {slo.incident_id, rca.incident_id})
+        self.assertEqual(cooldown_rows, [("rca:product-reviews",), ("slo:product-reviews",)])
+
     def test_sev1_bypasses_same_service_cooldown(self):
         with tempfile.TemporaryDirectory() as tmp:
             store = SQLiteIncidentStore(Path(tmp) / "aiops.sqlite3", environment="tf2", notification_cooldown_seconds=900)
             first = store.upsert(
-                service_candidate("product-reviews", "rca_root_cause").model_copy(update={"signal_id": "product_reviews_request_count_5m"})
+                service_candidate("product-reviews", "auto_product_reviews_requests").model_copy(update={"signal_id": "product_reviews_request_count_5m"})
             )
             sev1 = service_candidate("product-reviews", "auto_product_reviews_requests").model_copy(
                 update={"severity": "SEV1", "signal_id": "product_reviews_request_count_5m"}

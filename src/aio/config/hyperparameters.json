@@ -2,6 +2,7 @@
   "incident": {
     "count_reset_seconds": 300,
     "notification_cooldown_seconds": 300,
+    "rca_dedup_seconds": 300,
     "slo_dedup_seconds": 300
   },
   "correlation": {

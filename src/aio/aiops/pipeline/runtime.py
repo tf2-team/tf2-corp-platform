@@ -252,13 +252,10 @@ class AiopsPipeline:
         return notifications
 
     def _upsert_rca_root_incidents(self, rca_result: RcaResult, incidents: list[Incident]) -> list[Incident]:
-        existing_services = {incident.service for incident in incidents}
         flow = incidents[0].flow if incidents else "unknown"
         severity = min((incident.severity for incident in incidents), default="SEV2")
         rows = []
         for root in rca_result.root_causes:
-            if root.service in existing_services:
-                continue
             metric = root.root_cause_metrics[0] if root.root_cause_metrics else "rca_root_cause"
             rows.append(
                 self.store.upsert(

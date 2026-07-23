@@ -97,6 +97,7 @@ class SettingsTest(unittest.TestCase):
         self.assertEqual(config["correlation"]["suppress_window_seconds"], 300)
         self.assertEqual(config["incident"]["count_reset_seconds"], 300)
         self.assertEqual(config["incident"]["notification_cooldown_seconds"], 300)
+        self.assertEqual(config["incident"]["rca_dedup_seconds"], 300)
         self.assertEqual(config["incident"]["slo_dedup_seconds"], 300)
         self.assertNotIn("direct_slo_suppress_seconds", config["incident"])
         self.assertEqual(
