@@ -153,6 +153,11 @@ class AiopsPipeline:
         deduped_incidents = _unique_incidents(incidents)
         logger.debug("AIOPS_BLOCK incident persisted=%s ids=%s", len(incidents), [incident.incident_id for incident in analysis_incidents])
 
+        direct_notifications = self._flush_notifications(
+            _unique_incidents([incident for incident in incidents if is_slo_notification(incident.events[-1])]),
+            only_incidents=True,
+        )
+
         rca_result = self._run_v001_rca(metric_series or [], analysis_incidents)
         logger.info(
             "AIOPS_DEDUP_RESULT input_candidates=%s incidents=%s ids=%s services=%s occurrences=%s",
@@ -179,7 +184,7 @@ class AiopsPipeline:
         suppressed_incident_ids = self._suppress_related_notifications(_unique_incidents(regular_incidents), rca_result)
         actionable_incidents = [incident for incident in regular_incidents if incident.incident_id not in suppressed_incident_ids]
         self._record_rca_history(rca_result, incidents, enriched, metric_series or [])
-        notifications = self._flush_notifications(incidents)
+        notifications = direct_notifications + self._flush_notifications(_unique_incidents(regular_incidents))
         logger.debug("AIOPS_BLOCK notify notifications=%s", len(notifications))
         decisions: list[PolicyDecision] = []
         for incident in actionable_incidents:
@@ -215,7 +220,7 @@ class AiopsPipeline:
         )
         return result
 
-    def _flush_notifications(self, incidents: list[Incident]) -> list[NotificationMessage]:
+    def _flush_notifications(self, incidents: list[Incident], *, only_incidents: bool = False) -> list[NotificationMessage]:
         if self.notification_sender is None:
             notifications = self.store.pending_notifications_for(incidents)
             for message in notifications:
@@ -228,7 +233,7 @@ class AiopsPipeline:
                 )
             return notifications
 
-        notifications = self.store.due_notifications()
+        notifications = self.store.pending_notifications_for(incidents) if only_incidents else self.store.due_notifications()
         for message in notifications:
             logger.info(
                 "AIOPS_NOTIFY_READY incident=%s service=%s severity=%s runbook=%s route=outbox status=dispatching",
@@ -254,12 +259,13 @@ class AiopsPipeline:
         return notifications
 
     def _upsert_rca_root_incidents(self, rca_result: RcaResult, incidents: list[Incident]) -> list[Incident]:
-        flow = incidents[0].flow if incidents else "unknown"
         severity = min((incident.severity for incident in incidents), default="SEV2")
+        threshold = float(self.correlation_hyperparameters.get("suppress_min_root_score", 0.8))
+        valid_roots = [root for root in rca_result.root_causes if root.score >= threshold and root.root_cause_metrics]
         rows = []
-        for root in self._dedup_rca_root_causes(rca_result.root_causes):
-            metric = root.root_cause_metrics[0] if root.root_cause_metrics else "rca_root_cause"
-            likely_dependency = self._rca_topology_dependency(root.service, incidents)
+        for root in self._dedup_rca_root_causes(valid_roots):
+            metric = root.root_cause_metrics[0]
+            flow = next((service.flow for service in self.runtime_config.topology.services if service.name == root.service), "unknown") if self.runtime_config else "unknown"
             rows.append(
                 self.store.upsert(
                     CandidateEvent(
@@ -271,11 +277,11 @@ class AiopsPipeline:
                         value=root.score,
                         unit="score",
                         window="rca",
-                        threshold=float(self.correlation_hyperparameters.get("suppress_min_root_score", 0.8)),
+                        threshold=threshold,
                         quality=SignalQuality.VERIFIED,
                         reason="rca_root_cause",
                         runbook_id="RB-SERVICE-ERROR-RATE",
-                        likely_dependency=likely_dependency,
+                        likely_dependency="unknown",
                         confidence=root.score,
                         contributing_signals=tuple(root.root_cause_metrics),
                     )
@@ -316,14 +322,6 @@ class AiopsPipeline:
             frontier = neighbors - seen
             seen.update(neighbors)
         return False
-
-    def _rca_topology_dependency(self, root_service: str, incidents: list[Incident]) -> str:
-        if self.topology_graph is None:
-            return "unknown"
-        for incident in incidents:
-            if incident.service != root_service and self.topology_graph.has_dependency_path(incident.service, root_service):
-                return root_service
-        return "unknown"
 
     def _run_v001_rca(self, metric_series: list[MetricSeries], incidents: list[Incident] | None = None) -> RcaResult:
         log_messages = self._log_messages(incidents or [])

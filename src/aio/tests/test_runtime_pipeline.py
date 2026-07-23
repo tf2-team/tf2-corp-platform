@@ -510,6 +510,9 @@ class RuntimePipelineTest(unittest.TestCase):
         self.assertEqual(result.candidates, [])
         self.assertEqual([incident.service for incident in result.incidents], ["frontend"])
         self.assertEqual([message.service for message in result.notifications], ["frontend"])
+        self.assertEqual(result.notifications[0].flow, "web")
+        self.assertEqual(result.notifications[0].title, "RCA root cause: frontend")
+        self.assertEqual(result.notifications[0].likely_dependency, "unknown")
         self.assertEqual(result.rca_result.root_causes[0].service, "frontend")
         text = "\n".join(logs.output)
         self.assertIn("AIOPS_DEDUP_RESULT input_candidates=0 incidents=0", text)
@@ -571,6 +574,7 @@ class RuntimePipelineTest(unittest.TestCase):
 
     def test_pipeline_keeps_slo_notification_and_adds_rca_root_notification(self):
         settings = Settings()
+        sender = FakeNotificationSender()
         with TemporaryDirectory() as tmp:
             store = SQLiteIncidentStore(Path(tmp) / "aiops.sqlite3", environment=settings.environment)
             pipeline = AiopsPipeline(
@@ -590,29 +594,60 @@ class RuntimePipelineTest(unittest.TestCase):
                 ],
                 store=store,
                 policy=policy(settings),
+                notification_sender=sender,
                 **runtime_kwargs(settings),
             )
-            pipeline._run_v001_rca = lambda metric_series, incidents: RcaResult(
-                anomalies=[
-                    AnomalyFinding(
-                        algorithm="weighted_sum",
-                        service="payment",
-                        metric="error_rate_5m",
-                        signal_id="payment_error_rate_5m",
-                        score=0.8,
-                        timestamp=123,
-                    )
-                ],
-                root_causes=[RootCauseCandidate(service="payment", score=1.0, root_cause_metrics=["cpu_millicores"])],
-            )
+
+            def run_rca(metric_series, incidents):
+                self.assertEqual([message.service for message in sender.sent], ["checkout"])
+                return RcaResult(
+                    anomalies=[
+                        AnomalyFinding(
+                            algorithm="weighted_sum",
+                            service="payment",
+                            metric="error_rate_5m",
+                            signal_id="payment_error_rate_5m",
+                            score=0.8,
+                            timestamp=123,
+                        )
+                    ],
+                    root_causes=[RootCauseCandidate(service="payment", score=1.0, root_cause_metrics=["cpu_millicores"])],
+                )
+
+            pipeline._run_v001_rca = run_rca
 
             result = pipeline.run_once(metric_series=[metric("payment", "error_rate_5m", [0.0] * 31)])
             store.close()
 
         self.assertEqual([incident.service for incident in result.incidents], ["checkout", "payment"])
-        self.assertEqual(result.incidents[1].likely_dependency, "payment")
+        self.assertEqual(result.incidents[1].likely_dependency, "unknown")
         self.assertEqual([message.service for message in result.notifications], ["checkout", "payment"])
-        self.assertEqual(result.notifications[1].likely_dependency, "payment")
+        self.assertEqual(result.notifications[1].likely_dependency, "unknown")
+
+    def test_pipeline_does_not_notify_invalid_rca_roots(self):
+        settings = Settings()
+        with TemporaryDirectory() as tmp:
+            store = SQLiteIncidentStore(Path(tmp) / "aiops.sqlite3", environment=settings.environment)
+            pipeline = AiopsPipeline(
+                collector=StaticCollector([]),
+                detectors=[],
+                store=store,
+                policy=policy(settings),
+                **runtime_kwargs(settings),
+            )
+
+            incidents = pipeline._upsert_rca_root_incidents(
+                RcaResult(
+                    root_causes=[
+                        RootCauseCandidate(service="frontend", score=0.79, root_cause_metrics=["memory_usage_bytes"]),
+                        RootCauseCandidate(service="accounting", score=1.0, root_cause_metrics=[]),
+                    ]
+                ),
+                [],
+            )
+            store.close()
+
+        self.assertEqual(incidents, [])
 
     def test_pipeline_flushes_notification_outbox_to_sender(self):
         settings = Settings()

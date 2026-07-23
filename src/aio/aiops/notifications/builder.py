@@ -20,8 +20,8 @@ class NotificationBuilder:
     def _build_one(self, incident: Incident) -> NotificationMessage:
         last_event = incident.events[-1]
         dependency = incident.likely_dependency
-        title = f"{incident.flow} incident"
-        if dependency != "unknown":
+        title = f"RCA root cause: {incident.service}" if last_event.detector_id == "rca_root_cause" else f"{incident.flow} incident"
+        if last_event.detector_id != "rca_root_cause" and dependency != "unknown":
             title = f"{incident.flow} likely dependency: {dependency}"
         signals = tuple(dict.fromkeys(signal for event in incident.events for signal in (event.contributing_signals or (event.signal_id,))))
         return NotificationMessage(
