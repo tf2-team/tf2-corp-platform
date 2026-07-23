@@ -494,7 +494,9 @@ class RuntimePipelineTest(unittest.TestCase):
             store.close()
 
         self.assertEqual([incident.service for incident in result.incidents], ["checkout", "payment"])
+        self.assertEqual(result.incidents[1].likely_dependency, "payment")
         self.assertEqual([message.service for message in result.notifications], ["checkout", "payment"])
+        self.assertEqual(result.notifications[1].likely_dependency, "payment")
 
     def test_pipeline_flushes_notification_outbox_to_sender(self):
         settings = Settings()

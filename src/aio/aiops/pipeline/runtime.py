@@ -112,6 +112,8 @@ class AiopsPipeline:
         self.correlator = Correlator(runtime_config, topology_graph=self.topology_graph, **correlator_options)
         self.enricher = enricher or Enricher(runtime_config=runtime_config)
         self.store = store
+        if getattr(self.store, "topology_graph", None) is None:
+            setattr(self.store, "topology_graph", self.topology_graph)
         self.policy = policy
         self.verification = VerificationEngine()
         self.runtime_config = runtime_config
@@ -257,6 +259,7 @@ class AiopsPipeline:
         rows = []
         for root in rca_result.root_causes:
             metric = root.root_cause_metrics[0] if root.root_cause_metrics else "rca_root_cause"
+            likely_dependency = self._rca_topology_dependency(root.service, incidents)
             rows.append(
                 self.store.upsert(
                     CandidateEvent(
@@ -272,12 +275,21 @@ class AiopsPipeline:
                         quality=SignalQuality.VERIFIED,
                         reason="rca_root_cause",
                         runbook_id="RB-SERVICE-ERROR-RATE",
+                        likely_dependency=likely_dependency,
                         confidence=root.score,
                         contributing_signals=tuple(root.root_cause_metrics),
                     )
                 )
             )
         return rows
+
+    def _rca_topology_dependency(self, root_service: str, incidents: list[Incident]) -> str:
+        if self.topology_graph is None:
+            return "unknown"
+        for incident in incidents:
+            if incident.service != root_service and self.topology_graph.has_dependency_path(incident.service, root_service):
+                return root_service
+        return "unknown"
 
     def _run_v001_rca(self, metric_series: list[MetricSeries], incidents: list[Incident] | None = None) -> RcaResult:
         log_messages = self._log_messages(incidents or [])
