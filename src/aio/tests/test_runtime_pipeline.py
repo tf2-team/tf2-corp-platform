@@ -185,7 +185,7 @@ class FakeNotificationSender:
 
 
 class RuntimePipelineTest(unittest.TestCase):
-    def test_bad_ratio_slo_incident_is_not_added_to_rca_anomalies(self):
+    def test_bad_ratio_slo_incident_is_added_to_rca_anomalies(self):
         event = CandidateEvent(
             timestamp=44,
             detector_id="ops01_checkout_slo",
@@ -214,8 +214,8 @@ class RuntimePipelineTest(unittest.TestCase):
 
         findings = _slo_impact_findings([incident])
 
-        self.assertEqual(findings, [])
-        self.assertFalse(is_slo_notification(event))
+        self.assertEqual([finding.signal_id for finding in findings], ["checkout_bad_ratio_24h"])
+        self.assertTrue(is_slo_notification(event))
         self.assertTrue(is_slo_notification(event.model_copy(update={"signal_id": "checkout_p95_latency_5m"})))
 
     def test_slo_threshold_incident_is_added_to_rca_anomalies(self):
@@ -385,7 +385,7 @@ class RuntimePipelineTest(unittest.TestCase):
         self.assertEqual(result.policy_decisions[0].result, "dry-run-recorded")
         self.assertEqual(result.verification_results[0].status, "not_recovered")
 
-    def test_pipeline_does_not_notify_metric_only_rca(self):
+    def test_pipeline_notifies_metric_only_rca_root(self):
         settings = Settings()
         with TemporaryDirectory() as tmp:
             store = SQLiteIncidentStore(Path(tmp) / "aiops.sqlite3", environment=settings.environment)
@@ -422,14 +422,13 @@ class RuntimePipelineTest(unittest.TestCase):
             store.close()
 
         self.assertEqual(result.candidates, [])
-        self.assertEqual(result.incidents, [])
-        self.assertEqual(result.notifications, [])
+        self.assertEqual([incident.service for incident in result.incidents], ["frontend"])
+        self.assertEqual([message.service for message in result.notifications], ["frontend"])
         self.assertEqual(result.rca_result.root_causes[0].service, "frontend")
         text = "\n".join(logs.output)
-        self.assertNotIn("AIOPS_RCA_SYNTHETIC_CANDIDATE", text)
         self.assertIn("AIOPS_DEDUP_RESULT input_candidates=0 incidents=0", text)
 
-    def test_pipeline_suppresses_non_slo_sev1_notification_by_rca(self):
+    def test_pipeline_keeps_slo_notification_and_adds_rca_root_notification(self):
         settings = Settings()
         with TemporaryDirectory() as tmp:
             store = SQLiteIncidentStore(Path(tmp) / "aiops.sqlite3", environment=settings.environment)
@@ -469,8 +468,8 @@ class RuntimePipelineTest(unittest.TestCase):
             result = pipeline.run_once(metric_series=[metric("payment", "error_rate_5m", [0.0] * 31)])
             store.close()
 
-        self.assertEqual([incident.service for incident in result.incidents], ["checkout"])
-        self.assertEqual(result.notifications, [])
+        self.assertEqual([incident.service for incident in result.incidents], ["checkout", "payment"])
+        self.assertEqual([message.service for message in result.notifications], ["checkout", "payment"])
 
     def test_pipeline_flushes_notification_outbox_to_sender(self):
         settings = Settings()
@@ -862,7 +861,7 @@ class RuntimePipelineTest(unittest.TestCase):
         self.assertEqual(rows[0]["series_point_count"]["max"], 60)
         self.assertEqual(rows[0]["root_causes"][0]["service"], result.rca_result.root_causes[0].service)
 
-    def test_pipeline_does_not_suppress_slo_blast_radius_notifications(self):
+    def test_pipeline_does_not_suppress_slo_notification_in_blast_radius(self):
         settings = Settings()
         with TemporaryDirectory() as tmp:
             root = Path(tmp)
@@ -882,10 +881,10 @@ class RuntimePipelineTest(unittest.TestCase):
             outbox_rows = store._connection.execute("SELECT incident_id, status FROM notification_outbox ORDER BY incident_id").fetchall()
             store.close()
 
-        self.assertEqual({message.service for message in result.notifications}, {"checkout", "cart", "valkey-cart"})
-        self.assertEqual(outbox_rows, sorted((incident.incident_id, "pending") for incident in result.incidents))
+        self.assertEqual({message.service for message in result.notifications}, {"checkout", "valkey-cart"})
+        self.assertEqual([status for _, status in outbox_rows].count("suppressed"), 1)
         self.assertEqual(len(result.policy_decisions), 1)
-        self.assertEqual(result.policy_decisions[0].result, "dry-run-recorded")
+        self.assertEqual(result.policy_decisions[0].result, "blocked")
 
     def test_pipeline_does_not_suppress_children_for_low_confidence_root_cause(self):
         settings = Settings()
@@ -930,6 +929,42 @@ class RuntimePipelineTest(unittest.TestCase):
 
         self.assertIn("cart", {message.service for message in result.notifications})
 
+    def test_pipeline_requires_active_root_incident_in_same_run_to_suppress_child(self):
+        settings = Settings()
+        with TemporaryDirectory() as tmp:
+            store = SQLiteIncidentStore(Path(tmp) / "aiops.sqlite3", environment=settings.environment)
+            store.register_active_root_cause("checkout", {"checkout", "cart"}, suppress_seconds=900)
+            incident = store.upsert(
+                CandidateEvent(
+                    detector_id="auto_cart_error_rate",
+                    flow="checkout",
+                    service="cart",
+                    severity="SEV2",
+                    signal_id="cart_error_rate_5m",
+                    value=0.2,
+                    unit="ratio",
+                    window="5m",
+                    threshold=0.05,
+                    quality=SignalQuality.VERIFIED,
+                    reason="threshold_breached",
+                    runbook_id="RB-CART-ERROR-RATE",
+                )
+            )
+            pipeline = AiopsPipeline(
+                collector=StaticCollector([]),
+                detectors=[],
+                store=store,
+                policy=policy(settings),
+                **runtime_kwargs(settings),
+            )
+
+            suppressed = pipeline._suppress_related_notifications([incident], RcaResult())
+            notifications = store.pending_notifications_for([incident])
+            store.close()
+
+        self.assertEqual(suppressed, set())
+        self.assertEqual([message.service for message in notifications], ["cart"])
+
     def test_pipeline_suppresses_sev1_non_slo_caller_notifications(self):
         settings = Settings()
         with TemporaryDirectory() as tmp:
@@ -950,7 +985,7 @@ class RuntimePipelineTest(unittest.TestCase):
             result = pipeline.run_once()
             store.close()
 
-        self.assertEqual({message.service for message in result.notifications}, {"valkey-cart"})
+        self.assertEqual({message.service for message in result.notifications}, {"checkout", "valkey-cart"})
 
     def test_verified_remediation_is_added_to_incident_history(self):
         settings = Settings()

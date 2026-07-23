@@ -296,14 +296,19 @@ class SQLiteIncidentStore:
                 )
         return suppressed_ids
 
-    def suppress_active_root_notifications(self, incidents: list[Incident], exempt_services: set[str] | None = None) -> set[str]:
+    def suppress_active_root_notifications(
+        self,
+        incidents: list[Incident],
+        exempt_services: set[str] | None = None,
+        active_root_services: set[str] | None = None,
+    ) -> set[str]:
         exempt_services = exempt_services or set()
         rows = [
             (incident, parent)
             for incident in incidents
             if incident.service not in exempt_services
             for parent in [self._suppression_parent(incident.service)]
-            if parent is not None
+            if parent is not None and (active_root_services is None or parent in active_root_services)
         ]
         if not rows:
             return set()

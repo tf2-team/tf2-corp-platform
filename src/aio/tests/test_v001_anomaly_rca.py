@@ -934,7 +934,7 @@ class V001AnomalyRcaTest(unittest.TestCase):
 
         self.assertEqual([candidate.service for candidate in result.root_causes], ["checkout"])
 
-    def test_trace_failure_can_nominate_upstream_dependency_without_metric_anomaly(self):
+    def test_trace_failure_does_not_nominate_upstream_dependency_without_metric_anomaly(self):
         runtime_config = load_runtime_config(Path("config/runtime.json"))
         findings = [AnomalyFinding(algorithm="weighted_sum", service="checkout", metric="cpu_millicores", signal_id="checkout_cpu_millicores", score=0.8, timestamp=1000)]
         corroboration = {
@@ -954,20 +954,8 @@ class V001AnomalyRcaTest(unittest.TestCase):
 
         result = rca_engine(runtime_config).rank(findings, [], top_k=5, corroboration=corroboration)
 
-        self.assertEqual(result.root_causes[0].service, "payment")
-        self.assertIn("trace_failure", result.root_causes[0].root_cause_metrics)
-        self.assertIn(
-            "trace_id=trace-1 operation=charge status=ERROR upstream=checkout downstream=payment duration_ms=12.000 reference=https://jaeger/trace/1",
-            result.root_causes[0].evidence,
-        )
-        output = io.StringIO()
-        with redirect_stdout(output):
-            print_rca_result(
-                PipelineResult(
-                    observations=[], features=[], candidates=[], incidents=[], notifications=[], policy_decisions=[], verification_results=[], rca_result=result
-                )
-            )
-        self.assertIn("trace_id=trace-1", output.getvalue())
+        self.assertEqual(result.root_causes[0].service, "checkout")
+        self.assertNotIn("trace_failure", result.root_causes[0].root_cause_metrics)
 
     def test_trace_root_outside_dependency_path_is_rejected(self):
         runtime_config = load_runtime_config(Path("config/runtime.json"))

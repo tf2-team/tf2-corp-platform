@@ -19,7 +19,7 @@ from aiops.enrichment import Enricher
 from aiops.features import FeatureBuilder
 from aiops.anomaly import build_v001_anomaly_engine
 from aiops.rca import V001RcaEngine
-from aiops.schemas import AnomalyFinding, MetricSeries, NotificationMessage, PipelineResult, PolicyDecision, RcaResult, RuntimeConfig
+from aiops.schemas import AnomalyFinding, MetricSeries, NotificationMessage, PipelineResult, PolicyDecision, RcaResult, RuntimeConfig, SignalQuality
 from aiops.normalization import Normalizer
 from aiops.notifications import is_slo_notification
 from aiops.qualification import QualificationGate
@@ -160,6 +160,12 @@ class AiopsPipeline:
             [incident.service for incident in deduped_incidents],
             [incident.occurrence_count for incident in deduped_incidents],
         )
+        root_incidents = self._upsert_rca_root_incidents(rca_result, analysis_incidents)
+        if root_incidents:
+            incidents.extend(root_incidents)
+            analysis_incidents = incidents
+            regular_incidents = [incident for incident in incidents if not is_slo_notification(incident.events[-1])]
+            deduped_incidents = _unique_incidents(incidents)
         verification_results = self.verification.verify(analysis_incidents, features)
         logger.debug("AIOPS_BLOCK verify results=%s statuses=%s", len(verification_results), [result.status for result in verification_results])
         logger.info(
@@ -244,6 +250,37 @@ class AiopsPipeline:
                     message.runbook_id,
                 )
         return notifications
+
+    def _upsert_rca_root_incidents(self, rca_result: RcaResult, incidents: list[Incident]) -> list[Incident]:
+        existing_services = {incident.service for incident in incidents}
+        flow = incidents[0].flow if incidents else "unknown"
+        severity = min((incident.severity for incident in incidents), default="SEV2")
+        rows = []
+        for root in rca_result.root_causes:
+            if root.service in existing_services:
+                continue
+            metric = root.root_cause_metrics[0] if root.root_cause_metrics else "rca_root_cause"
+            rows.append(
+                self.store.upsert(
+                    CandidateEvent(
+                        detector_id="rca_root_cause",
+                        flow=flow,
+                        service=root.service,
+                        severity=severity,
+                        signal_id=metric,
+                        value=root.score,
+                        unit="score",
+                        window="rca",
+                        threshold=float(self.correlation_hyperparameters.get("suppress_min_root_score", 0.8)),
+                        quality=SignalQuality.VERIFIED,
+                        reason="rca_root_cause",
+                        runbook_id="RB-SERVICE-ERROR-RATE",
+                        confidence=root.score,
+                        contributing_signals=tuple(root.root_cause_metrics),
+                    )
+                )
+            )
+        return rows
 
     def _run_v001_rca(self, metric_series: list[MetricSeries], incidents: list[Incident] | None = None) -> RcaResult:
         log_messages = self._log_messages(incidents or [])
@@ -400,7 +437,7 @@ class AiopsPipeline:
         if active_suppress is not None:
             exempt_services = {current_root_service} if current_root_service else set()
             remaining = [incident for incident in incidents if incident.incident_id not in suppressed]
-            suppressed.update(active_suppress(remaining, exempt_services) or set())
+            suppressed.update(active_suppress(remaining, exempt_services, {incident.service for incident in incidents}) or set())
         active_suppressed = getattr(self.store, "suppressed_incident_ids", None)
         if active_suppressed is not None and active_suppress is None:
             suppressed.update(active_suppressed(incidents))

@@ -58,8 +58,6 @@ class V001RcaEngine:
             and not _is_context_metric(finding.metric)
             and not self._busy_infra_without_failure(finding.service, finding.metric, finding.timestamp, series, findings)
         ]
-        trace_findings = self._trace_findings(findings, corroboration or {})
-        root_findings.extend(trace_findings)
         rca_series = [metric for metric in series if not _is_context_metric(metric.metric)]
         drift_metrics = self._drift_metrics(rca_series, series, findings)
         if not root_findings and any(finding.algorithm == "slo_threshold" for finding in findings):
@@ -103,7 +101,6 @@ class V001RcaEngine:
             metrics_by_service[service].append((metric, score, "drift"))
 
         candidates: list[RootCauseCandidate] = []
-        trace_services = {finding.service for finding in trace_findings}
         trace_details = {
             self._canonical_service(evidence.trace_root_service): [
                 f"trace_id={evidence.trace_id or 'unknown'} operation={evidence.trace_operation or 'unknown'} status={evidence.trace_status or 'unknown'} "
@@ -114,7 +111,7 @@ class V001RcaEngine:
         }
         for service, rank_score in sorted(
             service_scores.items(),
-            key=lambda item: (item[0] in trace_services, item[1] * evidence_strength.get(item[0], 0.0)),
+            key=lambda item: item[1] * evidence_strength.get(item[0], 0.0),
             reverse=True,
         ):
             score = rank_score * evidence_strength.get(service, 0.0)
@@ -145,30 +142,6 @@ class V001RcaEngine:
             if len(candidates) >= top_k:
                 break
         return RcaResult(anomalies=findings, root_causes=candidates)
-
-    def _trace_findings(
-        self,
-        findings: list[AnomalyFinding],
-        corroboration: dict[str, TelemetryCorroboration],
-    ) -> list[AnomalyFinding]:
-        rows = []
-        for source, evidence in corroboration.items():
-            root = evidence.trace_root_service
-            if not evidence.trace_failure or root is None or not self._dependency_path_contains(source, root):
-                continue
-            score = max((finding.score for finding in findings if finding.service == source), default=0.0)
-            if score:
-                rows.append(
-                    AnomalyFinding(
-                        algorithm="trace",
-                        service=root,
-                        metric="trace_failure",
-                        signal_id=f"{root}_trace_failure",
-                        score=score,
-                        timestamp=evidence.trace_failure_timestamp or 0,
-                    )
-                )
-        return rows
 
     def _dependency_path_contains(self, source: str, target: str) -> bool:
         return self.topology_graph.has_dependency_path(source, target)

@@ -90,7 +90,7 @@ class SQLiteIncidentStoreTest(unittest.TestCase):
 
     def test_deduped_incident_requeues_notification_after_cooldown(self):
         with tempfile.TemporaryDirectory() as tmp:
-            store = SQLiteIncidentStore(Path(tmp) / "aiops.sqlite3", environment="tf2", notification_cooldown_seconds=0)
+            store = SQLiteIncidentStore(Path(tmp) / "aiops.sqlite3", environment="tf2", slo_dedup_seconds=0)
             incident = store.upsert(candidate(0.02, timestamp=100))
             store.mark_notification_sent(incident.incident_id)
 
@@ -109,10 +109,10 @@ class SQLiteIncidentStoreTest(unittest.TestCase):
     def test_slo_incident_requeues_after_dedup_ttl(self):
         with tempfile.TemporaryDirectory() as tmp:
             store = SQLiteIncidentStore(Path(tmp) / "aiops.sqlite3", environment="tf2", slo_dedup_seconds=0)
-            incident = store.upsert(service_candidate("product-reviews", "auto_product_reviews_error_rate"))
+            incident = store.upsert(service_candidate("product-reviews", "auto_product_reviews_error_rate").model_copy(update={"signal_id": "product_reviews_error_ratio_5m"}))
             store.mark_notification_sent(incident.incident_id)
 
-            repeated = store.upsert(service_candidate("product-reviews", "auto_product_reviews_error_rate"))
+            repeated = store.upsert(service_candidate("product-reviews", "auto_product_reviews_error_rate").model_copy(update={"signal_id": "product_reviews_error_ratio_5m"}))
             notifications = store.pending_notifications_for([repeated])
             service_cooldowns = store._connection.execute("SELECT COUNT(*) FROM notification_service_cooldowns").fetchone()[0]
             store.close()
@@ -152,7 +152,7 @@ class SQLiteIncidentStoreTest(unittest.TestCase):
             first = store.upsert(
                 service_candidate("product-reviews", "rca_root_cause").model_copy(update={"signal_id": "product_reviews_request_count_5m"})
             )
-            second = store.upsert(service_candidate("product-reviews", "auto_product_reviews_error_rate"))
+            second = store.upsert(service_candidate("product-reviews", "auto_product_reviews_error_rate").model_copy(update={"signal_id": "product_reviews_error_ratio_5m"}))
             notifications = store.pending_notifications_for([first, second])
             outbox_rows = store._connection.execute("SELECT incident_id FROM notification_outbox ORDER BY incident_id").fetchall()
             store.close()
@@ -167,7 +167,7 @@ class SQLiteIncidentStoreTest(unittest.TestCase):
             first = store.upsert(
                 service_candidate("product-reviews", "auto_product_reviews_latency").model_copy(update={"signal_id": "product_reviews_latency_5m"})
             )
-            second = store.upsert(service_candidate("product-reviews", "auto_product_reviews_error_rate"))
+            second = store.upsert(service_candidate("product-reviews", "auto_product_reviews_error_rate").model_copy(update={"signal_id": "product_reviews_error_ratio_5m"}))
             notifications = store.pending_notifications_for([first, second])
             outbox_rows = store._connection.execute("SELECT incident_id FROM notification_outbox ORDER BY incident_id").fetchall()
             cooldown_rows = store._connection.execute("SELECT service FROM notification_service_cooldowns").fetchall()
@@ -184,7 +184,9 @@ class SQLiteIncidentStoreTest(unittest.TestCase):
             first = store.upsert(
                 service_candidate("product-reviews", "rca_root_cause").model_copy(update={"signal_id": "product_reviews_request_count_5m"})
             )
-            sev1 = service_candidate("product-reviews", "ops01_product_reviews_slo").model_copy(update={"severity": "SEV1"})
+            sev1 = service_candidate("product-reviews", "auto_product_reviews_requests").model_copy(
+                update={"severity": "SEV1", "signal_id": "product_reviews_request_count_5m"}
+            )
             second = store.upsert(sev1)
             notifications = store.pending_notifications_for([first, second])
             store.close()
