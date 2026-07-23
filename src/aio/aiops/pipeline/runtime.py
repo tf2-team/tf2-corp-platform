@@ -459,6 +459,8 @@ class AiopsPipeline:
     def _suppress_related_notifications(self, incidents: list[Incident], rca_result: RcaResult) -> set[str]:
         suppressed = set()
         current_root_service = None
+        service_scores = _weighted_service_scores(rca_result.anomalies)
+        affected_services: set[str] = set()
         if self.runtime_config is not None and rca_result.root_causes:
             root = rca_result.root_causes[0]
             if root.score >= float(self.correlation_hyperparameters.get("suppress_min_root_score", 0.8)):
@@ -466,21 +468,31 @@ class AiopsPipeline:
                 current_root_service = root_service
                 max_hops = int(self.correlation_hyperparameters.get("topology_max_hops", 2))
                 affected_services = (
-                    self.topology_graph.blast_radius(root_service, max_hops)
+                    self.topology_graph.neighborhood(root_service, max_hops)
                     if self.topology_graph is not None
                     else _blast_radius_services(self.runtime_config, root_service, max_hops)
                 )
                 register = getattr(self.store, "register_active_root_cause", None)
-                suppress = getattr(self.store, "suppress_related_notifications", None)
                 if register is not None:
-                    register(root_service, affected_services, int(self.correlation_hyperparameters.get("suppress_window_seconds", 900)))
-                if suppress is not None:
-                    suppressed.update(suppress(incidents, root_service, affected_services) or set())
+                    register(
+                        root_service,
+                        affected_services,
+                        int(self.correlation_hyperparameters.get("suppress_window_seconds", 900)),
+                        service_scores.get(root_service, 0.0),
+                    )
+        breakout = getattr(self.store, "breakout_services", None)
+        breakout_services = (
+            breakout(service_scores, float(self.correlation_hyperparameters["suppress_breakout_multiplier"]))
+            if breakout is not None and service_scores
+            else set()
+        )
+        suppress = getattr(self.store, "suppress_related_notifications", None)
+        if current_root_service and suppress is not None:
+            suppressed.update(suppress(incidents, current_root_service, affected_services, breakout_services) or set())
         active_suppress = getattr(self.store, "suppress_active_root_notifications", None)
         if active_suppress is not None:
-            exempt_services = {current_root_service} if current_root_service else set()
             remaining = [incident for incident in incidents if incident.incident_id not in suppressed]
-            suppressed.update(active_suppress(remaining, exempt_services, {incident.service for incident in incidents}) or set())
+            suppressed.update(active_suppress(remaining, breakout_services) or set())
         active_suppressed = getattr(self.store, "suppressed_incident_ids", None)
         if active_suppressed is not None and active_suppress is None:
             suppressed.update(active_suppressed(incidents))
@@ -510,6 +522,14 @@ def _counts(values) -> dict[str, int]:
     for value in values:
         counts[value] = counts.get(value, 0) + 1
     return counts
+
+
+def _weighted_service_scores(findings: list[AnomalyFinding]) -> dict[str, float]:
+    scores: dict[str, float] = {}
+    for finding in findings:
+        if finding.algorithm == "weighted_sum":
+            scores[finding.service] = max(scores.get(finding.service, 0.0), finding.score)
+    return scores
 
 
 def _log_final_root_cause_algorithm_scores(result: RcaResult, findings: list[AnomalyFinding]) -> None:

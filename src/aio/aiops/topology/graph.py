@@ -50,6 +50,12 @@ class TopologyGraph:
         reverse_graph = self.graph.reverse(copy=False)
         return set(nx.single_source_shortest_path_length(reverse_graph, root_service, cutoff=max_hops))
 
+    def neighborhood(self, service: str, max_hops: int = 1) -> set[str]:
+        if service not in self.graph:
+            return {service}
+        graph = self.graph.to_undirected(as_view=True)
+        return set(nx.single_source_shortest_path_length(graph, service, cutoff=max_hops))
+
     def personalized_pagerank(self, seed_scores: dict[str, float], damping: float) -> dict[str, float]:
         if not seed_scores:
             return {}

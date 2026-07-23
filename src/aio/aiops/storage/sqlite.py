@@ -92,11 +92,13 @@ class SQLiteIncidentStore:
                 root_service TEXT PRIMARY KEY,
                 affected_services_json TEXT NOT NULL,
                 expires_at TEXT NOT NULL,
+                root_score REAL NOT NULL DEFAULT 0,
                 created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
             )
             """
         )
         self._ensure_event_columns()
+        self._ensure_active_root_columns()
 
     def upsert(self, candidate: CandidateEvent) -> Incident:
         self._validate_runbook(candidate.runbook_id)
@@ -258,29 +260,64 @@ class SQLiteIncidentStore:
             (service, cooldown_until, _now()),
         )
 
-    def register_active_root_cause(self, root_service: str, affected_services: set[str], suppress_seconds: int = 900) -> None:
+    def register_active_root_cause(
+        self,
+        root_service: str,
+        affected_services: set[str],
+        suppress_seconds: int = 900,
+        root_score: float = 0.0,
+    ) -> None:
         now = datetime.now(UTC)
         row = self._connection.execute(
-            "SELECT expires_at FROM active_root_causes WHERE root_service = ?",
+            "SELECT expires_at, root_score FROM active_root_causes WHERE root_service = ?",
             (root_service,),
         ).fetchone()
         expires_at = (now + timedelta(seconds=suppress_seconds)).isoformat()
         if row is not None and datetime.fromisoformat(row[0]) > now:
             expires_at = row[0]
+            root_score = float(row[1])
         with self._connection:
             self._connection.execute(
                 """
-                INSERT INTO active_root_causes (root_service, affected_services_json, expires_at)
-                VALUES (?, ?, ?)
+                INSERT INTO active_root_causes (root_service, affected_services_json, expires_at, root_score)
+                VALUES (?, ?, ?, ?)
                 ON CONFLICT(root_service) DO UPDATE SET
                     affected_services_json = excluded.affected_services_json,
-                    expires_at = excluded.expires_at
+                    expires_at = excluded.expires_at,
+                    root_score = excluded.root_score
                 """,
-                (root_service, json.dumps(sorted(affected_services)), expires_at),
+                (root_service, json.dumps(sorted(affected_services)), expires_at, root_score),
             )
 
-    def suppress_related_notifications(self, incidents: list[Incident], root_service: str, affected_services: set[str]) -> set[str]:
-        suppressed = [incident for incident in incidents if incident.service in affected_services and incident.service != root_service]
+    def breakout_services(self, service_scores: dict[str, float], multiplier: float) -> set[str]:
+        if self.topology_graph is None:
+            return set()
+        rows = self._connection.execute(
+            "SELECT root_service, root_score FROM active_root_causes WHERE expires_at > ? AND root_score > 0",
+            (_now(),),
+        ).fetchall()
+        return {
+            service
+            for root_service, root_score in rows
+            for service, score in service_scores.items()
+            if service != root_service
+            and service in self.topology_graph.neighborhood(root_service, max_hops=1)
+            and score >= float(root_score) * multiplier
+        }
+
+    def suppress_related_notifications(
+        self,
+        incidents: list[Incident],
+        root_service: str,
+        affected_services: set[str],
+        exempt_services: set[str] | None = None,
+    ) -> set[str]:
+        exempt_services = exempt_services or set()
+        suppressed = [
+            incident
+            for incident in incidents
+            if incident.service in affected_services and incident.service != root_service and incident.service not in exempt_services
+        ]
         if not suppressed:
             return set()
         suppressed_ids = {incident.incident_id for incident in suppressed}
@@ -303,7 +340,6 @@ class SQLiteIncidentStore:
         self,
         incidents: list[Incident],
         exempt_services: set[str] | None = None,
-        active_root_services: set[str] | None = None,
     ) -> set[str]:
         exempt_services = exempt_services or set()
         rows = [
@@ -311,7 +347,7 @@ class SQLiteIncidentStore:
             for incident in incidents
             if incident.service not in exempt_services
             for parent in [self._suppression_parent(incident.service)]
-            if parent is not None and (active_root_services is None or parent in active_root_services)
+            if parent is not None
         ]
         if not rows:
             return set()
@@ -425,6 +461,11 @@ class SQLiteIncidentStore:
         }.items():
             if name not in columns:
                 self._connection.execute(ddl)
+
+    def _ensure_active_root_columns(self) -> None:
+        columns = {row[1] for row in self._connection.execute("PRAGMA table_info(active_root_causes)").fetchall()}
+        if "root_score" not in columns:
+            self._connection.execute("ALTER TABLE active_root_causes ADD COLUMN root_score REAL NOT NULL DEFAULT 0")
 
 
 def _seen_at(candidate: CandidateEvent) -> str:

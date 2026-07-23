@@ -44,6 +44,12 @@ class TopologyGraphTest(unittest.TestCase):
         self.assertEqual(self.topology.blast_radius("payment", max_hops=2), {"payment", "checkout", "frontend"})
         self.assertNotIn("cart", self.topology.blast_radius("payment", max_hops=2))
 
+    def test_neighborhood_walks_dependencies_and_callers(self):
+        neighborhood = self.topology.neighborhood("checkout", max_hops=1)
+
+        self.assertIn("payment", neighborhood)
+        self.assertIn("frontend", neighborhood)
+
     def test_pagerank_handles_cycles_and_unknown_observed_services(self):
         graph = nx.DiGraph(self.topology.graph)
         graph.add_edge("payment", "checkout")

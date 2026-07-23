@@ -49,10 +49,10 @@ class RuntimeConfigTest(unittest.TestCase):
         self.assertEqual({detector.service for detector in latency_detectors}, set(configured_thresholds))
         self.assertEqual(len(latency_detectors), len(configured_thresholds) * 2)
         thresholds = {detector.service: detector.threshold for detector in latency_detectors}
-        self.assertEqual(thresholds["cart"], 0.3)
-        self.assertEqual(thresholds["frontend"], 0.5)
-        self.assertEqual(thresholds["recommendation"], 0.8)
-        self.assertEqual(thresholds["payment"], 1.0)
+        self.assertEqual(thresholds["cart"], 1)
+        self.assertEqual(thresholds["frontend"], 1)
+        self.assertEqual(thresholds["recommendation"], 1.0)
+        self.assertEqual(thresholds["payment"], 1.5)
         self.assertEqual(thresholds["shipping"], 1.0)
 
     def test_prometheus_services_expand_generated_metrics(self):

@@ -1042,7 +1042,7 @@ class RuntimePipelineTest(unittest.TestCase):
         self.assertEqual({message.service for message in result.notifications}, {"checkout", "cart", "valkey-cart"})
         self.assertEqual([status for (status,) in outbox_rows].count("suppressed"), 0)
 
-    def test_pipeline_does_not_suppress_current_child_root_cause_from_active_parent(self):
+    def test_pipeline_suppresses_current_child_root_without_breakout_score(self):
         settings = Settings()
         with TemporaryDirectory() as tmp:
             store = SQLiteIncidentStore(Path(tmp) / "aiops.sqlite3", environment=settings.environment)
@@ -1061,13 +1061,13 @@ class RuntimePipelineTest(unittest.TestCase):
             result = pipeline.run_once()
             store.close()
 
-        self.assertIn("cart", {message.service for message in result.notifications})
+        self.assertNotIn("cart", {message.service for message in result.notifications})
 
-    def test_pipeline_requires_active_root_incident_in_same_run_to_suppress_child(self):
+    def test_pipeline_suppresses_child_while_root_window_is_active(self):
         settings = Settings()
         with TemporaryDirectory() as tmp:
             store = SQLiteIncidentStore(Path(tmp) / "aiops.sqlite3", environment=settings.environment)
-            store.register_active_root_cause("checkout", {"checkout", "cart"}, suppress_seconds=900)
+            store.register_active_root_cause("checkout", {"checkout", "cart"}, suppress_seconds=300, root_score=1.0)
             incident = store.upsert(
                 CandidateEvent(
                     detector_id="auto_cart_error_rate",
@@ -1093,11 +1093,112 @@ class RuntimePipelineTest(unittest.TestCase):
             )
 
             suppressed = pipeline._suppress_related_notifications([incident], RcaResult())
+            status = store._connection.execute(
+                "SELECT status FROM notification_outbox WHERE incident_id = ?",
+                (incident.incident_id,),
+            ).fetchone()
+            store.close()
+
+        self.assertEqual(suppressed, {incident.incident_id})
+        self.assertEqual(status, ("suppressed",))
+
+    def test_pipeline_allows_one_hop_service_at_one_point_five_times_root_score(self):
+        settings = Settings()
+        with TemporaryDirectory() as tmp:
+            store = SQLiteIncidentStore(Path(tmp) / "aiops.sqlite3", environment=settings.environment)
+            store.register_active_root_cause("checkout", {"checkout", "cart"}, suppress_seconds=300, root_score=1.0)
+            incident = store.upsert(
+                CandidateEvent(
+                    detector_id="auto_cart_error_rate",
+                    flow="checkout",
+                    service="cart",
+                    severity="SEV2",
+                    signal_id="cart_error_rate_5m",
+                    value=0.2,
+                    unit="ratio",
+                    window="5m",
+                    threshold=0.05,
+                    quality=SignalQuality.VERIFIED,
+                    reason="threshold_breached",
+                    runbook_id="RB-CART-ERROR-RATE",
+                )
+            )
+            pipeline = AiopsPipeline(
+                collector=StaticCollector([]),
+                detectors=[],
+                store=store,
+                policy=policy(settings),
+                **runtime_kwargs(settings),
+            )
+
+            suppressed = pipeline._suppress_related_notifications(
+                [incident],
+                RcaResult(
+                    anomalies=[
+                        AnomalyFinding(
+                            algorithm="weighted_sum",
+                            service="cart",
+                            metric="cpu_millicores",
+                            signal_id="cart_cpu_millicores",
+                            score=1.5,
+                            timestamp=10,
+                        )
+                    ]
+                ),
+            )
             notifications = store.pending_notifications_for([incident])
             store.close()
 
         self.assertEqual(suppressed, set())
         self.assertEqual([message.service for message in notifications], ["cart"])
+
+    def test_pipeline_keeps_one_hop_service_suppressed_below_breakout_score(self):
+        settings = Settings()
+        with TemporaryDirectory() as tmp:
+            store = SQLiteIncidentStore(Path(tmp) / "aiops.sqlite3", environment=settings.environment)
+            store.register_active_root_cause("checkout", {"checkout", "cart"}, suppress_seconds=300, root_score=1.0)
+            incident = store.upsert(
+                CandidateEvent(
+                    detector_id="auto_cart_error_rate",
+                    flow="checkout",
+                    service="cart",
+                    severity="SEV2",
+                    signal_id="cart_error_rate_5m",
+                    value=0.2,
+                    unit="ratio",
+                    window="5m",
+                    threshold=0.05,
+                    quality=SignalQuality.VERIFIED,
+                    reason="threshold_breached",
+                    runbook_id="RB-CART-ERROR-RATE",
+                )
+            )
+            pipeline = AiopsPipeline(
+                collector=StaticCollector([]),
+                detectors=[],
+                store=store,
+                policy=policy(settings),
+                **runtime_kwargs(settings),
+            )
+
+            suppressed = pipeline._suppress_related_notifications(
+                [incident],
+                RcaResult(
+                    anomalies=[
+                        AnomalyFinding(
+                            algorithm="weighted_sum",
+                            service="cart",
+                            metric="cpu_millicores",
+                            signal_id="cart_cpu_millicores",
+                            score=1.49,
+                            timestamp=10,
+                        )
+                    ]
+                ),
+            )
+            store.close()
+
+        self.assertEqual(suppressed, {incident.incident_id})
 
     def test_pipeline_suppresses_sev1_non_slo_caller_notifications(self):
         settings = Settings()
