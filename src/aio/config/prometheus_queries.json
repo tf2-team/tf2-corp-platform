@@ -226,6 +226,16 @@
       "feature_role": "official_slo",
       "modes": ["instant"]
     },
+    "slo.grpc.method_burn_rate": {
+      "query_id_template": "$service.error_budget_burn_rate.24h",
+      "signal_id_template": "${service_id}_error_budget_burn_rate_24h",
+      "promql": "((((sum(increase(rpc_server_duration_milliseconds_count{service_name=\"$service\",rpc_method=\"$method\",rpc_grpc_status_code!=\"0\"}[24h])) or 0 * sum(increase(rpc_server_duration_milliseconds_count{service_name=\"$service\",rpc_method=\"$method\"}[24h]))) / clamp_min(sum(increase(rpc_server_duration_milliseconds_count{service_name=\"$service\",rpc_method=\"$method\"}[24h])), 0.000000001)) and on() (sum(increase(rpc_server_duration_milliseconds_count{service_name=\"$service\",rpc_method=\"$method\"}[24h])) > 0)) / $error_budget)",
+      "unit": "burn_rate",
+      "window": "24h",
+      "metric": "error_budget_burn_rate_24h",
+      "feature_role": "official_slo",
+      "modes": ["instant"]
+    },
     "dependency.grpc_client.error_ratio": {
       "query_id_template": "$service.$dependency.error_rate.5m",
       "signal_id_template": "${service_id}_${dependency_id}_error_rate_5m",
@@ -314,6 +324,14 @@
       "template_id": "slo.grpc.method_bad_ratio",
       "service": "checkout",
       "parameters": {"method": "PlaceOrder"}
+    },
+    {
+      "query_id": "checkout.error_budget_burn_rate.24h",
+      "signal_id": "checkout_error_budget_burn_rate_24h",
+      "template_id": "slo.grpc.method_burn_rate",
+      "service": "checkout",
+      "parameters": {"method": "PlaceOrder", "error_budget": "0.01"},
+      "required_for_monitoring": false
     },
     {
       "query_id": "checkout.payment_error_rate.5m",

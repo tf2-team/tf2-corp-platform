@@ -35,7 +35,7 @@ class SignalDefinition(AiopsModel):
     id: str
     source: Literal["prometheus", "grafana", "jaeger", "opensearch", "kubernetes", "aie", "cost"]
     query_id: str
-    unit: Literal["ratio", "seconds", "milliseconds", "count", "requests_per_second", "bytes", "bytes_per_second", "millicores", "percent", "boolean"]
+    unit: Literal["ratio", "seconds", "milliseconds", "count", "requests_per_second", "bytes", "bytes_per_second", "millicores", "percent", "boolean", "burn_rate"]
     window: str
     flow: str
     service: str

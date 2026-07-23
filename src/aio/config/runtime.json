@@ -308,6 +308,16 @@
       "runbook_id": "RB-MONITORING-LOSS"
     },
     {
+      "id": "ops01_checkout_slo_burn_rate",
+      "type": "threshold",
+      "enabled": true,
+      "signal_id": "checkout_error_budget_burn_rate_24h",
+      "flow": "checkout",
+      "service": "checkout",
+      "severity": "SEV1",
+      "runbook_id": "RB-CHECKOUT-SLO"
+    },
+    {
       "id": "ops03_checkout_payment_dependency",
       "type": "dependency",
       "enabled": true,

@@ -38,6 +38,7 @@
       "fraud-detection": 1.0
     },
     "thresholds": {
+      "ops01_checkout_slo_burn_rate": 1.0,
       "ops03_checkout_payment_dependency": 0.05,
       "auto_checkout_error_rate": 0.05,
       "auto_payment_error_rate": 0.05,

@@ -38,6 +38,21 @@ class QualificationGateTest(unittest.TestCase):
 
         self.assertEqual(result.quality, SignalQuality.VERIFIED)
 
+    def test_verifies_burn_rate_above_one(self):
+        result = self.qualify(
+            Observation(
+                signal_id="checkout_error_budget_burn_rate_24h",
+                value=8.32,
+                unit="burn_rate",
+                window="24h",
+                quality=SignalQuality.UNQUALIFIED,
+                labels={"service": "checkout"},
+            )
+        )
+
+        self.assertEqual(result.value, 8.32)
+        self.assertEqual(result.quality, SignalQuality.VERIFIED)
+
     def test_latency_normalizes_to_registered_seconds_unit(self):
         observation = Observation(
             signal_id="checkout_p95_latency_5m",
