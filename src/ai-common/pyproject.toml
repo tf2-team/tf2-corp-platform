@@ -26,6 +26,7 @@ dependencies = [
   "openai==2.14.0",
   "presidio-analyzer==2.2.363",
   "pydantic==2.12.5",
+  "rank-bm25>=0.2.2",
   "spacy==3.8.13",
   "regex==2024.11.6",
   "structlog>=24",

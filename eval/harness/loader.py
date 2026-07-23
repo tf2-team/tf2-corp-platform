@@ -1,3 +1,7 @@
+#!/usr/bin/python
+# Copyright The OpenTelemetry Authors
+# SPDX-License-Identifier: Apache-2.0
+
 """Eval dataset loader and schema validator (WI-6).
 
 Reads JSONL eval cases from an external file, validates each case against

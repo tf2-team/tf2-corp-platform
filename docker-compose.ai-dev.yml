@@ -1,3 +1,5 @@
+# Copyright The OpenTelemetry Authors
+# SPDX-License-Identifier: Apache-2.0
 # Local development only. Do not include this file in CI or production deploys.
 services:
   product-reviews:

@@ -1,3 +1,7 @@
+#!/usr/bin/python
+# Copyright The OpenTelemetry Authors
+# SPDX-License-Identifier: Apache-2.0
+
 """Integration tests for the eval JSONL loader.
 
 These tests use real temporary JSONL files and the real JSON Schema.

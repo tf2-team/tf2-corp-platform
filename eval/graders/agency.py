@@ -1,3 +1,7 @@
+#!/usr/bin/python
+# Copyright The OpenTelemetry Authors
+# SPDX-License-Identifier: Apache-2.0
+
 """Deterministic checks for Shopping Copilot cart safety."""
 
 
