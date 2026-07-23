@@ -911,6 +911,7 @@ services:
     environment:
       - FLAGD_HOST
       - FLAGD_PORT
+      - APP_PORT=8000
     ports:
       - "${LLM_PORT}"
     depends_on:

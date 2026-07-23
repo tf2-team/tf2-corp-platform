@@ -16,6 +16,7 @@ import (
 )
 
 const pendingStatus = "pending"
+const publishedStatus = "published"
 
 type dynamoClient interface {
 	PutItem(context.Context, *dynamodb.PutItemInput, ...func(*dynamodb.Options)) (*dynamodb.PutItemOutput, error)
@@ -75,8 +76,9 @@ func (s *Store) Enqueue(ctx context.Context, event Event) error {
 	return nil
 }
 
-// Run publishes pending events outside the checkout request path. Records are
-// deleted only after the publisher confirms Kafka success.
+// Run publishes pending events outside the checkout request path. A successful
+// publish only marks the event as published; the accounting persistence ACK is
+// responsible for removing it after the order is durable in PostgreSQL.
 func (s *Store) Run(ctx context.Context, publish func(context.Context, Event) error) {
 	ticker := time.NewTicker(time.Second)
 	defer ticker.Stop()
@@ -135,19 +137,44 @@ func (s *Store) publishBatch(ctx context.Context, publish func(context.Context, 
 			// Preserve ordering and avoid hammering Kafka while it is unavailable.
 			return fmt.Errorf("publish event %s: %w", event.ID, err)
 		}
-		_, err = s.client.DeleteItem(ctx, &dynamodb.DeleteItemInput{
+		_, err = s.client.UpdateItem(ctx, &dynamodb.UpdateItemInput{
 			TableName: &s.table,
 			Key: map[string]types.AttributeValue{
 				"event_id": &types.AttributeValueMemberS{Value: event.ID},
 			},
+			UpdateExpression:    strPtr("SET #status = :published, published_at = :published_at REMOVE lease_owner, lease_until"),
 			ConditionExpression: strPtr("lease_owner = :worker"),
+			ExpressionAttributeNames: map[string]string{
+				"#status": "status",
+			},
 			ExpressionAttributeValues: map[string]types.AttributeValue{
-				":worker": &types.AttributeValueMemberS{Value: s.worker},
+				":worker":       &types.AttributeValueMemberS{Value: s.worker},
+				":published":    &types.AttributeValueMemberS{Value: publishedStatus},
+				":published_at": &types.AttributeValueMemberN{Value: strconv.FormatInt(time.Now().UnixMilli(), 10)},
 			},
 		})
 		if err != nil {
-			return fmt.Errorf("delete published event %s: %w", event.ID, err)
+			return fmt.Errorf("mark event %s published: %w", event.ID, err)
 		}
+	}
+	return nil
+}
+
+// Acknowledge deletes an event only after accounting confirms that the order is
+// durable in PostgreSQL. Repeated ACKs are harmless because DeleteItem is
+// idempotent when the item no longer exists.
+func (s *Store) Acknowledge(ctx context.Context, eventID string) error {
+	if eventID == "" {
+		return fmt.Errorf("event id is required")
+	}
+	_, err := s.client.DeleteItem(ctx, &dynamodb.DeleteItemInput{
+		TableName: &s.table,
+		Key: map[string]types.AttributeValue{
+			"event_id": &types.AttributeValueMemberS{Value: eventID},
+		},
+	})
+	if err != nil {
+		return fmt.Errorf("delete persisted event %s: %w", eventID, err)
 	}
 	return nil
 }

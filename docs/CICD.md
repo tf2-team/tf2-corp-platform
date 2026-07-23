@@ -8,7 +8,7 @@ Helm deploy stays in `techx-corp-chart`.
 | Workflow | File | When | What |
 |---|---|---|---|
 | CI | `.github/workflows/ci.yml` | `pull_request` to `main` / `techx-dev-corp`; also `workflow_call` | Lint + selective unit tests; on PRs only, local (no-push) image bake for changed services |
-| Build & Push | `.github/workflows/build-and-push.yml` | `push` to `main` / `techx-dev-corp` with image-affecting path changes, tags `v*`, `workflow_dispatch` | Gated multi-arch bake and/or ECR retag → verify all 23 tags → security/sign → Mem0 FastEmbed artifact (build/retag) → chart promote of `service-digest/` overlays (dev push / prod PR) |
+| Build & Push | `.github/workflows/build-and-push.yml` | `push` to `main` / `techx-dev-corp` with image-affecting path changes, tags `v*`, `workflow_dispatch` | Per-service local amd64 bake → Trivy → multi-arch ECR push of `BUILD_SET` → verify/sign/attest → selective digest promotion (dev push / prod PR) |
 
 ### Job graph (PR CI)
 
@@ -24,12 +24,7 @@ lint  ||  unit-tests  ||  prepare-pr-images → build-pr-images (matrix) → pr-
 
 `workflow_call` from Build & Push runs **lint + unit-tests only** (PR image jobs are skipped). Publish still owns multi-arch bake + ECR.
 
-**Required checks (branch protection):** require **`PR image build`**, **`Semgrep
-SAST`**, and **`TruffleHog secrets`**. Image promotion is additionally blocked by
-**`Trivy image scan`** and
-**`Sign and attest <service>`** for every catalog service. See
-`docs/changes/2026-07-19-secure-delivery-person-1.md` for repository settings and the
-selective per-service digest contract.
+**Required check (branch protection):** add check name **`PR image build`** (job `pr-image-build`) so matrix job names do not need individual protection rules.
 
 **PR path classification** (same image-affecting roots as publish):
 
@@ -47,28 +42,39 @@ PR bake intentionally differs from publish: single platform, no registry cache, 
 
 ```text
 CI (reusable lint + unit tests)
-  → prepare            # env, tag, bake catalog validation, classify build vs retag
-  → AWS/ECR preflight  # OIDC + verify 23 ECR repos; refine lists if PREV_TAG missing
-  → build matrix       # changed services only (bake from source + GHA BuildKit cache)
-  → retag matrix       # unchanged services: PREV_TAG → NEW_TAG (parallel with build)
-  → verify ECR         # describe-images for every release service under NEW_TAG
-  → Mem0 FastEmbed     # build model cache when mem0 bakes; else S3 retag PREV_TAG→NEW_TAG
-  → security (Trivy image/IaC, Semgrep, TruffleHog) → sign-and-attest (Cosign + SBOM + provenance)
+  → prepare            # env, tag, catalog validation, classify BUILD_SET
+  → AWS/ECR preflight  # OIDC + verify repositories selected in BUILD_SET
+  → build matrix       # BUILD_SET only; each service:
+  │                      1) local linux/amd64 bake (no push)
+  │                      2) Trivy HIGH/CRITICAL (fixable) on local image
+  │                      3) multi-arch bake --push to ECR only if Trivy passes
+  → verify ECR         # describe-images for BUILD_SET under NEW_TAG
+  → post-push security # Cosign signature + SBOM + provenance for BUILD_SET
+  │                      (parallel: Trivy IaC, Semgrep, TruffleHog)
+  → Mem0 FastEmbed     # only when mem0 is in BUILD_SET
   → release-ready      # if: always(); sole gate for chart promotion
-  → update-chart-dev      # development only: always() + release-ready + digests + build_count > 0
-  → create-chart-prod-pr  # production only: always() + release-ready + digests + build_count > 0
+  → update-chart-dev      # development only: always() + release-ready success + env
+  → create-chart-prod-pr  # production only: always() + release-ready success + env
 ```
 
 Failing CI never reaches AWS authentication or image push.  
-`release-ready` succeeds when CI, prepare, preflight, and verify-ecr succeed, build/retag are each **success** or **skipped** (skipped when that side of the plan is empty), security/sign jobs succeed, and the Mem0 FastEmbed job succeeds (skip-with-warning when `MEM0_FASTEMBED_ARTIFACT_S3_URI` is unset). At least one of build/retag must have run.  
-Chart promote jobs also use `always()` so a skipped empty build/retag matrix does not cascade-skip them after a green `release-ready`. They additionally require `resolve-image-digests` success and a non-empty rebuild list (`build_count != 0`).
+Failing **local Trivy** never reaches ECR push for that service (AWS login happens only after the scan step).  
+`release-ready` requires build (local Trivy + gated push), ECR verification, signature, SBOM, and provenance to succeed for every service in `BUILD_SET`. If `BUILD_SET` is empty, publish/security jobs are skipped and chart promotion is explicitly disabled. The optional Mem0 artifact job runs only when mem0 is selected.
 
-| Environment | After `release-ready` (when services were rebuilt) |
+#### Per-service publish steps (build job)
+
+| Step | What happens | ECR write? |
+|---|---|---|
+| **Local bake** | `docker buildx bake` for `linux/amd64` with `output=type=docker`; GHA BuildKit cache `type=gha` | No |
+| **Trivy image scan** | Scan the local tag `${IMAGE_NAME}/<service>:${VERSION}`; fail on fixable HIGH/CRITICAL (`ignore-unfixed: true`; temporary exit-code exception for `shopping-copilot` only) | No |
+| **Multi-arch push** | OIDC + ECR login, then `docker buildx bake … --push` for `linux/amd64,linux/arm64` (amd64 layers reuse GHA cache) | Yes |
+
+| Environment | After `release-ready` |
 |---|---|
-| `development` | Job **update-chart-dev** direct-pushes `service-digest/values-<service>.yaml` digests on chart branch `techx-dev-corp` |
-| `production` | Job **create-chart-prod-pr** opens a chart PR updating only rebuilt `service-digest/` overlays on base `main` (no auto-merge) |
+| `development` | Job **update-chart-dev** writes only selected `service-digest/values-<service>.yaml` files on branch `techx-dev-corp` |
+| `production` | Job **create-chart-prod-pr** opens a PR containing only selected service digest overlays on base `main` (no auto-merge) |
 
-Unchanged services keep their previous digest overlays (or continue to use `default.image.tag` until first digest promote). The workflow does **not** deploy Helm resources, call Argo CD APIs, or merge production chart PRs. Dev promotion relies on Argo CD auto-sync after the direct push; prod deploy still requires a human to merge the chart PR.
+The workflow does **not** deploy Helm resources, call Argo CD APIs, or merge production chart PRs. Dev promotion relies on Argo CD auto-sync after the direct push; prod deploy still requires a human to merge the chart PR.
 
 ### Path filter (branch pushes)
 
@@ -89,39 +95,32 @@ Examples that **do not** start a branch publish: docs, README, workflows, `Makef
 
 Git tag pushes (`v*`) and manual `workflow_dispatch` always run the pipeline (no path filter).
 
-### Selective rebuild (build vs retag)
+### Selective rebuild (`BUILD_SET`)
 
-Helm still uses **one global image tag** for all release services. Every successful publish must leave all **23** images present under the new tag (`sha-<7>` or `v*`). Selective CI does **not** promote a partial catalog.
+Digest overlays make each service independently promotable. Unchanged services keep their existing digest and are not retagged or redeployed.
 
 | Service classification | Action |
 |---|---|
-| **Changed** (`src/<service>/**`, or `third-party/mem0` for mem0) | `docker buildx bake … --push` from source (BuildKit uses GHA `type=gha` layer cache) |
-| **Unchanged** | Retag previous runtime image: `PREV_TAG` → `NEW_TAG` via `docker buildx imagetools create` (same digest, new tag) |
-| **Shared / global path** (`pb/**`, `.env`, `buildkitd.toml`, `.gitmodules`) | **Full** bake of all 23 (no retag) |
-| **Catalog only** (`docker-compose.yml`, `docker-bake.hcl`) | **Selective**: does not by itself bake every service; new services missing `PREV_TAG` are moved to build by preflight |
+| **Changed** (`src/<service>/**`, or `third-party/mem0` for mem0) | Local amd64 bake → Trivy → multi-arch `docker buildx bake … --push` (BuildKit uses GHA `type=gha` layer cache) |
+| **Unchanged** | No publish, scan/sign, digest update, or rollout |
+| **Shared / global path** (`pb/**`, `.env`, `buildkitd.toml`, `.gitmodules`) | **Full** bake of all 23 |
+| **Catalog only** (`docker-compose.yml`, `docker-bake.hcl`) | Does not select a service by itself; include the relevant `src/<service>/**` change or use reviewed full rebuild |
 
 **When mode is full**
 
 * Git tag `v*`
-* `workflow_dispatch` with `force_full_rebuild: true` (default)
+* `workflow_dispatch` with `force_full_rebuild: true` and a non-empty reason
 * First push / zero `before` SHA
 * Shared path change above
-* Selective requested but no usable `PREV_TAG`
 
-**When mode is selective** (branch push with only per-service `src/<service>/` changes, catalog edits, or dispatch with `force_full_rebuild: false` and a previous tag)
+**When mode is selective**, only release services mapped from changed `src/<service>/**` paths (plus `third-party/mem0`) enter `BUILD_SET`. Non-release paths select nothing, so no image or chart promotion occurs.
 
-* `PREV_TAG` defaults to `sha-<first-7-of-github.event.before>` on branch pushes
-* `workflow_dispatch` can set `previous_tag` (e.g. `sha-a1b2c3d` or `v1.2.3`)
-* Preflight checks each retag candidate exists in ECR under `PREV_TAG`; missing services are moved into the build list
-
-Non-release paths under `src/` (e.g. `src/flagd`, Grafana config) do not force a service bake; if nothing maps to a release service, all 23 are retagged to the new global tag.
-
-**Mem0 FastEmbed artifact** (S3, not ECR) follows the same classification as the mem0 image:
+**Mem0 FastEmbed artifact** (S3, not ECR) is rebuilt only when mem0 is in `BUILD_SET`:
 
 | mem0 image side | FastEmbed action |
 |---|---|
 | **Build** | Rebuild model cache and upload under `…/${NEW_TAG}/` |
-| **Retag** | Copy S3 objects `…/${PREV_TAG}/` → `…/${NEW_TAG}/` (no Hugging Face download) |
+| **Mem0 unchanged** | Artifact job is skipped; existing artifact objects remain unchanged |
 | **URI unset** | Job succeeds with a warning skip so image promote is not blocked |
 
 Set GitHub Environment variable `MEM0_FASTEMBED_ARTIFACT_S3_URI` on `development` / `production` to enable publish. **Must match chart `mem0.modelDelivery.s3Prefix` and the IRSA-allowed prefix** (not a free-form path):
@@ -136,15 +135,20 @@ CI uploads to `${MEM0_FASTEMBED_ARTIFACT_S3_URI}/${VERSION}/`. The chart compose
 | Ref | Purpose |
 |---|---|
 | GHA `type=gha,scope=<service>` | BuildKit **layer** cache in GitHub Actions only — never an ECR tag |
-| `…/<service>:<PREV_TAG>` → `…/<service>:<NEW_TAG>` | Skip source rebuild for unchanged services while keeping the global tag contract |
 
 ### workflow_dispatch inputs
 
 | Input | Default | Purpose |
 |---|---|---|
 | `target_environment` | required | `development` or `production` |
-| `force_full_rebuild` | `true` | Bake all 23 from source when true |
-| `previous_tag` | empty | When force is false, tag to retag unchanged services from |
+| `requested_services` | empty | Comma/space-separated release services for an explicit selective rebuild |
+| `requested_services_reason` | empty | Required and audited when `requested_services` is non-empty |
+| `force_full_rebuild` | `false` | Break-glass full-catalog build when true |
+| `full_rebuild_reason` | empty | Required and audited when `force_full_rebuild=true` |
+
+`requested_services` is validated against the release catalog and cannot be combined
+with `force_full_rebuild=true`. This is the operator path for rebuilding only artifacts
+that are missing a trustworthy signature or attestation without modifying service source.
 
 ### Environment mapping (Build & Push)
 
@@ -195,13 +199,13 @@ Defined in `docker-bake.hcl` group `release` (layered over `docker-compose.yml`)
 
 `opensearch` is a **customized** image (`src/opensearch/Dockerfile`, based on `opensearchproject/opensearch:3.2.0` with unused plugins removed). CI pushes it to ECR; Helm’s OpenSearch subchart pulls that image (not the public Docker Hub image).
 
-`mem0` is a normal matrix service (multi-arch bake + retag). Its FastEmbed model cache is published separately to S3 under the same global tag identity (build when mem0 bakes; S3 retag otherwise).
+`mem0` is a normal matrix service. Its FastEmbed model cache is rebuilt and published separately to S3 only when mem0 is in `BUILD_SET`.
 
-`shopping-copilot` is a normal matrix service (multi-arch bake + retag). PR CI also runs `Shopping copilot tests` (pytest under `src/shopping-copilot/tests`).
+`shopping-copilot` is a normal matrix service. PR CI also runs `Shopping copilot tests` (pytest under `src/shopping-copilot/tests`).
 
 `prepare` asserts `release` equals all Compose build targets (23), with no duplicates or missing services. A newly added Compose build target must be listed in `docker-bake.hcl` group `release`.
 
-### BuildKit cache and retag
+### BuildKit cache
 
 Each release target imports and exports BuildKit cache via **GitHub Actions cache** (not ECR):
 
@@ -211,31 +215,21 @@ cache-to: type=gha,mode=max,scope=<service>
 ```
 
 This avoids pushing movable tags such as `:buildcache` into ECR, which fails when repositories use `image_tag_mutability=IMMUTABLE`.  
-Deploy only uses immutable release tags (`sha-*` or `v*`). Local multiplatform push clears `cache-from` / `cache-to` (GHA cache is unavailable outside Actions).
-
-Selective publishes additionally copy multi-arch **runtime** manifests:
-
-```text
-docker buildx imagetools create \
-  --tag ${IMAGE_NAME}/<service>:${NEW_TAG} \
-  ${IMAGE_NAME}/<service>:${PREV_TAG}
-```
-
-That reuses the previous image digest under the new global tag; it does not rebuild layers and does not use GHA cache.
+Workflow build tags are immutable release identities (`sha-*` or `v*`), while chart promotion resolves and stores the resulting digest. Local multiplatform push clears `cache-from` / `cache-to` because GHA cache is unavailable outside Actions. Runtime manifests are never retagged for unchanged services.
 
 Platforms: `linux/amd64` and `linux/arm64` (QEMU on bake jobs only).
 
-Build / retag matrix settings:
+Build matrix settings:
 
 | Setting | Value |
 |---|---|
 | `fail-fast` | `false` |
 | `max-parallel` | `23` |
 | runner | `ubuntu-latest` |
-| `timeout-minutes` | `120` bake / `20` retag per service |
+| `timeout-minutes` | `120` bake per service |
 | builder | Buildx + `buildkitd.toml` (`max-parallelism = 4`) on bake jobs |
 
-Environment-level concurrency uses `cancel-in-progress: false` so a canceled publish cannot leave a partially populated global tag.
+Environment-level concurrency uses `cancel-in-progress: false` so a selected digest cannot bypass its remaining security gates.
 
 PR CI runs **local single-arch** bake for changed services (no ECR). Multi-arch bake + push remains post-merge / dispatch only. e2e / Cypress / tracetest are out of scope for PR CI.
 
@@ -512,7 +506,7 @@ On the **chart** repo:
 | `Repository not found` / checkout 404 | Wrong `CHART_REPO`, or PAT lacks access to that repo |
 | `Permission denied` / push rejected | PAT Contents not Read/write; or branch rules block the PAT identity (Step C) |
 | `GraphQL: Resource not accessible` / PR create fails | Grant fine-grained PAT **Pull requests: Read and write** |
-| Job skipped entirely | Wrong environment for that job, or `release-ready` failed. If **both** chart jobs skip after a green `release-ready` on a selective run, the job `if` must include `always()` so a skipped empty build/retag matrix does not cascade-skip promote (fixed in workflow). |
+| Job skipped entirely | Expected when `BUILD_SET` is empty or for the non-target environment; otherwise inspect `release-ready`. Promotion additionally requires resolved digests and `build_count != 0`. |
 
 Without `CHART_REPO_TOKEN`, builds can still push images and pass `release-ready`, but chart promote jobs fail until the secret is set. Operators can still edit chart values manually as a fallback.
 
@@ -535,9 +529,9 @@ Without `CHART_REPO_TOKEN`, builds can still push images and pass `release-ready
    # no :buildcache tag required — layer cache lives in GitHub Actions
    ```
 
-4. Confirm the workflow summary shows **Release ready**, then **Update chart dev service digests** for rebuilt services.
-5. Confirm chart `service-digest/values-<service>.yaml` on `techx-dev-corp` contains the new digests for rebuilt services.
-6. Production: merge/push `main` (or tag `v*` / protected dispatch) only after development passes → ECR production project; confirm job **Create chart production digest PR** opens a chart PR under `service-digest/`, then merge that PR to deploy.
+4. Confirm the workflow summary shows **Release ready**, then **Chart values-dev update** with the new tag.
+5. Confirm chart `values-dev.yaml` on `techx-dev-corp` has `default.image.tag: "sha-<7char>"`.
+6. Production: merge/push `main` (or tag `v*` / protected dispatch) only after development passes → ECR production project; confirm job **Create chart values-prod PR** opens a chart PR for `values-prod.yaml`, then merge that PR to deploy.
 
 ---
 
@@ -585,9 +579,10 @@ Local non-push Compose builds (`make build`, `make start`) are unchanged and use
 | prepare catalog assert fails | Add new Compose build targets to `docker-bake.hcl` group `release`. |
 | preflight missing ECR repo | Create nested repo via `techx-corp-infra` ECR module; re-run. |
 | Individual matrix build fails | Re-run failed jobs or full workflow; `fail-fast: false` keeps other services building. |
+| Trivy fails on local image (in build job) | Fix CVEs or base image; re-run. **Nothing was pushed** to ECR for that service in the failed attempt. |
 | verify-ecr reports missing tags | Re-run build for missing services or full workflow; do **not** promote chart values. |
 | release-ready red | Treat as not promotable; chart promote jobs are skipped. |
-| update-chart-dev / create-chart-prod-pr skipped after green release-ready | Empty build or retag side is **skipped** by design; promote jobs use `always()` plus `needs.release-ready.result == 'success'` so they still run. Re-run on a commit that includes that `if` fix if an older workflow skipped them. |
+| update-chart-dev / create-chart-prod-pr skipped after green release-ready | Confirm the target environment, `build_count != 0`, and `resolve-image-digests=success`. An empty `BUILD_SET` intentionally promotes nothing. |
 | update-chart-dev / create-chart-prod-pr fails: missing `CHART_REPO_TOKEN` | Add the secret (see §4.4 / §5); re-run failed job or full workflow. |
 | update-chart-dev fails: push rejected / protected branch | Allow the PAT identity to push to `techx-dev-corp`, or temporarily open a manual values commit. |
 | create-chart-prod-pr fails: cannot create PR | Ensure PAT has **Pull requests: Read and write**; confirm `CHART_PROD_BRANCH` exists. |
@@ -616,42 +611,34 @@ Rollback of this CI design: revert workflow, `docker-bake.hcl`, Makefile, and do
 
 Platform CI builds, pushes, and verifies images. Deploy is Argo CD reading the chart repo (Git desired state).
 
-Images still land under one **global runtime tag** for all 23 services (`sha-*` / `v*`). Chart promotion is **selective by digest**:
+Because the chart uses a **global** `default.image.tag` for all nested services (including first-party `opensearch`):
 
-1. **Build changed services** and **retag** unchanged ones so every service exists under `NEW_TAG`.
-2. **Wait for `release-ready`** (ECR verify + security scans + Cosign/SBOM/provenance).
-3. **Development:** job **update-chart-dev** writes only rebuilt services under chart `service-digest/values-<service>.yaml` on branch `techx-dev-corp` (requires `CHART_REPO_TOKEN`).
-4. **Production:** job **create-chart-prod-pr** opens a chart PR with the same `service-digest/` files against base `main` (requires `CHART_REPO_TOKEN` with Pull requests write). A human merges the PR.
-5. Argo CD Applications load every `service-digest/values-*.yaml` after the env overlay. Helm uses `image@sha256:…` when a digest is set; otherwise `default.image.tag`.
+1. **Rebuild and push the full release set** (23 services, including `mem0`, `opensearch`, and `shopping-copilot`) with the same tag.
+2. **Wait for `release-ready`** (includes ECR `describe-images` for every service).
+3. **Development:** job **update-chart-dev** direct-pushes `default.image.tag` in `values-dev.yaml` on chart branch `techx-dev-corp` (requires `CHART_REPO_TOKEN`).
+4. **Production:** job **create-chart-prod-pr** opens a chart PR updating `values-prod.yaml` (`default.image.tag` only) against base `main` (requires `CHART_REPO_TOKEN` with Pull requests write). A human merges the PR.
+5. Argo CD auto-syncs after the chart commit lands (dev Application `techx-corp-dev` after direct push; prod Application `techx-corp` after PR merge). Optional wait: `argocd app wait techx-corp-dev --sync --health --timeout 600` or `argocd app wait techx-corp --sync --health --timeout 600`.
 
-Do **not** promote chart digests while any matrix job or verification is incomplete. Retag-only publishes (`build_count=0`) skip chart promote (no new digests).
+Do **not** promote chart values while any matrix job or verification is incomplete.
 
 ```text
-# Development (selective rebuild)
-CI → prepare → preflight → build ‖ retag → verify ECR → scan/sign → release-ready
-  → update-chart-dev (service-digest/values-*.yaml) → Argo auto-sync
+# Development
+CI → prepare → preflight → build (local Trivy → ECR push) → verify ECR → release-ready
+  → update-chart-dev (direct push service-digest overlays) → Argo auto-sync
 
 # Production
-CI → prepare → preflight → build ‖ retag → verify ECR → scan/sign → release-ready
-  → create-chart-prod-pr (service-digest PR) → human merge → Argo sync
+CI → prepare → preflight → build (local Trivy → ECR push) → verify ECR → release-ready
+  → create-chart-prod-pr (open service-digest PR) → human merge → Argo sync
 ```
 
-See chart runbook: `techx-corp-chart/docs/operations/gitops-argocd.md` and `techx-corp-chart/service-digest/README.md`.
+See chart runbook: `techx-corp-chart/docs/operations/gitops-argocd.md`.
 
 ## Security notes
 
 - Actions pinned to full commit SHAs (major-version patch pins) with version comments.
-- Every external Dockerfile `FROM` is pinned to an immutable manifest digest; `scripts/check_pinned_base_images.py` blocks regressions in PR CI.
-- Shared release catalog: `scripts/release_services.json` (asserted vs bake group in PR lint).
-- Trivy image CVE and IaC misconfiguration scans block on `HIGH`/`CRITICAL`; Semgrep and TruffleHog are also blocking gates.
-- On publish, Trivy image scan and Cosign sign target **rebuilt** services when `build_count > 0`; full catalog when the run is a full rebuild (or retag-only with empty build list falls back to full scan).
-- Cosign signs immutable image digests with AWS KMS. CycloneDX SBOM and custom provenance are KMS-signed attestations.
-- Provenance schema v1 records commit, merged PR (or `0` for tag/dispatch), approving reviewer (or dispatch/tag actor), signing key URI, workflow run, SBOM status, and every blocking scan result.
-- Sign/attest accepts approved merged PR, or `workflow_dispatch` / `v*` tag (actor recorded; Environment protection remains the human gate for dispatch).
-- Selective chart promotion writes only rebuilt services under chart `service-digest/values-<service>.yaml`; force full rebuild requires `full_rebuild_reason`.
-- PR CI runs Semgrep/TruffleHog/Trivy IaC; those jobs skip on `workflow_call` so publish does not double-run them (publish still runs its own security jobs).
 - Weekly Dependabot updates for `github-actions` (`.github/dependabot.yml`).
-- `id-token: write` only on jobs that call AWS (preflight, build, retag, verify, scan, sign, Mem0 artifact, digest resolve).
+- `id-token: write` only on preflight, build (post-Trivy ECR push + sign path consumers), verify-ecr, resolve digests, sign-and-attest, and related AWS jobs.
+- Image CVE gate runs **before** ECR push (local amd64 image); a failed Trivy step never authenticates to ECR for that matrix leg.
 - GitHub expressions passed into shell steps via quoted environment variables.
 - OIDC authentication only; no long-lived AWS keys.
 - Production chart path still requires human PR merge (no auto-merge from platform CI).
@@ -660,27 +647,9 @@ See chart runbook: `techx-corp-chart/docs/operations/gitops-argocd.md` and `tech
 
 - Auto-merge of production chart PRs (human review remains the prod deploy gate)
 - Helm/kubectl deploy or Argo CD API calls from this repo
-- Admission policy installation and enforcement (owned by `tf2-corp-chart` and `tf2-corp-infra`)
-- GitHub branch-protection administration (required checks must be enabled by a repository administrator)
+- Global-tag retag promotion of unchanged services
+- Per-service movable runtime tags
+- Native multi-arch runners
 - Full e2e / tracetest in PR CI
 
-## Mandate 10 cross-repository contract
-
-Platform CI writes overlays under **`service-digest/values-<service>.yaml`** in the chart repo.
-The chart templates and Argo Applications must load that folder. Overlay keys:
-
-- Normal service: `components.<service>.imageOverride.digest`
-- Mem0: `mem0.image.digest`
-- Load generator: the same digest is written for `load-generator` and `load-generator-worker`
-- Flagd UI sidecar: `components.flagd.sidecarImageDigests.flagd-ui`
-
-The flagd UI map is intentionally not a `sidecarContainers` array override: replacing
-that array would discard the existing sidecar configuration and violate the mandate's
-requirement not to disable or alter flagd.
-
-Admission must require two independent facts for first-party ECR images: a valid KMS
-signature and the custom provenance attestation type
-`https://techx-corp.dev/attestations/provenance/v1`. The attestation policy must require
-all `scans` values to equal `pass` and `sbom.attested` to equal `true`.
-
-<!-- Change trail: @hungxqt - 2026-07-20 - Document service-digest promote, selective scan/sign, and dispatch attest path. -->
+<!-- Change trail: @hungxqt - 2026-07-19 - Document shopping-copilot in 23-image release catalog and CI tests. -->
