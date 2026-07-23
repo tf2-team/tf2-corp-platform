@@ -19,6 +19,8 @@ import (
 	"syscall"
 	"time"
 
+	"golang.org/x/sync/errgroup"
+
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/log/global"
 	semconv "go.opentelemetry.io/otel/semconv/v1.24.0"
@@ -494,14 +496,35 @@ func (cs *checkout) prepareOrderItemsAndShippingQuoteFromCart(ctx context.Contex
 	if len(cartItems) == 0 {
 		return out, fmt.Errorf("cart is empty")
 	}
-	orderItems, err := cs.prepOrderItems(ctx, cartItems, userCurrency)
-	if err != nil {
-		return out, fmt.Errorf("failed to prepare order: %+v", err)
+	var (
+		orderItems  []*pb.OrderItem
+		shippingUSD *pb.Money
+	)
+
+	g, gctx := errgroup.WithContext(ctx)
+
+	g.Go(func() error {
+		var err error
+		orderItems, err = cs.prepOrderItems(gctx, cartItems, userCurrency)
+		if err != nil {
+			return fmt.Errorf("failed to prepare order: %+v", err)
+		}
+		return nil
+	})
+
+	g.Go(func() error {
+		var err error
+		shippingUSD, err = cs.quoteShipping(gctx, address, cartItems)
+		if err != nil {
+			return fmt.Errorf("shipping quote failure: %+v", err)
+		}
+		return nil
+	})
+
+	if err := g.Wait(); err != nil {
+		return out, err
 	}
-	shippingUSD, err := cs.quoteShipping(ctx, address, cartItems)
-	if err != nil {
-		return out, fmt.Errorf("shipping quote failure: %+v", err)
-	}
+
 	shippingPrice, err := cs.convertCurrency(ctx, shippingUSD, userCurrency)
 	if err != nil {
 		return out, fmt.Errorf("failed to convert shipping cost to currency: %+v", err)
@@ -526,9 +549,11 @@ func (cs *checkout) prepareOrderItemsAndShippingQuoteFromCart(ctx context.Contex
 }
 
 func mustCreateClient(svcAddr string) *grpc.ClientConn {
+	serviceConfig := `{"loadBalancingConfig": [{"round_robin": {}}]}`
 	c, err := grpc.NewClient(svcAddr,
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
 		grpc.WithStatsHandler(otelgrpc.NewClientHandler()),
+		grpc.WithDefaultServiceConfig(serviceConfig),
 	)
 	if err != nil {
 		logger.Error(fmt.Sprintf("could not connect to %s service, err: %+v", svcAddr, err))
@@ -717,19 +742,29 @@ func recordCartCleanupDeferred(ctx context.Context, userID string, err error) {
 
 func (cs *checkout) prepOrderItems(ctx context.Context, items []*pb.CartItem, userCurrency string) ([]*pb.OrderItem, error) {
 	out := make([]*pb.OrderItem, len(items))
+	g, ctx := errgroup.WithContext(ctx)
 
 	for i, item := range items {
-		product, err := cs.productCatalogSvcClient.GetProduct(ctx, &pb.GetProductRequest{Id: item.GetProductId()})
-		if err != nil {
-			return nil, fmt.Errorf("failed to get product #%q", item.GetProductId())
-		}
-		price, err := cs.convertCurrency(ctx, product.GetPriceUsd(), userCurrency)
-		if err != nil {
-			return nil, fmt.Errorf("failed to convert price of %q to %s", item.GetProductId(), userCurrency)
-		}
-		out[i] = &pb.OrderItem{
-			Item: item,
-			Cost: price}
+		i, item := i, item
+		g.Go(func() error {
+			product, err := cs.productCatalogSvcClient.GetProduct(ctx, &pb.GetProductRequest{Id: item.GetProductId()})
+			if err != nil {
+				return fmt.Errorf("failed to get product #%q: %w", item.GetProductId(), err)
+			}
+			price, err := cs.convertCurrency(ctx, product.GetPriceUsd(), userCurrency)
+			if err != nil {
+				return fmt.Errorf("failed to convert price of %q to %s: %w", item.GetProductId(), userCurrency, err)
+			}
+			out[i] = &pb.OrderItem{
+				Item: item,
+				Cost: price,
+			}
+			return nil
+		})
+	}
+
+	if err := g.Wait(); err != nil {
+		return nil, err
 	}
 	return out, nil
 }
