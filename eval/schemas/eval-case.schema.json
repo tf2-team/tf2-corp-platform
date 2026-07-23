@@ -158,6 +158,10 @@
         "expected_pending_action": {
           "type": "boolean",
           "description": "True if the copilot should create a pending cart action token."
+        },
+        "expected_pending_product_id": {
+          "type": "string",
+          "description": "Product ID that must be stored in the pending cart action."
         }
       }
     },
