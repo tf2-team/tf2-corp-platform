@@ -7,36 +7,44 @@ Helm deploy stays in `techx-corp-chart`.
 
 | Workflow | File | When | What |
 |---|---|---|---|
-| CI | `.github/workflows/ci.yml` | `pull_request` to `main` / `techx-dev-corp`; also `workflow_call` | Lint + selective unit tests; on PRs only, local (no-push) image bake for changed services |
+| CI | `.github/workflows/ci.yml` | `pull_request` to `main` / `techx-dev-corp`; also `workflow_call` | Lint + selective unit tests; on PRs only, local (no-push) image bake **and Trivy** for changed services |
 | Build & Push | `.github/workflows/build-and-push.yml` | `push` to `main` / `techx-dev-corp` with image-affecting path changes, tags `v*`, `workflow_dispatch` | Per-service local amd64 bake → Trivy → multi-arch ECR push of `BUILD_SET` → verify/sign/attest → selective digest promotion (dev push / prod PR) |
 
 ### Job graph (PR CI)
 
 ```text
-lint  ||  unit-tests  ||  prepare-pr-images → build-pr-images (matrix) → pr-image-build
+lint  ||  unit-tests  ||  prepare-pr-images → build-pr-images (matrix: bake → Trivy) → pr-image-build
 ```
 
 | Job | When | Behavior |
 |---|---|---|
 | **prepare-pr-images** | `pull_request` only | Diff PR base…head; classify full vs selective bake list (same path rules as publish) |
-| **build-pr-images** | PR and `build_count != 0` | `docker buildx bake` per changed service: **linux/amd64 only**, registry cache disabled, `output=type=cacheonly`, **no** AWS OIDC, **no** ECR login, **no** `--push` |
+| **build-pr-images** | PR and `build_count != 0` | Per changed service: (1) `docker buildx bake` **linux/amd64**, registry cache disabled, `output=type=docker`, **no** AWS OIDC / ECR / `--push`; (2) **Trivy** on the local tag (fixable HIGH/CRITICAL; same policy as publish) |
 | **pr-image-build** | always on PR | Stable required-check aggregator (success if prepare ok and matrix success or skipped) |
 
 `workflow_call` from Build & Push runs **lint + unit-tests only** (PR image jobs are skipped). Publish still owns multi-arch bake + ECR.
 
-**Required check (branch protection):** add check name **`PR image build`** (job `pr-image-build`) so matrix job names do not need individual protection rules.
+**Required check (branch protection):** add check name **`PR image build`** (job `pr-image-build`) so matrix job names do not need individual protection rules. That check includes both bake and Trivy for image-touching PRs.
 
 **PR path classification** (same image-affecting roots as publish):
 
 | Change | PR bake plan |
 |---|---|
-| `src/<release-service>/**` | Selective: bake those services only |
-| `third-party/mem0` (submodule pin) | Selective: bake `mem0` only |
+| `src/<release-service>/**` | Selective: bake + Trivy those services only |
+| `third-party/mem0` (submodule pin) | Selective: bake + Trivy `mem0` only |
 | `pb/**`, `buildkitd.toml`, `.env`, `.gitmodules` | Full: all 23 release services |
 | `docker-compose.yml`, `docker-bake.hcl` | Selective: catalog change only (no automatic full matrix); bake services that also have `src/**` changes |
 | Docs / workflows / other non-image paths only | Skip bake matrix (`build_count=0`); **pr-image-build** still succeeds |
 
-PR bake intentionally differs from publish: single platform, no registry cache, no push. It exists to catch Dockerfile/context compile failures (e.g. missing `COPY` of a new package) before merge.
+#### Per-service PR steps (`build-pr-images`)
+
+| Step | What happens | ECR write? |
+|---|---|---|
+| **Local bake** | `docker buildx bake` for `linux/amd64` with `output=type=docker`; placeholder tag `local.invalid/pr-check/<service>:pr-local`; cache-from/to cleared | No |
+| **Runtime smoke** | `scripts/smoke_runtime_image.sh` for `email`, `llm`, and `opensearch` only | No |
+| **Trivy image scan** | Scan the local placeholder tag; fail on fixable HIGH/CRITICAL (`ignore-unfixed: true`; temporary exit-code exception for `shopping-copilot` only) | No |
+
+PR validation intentionally differs from publish: single platform, no registry cache, no AWS, no push. It exists to catch Dockerfile/context compile failures (e.g. missing `COPY` of a new package) **and** the same fixable CVE surface as the pre-ECR Trivy gate before merge.
 
 ### Job graph (Build & Push)
 
@@ -576,6 +584,8 @@ Local non-push Compose builds (`make build`, `make start`) are unchanged and use
 | Failure | Recovery |
 |---|---|
 | CI (lint/unit) fails | Fix code; re-run. No AWS auth or images pushed. |
+| PR image bake fails | Fix Dockerfile/context; re-run. No AWS auth or images pushed. |
+| PR Trivy fails on local image | Fix fixable HIGH/CRITICAL CVEs or base image; re-run. **Nothing was pushed** to ECR (PR path never logs in). |
 | prepare catalog assert fails | Add new Compose build targets to `docker-bake.hcl` group `release`. |
 | preflight missing ECR repo | Create nested repo via `techx-corp-infra` ECR module; re-run. |
 | Individual matrix build fails | Re-run failed jobs or full workflow; `fail-fast: false` keeps other services building. |
@@ -639,6 +649,7 @@ See chart runbook: `techx-corp-chart/docs/operations/gitops-argocd.md`.
 - Weekly Dependabot updates for `github-actions` (`.github/dependabot.yml`).
 - `id-token: write` only on preflight, build (post-Trivy ECR push + sign path consumers), verify-ecr, resolve digests, sign-and-attest, and related AWS jobs.
 - Image CVE gate runs **before** ECR push (local amd64 image); a failed Trivy step never authenticates to ECR for that matrix leg.
+- PR CI also runs the same Trivy policy on locally loaded images for changed services (no AWS credentials on that path).
 - GitHub expressions passed into shell steps via quoted environment variables.
 - OIDC authentication only; no long-lived AWS keys.
 - Production chart path still requires human PR merge (no auto-merge from platform CI).
@@ -652,4 +663,4 @@ See chart runbook: `techx-corp-chart/docs/operations/gitops-argocd.md`.
 - Native multi-arch runners
 - Full e2e / tracetest in PR CI
 
-<!-- Change trail: @hungxqt - 2026-07-19 - Document shopping-copilot in 23-image release catalog and CI tests. -->
+<!-- Change trail: @hungxqt - 2026-07-23 - Document PR local bake Trivy HIGH/CRITICAL gate. -->
