@@ -9,6 +9,9 @@ from typing import Literal
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
+from pydantic import model_validator
+
+
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(
         env_file=".env",
@@ -32,6 +35,15 @@ class Settings(BaseSettings):
     incidents_history_path: Path = Path("config/incidents_history.json")
     remediation_audit_path: Path = Path("state/remediation_audit.jsonl")
     rca_history_path: Path = Path("state/rca_history.jsonl")
+
+    @model_validator(mode="after")
+    def _sync_state_paths(self) -> Settings:
+        state_dir = self.state_store_path.parent
+        if self.remediation_audit_path == Path("state/remediation_audit.jsonl") and state_dir != Path("state"):
+            self.remediation_audit_path = state_dir / "remediation_audit.jsonl"
+        if self.rca_history_path == Path("state/rca_history.jsonl") and state_dir != Path("state"):
+            self.rca_history_path = state_dir / "rca_history.jsonl"
+        return self
 
     qualification_gate_dev: bool = False
     qualification_schema_path: Path = Path("config/signal_qualification_schema.json")

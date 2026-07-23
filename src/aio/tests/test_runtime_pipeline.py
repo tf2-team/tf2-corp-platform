@@ -27,6 +27,7 @@ from aiops.schemas import (
 )
 from aiops.pipeline import AiopsPipeline
 from aiops.notifications import is_slo_notification
+from aiops.topology import TopologyGraph
 from aiops.pipeline.runtime import _algorithm_service_scores, _apply_corroboration, _slo_impact_findings
 from aiops.remediation import (
     ActionCatalog,
@@ -1110,7 +1111,7 @@ class RuntimePipelineTest(unittest.TestCase):
             store = SQLiteIncidentStore(root / "aiops.sqlite3", environment=settings.environment)
             pipeline = AiopsPipeline(
                 collector=StaticCollector([]),
-                detectors=[MultiServiceDetector()],
+                detectors=[MultiServiceDetector(cart_signal_id="cart_cpu_usage")],
                 store=store,
                 policy=policy(settings),
                 **runtime_kwargs(settings),
@@ -1125,7 +1126,7 @@ class RuntimePipelineTest(unittest.TestCase):
 
         self.assertEqual([message.service for message in result.notifications], ["checkout", "valkey-cart", "valkey-cart"])
         self.assertEqual([status for _, status in outbox_rows].count("suppressed"), 1)
-        self.assertEqual([decision.result for decision in result.policy_decisions], ["blocked", "blocked"])
+        self.assertEqual([decision.result for decision in result.policy_decisions], ["blocked"])
 
     def test_pipeline_does_not_suppress_children_for_low_confidence_root_cause(self):
         settings = Settings()
@@ -1156,7 +1157,7 @@ class RuntimePipelineTest(unittest.TestCase):
             store.register_active_root_cause("checkout", {"checkout", "cart"}, suppress_seconds=900)
             pipeline = AiopsPipeline(
                 collector=StaticCollector([]),
-                detectors=[MultiServiceDetector()],
+                detectors=[MultiServiceDetector(cart_signal_id="cart_cpu_usage")],
                 store=store,
                 policy=policy(settings),
                 **runtime_kwargs(settings),
@@ -1453,6 +1454,97 @@ class RuntimePipelineTest(unittest.TestCase):
         self.assertEqual(len(history), 2)
         self.assertEqual(history[1]["incident_id"], result.incidents[0].incident_id)
         self.assertEqual(history[1]["actions_taken"][0]["outcome"], "success")
+
+    def test_is_slo_notification_recognizes_error_rate_and_burn_rate(self):
+        event = CandidateEvent(
+            detector_id="auto_checkout_error_rate",
+            flow="checkout",
+            service="checkout",
+            severity="SEV1",
+            signal_id="checkout_error_rate_5m",
+            value=0.05,
+            unit="ratio",
+            window="5m",
+            threshold=0.01,
+            quality=SignalQuality.VERIFIED,
+            reason="threshold_breached",
+            runbook_id="RB-CHECKOUT-SLO",
+        )
+        self.assertTrue(is_slo_notification(event))
+
+    def test_rca_notification_min_score_decoupled_from_suppress_min_root_score(self):
+        settings = Settings()
+        with TemporaryDirectory() as tmp:
+            store = SQLiteIncidentStore(Path(tmp) / "aiops.sqlite3", environment=settings.environment)
+            kwargs = runtime_kwargs(settings)
+            kwargs["correlation_hyperparameters"] = {
+                "suppress_min_root_score": 0.5,
+                "rca_notification_min_score": 0.85,
+                "topology_max_hops": 1,
+            }
+            pipeline = AiopsPipeline(
+                collector=StaticCollector([]),
+                detectors=[],
+                store=store,
+                policy=policy(settings),
+                **kwargs,
+            )
+            rca_result = RcaResult(
+                root_causes=[
+                    RootCauseCandidate(service="checkout", score=0.7, root_cause_metrics=["p95_latency_5m"]),
+                ]
+            )
+
+            incidents = pipeline._upsert_rca_root_incidents(rca_result, [impact_incident("checkout")])
+            store.close()
+
+        self.assertEqual(incidents, [])
+
+    def test_rca_dedup_respects_topology_max_hops_1(self):
+        settings = Settings()
+        with TemporaryDirectory() as tmp:
+            store = SQLiteIncidentStore(Path(tmp) / "aiops.sqlite3", environment=settings.environment)
+            kwargs = runtime_kwargs(settings)
+            kwargs["correlation_hyperparameters"] = {"topology_max_hops": 1}
+            pipeline = AiopsPipeline(
+                collector=StaticCollector([]),
+                detectors=[],
+                store=store,
+                policy=policy(settings),
+                **kwargs,
+            )
+            # payment and ad are 2 hops apart in topology
+            rca_result = RcaResult(
+                root_causes=[
+                    RootCauseCandidate(service="payment", score=0.9, root_cause_metrics=["cpu_millicores"]),
+                    RootCauseCandidate(service="ad", score=0.85, root_cause_metrics=["cpu_millicores"]),
+                ]
+            )
+
+            kept = pipeline._dedup_rca_root_causes(rca_result.root_causes)
+            store.close()
+
+        self.assertEqual([root.service for root in kept], ["payment", "ad"])
+
+    def test_breakout_services_evaluates_against_max_relevant_root_score(self):
+        graph = TopologyGraph(load_runtime_config(Path("config/runtime.json")))
+        with TemporaryDirectory() as tmp:
+            store = SQLiteIncidentStore(Path(tmp) / "db.sqlite3", environment="tf2", topology_graph=graph)
+            # Active root payment has high score 0.9 (covers checkout)
+            store.register_active_root_cause("payment", {"checkout", "payment"}, suppress_seconds=300, root_score=0.9)
+            # Active root email has low score 0.2 (covers checkout as neighbor)
+            store.register_active_root_cause("email", {"email"}, suppress_seconds=300, root_score=0.2)
+
+            # checkout score = 0.35 (which is >= 0.2 * 1.5, but NOT >= 0.9 * 1.5 = 1.35)
+            breakouts = store.breakout_services({"checkout": 0.35}, multiplier=1.5)
+            store.close()
+
+        self.assertEqual(breakouts, set())
+
+    def test_settings_state_paths_synced_with_state_store_path(self):
+        custom_settings = Settings(state_store_path=Path("/tmp/custom_dir/aiops.sqlite3"))
+        self.assertEqual(custom_settings.remediation_audit_path, Path("/tmp/custom_dir/remediation_audit.jsonl"))
+        self.assertEqual(custom_settings.rca_history_path, Path("/tmp/custom_dir/rca_history.jsonl"))
 
 
 if __name__ == "__main__":

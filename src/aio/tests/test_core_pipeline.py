@@ -9,7 +9,9 @@ from pydantic import ValidationError
 
 from aiops.config import Settings, load_hyperparameters, load_runtime_config
 from aiops.correlation import Correlator
-from aiops.incidents import IncidentManager
+from tempfile import TemporaryDirectory
+
+from aiops.storage import SQLiteIncidentStore
 from aiops.detectors import DependencyDetector, DetectorEngine, NoDataDetector, ThresholdDetector
 from aiops.features import FeatureBuilder
 from aiops.schemas import ActionCatalogItem, ActionProposal, CandidateEvent, EvidenceItem, Feature, HistoryAction, IncidentFeatures, IncidentHistoryRecord, Observation, SignalQuality
@@ -292,109 +294,118 @@ class DetectorEngineTest(unittest.TestCase):
         self.assertEqual(candidates[0].contributing_signals, ("checkout_bad_ratio_24h", "checkout_p95_latency_5m"))
 
 
-class IncidentManagerTest(unittest.TestCase):
+class SQLiteIncidentStoreTest(unittest.TestCase):
     def test_deduplicates_by_stable_fingerprint_not_metric_value(self):
-        manager = IncidentManager(environment="tf2")
-        detector = ThresholdDetector(
-            detector_id="ops01_checkout_slo",
-            signal_id="checkout_bad_ratio_24h",
-            threshold=0.01,
-            flow="checkout",
-            service="checkout",
-            severity="SEV1",
-            runbook_id="RB-CHECKOUT-SLO",
-        )
-
-        first = detector.evaluate(
-            FeatureBuilder(load_runtime_config(Path("config/runtime.json"))).build(
-                [Observation(signal_id="checkout_bad_ratio_24h", value=0.017, unit="ratio", window="24h", quality=SignalQuality.VERIFIED)]
+        with TemporaryDirectory() as tmp:
+            store = SQLiteIncidentStore(Path(tmp) / "db.sqlite3", environment="tf2")
+            detector = ThresholdDetector(
+                detector_id="ops01_checkout_slo",
+                signal_id="checkout_bad_ratio_24h",
+                threshold=0.01,
+                flow="checkout",
+                service="checkout",
+                severity="SEV1",
+                runbook_id="RB-CHECKOUT-SLO",
             )
-        )[0]
-        second = detector.evaluate(
-            FeatureBuilder(load_runtime_config(Path("config/runtime.json"))).build(
-                [Observation(signal_id="checkout_bad_ratio_24h", value=0.021, unit="ratio", window="24h", quality=SignalQuality.VERIFIED)]
-            )
-        )[0]
 
-        incident = manager.upsert(first)
-        same_incident = manager.upsert(second)
+            first = detector.evaluate(
+                FeatureBuilder(load_runtime_config(Path("config/runtime.json"))).build(
+                    [Observation(signal_id="checkout_bad_ratio_24h", value=0.017, unit="ratio", window="24h", quality=SignalQuality.VERIFIED)]
+                )
+            )[0]
+            second = detector.evaluate(
+                FeatureBuilder(load_runtime_config(Path("config/runtime.json"))).build(
+                    [Observation(signal_id="checkout_bad_ratio_24h", value=0.021, unit="ratio", window="24h", quality=SignalQuality.VERIFIED)]
+                )
+            )[0]
 
-        self.assertEqual(incident.incident_id, same_incident.incident_id)
-        self.assertEqual(same_incident.occurrence_count, 2)
+            incident = store.upsert(first)
+            same_incident = store.upsert(second)
+
+            self.assertEqual(incident.incident_id, same_incident.incident_id)
+            self.assertEqual(same_incident.occurrence_count, 2)
+            store.close()
 
     def test_topology_dependency_path_can_scope_fingerprint_to_dependency(self):
         graph = TopologyGraph(load_runtime_config(Path("config/runtime.json")))
-        manager = IncidentManager(environment="tf2", topology_graph=graph)
-        checkout = CandidateEvent(
-            detector_id="shared_dependency_detector",
-            flow="checkout",
-            service="checkout",
-            severity="SEV2",
-            signal_id="checkout_product_catalog_error_rate_5m",
-            value=0.2,
-            unit="ratio",
-            window="5m",
-            threshold=0.05,
-            quality=SignalQuality.VERIFIED,
-            reason="dependency_signal_breached",
-            runbook_id="RB-CHECKOUT-DEPENDENCY",
-            likely_dependency="product-catalog",
-        )
-        frontend = checkout.model_copy(update={"service": "frontend", "signal_id": "frontend_product_catalog_error_rate_5m"})
+        with TemporaryDirectory() as tmp:
+            store = SQLiteIncidentStore(Path(tmp) / "db.sqlite3", environment="tf2", topology_graph=graph)
+            checkout = CandidateEvent(
+                detector_id="shared_dependency_detector",
+                flow="checkout",
+                service="checkout",
+                severity="SEV2",
+                signal_id="checkout_product_catalog_error_rate_5m",
+                value=0.2,
+                unit="ratio",
+                window="5m",
+                threshold=0.05,
+                quality=SignalQuality.VERIFIED,
+                reason="dependency_signal_breached",
+                runbook_id="RB-CHECKOUT-DEPENDENCY",
+                likely_dependency="product-catalog",
+            )
+            frontend = checkout.model_copy(update={"service": "frontend", "signal_id": "frontend_product_catalog_error_rate_5m"})
 
-        incident = manager.upsert(checkout)
-        same_incident = manager.upsert(frontend)
+            incident = store.upsert(checkout)
+            same_incident = store.upsert(frontend)
 
-        self.assertEqual(incident.incident_id, same_incident.incident_id)
-        self.assertEqual(same_incident.occurrence_count, 2)
+            self.assertEqual(incident.incident_id, same_incident.incident_id)
+            self.assertEqual(same_incident.occurrence_count, 2)
+            store.close()
 
     def test_slo_fingerprint_does_not_dedup_by_topology_dependency(self):
         graph = TopologyGraph(load_runtime_config(Path("config/runtime.json")))
-        manager = IncidentManager(environment="tf2", topology_graph=graph)
-        checkout = CandidateEvent(
-            detector_id="ops01_checkout_slo",
-            flow="checkout",
-            service="checkout",
-            severity="SEV1",
-            signal_id="checkout_bad_ratio_24h",
-            value=0.2,
-            unit="ratio",
-            window="24h",
-            threshold=0.01,
-            quality=SignalQuality.VERIFIED,
-            reason="threshold_breached",
-            runbook_id="RB-CHECKOUT-SLO",
-            likely_dependency="product-catalog",
-        )
-        frontend = checkout.model_copy(update={"service": "frontend", "signal_id": "frontend_bad_ratio_24h"})
+        with TemporaryDirectory() as tmp:
+            store = SQLiteIncidentStore(Path(tmp) / "db.sqlite3", environment="tf2", topology_graph=graph)
+            checkout = CandidateEvent(
+                detector_id="ops01_checkout_slo",
+                flow="checkout",
+                service="checkout",
+                severity="SEV1",
+                signal_id="checkout_bad_ratio_24h",
+                value=0.2,
+                unit="ratio",
+                window="24h",
+                threshold=0.01,
+                quality=SignalQuality.VERIFIED,
+                reason="threshold_breached",
+                runbook_id="RB-CHECKOUT-SLO",
+                likely_dependency="product-catalog",
+            )
+            frontend = checkout.model_copy(update={"service": "frontend", "signal_id": "frontend_bad_ratio_24h"})
 
-        incident = manager.upsert(checkout)
-        other_incident = manager.upsert(frontend)
+            incident = store.upsert(checkout)
+            other_incident = store.upsert(frontend)
 
-        self.assertNotEqual(incident.incident_id, other_incident.incident_id)
+            self.assertNotEqual(incident.incident_id, other_incident.incident_id)
+            store.close()
 
     def test_rca_root_cause_fingerprint_includes_primary_metric(self):
-        manager = IncidentManager(environment="tf2")
-        latency = CandidateEvent(
-            detector_id="rca_root_cause",
-            flow="checkout",
-            service="payment",
-            severity="SEV2",
-            signal_id="p95_latency_5m",
-            value=1.0,
-            unit="score",
-            window="rca",
-            threshold=None,
-            quality=SignalQuality.VERIFIED,
-            reason="rca_root_cause",
-            runbook_id="RB-SERVICE-ERROR-RATE",
-        )
-        errors = latency.model_copy(update={"signal_id": "error_rate_5m"})
+        with TemporaryDirectory() as tmp:
+            store = SQLiteIncidentStore(Path(tmp) / "db.sqlite3", environment="tf2")
+            latency = CandidateEvent(
+                detector_id="rca_root_cause",
+                flow="checkout",
+                service="payment",
+                severity="SEV2",
+                signal_id="p95_latency_5m",
+                value=1.0,
+                unit="score",
+                window="rca",
+                threshold=None,
+                quality=SignalQuality.VERIFIED,
+                reason="rca_root_cause",
+                runbook_id="RB-SERVICE-ERROR-RATE",
+                contributing_signals=("p95_latency_5m",),
+            )
+            errors = latency.model_copy(update={"signal_id": "error_rate_5m", "contributing_signals": ("error_rate_5m",)})
 
-        first = manager.upsert(latency)
-        second = manager.upsert(errors)
+            first = store.upsert(latency)
+            second = store.upsert(errors)
 
-        self.assertNotEqual(first.incident_id, second.incident_id)
+            self.assertNotEqual(first.incident_id, second.incident_id)
+            store.close()
 
 
 class PolicyEngineTest(unittest.TestCase):

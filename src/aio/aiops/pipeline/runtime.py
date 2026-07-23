@@ -57,6 +57,8 @@ RemediationComponents = tuple[
 
 
 class IncidentStore(Protocol):
+    topology_graph: TopologyGraph | None
+
     def upsert(self, candidate: CandidateEvent) -> Incident:
         ...
 
@@ -67,6 +69,32 @@ class IncidentStore(Protocol):
     def mark_notification_sent(self, incident_id: str) -> None: ...
 
     def mark_notification_failed(self, incident_id: str, error: str) -> None: ...
+
+    def register_active_root_cause(
+        self,
+        root_service: str,
+        affected_services: set[str],
+        suppress_seconds: int = 900,
+        root_score: float = 0.0,
+    ) -> None: ...
+
+    def breakout_services(self, service_scores: dict[str, float], multiplier: float) -> set[str]: ...
+
+    def suppress_related_notifications(
+        self,
+        incidents: list[Incident],
+        root_service: str,
+        affected_services: set[str],
+        exempt_services: set[str] | None = None,
+    ) -> set[str]: ...
+
+    def suppress_active_root_notifications(
+        self,
+        incidents: list[Incident],
+        exempt_services: set[str] | None = None,
+    ) -> set[str]: ...
+
+    def suppressed_incident_ids(self, incidents: list[Incident]) -> set[str]: ...
 
 
 class NotificationSender(Protocol):
@@ -259,7 +287,12 @@ class AiopsPipeline:
         return notifications
 
     def _upsert_rca_root_incidents(self, rca_result: RcaResult, incidents: list[Incident]) -> list[Incident]:
-        threshold = float(self.correlation_hyperparameters.get("suppress_min_root_score", 0.8))
+        threshold = float(
+            self.correlation_hyperparameters.get(
+                "rca_notification_min_score",
+                self.correlation_hyperparameters.get("suppress_min_root_score", 0.8),
+            )
+        )
         valid_roots = [root for root in rca_result.root_causes if root.score >= threshold and root.root_cause_metrics]
         impact_incidents = [incident for incident in incidents if any(_is_user_impact_event(event) for event in incident.events)]
         scoped_roots: list[tuple[RootCauseCandidate, list[Incident]]] = []
@@ -321,7 +354,7 @@ class AiopsPipeline:
 
     def _dedup_rca_root_causes(self, root_causes: list[RootCauseCandidate]) -> list[RootCauseCandidate]:
         kept: list[RootCauseCandidate] = []
-        max_hops = max(2, int(self.correlation_hyperparameters.get("topology_max_hops", 2)))
+        max_hops = max(1, int(self.correlation_hyperparameters.get("topology_max_hops", 1)))
         for root in root_causes:
             duplicate = next((item for item in kept if self._same_rca_topology_scope(root.service, item.service, max_hops)), None)
             if duplicate is None:
@@ -337,20 +370,8 @@ class AiopsPipeline:
     def _same_rca_topology_scope(self, service: str, other: str, max_hops: int) -> bool:
         if service == other:
             return True
-        graph = getattr(self.topology_graph, "graph", None)
-        if graph is None or service not in graph or other not in graph:
-            return False
-        seen = {service}
-        frontier = {service}
-        for _ in range(max_hops):
-            neighbors = set()
-            for item in frontier:
-                neighbors.update(graph.successors(item))
-                neighbors.update(graph.predecessors(item))
-            if other in neighbors:
-                return True
-            frontier = neighbors - seen
-            seen.update(neighbors)
+        if self.topology_graph is not None:
+            return other in self.topology_graph.neighborhood(service, max_hops=max_hops)
         return False
 
     def _run_v001_rca(self, metric_series: list[MetricSeries], incidents: list[Incident] | None = None) -> RcaResult:

@@ -10,8 +10,6 @@ import httpx
 
 from aiops.config import Settings
 from aiops.integrations import (
-    AieClient,
-    CostClient,
     JaegerClient,
     KubernetesClient,
     LiveExecutorClient,
@@ -69,14 +67,11 @@ class IntegrationClientTest(unittest.TestCase):
         JaegerClient(cfg, transport=transport).search_traces(service="checkout")
         OpenSearchClient(cfg, transport=transport).search(index="logs-*", body={"query": {"match_all": {}}})
         KubernetesClient(cfg, transport=transport).get_deployment(namespace="tf2", name="checkout")
-        AieClient(cfg, transport=transport).get_status()
-        CostClient(cfg, transport=transport).get_status()
         LiveExecutorClient(cfg, transport=transport).submit_action({"action_id": "act-1"})
 
         self.assertIn(("GET", "/jaeger/ui/api/traces"), calls)
         self.assertIn(("POST", "/logs-*/_search"), calls)
         self.assertIn(("GET", "/apis/apps/v1/namespaces/tf2/deployments/checkout"), calls)
-        self.assertIn(("GET", "/status"), calls)
         self.assertIn(("POST", "/actions"), calls)
 
     def test_opensearch_uses_basic_auth(self):

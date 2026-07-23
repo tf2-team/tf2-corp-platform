@@ -290,20 +290,28 @@ class SQLiteIncidentStore:
             )
 
     def breakout_services(self, service_scores: dict[str, float], multiplier: float) -> set[str]:
-        if self.topology_graph is None:
+        if self.topology_graph is None or not service_scores:
             return set()
         rows = self._connection.execute(
-            "SELECT root_service, root_score FROM active_root_causes WHERE expires_at > ? AND root_score > 0",
+            "SELECT root_service, root_score, affected_services_json FROM active_root_causes WHERE expires_at > ? AND root_score > 0",
             (_now(),),
         ).fetchall()
-        return {
-            service
-            for root_service, root_score in rows
-            for service, score in service_scores.items()
-            if service != root_service
-            and service in self.topology_graph.neighborhood(root_service, max_hops=1)
-            and score >= float(root_score) * multiplier
-        }
+        if not rows:
+            return set()
+
+        breakouts = set()
+        for service, score in service_scores.items():
+            relevant_root_scores = []
+            for root_service, root_score, affected_json in rows:
+                if service == root_service:
+                    continue
+                affected_set = set(json.loads(affected_json)) if affected_json else set()
+                is_neighbor = service in self.topology_graph.neighborhood(root_service, max_hops=1)
+                if service in affected_set or is_neighbor:
+                    relevant_root_scores.append(float(root_score))
+            if relevant_root_scores and score >= max(relevant_root_scores) * multiplier:
+                breakouts.add(service)
+        return breakouts
 
     def suppress_related_notifications(
         self,
@@ -390,7 +398,7 @@ class SQLiteIncidentStore:
 
     def _suppression_parent(self, service: str) -> str | None:
         rows = self._connection.execute(
-            "SELECT root_service, affected_services_json FROM active_root_causes WHERE expires_at > ?",
+            "SELECT root_service, affected_services_json FROM active_root_causes WHERE expires_at > ? ORDER BY root_score DESC, root_service ASC",
             (_now(),),
         ).fetchall()
         for root_service, affected_json in rows:
