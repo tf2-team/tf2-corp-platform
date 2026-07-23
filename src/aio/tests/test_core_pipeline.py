@@ -14,6 +14,7 @@ from aiops.detectors import DependencyDetector, DetectorEngine, NoDataDetector, 
 from aiops.features import FeatureBuilder
 from aiops.schemas import ActionCatalogItem, ActionProposal, CandidateEvent, EvidenceItem, Feature, HistoryAction, IncidentFeatures, IncidentHistoryRecord, Observation, SignalQuality
 from aiops.remediation import HistoryRetriever, PolicyEngine, RemediationDecisionEngine
+from aiops.topology import TopologyGraph
 
 
 def policy(settings: Settings | None = None, mode: str | None = None) -> PolicyEngine:
@@ -316,6 +317,32 @@ class IncidentManagerTest(unittest.TestCase):
 
         incident = manager.upsert(first)
         same_incident = manager.upsert(second)
+
+        self.assertEqual(incident.incident_id, same_incident.incident_id)
+        self.assertEqual(same_incident.occurrence_count, 2)
+
+    def test_topology_dependency_path_can_scope_fingerprint_to_dependency(self):
+        graph = TopologyGraph(load_runtime_config(Path("config/runtime.json")))
+        manager = IncidentManager(environment="tf2", topology_graph=graph)
+        checkout = CandidateEvent(
+            detector_id="shared_dependency_detector",
+            flow="checkout",
+            service="checkout",
+            severity="SEV2",
+            signal_id="checkout_product_catalog_error_rate_5m",
+            value=0.2,
+            unit="ratio",
+            window="5m",
+            threshold=0.05,
+            quality=SignalQuality.VERIFIED,
+            reason="dependency_signal_breached",
+            runbook_id="RB-CHECKOUT-DEPENDENCY",
+            likely_dependency="product-catalog",
+        )
+        frontend = checkout.model_copy(update={"service": "frontend", "signal_id": "frontend_product_catalog_error_rate_5m"})
+
+        incident = manager.upsert(checkout)
+        same_incident = manager.upsert(frontend)
 
         self.assertEqual(incident.incident_id, same_incident.incident_id)
         self.assertEqual(same_incident.occurrence_count, 2)

@@ -390,7 +390,6 @@ class AiopsPipeline:
                     if self.topology_graph is not None
                     else _blast_radius_services(self.runtime_config, root_service, max_hops)
                 )
-                affected_services -= {incident.service for incident in incidents if incident.severity == "SEV1"}
                 register = getattr(self.store, "register_active_root_cause", None)
                 suppress = getattr(self.store, "suppress_related_notifications", None)
                 if register is not None:

@@ -67,7 +67,6 @@ class SQLiteIncidentStoreTest(unittest.TestCase):
                 outbox_count = second_store._connection.execute("SELECT COUNT(*) FROM notification_outbox").fetchone()[0]
                 incidents = second_store.list_incidents()
                 second_store.close()
-                history_rows = [json.loads(line) for line in (Path(tmp) / "notification_history.jsonl").read_text(encoding="utf-8").splitlines()]
 
         self.assertEqual(incident.incident_id, same_incident.incident_id)
         text = "\n".join(logs.output)
@@ -82,8 +81,6 @@ class SQLiteIncidentStoreTest(unittest.TestCase):
         self.assertEqual(same_incident.occurrence_count, 2)
         self.assertEqual(len(same_incident.events), 2)
         self.assertEqual(len(incidents), 1)
-        self.assertEqual(len(history_rows), 1)
-        self.assertEqual(history_rows[0], notifications[0].model_dump(mode="json"))
         self.assertEqual(same_incident.state, "open")
         self.assertEqual(same_incident.last_seen, "1970-01-01T00:03:20+00:00")
         self.assertIsNone(same_incident.recovered_at)
@@ -103,13 +100,11 @@ class SQLiteIncidentStoreTest(unittest.TestCase):
                 "SELECT status FROM notification_outbox WHERE incident_id = ?",
                 (incident.incident_id,),
             ).fetchone()
-            history_rows = [json.loads(line) for line in (Path(tmp) / "notification_history.jsonl").read_text(encoding="utf-8").splitlines()]
             store.close()
 
         self.assertEqual(incident.incident_id, repeated.incident_id)
         self.assertEqual([message.incident_id for message in notifications], [incident.incident_id])
         self.assertEqual(outbox_row, ("pending",))
-        self.assertEqual(history_rows, [notifications[0].model_dump(mode="json")] * 2)
 
     def test_slo_incident_requeues_after_dedup_ttl(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -133,11 +128,23 @@ class SQLiteIncidentStoreTest(unittest.TestCase):
             first_cooldown = incident.cooldown_until
 
             repeated = store.upsert(candidate(0.03, timestamp=200))
-            history_rows = [json.loads(line) for line in (Path(tmp) / "notification_history.jsonl").read_text(encoding="utf-8").splitlines()]
             store.close()
 
         self.assertEqual(repeated.cooldown_until, first_cooldown)
-        self.assertEqual(len(history_rows), 1)
+
+    def test_deduped_incident_count_resets_after_count_window(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            store = SQLiteIncidentStore(Path(tmp) / "aiops.sqlite3", environment="tf2", incident_count_reset_seconds=50)
+            incident = store.upsert(candidate(0.02, timestamp=100))
+            repeated = store.upsert(candidate(0.03, timestamp=120))
+            reset = store.upsert(candidate(0.04, timestamp=200))
+            store.close()
+
+        self.assertEqual(incident.incident_id, repeated.incident_id)
+        self.assertEqual(repeated.occurrence_count, 2)
+        self.assertEqual(reset.incident_id, incident.incident_id)
+        self.assertEqual(reset.occurrence_count, 1)
+        self.assertEqual(len(reset.events), 1)
 
     def test_slo_notification_bypasses_service_cooldown(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -146,13 +153,11 @@ class SQLiteIncidentStoreTest(unittest.TestCase):
             second = store.upsert(service_candidate("product-reviews", "auto_product_reviews_error_rate"))
             notifications = store.pending_notifications_for([first, second])
             outbox_rows = store._connection.execute("SELECT incident_id FROM notification_outbox ORDER BY incident_id").fetchall()
-            history_rows = [json.loads(line) for line in (Path(tmp) / "notification_history.jsonl").read_text(encoding="utf-8").splitlines()]
             store.close()
 
         self.assertNotEqual(first.incident_id, second.incident_id)
-        self.assertEqual([message.incident_id for message in notifications], [first.incident_id, second.incident_id])
-        self.assertEqual(outbox_rows, [(first.incident_id,), (second.incident_id,)])
-        self.assertEqual([row["service"] for row in history_rows], ["product-reviews", "product-reviews"])
+        self.assertEqual({message.incident_id for message in notifications}, {first.incident_id, second.incident_id})
+        self.assertEqual(set(outbox_rows), {(first.incident_id,), (second.incident_id,)})
 
     def test_sev1_bypasses_same_service_cooldown(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -202,7 +207,7 @@ class SQLiteIncidentStoreTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             store = SQLiteIncidentStore(Path(tmp) / "aiops.sqlite3", environment="tf2")
             store.register_active_root_cause("checkout", {"checkout", "cart"}, suppress_seconds=900)
-            incident = store.upsert(service_candidate("cart", "auto_cart_error_rate"))
+            incident = store.upsert(service_candidate("cart", "auto_cart_error_rate").model_copy(update={"severity": "SEV1"}))
             suppressed = store.suppress_active_root_notifications([incident])
             notifications = store.pending_notifications_for([incident])
             status = store._connection.execute("SELECT status FROM notification_outbox WHERE incident_id = ?", (incident.incident_id,)).fetchone()

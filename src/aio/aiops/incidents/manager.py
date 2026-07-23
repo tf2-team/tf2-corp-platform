@@ -13,8 +13,9 @@ logger = logging.getLogger(__name__)
 
 
 class IncidentManager:
-    def __init__(self, environment: str):
+    def __init__(self, environment: str, topology_graph=None):
         self.environment = environment
+        self.topology_graph = topology_graph
         self._incidents_by_fingerprint: dict[str, Incident] = {}
 
     def upsert(self, candidate: CandidateEvent) -> Incident:
@@ -59,7 +60,7 @@ class IncidentManager:
         return incident
 
     def fingerprint(self, candidate: CandidateEvent) -> str:
-        return incident_fingerprint(self.environment, candidate)
+        return incident_fingerprint(self.environment, candidate, self.topology_graph)
 
 
 def _seen_at(candidate: CandidateEvent) -> str:

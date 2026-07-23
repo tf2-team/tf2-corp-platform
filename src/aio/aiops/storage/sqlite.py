@@ -17,12 +17,23 @@ logger = logging.getLogger(__name__)
 
 
 class SQLiteIncidentStore:
-    def __init__(self, path: Path, environment: str, runbooks_dir: Path | None = None, notification_cooldown_seconds: int = 900, slo_dedup_seconds: int = 300):
+    def __init__(
+        self,
+        path: Path,
+        environment: str,
+        runbooks_dir: Path | None = None,
+        notification_cooldown_seconds: int = 900,
+        slo_dedup_seconds: int = 300,
+        incident_count_reset_seconds: int = 900,
+        topology_graph=None,
+    ):
         self.path = path
         self.environment = environment
         self.runbooks_dir = runbooks_dir or _default_runbooks_dir()
         self.notification_cooldown_seconds = notification_cooldown_seconds
         self.slo_dedup_seconds = slo_dedup_seconds
+        self.incident_count_reset_seconds = incident_count_reset_seconds
+        self.topology_graph = topology_graph
         self._last_enqueued_incident_ids: set[str] = set()
         self.path.parent.mkdir(parents=True, exist_ok=True)
         self._connection = sqlite3.connect(self.path)
@@ -66,18 +77,6 @@ class SQLiteIncidentStore:
         )
         self._connection.execute(
             """
-            CREATE TABLE IF NOT EXISTS notification_attempts (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                incident_id TEXT NOT NULL,
-                status TEXT NOT NULL,
-                attempt_number INTEGER NOT NULL,
-                error TEXT,
-                created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
-            )
-            """
-        )
-        self._connection.execute(
-            """
             CREATE TABLE IF NOT EXISTS notification_service_cooldowns (
                 service TEXT PRIMARY KEY,
                 cooldown_until TEXT NOT NULL,
@@ -99,7 +98,7 @@ class SQLiteIncidentStore:
 
     def upsert(self, candidate: CandidateEvent) -> Incident:
         self._validate_runbook(candidate.runbook_id)
-        fingerprint = incident_fingerprint(self.environment, candidate)
+        fingerprint = incident_fingerprint(self.environment, candidate, self.topology_graph)
         seen_at = _seen_at(candidate)
         row = self._connection.execute(
             "SELECT incident_json FROM incidents WHERE fingerprint = ?",
@@ -122,10 +121,15 @@ class SQLiteIncidentStore:
             )
         else:
             incident = Incident.model_validate_json(row[0])
-            incident.occurrence_count += 1
-            incident.events.append(candidate)
+            if self._count_window_expired(incident, candidate):
+                incident.occurrence_count = 1
+                incident.events = [candidate]
+                incident.severity = candidate.severity
+            else:
+                incident.occurrence_count += 1
+                incident.events.append(candidate)
+                incident.severity = min(incident.severity, candidate.severity)
             incident.last_seen = seen_at
-            incident.severity = min(incident.severity, candidate.severity)
 
         now = datetime.now(UTC)
         slo_notification = is_slo_notification(candidate)
@@ -179,7 +183,6 @@ class SQLiteIncidentStore:
                     if not slo_notification:
                         self._set_service_notification_cooldown(incident.service, incident.cooldown_until or _now())
                     self._last_enqueued_incident_ids.add(incident.incident_id)
-                    self.record_notification_history(notification)
                     logger.info(
                         "AIOPS_NOTIFY_ENQUEUED_READY incident=%s service=%s severity=%s runbook=%s status=pending",
                         incident.incident_id,
@@ -210,6 +213,13 @@ class SQLiteIncidentStore:
             return True
         return datetime.fromisoformat(incident.cooldown_until) <= now
 
+    def _count_window_expired(self, incident: Incident, candidate: CandidateEvent) -> bool:
+        if self.incident_count_reset_seconds <= 0 or not incident.events:
+            return True
+        first_seen = _candidate_seen_at(incident.events[0])
+        current_seen = _candidate_seen_at(candidate)
+        return current_seen - first_seen >= timedelta(seconds=self.incident_count_reset_seconds)
+
     def _can_enqueue_notification(self, incident_id: str) -> bool:
         row = self._connection.execute(
             "SELECT status FROM notification_outbox WHERE incident_id = ?",
@@ -237,11 +247,6 @@ class SQLiteIncidentStore:
             """,
             (service, cooldown_until, _now()),
         )
-
-    def record_notification_history(self, notification: NotificationMessage) -> None:
-        path = self.path.parent / "notification_history.jsonl"
-        with path.open("a", encoding="utf-8") as handle:
-            handle.write(notification.model_dump_json() + "\n")
 
     def register_active_root_cause(self, root_service: str, affected_services: set[str], suppress_seconds: int = 900) -> None:
         now = datetime.now(UTC)
@@ -289,7 +294,7 @@ class SQLiteIncidentStore:
         rows = [
             (incident, parent)
             for incident in incidents
-            if incident.severity != "SEV1" and incident.service not in exempt_services
+            if incident.service not in exempt_services
             for parent in [self._suppression_parent(incident.service)]
             if parent is not None
         ]
@@ -329,7 +334,7 @@ class SQLiteIncidentStore:
         return {
             incident.incident_id
             for incident in incidents
-            if incident.severity != "SEV1" and self._suppression_parent(incident.service) is not None
+            if self._suppression_parent(incident.service) is not None
         }
 
     def _suppression_parent(self, service: str) -> str | None:
@@ -368,16 +373,6 @@ class SQLiteIncidentStore:
                 "UPDATE notification_outbox SET status = 'sent', attempt_count = ?, updated_at = ? WHERE incident_id = ?",
                 (attempt_count, _now(), incident_id),
             )
-            self._record_notification_attempt(incident_id, "sent", attempt_count)
-
-    def _record_notification_attempt(self, incident_id: str, status: str, attempt_number: int, error: str | None = None) -> None:
-        self._connection.execute(
-            """
-            INSERT INTO notification_attempts (incident_id, status, attempt_number, error)
-            VALUES (?, ?, ?, ?)
-            """,
-            (incident_id, status, attempt_number, error[:512] if error else None),
-        )
 
     def mark_notification_failed(self, incident_id: str, error: str) -> None:
         row = self._connection.execute(
@@ -397,7 +392,6 @@ class SQLiteIncidentStore:
                 """,
                 (attempt_count, retry_at.isoformat(), error[:512], _now(), incident_id),
             )
-            self._record_notification_attempt(incident_id, "failed", attempt_count, error)
 
     def close(self) -> None:
         self._connection.close()
@@ -419,9 +413,13 @@ class SQLiteIncidentStore:
 
 
 def _seen_at(candidate: CandidateEvent) -> str:
+    return _candidate_seen_at(candidate).isoformat()
+
+
+def _candidate_seen_at(candidate: CandidateEvent) -> datetime:
     if candidate.timestamp:
-        return datetime.fromtimestamp(candidate.timestamp, UTC).isoformat()
-    return _now()
+        return datetime.fromtimestamp(candidate.timestamp, UTC)
+    return datetime.now(UTC)
 
 
 def _now() -> str:

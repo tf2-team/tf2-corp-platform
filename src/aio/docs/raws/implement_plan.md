@@ -402,8 +402,7 @@ Create migrations for:
 | `incidents` | ID, fingerprint, flow, service, likely dependency, state, severity, confidence, first/last seen, occurrence count, config revision |
 | `incident_events` | Event ID, incident ID, transition, reason, source event, timestamp, evidence digest |
 | `observations` | Signal ID, value, unit, labels digest, observed/query times, window, quality, source revision |
-| `notification_outbox` | Notification ID, incident ID, route, payload digest, next attempt, attempt count, terminal status |
-| `notification_attempts` | Attempt result, HTTP status/error, timestamp, latency |
+| `notification_outbox` | Notification ID, incident ID, route, payload digest, next attempt, attempt count, last error, terminal status |
 | `actions` | Action ID, incident ID, type, exact target, mode, state, policy result, attempt count, verification/rollback references |
 | `approvals` | Action ID, approver identity, reason, issued/expiry time, scope digest |
 | `audit_events` | Append-only actor, transition/action, reason, input/output digest, revision, result |

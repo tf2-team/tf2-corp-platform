@@ -33,6 +33,7 @@ from aiops.remediation import (
 )
 from aiops.schemas import GrafanaNormalizedEvent, GrafanaWebhookEvent, HealthResponse, Incident, PipelineResult, PipelineRunRequest
 from aiops.storage import SQLiteIncidentStore
+from aiops.topology import TopologyGraph
 
 
 logger = logging.getLogger(__name__)
@@ -75,11 +76,14 @@ def run_live_pipeline(settings: Settings | None = None) -> PipelineResult:
 def run_pipeline_with_collector(collector, settings: Settings, runtime_config, metric_series=None) -> PipelineResult:
     started = time.monotonic()
     hyperparameters = load_hyperparameters(settings.hyperparameters_path)
+    topology_graph = TopologyGraph(runtime_config)
     store = SQLiteIncidentStore(
         path=settings.state_store_path,
         environment=settings.environment,
         notification_cooldown_seconds=int(hyperparameters["incident"]["notification_cooldown_seconds"]),
         slo_dedup_seconds=int(hyperparameters["incident"]["slo_dedup_seconds"]),
+        incident_count_reset_seconds=int(hyperparameters["incident"]["count_reset_seconds"]),
+        topology_graph=topology_graph,
     )
     pipeline = AiopsPipeline(
         collector=collector,

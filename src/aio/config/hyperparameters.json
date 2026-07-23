@@ -1,6 +1,7 @@
 {
   "incident": {
-    "notification_cooldown_seconds": 900,
+    "count_reset_seconds": 300,
+    "notification_cooldown_seconds": 300,
     "slo_dedup_seconds": 300
   },
   "correlation": {
@@ -8,7 +9,7 @@
     "confidence_threshold": 0.5,
     "topology_max_hops": 1,
     "suppress_min_root_score": 0.8,
-    "suppress_window_seconds": 900,
+    "suppress_window_seconds": 300,
     "weights": {
       "verified_primary_signal": 0.25,
       "temporal_precedence": 0.2,

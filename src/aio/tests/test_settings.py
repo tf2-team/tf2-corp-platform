@@ -96,8 +96,9 @@ class SettingsTest(unittest.TestCase):
         self.assertEqual(config["rca"]["graph"]["damping"], 0.85)
         self.assertEqual(config["rca"]["graph"]["pagerank_weight"], 0.7)
         self.assertEqual(config["rca"]["graph"]["timestamp_weight"], 0.3)
-        self.assertEqual(config["correlation"]["suppress_window_seconds"], 900)
-        self.assertEqual(config["incident"]["notification_cooldown_seconds"], 900)
+        self.assertEqual(config["correlation"]["suppress_window_seconds"], 300)
+        self.assertEqual(config["incident"]["count_reset_seconds"], 300)
+        self.assertEqual(config["incident"]["notification_cooldown_seconds"], 300)
         self.assertEqual(config["incident"]["slo_dedup_seconds"], 300)
         self.assertNotIn("direct_slo_suppress_seconds", config["incident"])
         self.assertEqual(

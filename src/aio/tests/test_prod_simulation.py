@@ -11,7 +11,7 @@ from aiops.normalization import load_normalization_schema
 from aiops.pipeline import AiopsPipeline
 from aiops.qualification import load_qualification_schema
 from aiops.remediation import PolicyEngine
-from aiops.schemas import MetricPoint, MetricSeries, NotificationMessage, Observation, SignalQuality
+from aiops.schemas import MetricPoint, MetricSeries, Observation, SignalQuality
 from aiops.storage import SQLiteIncidentStore
 
 
@@ -164,14 +164,11 @@ class ProdSimulationTest(unittest.TestCase):
                 "SELECT (SELECT COUNT(*) FROM incidents), (SELECT COUNT(*) FROM notification_outbox)"
             ).fetchone()
             second.store.close()
-            history_rows = (root / "notification_history.jsonl").read_text(encoding="utf-8").splitlines()
 
         self.assertEqual(result.incidents[0].occurrence_count, 2)
         self.assertEqual(len(sender.sent), 1)
         self.assertEqual(result.notifications, [])
         self.assertEqual(counts, (1, 1))
-        self.assertEqual(len(history_rows), 1)
-        self.assertTrue(all(NotificationMessage.model_validate_json(row) for row in history_rows))
 
 
 if __name__ == "__main__":

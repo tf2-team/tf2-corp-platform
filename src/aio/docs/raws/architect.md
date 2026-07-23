@@ -562,7 +562,7 @@ No live-action approval endpoint is exposed in the baseline. If a live action is
 ### 10.1 Baseline persistence
 
 - SQLite in WAL mode on a small encrypted persistent volume.
-- Tables: `incidents`, `incident_events`, `observations`, `notification_attempts`, `actions`, `approvals`, `audit_events`, and `scheduler_checkpoints`.
+- Tables: `incidents`, `incident_events`, `observations`, `notification_outbox`, `actions`, `approvals`, `audit_events`, and `scheduler_checkpoints`.
 - Keep derived observations needed for current incidents and evaluation; Prometheus remains the time-series source of truth.
 - Emit the same lifecycle events as structured JSON logs to OpenSearch for an independent operational trail.
 - Back up/export redacted incident bundles before the weekly Ops Review and final readout.

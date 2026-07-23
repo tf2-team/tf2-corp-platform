@@ -118,8 +118,9 @@ class RecoveredDependencyDetector(Detector):
 
 
 class MultiServiceDetector(Detector):
-    def __init__(self, cart_severity: str = "SEV2"):
+    def __init__(self, cart_severity: str = "SEV2", cart_signal_id: str = "cart_error_rate_5m"):
         self.cart_severity = cart_severity
+        self.cart_signal_id = cart_signal_id
 
     def evaluate(self, features: list[Feature]) -> list[CandidateEvent]:
         return [
@@ -129,7 +130,7 @@ class MultiServiceDetector(Detector):
                 flow="checkout",
                 service="cart",
                 severity=self.cart_severity,
-                signal_id="cart_error_rate_5m",
+                signal_id=self.cart_signal_id,
                 value=0.2,
                 unit="ratio",
                 window="5m",
@@ -428,7 +429,7 @@ class RuntimePipelineTest(unittest.TestCase):
         self.assertNotIn("AIOPS_RCA_SYNTHETIC_CANDIDATE", text)
         self.assertIn("AIOPS_DEDUP_RESULT input_candidates=0 incidents=0", text)
 
-    def test_pipeline_keeps_slo_notification_independent_from_rca(self):
+    def test_pipeline_suppresses_non_slo_sev1_notification_by_rca(self):
         settings = Settings()
         with TemporaryDirectory() as tmp:
             store = SQLiteIncidentStore(Path(tmp) / "aiops.sqlite3", environment=settings.environment)
@@ -469,9 +470,7 @@ class RuntimePipelineTest(unittest.TestCase):
             store.close()
 
         self.assertEqual([incident.service for incident in result.incidents], ["checkout"])
-        self.assertEqual([message.service for message in result.notifications], ["checkout"])
-        checkout = result.notifications[0]
-        self.assertEqual(checkout.summary, "threshold_breached on checkout_bad_ratio_24h")
+        self.assertEqual(result.notifications, [])
 
     def test_pipeline_flushes_notification_outbox_to_sender(self):
         settings = Settings()
@@ -512,15 +511,10 @@ class RuntimePipelineTest(unittest.TestCase):
                 "SELECT status, attempt_count FROM notification_outbox WHERE incident_id = ?",
                 (result.incidents[0].incident_id,),
             ).fetchone()
-            attempt_row = store._connection.execute(
-                "SELECT status, attempt_number FROM notification_attempts WHERE incident_id = ?",
-                (result.incidents[0].incident_id,),
-            ).fetchone()
             store.close()
 
         self.assertEqual([message.incident_id for message in sender.sent], [result.incidents[0].incident_id])
         self.assertEqual(outbox_row, ("sent", 1))
-        self.assertEqual(attempt_row, ("sent", 1))
 
     def test_pipeline_logs_notification_ready_after_dedup(self):
         settings = Settings()
@@ -604,16 +598,11 @@ class RuntimePipelineTest(unittest.TestCase):
                 "SELECT status, attempt_count, last_error FROM notification_outbox WHERE incident_id = ?",
                 (result.incidents[0].incident_id,),
             ).fetchone()
-            attempt_row = store._connection.execute(
-                "SELECT status, attempt_number, error FROM notification_attempts WHERE incident_id = ?",
-                (result.incidents[0].incident_id,),
-            ).fetchone()
             store.close()
 
         self.assertEqual(outbox_row, ("retry", 1, "grafana webhook down"))
-        self.assertEqual(attempt_row, ("failed", 1, "grafana webhook down"))
 
-    def test_slo_notification_failure_uses_common_retry_and_history(self):
+    def test_slo_notification_failure_uses_common_retry_outbox(self):
         settings = Settings()
         with TemporaryDirectory() as tmp:
             root = Path(tmp)
@@ -642,14 +631,12 @@ class RuntimePipelineTest(unittest.TestCase):
             with self.assertLogs("aiops.pipeline.runtime", level="WARNING") as logs:
                 result = pipeline.run_once()
             counts = store._connection.execute(
-                "SELECT (SELECT COUNT(*) FROM incidents), (SELECT COUNT(*) FROM notification_outbox), (SELECT COUNT(*) FROM notification_attempts)"
+                "SELECT (SELECT COUNT(*) FROM incidents), (SELECT COUNT(*) FROM notification_outbox)"
             ).fetchone()
-            history_rows = (root / "notification_history.jsonl").read_text(encoding="utf-8").splitlines()
             store.close()
 
         self.assertEqual(len(result.notifications), 1)
-        self.assertEqual(counts, (1, 1, 1))
-        self.assertEqual(len(history_rows), 1)
+        self.assertEqual(counts, (1, 1))
         self.assertIn("AIOPS_BLOCK notify_failed", " ".join(logs.output))
 
     def test_pipeline_accepts_current_cdo_signal_shape_before_detection(self):
@@ -943,7 +930,7 @@ class RuntimePipelineTest(unittest.TestCase):
 
         self.assertIn("cart", {message.service for message in result.notifications})
 
-    def test_pipeline_does_not_suppress_sev1_caller_notifications(self):
+    def test_pipeline_suppresses_sev1_non_slo_caller_notifications(self):
         settings = Settings()
         with TemporaryDirectory() as tmp:
             store = SQLiteIncidentStore(Path(tmp) / "aiops.sqlite3", environment=settings.environment)
@@ -951,7 +938,7 @@ class RuntimePipelineTest(unittest.TestCase):
             kwargs["correlation_hyperparameters"] = {**kwargs["correlation_hyperparameters"], "topology_max_hops": 2}
             pipeline = AiopsPipeline(
                 collector=StaticCollector([]),
-                detectors=[MultiServiceDetector(cart_severity="SEV1")],
+                detectors=[MultiServiceDetector(cart_severity="SEV1", cart_signal_id="cart_request_count_5m")],
                 store=store,
                 policy=policy(settings),
                 **kwargs,
@@ -963,7 +950,7 @@ class RuntimePipelineTest(unittest.TestCase):
             result = pipeline.run_once()
             store.close()
 
-        self.assertEqual({message.service for message in result.notifications}, {"checkout", "cart", "valkey-cart"})
+        self.assertEqual({message.service for message in result.notifications}, {"valkey-cart"})
 
     def test_verified_remediation_is_added_to_incident_history(self):
         settings = Settings()
