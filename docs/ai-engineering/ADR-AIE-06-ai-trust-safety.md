@@ -1,14 +1,14 @@
 # ADR-AIE-06: Quyết định Kiến trúc Trust & Safety cho AI Assistant
 
 > Status: Proposed, pending mentor sign-off  
-> Owner:  Trần Quang Minh
-> Reviewers: AIO Mentor / TF Leader  
-> Last updated: 2026-07-20  
+> Owner:  Ngô Thanh Tuấn
+> Reviewers: Trần Quang Minh, Lê Duy Khánh, Nguyễn Hoàng Huy  
+> Last updated: 2026-07-23  
 > Related docs: `docs/aiops/mandate/MANDATE-06-ai-trust-safety.md`, `AI_MANDATE_6_EVIDENCE.md`
 
 ## 1. Tóm tắt (Summary)
 
-Đối với Mandate 06, triển khai kiến trúc "Trust & Safety" nhiều lớp cho tính năng Ask AI (Trợ lý Đánh giá Sản phẩm). Kiến trúc này đảm bảo rằng AI chạy trên một model thực, tuân thủ nghiêm ngặt các đánh giá nguồn (Tính trung thực - Faithfulness), chặn các cuộc tấn công prompt injection, che giấu thông tin định danh cá nhân (PII), và có cơ chế dự phòng (fallback) an toàn khi LLM hoặc mạng gặp sự cố.
+Đối với Mandate 06, triển khai kiến trúc "Trust & Safety" nhiều lớp cho tính năng Ask AI (Trợ lý Đánh giá Sản phẩm), Chatbot Shopping Copilot (Tìm kiếm sản phẩm, RAG, thêm giỏ hàng có kiểm soát). Kiến trúc này đảm bảo rằng AI chạy trên một model thực, tuân thủ nghiêm ngặt các đánh giá nguồn (Tính trung thực - Faithfulness), chặn các cuộc tấn công prompt injection, che giấu thông tin định danh cá nhân (PII), và có cơ chế dự phòng (fallback) an toàn khi LLM hoặc mạng gặp sự cố.
 
 ADR này phê duyệt việc lựa chọn model, pipeline guardrail, logic xác thực grounding, cấu hình timeout của Envoy, và bộ kiểm thử (eval) cần thiết cho Mandate 06.
 
@@ -29,75 +29,82 @@ Việc triển khai hiện tại cung cấp các thành phần sau để thực 
 
 | Khu vực (Area) | File | Mục đích (Purpose) |
 |---|---|---|
-| AI Server | `src/product-reviews/product_reviews_server.py` | Điều phối LLM tool-calling, triển khai xử lý ngoại lệ (exception) và trả về các payload dự phòng an toàn. |
-| Grounding Pipeline | `src/product-reviews/grounding.py` | Ép LLM trích dẫn nguồn thông qua `instructor` và xác thực nghiêm ngặt các luận điểm với văn bản gốc. |
-| Guardrails | `src/product-reviews/guardrails.py` | Triển khai `presidio-analyzer` để che giấu PII và chặn các nỗ lực prompt injection trước khi chúng đến model. |
-| Envoy Proxy | `src/frontend-proxy/envoy.tmpl.yaml` | Kéo dài timeout cho route `/api/product-ask-ai-assistant` lên 60s để hỗ trợ việc thực thi LLM nhiều lượt (multi-turn). |
-| Integration Tests | `src/product-reviews/tests/test_integration.py` | Cung cấp bộ kiểm thử tự động cho tính trung thực (faithfulness), che giấu PII, và tỷ lệ chặn tấn công. |
+| Product Review Assistant | `src/product-reviews/product_reviews_server.py` | Chatbot hỏi đáp về review sản phẩm. |
+| Shopping Copilot | `src/shopping-copilot/shopping_copilot_server.py` | Chatbot tìm kiếm sản phẩm, thêm sản phẩm vào giỏ hàng và điều phối các action liên quan. |
+| Grounding Pipeline | `src/ai-common/techx_ai_common/grounding.py` | Ép LLM trích dẫn nguồn thông qua `instructor` và xác thực nghiêm ngặt các luận điểm với văn bản gốc. |
+| Guardrails | `src/ai-common/techx_ai_common/guardrails.py` | Triển khai phòng thủ nhiều lớp, lớp 1 chặn rule-based, lớp 2 chặn prompt injection bằng LLM Guard, lớp 3 phát hiện và ngăn chặn PII. |
+| Retrieval | `src/ai-common/techx_ai_common/retrieval.py` | Thực hiện truy xuất dữ liệu bằng Hybrid Search (Similarity Cosine Search + BM25 + RRF). |
+| Rate Limit | `src/ai-common/techx_ai_common/rate_limiter.py` | Thực hiện rate limiting dựa trên hành vi của người dùng, giới hạn tốc độ truy cập và sử dụng tài nguyên LLM để đảm bảo tính ổn định và công bằng của hệ thống. |
+| Eval Tests | `src/product-reviews/eval/run_eval.py`, `src/shopping-copilot/eval/run_eval.py` | Cung cấp bộ kiểm thử tự động cho tính trung thực (faithfulness), che giấu PII, và tỷ lệ chặn tấn công. |
 
 ## 4. Quyết định (Decision)
 
-Áp dụng kiến trúc xác thực nhiều lớp hoạt động bên trong service `product-reviews`, đóng vai trò như một proxy nghiêm ngặt nằm giữa yêu cầu của người dùng, cơ sở dữ liệu và nhà cung cấp LLM bên ngoài. Việc này cho phép chúng ta kiểm soát chặt chẽ mọi dữ liệu vào và ra, từ đó ngăn chặn kịp thời các truy vấn rác và phản hồi không hợp lệ trước khi chúng ảnh hưởng đến UI.
+Áp dụng kiến trúc xác thực và bảo vệ nhiều lớp hoạt động bên trong service `product-reviews`, `shopping-copilot`, đóng vai trò như một proxy nghiêm ngặt nằm giữa yêu cầu của người dùng, cơ sở dữ liệu và nhà cung cấp LLM bên ngoài. Việc này cho phép chúng ta kiểm soát chặt chẽ mọi dữ liệu vào và ra, từ đó ngăn chặn kịp thời các truy vấn rác và phản hồi không hợp lệ trước khi chúng ảnh hưởng đến UI.
 
 ### Sơ đồ Kiến trúc (Architecture Diagram)
 
 ```mermaid
 flowchart TB
-    User([User]) -->|Send request| UI[Frontend / UI]
+    User([User]) -->|Gửi yêu cầu| UI[Frontend / UI]
 
     subgraph Chatbots [Shopping Chatbots]
-        PRA[Product Review Assistant<br/>Grounded review summary & Q&A]
-        SC[Shopping Copilot<br/>Multi-turn shopping]
+        PRA[Product Review Assistant<br/>gRPC - Tóm tắt đánh giá & Q&A]
+        SC[Shopping Copilot<br/>gRPC - Điều phối LangGraph đơn lượt]
     end
 
-    UI -->|Ask Reviews| PRA
-    UI -->|Start Shopping| SC
+    UI -->|Hỏi đánh giá sản phẩm| PRA
+    UI -->|Tìm kiếm & Ý định mua sắm| SC
+    UI -->|Xác nhận thêm giỏ hàng| SC
 
-    subgraph Ecom [E-commerce Services]
-        Catalog[Product Catalog Service]
-        Reviews[(Review Data)]
-        Cart[Cart Service]
+    subgraph Ecom [Dịch vụ E-commerce & Dữ liệu]
+        Catalog[Product Catalog Service<br/>gRPC SearchProducts]
+        Reviews[(Postgres DB<br/>Dữ liệu đánh giá)]
+        Cart[Cart Service<br/>gRPC AddItem]
     end
 
-    subgraph Guardrail [Guardrail Layer]
-        LLMGuard[LLM GUARD<br/>Scan Prompt]
-        Presidio[Presidio<br/>Detect PII]
+    subgraph Guardrail [Guardrail Layer - techx_ai_common]
+        LLMGuard[LLM Guard<br/>Lọc Prompt Injection]
+        Presidio[Presidio / Regex<br/>Phát hiện & Lọc PII]
+        ToolCheck[Tool Call Validation & Output Scan]
     end
 
-    subgraph Cache [Cache Layer]
-        Valkey[(Valkey)]
-    end
-
-    subgraph Memory [Memory Layer]
-        Mem0[(mem0)]
+    subgraph Cache [Cache & Token Storage]
+        Valkey[(Valkey Cache<br/>Rate Limit & Pending Cart Tokens)]
     end
 
     subgraph LLM [LLM Providers]
-        Groq[Groq Cloud]
+        OpenAI[OpenAI / Mock OpenAI API]
         Bedrock[AWS Bedrock]
     end
 
-    PRA & SC <-->|Check valid in/output| Guardrail
-    PRA & SC -.->|Check cache| Cache
-    SC -.->|Load history| Memory
-    PRA & SC -->|Invoke LLM| LLM
+    PRA <-->|Kiểm tra Input / Tool / Output| Guardrail
+    SC <-->|Kiểm tra Input / Output| Guardrail
 
-    SC -.->|Search Products| Catalog
-    PRA -.->|Read Reviews| Reviews
-    SC -.->|Confirm/Add| Cart
+    Guardrail -.->|Kiểm tra rate limit| Valkey
+    SC -.->|Lưu pending cart token| Valkey
+
+    PRA -->|Gọi Tool / Truy vấn LLM| LLM
+    SC -->|Phân tích ý định / Q&A| LLM
+
+    PRA -.->|Truy vấn SQL trực tiếp| Reviews
+    SC -.->|1. Tìm sản phẩm| Catalog
+    SC -.->|2. Lấy đánh giá qua gRPC| PRA
+    SC -.->|3. Thêm giỏ hàng khi Confirm| Cart
 ```
 
 
 ![Chatbot Architecture](../ai-engineering/chatbot-c4-container.png)
 
-*Sơ đồ trên minh họa kiến trúc Container C4 cho Shopping Chatbots, mô tả chi tiết các luồng dữ liệu tương tác giữa người dùng cuối, các service e-commerce nội bộ, bộ lọc Guardrail và các nhà cung cấp LLM bên ngoài (AWS Bedrock, Groq).*
+*Sơ đồ trên minh họa kiến trúc Container C4 cho Shopping Chatbots, mô tả chi tiết các luồng dữ liệu tương tác giữa người dùng cuối, các service e-commerce nội bộ, bộ lọc Guardrail và các nhà cung cấp LLM bên ngoài (AWS Bedrock, OpenAI/Groq API).*
 
 ## 5. Thiết kế Chi tiết (Detailed Design)
 
 ### 5.1. Lựa chọn Model & Cấu hình (Model Selection & Configuration)
-- **Model:** Groq API (sử dụng model `openai/gpt-oss-20b` hoặc tương tự được cấu hình động thông qua biến môi trường).
-- **Lý do:** Mandate 06 nghiêm cấm việc sử dụng mock model. Một API LLM thực sự cung cấp độ trễ (latency), số lượng token giới hạn, và giới hạn rate limit (chẳng hạn như HTTP 429 Too Many Requests) thực tế. Chỉ khi đối mặt với những ràng buộc vận hành thực tế này, chúng ta mới có thể xây dựng và đánh giá chính xác độ tin cậy cũng như cơ chế dự phòng của hệ thống.
-- **Tiêu thụ Token:** Sử dụng mode JSON sẽ làm tăng khoảng 10-15% tổng token đầu ra do overhead định dạng, nhưng hoàn toàn xứng đáng với mức độ an toàn dữ liệu mà nó mang lại.
+- **Model & Cấu hình Động:** Hệ thống hỗ trợ chuyển đổi linh hoạt giữa các nhà cung cấp LLM thông qua biến môi trường `LLM_PROVIDER` (`groq`/`openai` hoặc `bedrock`):
+  - **OpenAI-compatible Interface (Groq API / OpenAI API):** Cấu hình qua các biến môi trường `LLM_BASE_URL` (ví dụ `https://api.groq.com/openai/v1`), `LLM_MODEL` (ví dụ `openai/gpt-oss-20b`) và `OPENAI_API_KEY`.
+  - **AWS Bedrock Provider:** Kích hoạt khi `LLM_PROVIDER=bedrock`, cấu hình thông qua `BEDROCK_MODEL_ID` (sử dụng dòng model Amazon Nova như `amazon.nova-lite-v1:0`)
+- **Lý do:** Giúp hệ thống tránh bị phụ thuộc vào một nhà cung cấp đơn lẻ, đồng thời đảm bảo kiểm thử chính xác với các ràng buộc vận hành thực tế như độ trễ (latency), giới hạn rate limit (chẳng hạn như HTTP 429) và khả năng hỗ trợ tool calling.
+- **Tiêu thụ Token:** Sử dụng định dạng JSON làm tăng khoảng 10-15% tổng token đầu ra do overhead định dạng, nhưng đảm bảo dữ liệu đầu ra được kiểm soát và xác thực nghiêm ngặt.
 
 ### 5.2. Guardrail & Che giấu PII (Input/Output Safety)
 Lớp guardrail hoạt động như một bức tường lửa, chặn yêu cầu trước khi nó đi đến logic điều phối LLM hoặc truy cập cơ sở dữ liệu. Nhờ vậy, tiết kiệm được lượng token vô ích từ các luồng tấn công.
@@ -112,11 +119,15 @@ Lớp guardrail hoạt động như một bức tường lửa, chặn yêu cầ
 - **Logic Xác thực (`validate_grounded_summary`):** Mỗi `claim` sinh ra không lập tức được hiển thị. Chúng phải đi qua hàm đối chiếu chéo (cross-reference) với văn bản gốc. Quá trình xác thực này sử dụng cả so khớp từ khóa (keyword overlapping) và trích xuất thực thể. Đặc biệt, bất kỳ con số nào (thời lượng pin, mức giá, năm) xuất hiện trong `claim` đều phải nằm trong bài đánh giá gốc.
 - **Từ chối trả lời (`ABSTAINED`):** Nếu một claim vi phạm các quy tắc trên (hallucination), nó sẽ âm thầm bị loại bỏ (filtered out). Nếu không có claim nào sống sót sau quá trình xác thực (ví dụ người dùng hỏi "Giá bao nhiêu" trong khi review chỉ nói về "Chất lượng"), AI sẽ tự động từ chối trả lời ("Không có thông tin") thay vì tự sáng tác ra một đáp án sai lệch.
 
-### 5.4. Xử lý Fallback và Timeout (Reliability)
-Trong kiến trúc vi dịch vụ, việc gọi các API bên ngoài không bao giờ an toàn tuyệt đối. Mạng có thể đứt, API có thể sập, hoặc quá tải.
+### 5.4. Xử lý Fallback, Timeout và Rate Limit (Reliability)
+Trong kiến trúc vi dịch vụ, việc gọi các API bên ngoài không bao giờ an toàn tuyệt đối. Mạng có thể đứt, API có thể sập, hoặc bị quá tải.
 
-- **Envoy Proxy:** Mức timeout mặc định 15 giây của Envoy là quá ngắn cho việc gọi tool nhiều lượt, đặc biệt với các mô hình suy luận lớn. Thiết lập tường minh timeout cho `/api/product-ask-ai-assistant` lên `60s` trong file `envoy.tmpl.yaml` đảm bảo LLM có đủ thời gian hoàn thành tác vụ.
-- **Try/Except ở Lớp Service:** Tất cả các lần gọi LLM bên trong `get_ai_assistant_response` đều được bọc trong một khối `try/except`. Khối này bắt triệt để các lỗi `TimeoutError`, `APIConnectionError`, và `RateLimitError` từ phía provider. Khi có lỗi xảy ra, thay vì để traceback ném thẳng ra phía gateway, hệ thống bẫy lỗi và trả về một payload JSON `FALLBACK` tĩnh cực kỳ an toàn. Giao diện (UI) sử dụng payload này để hiển thị một thông báo lỗi thân thiện mà không phá vỡ layout hay treo toàn bộ ứng dụng.
+- **Rate Limiting bằng Valkey (`rate_limiter.py`):** Triển khai cơ chế kiểm soát tần suất truy cập hai lớp dựa trên Valkey thông qua hàm `check_rate_limit` trong [rate_limiter.py]
+  - **Kiểm tra thời gian chờ Cooldown (2 giây):** Yêu cầu người dùng phải đợi tối thiểu 2 giây giữa hai lần gửi câu hỏi liên tiếp (`rate_limit:cooldown:{client_id}`).
+  - **Cửa sổ trượt Sliding Window (10 yêu cầu/phút):** Giới hạn tối đa 10 yêu cầu trong khoảng thời gian 60 giây cho mỗi người dùng (`rate_limit:window:{client_id}`).
+  - **Cơ chế dự phòng Graceful Fallback:** Nếu hệ thống Valkey gặp sự cố hoặc gián đoạn kết nối, hàm kiểm tra sẽ tự động trả về trạng thái cho phép để tránh làm gián đoạn trải nghiệm của người dùng.
+- **Cấu hình Timeout điều phối:** Đặt ngưỡng thời gian chờ phù hợp cho các điểm gọi LLM (ví dụ 20 giây cho các gọi cụ thể và 15 giây cho luồng điều phối LangGraph). Điều này đảm bảo LLM không làm nghẽn tài nguyên của Gateway khi gặp sự cố phản hồi chậm.
+- **Xử lý ngoại lệ Try/Except ở lớp Service:** Tất cả các truy vấn tới LLM đều được bọc trong khối `try/except` để bắt các lỗi `TimeoutError`, `APIConnectionError` và `RateLimitError`. Thay vì để lộ traceback lỗi ra phía ngoài, hệ thống bẫy lỗi và trả về phản hồi JSON `FALLBACK` hoặc `BLOCKED` an toàn. Giao diện người dùng sử dụng phản hồi này để hiển thị thông báo thân thiện mà không gây lỗi vỡ giao diện.
 
 ## 6. Các Tùy chọn Đã Cân nhắc (Options Considered)
 
@@ -150,16 +161,31 @@ Trước khi ADR này được đánh dấu là "Accepted", các bằng chứng 
 3. **Eval PII:** Cung cấp ảnh chụp Jaeger traces chứng minh rằng email và số điện thoại đã được chuyển hóa thành `[REDACTED]` hoàn toàn trên đường truyền.
 4. **Bằng chứng Fallback:** Cung cấp log hệ thống và ảnh chụp màn hình hiển thị UI fallback an toàn khi model bị hệ thống test cố tình bóp băng thông (timeout) hoặc ép vượt quá giới hạn rate limit.
 
-Lệnh dùng để chạy toàn bộ bộ kiểm thử (eval suite) phục vụ Mandate 06:
+Lệnh dùng để chạy toàn bộ các bài kiểm thử đơn vị, kiểm thử tích hợp (Unit & Integration Tests) và bộ kiểm thử trực tiếp (Live Eval Suite) cho cả Product Review Assistant và Shopping Copilot:
+
+**1. Chạy Unit & Integration Tests (pytest):**
 ```bash
-pytest src/product-reviews/tests/test_integration.py -v
+# Product Review Assistant tests
+pytest src/product-reviews/tests/ -v
+
+# Shopping Copilot tests
+pytest src/shopping-copilot/tests/ -v
+```
+
+**. Chạy Live Eval Suite (Live Service Evals):**
+```bash
+# Product Review Assistant live evals
+python src/product-reviews/evals/run_eval.py
+
+# Shopping Copilot live evals
+python src/shopping-copilot/evals/run_eval.py
 ```
 
 ## 9. Kế hoạch Triển khai (Rollout Plan)
 
-- **Giai đoạn 1 (Phát triển):** Triển khai module grounding thông qua thư viện `instructor`, tích hợp các lớp guardrails `presidio` vào luồng controller, và nâng cấu hình timeout của Envoy proxy.
-- **Giai đoạn 2 (Đánh giá nội bộ):** Chạy lệnh `test_integration.py` cục bộ. Liên tục điều chỉnh regex và prompt cho đến khi xác nhận tất cả các metric an toàn đạt điểm tối đa (100%). Chụp màn hình và xuất file lưu trữ bằng chứng trace.
-- **Giai đoạn 3 (Review):** Gắn các bằng chứng vào PR, đính kèm Jira ticket, và gửi ADR đã ký tên này để hội đồng AIO Mentor phê duyệt (sign-off) chính thức.
+- **Giai đoạn 1 (Phát triển & Tích hợp):** Triển khai module grounding trích dẫn bằng `instructor`, tích hợp lớp phòng thủ đa tầng `techx_ai_common.guardrails` (Prompt Injection, PII Sanitization, Tool Validation) vào controller, và áp dụng cơ chế Rate Limiting dựa trên Valkey (`rate_limiter.py`).
+- **Giai đoạn 2 (Đánh giá & Kiểm thử nội bộ):** Chạy toàn bộ bộ kiểm thử đơn vị, kiểm thử tích hợp (`pytest`) cùng bộ kịch bản kiểm thử trực tiếp (`python .../evals/run_eval.py`). Liên tục điều chỉnh quy tắc regex, danh sách từ cấm và prompt cho đến khi đạt chỉ số an toàn 100%. Xuất báo cáo đánh giá và ảnh chụp vết phân tích (Jaeger trace evidence).
+- **Giai đoạn 3 (Review & Ký duyệt):** Tổng hợp bằng chứng vào tài liệu `AI_MANDATE_6_EVIDENCE.md`, đính kèm liên kết bằng chứng vào PR, đính kèm thẻ Jira và trình ADR lên hội đồng AIO Mentor để ký duyệt chính thức (Sign-off).
 
 ## 10. Checklist cho Reviewer (Reviewer Checklist)
 
@@ -175,9 +201,10 @@ pytest src/product-reviews/tests/test_integration.py -v
 
 | Reviewer | Decision | Evidence link/comment | Date |
 |---|---|---|---|
-| Ngô Thanh Tuấn | Sign-off | Approved | 2026-07-18 |
-| Hoàng Huy | Sign-off | Approved | 2026-07-18 |
-| Lê Duy Khánh | Sign-off | Approved | 2026-07-18 |
+| Ngô Thanh Tuấn | Sign-off | Approved | 2026-07-23 |
+| Trần Quang Minh | Sign-off | Approved | 2026-07-23 |
+| Hoàng Huy | Sign-off | Approved | 2026-07-23 |
+| Lê Duy Khánh | Sign-off | Approved | 2026-07-23 |
 
 ## 12. Hậu quả (Consequences)
 
