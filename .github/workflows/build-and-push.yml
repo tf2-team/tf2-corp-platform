@@ -394,9 +394,9 @@ jobs:
             fi
             if [[ "${FORCE_FULL}" == "false" || "${FORCE_FULL}" == "False" ]]; then
               if [[ -n "${REQUESTED_SERVICES//[[:space:],]/}" ]]; then
-                req_reason="${REQUESTED_SERVICES_REASON}"
-                if [[ -z "${req_reason//[[:space:]]/}" ]]; then
-                  req_reason="Manual operator build for ${REQUESTED_SERVICES}"
+                if [[ -z "${REQUESTED_SERVICES_REASON//[[:space:]]/}" ]]; then
+                  echo "::error::requested_services_reason is required when requested_services is non-empty"
+                  exit 1
                 fi
                 normalized="${REQUESTED_SERVICES//,/ }"
                 read -r -a requested_list <<< "${normalized}"
@@ -409,7 +409,7 @@ jobs:
                   echo "Operator-requested service: ${requested}"
                 done
                 MODE="selective"
-                REASON="workflow_dispatch requested_services: ${req_reason}"
+                REASON="workflow_dispatch requested_services: ${REQUESTED_SERVICES_REASON}"
               elif ! is_zero_sha "${BEFORE_SHA:-}" && git cat-file -e "${BEFORE_SHA}^{commit}" 2>/dev/null; then
                 classify_from_diff "${BEFORE_SHA}" "workflow_dispatch"
               elif git rev-parse --verify HEAD^ >/dev/null 2>&1; then
