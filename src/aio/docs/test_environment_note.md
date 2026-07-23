@@ -39,9 +39,8 @@ quá trình kiểm tra.
 - Bổ sung danh sách endpoint, authentication mode và secret source tại
   [live_endpoints.md](./live_endpoints.md).
 - Bổ sung template port-forward không chứa secret tại
-  [.env.live.example](../.env.live.example).
-- Hỗ trợ load cấu hình mặc định từ `.env` và override bằng
-  `AIOPS_ENV_FILE=.env.live` tại
+  [.env.example](../.env.example).
+- Hỗ trợ load toàn bộ cấu hình local từ một file `.env` tại
   [settings.py](../aiops/config/settings.py).
 - Sửa OpenSearch client để dùng HTTPS + Basic Auth; TLS verification chỉ được tắt
   cho tunnel `localhost` thông qua `AIOPS_OPENSEARCH_VERIFY_TLS=false`.
@@ -92,17 +91,17 @@ phải regression từ thay đổi integration.
 
 Chạy các lệnh sau từ thư mục `src/aio`.
 
-### 5.1. Chuẩn bị file live
+### 5.1. Chuẩn bị file cấu hình
 
-Chỉ copy template nếu `.env.live` chưa tồn tại để tránh ghi đè cấu hình local:
+Chỉ copy template nếu `.env` chưa tồn tại để tránh ghi đè cấu hình local:
 
 ```powershell
-if (-not (Test-Path .env.live)) {
-    Copy-Item .env.live.example .env.live
+if (-not (Test-Path .env)) {
+    Copy-Item .env.example .env
 }
 ```
 
-Điền credential được cấp vào `.env.live`. File này đã nằm trong `.gitignore` và
+Điền credential được cấp vào `.env`. File này đã nằm trong `.gitignore` và
 không được commit.
 
 ### 5.2. Mở tunnel tới EKS
@@ -116,7 +115,6 @@ powershell -File scripts/port_forward.ps1
 Trong terminal thứ hai:
 
 ```powershell
-$env:AIOPS_ENV_FILE = ".env.live"
 python -m uvicorn aiops.api.app:create_app --factory --port 8000
 ```
 

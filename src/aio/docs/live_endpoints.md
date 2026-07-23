@@ -64,15 +64,16 @@ Service đó.
 Từ thư mục `src/aio`:
 
 ```powershell
-Copy-Item .env.live.example .env.live
+if (-not (Test-Path .env)) {
+    Copy-Item .env.example .env
+}
 powershell -File scripts/port_forward.ps1
 ```
 
-Trong terminal thứ hai, chạy AIOps bằng file live mà không copy secret vào `.env`
-đang được Git track:
+Điền integration values vào file `.env` đã được Git ignore. Trong terminal thứ
+hai, chạy AIOps:
 
 ```powershell
-$env:AIOPS_ENV_FILE = ".env.live"
 python -m uvicorn aiops.api.app:create_app --factory --port 8000
 ```
 

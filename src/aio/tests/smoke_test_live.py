@@ -7,7 +7,6 @@ Preparation (run from ``src/aio``):
 
 1. ``powershell -File scripts/port_forward.ps1``
 2. Start AIOps in another terminal when testing the inbound Grafana webhook:
-   ``$env:AIOPS_ENV_FILE='.env.live'``
    ``python -m uvicorn aiops.api.app:create_app --factory --port 8000``
 3. ``python -B tests/smoke_test_live.py``
 
@@ -45,7 +44,7 @@ def load_env_file(path: Path) -> None:
             os.environ.setdefault(key.strip(), value.strip())
 
 
-load_env_file(ROOT / ".env.live")
+load_env_file(ROOT / ".env")
 
 from aiops.api.app import build_enricher  # noqa: E402
 from aiops.config import Settings, load_runtime_config  # noqa: E402

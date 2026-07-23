@@ -5,7 +5,6 @@ from __future__ import annotations
 
 import argparse
 import json
-import os
 import sys
 from pathlib import Path
 
@@ -19,12 +18,9 @@ def main() -> int:
     parser = argparse.ArgumentParser(
         description="Run the complete AIOps pipeline against real Prometheus metrics in enforced dry-run mode."
     )
-    parser.add_argument("--env-file", type=Path, default=ROOT / ".env.live")
     parser.add_argument("--plan", type=Path, default=ROOT / "config" / "prometheus_e2e.json")
     parser.add_argument("--out-dir", type=Path, default=None)
     args = parser.parse_args()
-
-    os.environ["AIOPS_ENV_FILE"] = str(args.env_file.resolve())
 
     from aiops.api.app import configure_logging
     from aiops.config import Settings

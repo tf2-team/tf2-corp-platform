@@ -12,13 +12,13 @@ from aiops.schemas import Observation, PipelineRunRequest, SignalQuality
 
 
 class SettingsTest(unittest.TestCase):
-    def test_live_example_overrides_tracked_defaults(self):
-        settings = Settings(_env_file=(".env", ".env.live.example"))
+    def test_example_loads_local_integration_defaults(self):
+        settings = Settings(_env_file=".env.example")
 
         self.assertEqual(settings.prometheus_base_url, "http://localhost:9090")
         self.assertEqual(settings.jaeger_base_url, "http://localhost:16686/jaeger/ui")
         self.assertFalse(settings.opensearch_verify_tls)
-        self.assertEqual(settings.notification_provider, "grafana")
+        self.assertEqual(settings.notification_provider, "auto")
         self.assertEqual(settings.runtime_config_path, Path("config/runtime.json"))
 
     def test_settings_load_from_env_file_and_drive_pipeline(self):
@@ -32,9 +32,7 @@ class SettingsTest(unittest.TestCase):
             hyperparameters["detectors"]["thresholds"]["ops01_checkout_slo"] = 0.5
             hyperparameters_path.write_text(json.dumps(hyperparameters), encoding="utf-8")
             env_file.write_text(
-                Path(".env").read_text(encoding="utf-8")
-                + "\n"
-                + "\n".join(
+                "\n".join(
                     [
                         "AIOPS_POLICY_MODE=observe",
                         f"AIOPS_STATE_STORE_PATH={Path(directory) / 'aiops.sqlite3'}",
@@ -163,9 +161,7 @@ class SettingsTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             env_file = Path(directory) / ".env"
             env_file.write_text(
-                Path(".env").read_text(encoding="utf-8")
-                + "\n"
-                + "\n".join(
+                "\n".join(
                     [
                         "AIOPS_QUALIFICATION_GATE_DEV=true",
                         f"AIOPS_STATE_STORE_PATH={Path(directory) / 'aiops.sqlite3'}",

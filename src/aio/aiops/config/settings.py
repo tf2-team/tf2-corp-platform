@@ -3,21 +3,15 @@
 # SPDX-License-Identifier: Apache-2.0
 from __future__ import annotations
 
-import os
 from pathlib import Path
 from typing import Literal
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
-def _env_files() -> str | tuple[str, str]:
-    override = os.getenv("AIOPS_ENV_FILE", "").strip()
-    return (".env", override) if override and override != ".env" else ".env"
-
-
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(
-        env_file=_env_files(),
+        env_file=".env",
         env_prefix="AIOPS_",
         extra="ignore",
     )

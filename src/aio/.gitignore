@@ -5,4 +5,6 @@ state/*.sqlite3
 state/*.sqlite3-*
 state/*.jsonl
 evidence/
-.env.live
+.env
+.env.*
+!.env.example

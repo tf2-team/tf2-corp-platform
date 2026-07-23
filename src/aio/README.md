@@ -76,15 +76,16 @@ The canonical endpoint and credential inventory is in
 port-forward helper running in one terminal:
 
 ```powershell
-Copy-Item .env.live.example .env.live
+if (-not (Test-Path .env)) {
+    Copy-Item .env.example .env
+}
 powershell -File scripts/port_forward.ps1
 ```
 
-To test the inbound Grafana webhook, start AIOps in a second terminal. Use
-`AIOPS_ENV_FILE`; do not copy `.env.live` over the tracked `.env` template:
+Fill the ignored `.env` with the required local integration values. To test the
+inbound Grafana webhook, start AIOps in a second terminal:
 
 ```powershell
-$env:AIOPS_ENV_FILE = ".env.live"
 python -m uvicorn aiops.api.app:create_app --factory --port 8000
 ```
 
@@ -114,7 +115,7 @@ live executor.
 Keep `scripts/port_forward.ps1` running, then execute from `src/aio`:
 
 ```powershell
-conda run -n capstone python -B scripts/run_prometheus_e2e.py --env-file .env.live
+python -B scripts/run_prometheus_e2e.py
 ```
 
 Each invocation writes `evidence/e2e/<run_id>.json`. The report contains the
@@ -141,8 +142,8 @@ Runtime secrets, URLs, paths, and operational switches are loaded from
 `AIOPS_*` environment variables through `aiops.config.Settings`. Numeric
 pipeline tuning lives in `config/hyperparameters.json`; select another file
 with `AIOPS_HYPERPARAMETERS_PATH` instead of putting tuning values in `.env`.
-Set `AIOPS_ENV_FILE=.env.live` to select the ignored live file without copying
-secrets into the tracked template.
+Local runtime and integration values use the single ignored `.env` file; copy
+`.env.example` only when creating it for the first time.
 Infrastructure topology, signal IDs, detector definitions, and policy lists are loaded from `config/runtime.json`.
 Topology dependencies are directed RCA-impact edges (`service -> dependency`). The runtime builds one shared NetworkX
 `DiGraph` for personalized PageRank, bounded dependency paths, correlation distance, and reverse caller blast radius.
