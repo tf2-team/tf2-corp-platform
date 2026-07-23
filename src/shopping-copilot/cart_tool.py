@@ -115,7 +115,7 @@ def confirm_cart_action(
     product_id = payload.get("product_id", "")
     quantity = int(payload.get("quantity", 1))
 
-    if stored_user_id not in ("anonymous", user_id):
+    if stored_user_id != user_id:
         logger.info(
             "Confirm cart: user_id mismatch. expected=%r got=%r",
             stored_user_id, user_id,

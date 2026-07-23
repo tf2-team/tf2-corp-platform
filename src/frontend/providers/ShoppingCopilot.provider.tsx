@@ -10,6 +10,7 @@ export interface CopilotProduct {
   priceUnits: number;
   priceNanos: number;
   currencyCode: string;
+  description?: string;
 }
 
 export interface CopilotClaim {
@@ -21,6 +22,9 @@ export interface CopilotSource {
   sourceId: string;
   sourceType: string;
   productId: string;
+  username?: string;
+  score?: number;
+  description?: string;
 }
 
 export interface CopilotResponse {
@@ -58,7 +62,7 @@ interface ShoppingCopilotContextType {
   activeSessionId: string;
   currentTurns: ChatTurn[];
   searchCopilot: (message: string) => Promise<void>;
-  confirmCartAction: (token: string, userId?: string) => Promise<void>;
+  confirmCartAction: (token: string) => Promise<void>;
   cancelCartAction: () => void;
   clearResponse: () => void;
   createNewSession: () => void;
@@ -228,7 +232,10 @@ export const ShoppingCopilotProvider: React.FC<{ children: React.ReactNode }> = 
       const res = await fetch('/api/copilot', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ user_message: message }),
+        body: JSON.stringify({
+          user_message: message,
+          user_id: SessionGateway.getSession().userId || 'anonymous',
+        }),
       });
       const rawData: CopilotResponse = await res.json();
       if (!res.ok && !rawData.status) {
@@ -281,15 +288,12 @@ export const ShoppingCopilotProvider: React.FC<{ children: React.ReactNode }> = 
     }
   };
 
-  const confirmCartAction = async (token: string, userId?: string) => {
+  const confirmCartAction = async (token: string) => {
     setConfirmLoading(true);
     setConfirmSuccess(null);
     setConfirmMessage(null);
 
-    const actualUserId =
-      userId && userId !== 'user_1'
-        ? userId
-        : SessionGateway.getSession().userId || 'user_1';
+    const actualUserId = SessionGateway.getSession().userId || 'anonymous';
 
     try {
       const res = await fetch('/api/copilot/confirm-cart', {

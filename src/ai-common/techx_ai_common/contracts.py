@@ -11,6 +11,7 @@ grounding, database, and transport logic belong in their respective modules.
 
 from decimal import Decimal
 from enum import Enum
+from typing import Optional
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
@@ -35,8 +36,8 @@ class ResponseStatus(str, Enum):
 
 class GuardrailResult(ContractModel):
     action: GuardrailAction
-    reason: str | None = None
-    sanitized_text: str | None = None
+    reason: Optional[str] = None
+    sanitized_text: Optional[str] = None
 
     @model_validator(mode="after")
     def validate_action_fields(self) -> "GuardrailResult":
@@ -52,7 +53,7 @@ class GuardrailResult(ContractModel):
 
 class ToolValidationResult(ContractModel):
     allowed: bool
-    reason: str | None = None
+    reason: Optional[str] = None
 
     @model_validator(mode="after")
     def rejected_tool_has_reason(self) -> "ToolValidationResult":
@@ -64,13 +65,15 @@ class ToolValidationResult(ContractModel):
 class SafeReview(ContractModel):
     source_id: str = Field(min_length=1)
     text: str = Field(min_length=1)
-    score: Decimal | None = None
+    score: Optional[Decimal] = None
+    username: Optional[str] = None
+    description: Optional[str] = None
 
 
 class SafeReviewSet(ContractModel):
     product_id: str = Field(min_length=1)
     reviews: list[SafeReview] = Field(default_factory=list)
-    reason: str | None = None
+    reason: Optional[str] = None
 
     @model_validator(mode="after")
     def validate_review_set(self) -> "SafeReviewSet":
@@ -104,7 +107,7 @@ class GroundedResponse(ContractModel):
     answer: str = ""
     claims: list[GroundedClaim] = Field(default_factory=list)
     status: ResponseStatus
-    reason: str | None = None
+    reason: Optional[str] = None
 
     @model_validator(mode="after")
     def validate_status(self) -> "GroundedResponse":
