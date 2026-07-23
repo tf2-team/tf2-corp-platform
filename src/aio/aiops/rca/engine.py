@@ -55,10 +55,10 @@ class V001RcaEngine:
             else finding
             for finding in findings
             if (finding.service == "global" or not self._excluded_root_cause(finding.service))
-            and not _is_context_metric(finding.metric)
+            and is_root_cause_metric(finding.metric)
             and not self._busy_infra_without_failure(finding.service, finding.metric, finding.timestamp, series, findings)
         ]
-        rca_series = [metric for metric in series if not _is_context_metric(metric.metric)]
+        rca_series = [metric for metric in series if is_root_cause_metric(metric.metric)]
         drift_metrics = self._drift_metrics(rca_series, series, findings)
         if not root_findings and any(finding.algorithm == "slo_threshold" for finding in findings):
             root_findings.extend(
@@ -94,7 +94,7 @@ class V001RcaEngine:
         for finding in root_findings:
             if finding.service == "global":
                 continue
-            if _is_log_metric(finding.metric) or _is_context_metric(finding.metric):
+            if not is_root_cause_metric(finding.metric):
                 continue
             metrics_by_service[finding.service].append((finding.metric, finding.score, "anomaly"))
         for service, metric, _, score, _ in drift_metrics:
@@ -332,7 +332,11 @@ def _is_log_metric(metric: str) -> bool:
 
 
 def _is_context_metric(metric: str) -> bool:
-    return "request_rate" in metric or "latency" in metric or _is_error_metric(metric)
+    return "request_rate" in metric or "latency" in metric or "burn_rate" in metric or _is_error_metric(metric)
+
+
+def is_root_cause_metric(metric: str) -> bool:
+    return not (_is_log_metric(metric) or _is_context_metric(metric))
 
 
 def _is_busy_infra_metric(metric: str) -> bool:

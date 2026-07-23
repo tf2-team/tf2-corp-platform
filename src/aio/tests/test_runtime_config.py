@@ -73,6 +73,8 @@ class RuntimeConfigTest(unittest.TestCase):
         self.assertEqual(thresholds["recommendation"], 1.0)
         self.assertEqual(thresholds["payment"], 1.5)
         self.assertEqual(thresholds["shipping"], 1.0)
+        self.assertEqual(thresholds["accounting"], 1.0)
+        self.assertEqual(thresholds["llm"], 5.0)
 
     def test_prometheus_services_expand_generated_metrics(self):
         raw = json.loads(Path("config/runtime.json").read_text(encoding="utf-8"))

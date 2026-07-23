@@ -785,6 +785,7 @@ class V001AnomalyRcaTest(unittest.TestCase):
             AnomalyFinding(algorithm="weighted_sum", service="checkout", metric="request_rate_5m", signal_id="checkout_request_rate_5m", score=1.0, timestamp=1),
             AnomalyFinding(algorithm="weighted_sum", service="checkout", metric="p95_latency_5m", signal_id="checkout_p95_latency_5m", score=1.0, timestamp=1),
             AnomalyFinding(algorithm="weighted_sum", service="checkout", metric="error_rate_5m", signal_id="checkout_error_rate_5m", score=1.0, timestamp=1),
+            AnomalyFinding(algorithm="weighted_sum", service="checkout", metric="error_budget_burn_rate_24h", signal_id="checkout_error_budget_burn_rate_24h", score=1.0, timestamp=1),
             AnomalyFinding(algorithm="weighted_sum", service="checkout", metric="cpu_millicores", signal_id="checkout_cpu_millicores", score=0.8, timestamp=1),
         ]
 

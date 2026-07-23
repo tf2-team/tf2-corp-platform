@@ -27,7 +27,7 @@ from aiops.schemas import (
 )
 from aiops.pipeline import AiopsPipeline
 from aiops.notifications import is_slo_notification
-from aiops.pipeline.runtime import _apply_corroboration, _slo_impact_findings
+from aiops.pipeline.runtime import _algorithm_service_scores, _apply_corroboration, _slo_impact_findings
 from aiops.remediation import (
     ActionCatalog,
     HistoryRetriever,
@@ -343,6 +343,16 @@ class RuntimePipelineTest(unittest.TestCase):
         evidence = {"checkout": TelemetryCorroboration(service="checkout", available_sources={"log", "trace"})}
 
         self.assertEqual(_apply_corroboration([finding], [], evidence, 0.5, 0.15, 0.3)[0].score, 0.5)
+
+    def test_breakout_score_ignores_impact_and_context_metrics(self):
+        findings = [
+            AnomalyFinding(algorithm="robust_drift", service="checkout", metric="p95_latency_5m", signal_id="checkout_p95_latency_5m", score=10.0, timestamp=1),
+            AnomalyFinding(algorithm="ewma_stl", service="checkout", metric="error_rate_5m", signal_id="checkout_error_rate_5m", score=10.0, timestamp=1),
+            AnomalyFinding(algorithm="isolation_forest", service="checkout", metric="error_budget_burn_rate_24h", signal_id="checkout_error_budget_burn_rate_24h", score=10.0, timestamp=1),
+            AnomalyFinding(algorithm="robust_drift", service="checkout", metric="cpu_millicores", signal_id="checkout_cpu_millicores", score=0.3, timestamp=1),
+        ]
+
+        self.assertEqual(_algorithm_service_scores(findings), {"checkout": 0.3})
 
     def test_corroboration_adds_single_and_dual_source_bonus(self):
         finding = anomaly("cpu_millicores")

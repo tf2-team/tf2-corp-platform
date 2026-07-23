@@ -117,6 +117,8 @@ class SettingsTest(unittest.TestCase):
                 "email": 1.0,
                 "quote": 1.0,
                 "fraud-detection": 1.0,
+                "accounting": 1.0,
+                "llm": 5.0,
             },
         )
         self.assertEqual(config["correlation"]["suppress_min_root_score"], 0.8)

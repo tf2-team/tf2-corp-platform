@@ -18,7 +18,7 @@ from aiops.detectors import Detector, DetectorEngine
 from aiops.enrichment import Enricher
 from aiops.features import FeatureBuilder
 from aiops.anomaly import build_v001_anomaly_engine
-from aiops.rca import V001RcaEngine
+from aiops.rca import V001RcaEngine, is_root_cause_metric
 from aiops.schemas import AnomalyFinding, MetricSeries, NotificationMessage, PipelineResult, PolicyDecision, RcaResult, RootCauseCandidate, RuntimeConfig, SignalQuality
 from aiops.normalization import Normalizer
 from aiops.notifications import is_slo_notification
@@ -529,7 +529,7 @@ def _algorithm_service_scores(findings: list[AnomalyFinding]) -> dict[str, float
     algorithms = {"robust_drift", "ewma_stl", "isolation_forest"}
     maxima: dict[str, dict[str, float]] = {}
     for finding in findings:
-        if finding.algorithm in algorithms:
+        if finding.algorithm in algorithms and is_root_cause_metric(finding.metric):
             service_scores = maxima.setdefault(finding.service, {})
             service_scores[finding.algorithm] = max(service_scores.get(finding.algorithm, 0.0), finding.score)
     return {service: sum(scores.values()) for service, scores in maxima.items()}

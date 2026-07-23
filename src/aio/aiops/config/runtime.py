@@ -183,6 +183,20 @@ def _expand_detector_signal_groups(raw: dict) -> None:
     existing_signal_ids = {detector.get("signal_id") for detector in raw.get("detectors", [])}
     raw.setdefault("detectors", []).extend(
         {
+            "id": f"auto_{spec['service'].replace('-', '_')}_error_rate",
+            "type": "threshold",
+            "enabled": True,
+            "signal_id": spec["signal_id"],
+            "flow": spec["flow"],
+            "service": spec["service"],
+            "severity": "SEV2",
+            "runbook_id": "RB-SERVICE-ERROR-RATE",
+        }
+        for spec in raw.get("prometheus_query_specs", {}).values()
+        if spec.get("metric") == "error_rate_5m" and spec.get("signal_id") not in existing_signal_ids
+    )
+    raw.setdefault("detectors", []).extend(
+        {
             "id": f"auto_{spec['service'].replace('-', '_')}_latency_{spec['metric'].split('_', 1)[0]}",
             "type": "threshold",
             "enabled": True,
