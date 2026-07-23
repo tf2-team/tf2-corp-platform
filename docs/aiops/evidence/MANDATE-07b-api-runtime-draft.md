@@ -1,480 +1,420 @@
-# AI MANDATE #7b — API Runtime Live Detection Evidence
+# AI MANDATE #7b - API Runtime Live Detection Evidence
 
-## 1. Mục tiêu
+## 1. Scope
 
-Tài liệu này ghi bằng chứng chạy thật cho `AI MANDATE #7b` trên nhánh
-`feat/aio/v0.0.5`. Detector được giữ chạy liên tục trong luồng:
+This document records the clean local live run for `AI MANDATE #7b` using the AIOps API runtime against port-forwarded production-like telemetry.
+
+Primary labeled scenario:
 
 ```text
-Baseline bình thường → bật fault qua flagd → detection/dedup → tắt fault → recovery
+Normal baseline under Locust load -> operator enables local-paymentFailure=50% -> AIOps detects checkout impact -> incident dedup/notification intent -> operator disables fault -> telemetry recovery
 ```
 
-AIOps chạy ở chế độ `dry-run`; operator là người duy nhất bật/tắt fault. Không có
-Kubernetes mutation hoặc flagd mutation do AIOps thực hiện.
+AIOps ran in `dry-run` mode. The operator manually changed the flag in Flagd Configurator. AIOps did not mutate Kubernetes resources or Flagd state.
 
-## 2. Definition of Done
+## 2. Definition of Done Mapping
 
-- [x] Có normal baseline trước fault và đo false-positive incident.
-- [x] Operator bật fault qua flagd, có ảnh và timestamp.
-- [x] Detector phát hiện fault từ Prometheus telemetry thật.
-- [x] Có timestamp detector kêu lần đầu và lead-time.
-- [x] Có incident ID và bằng chứng dedup qua nhiều chu kỳ.
-- [x] Có notification intent và bằng chứng chống spam.
-- [x] Có dashboard trong fault và sau recovery.
-- [x] Có labeled incident case và normal window để tính recall/precision sơ bộ.
-- [x] Có caveat trung thực cho RCA, false positive và incident lifecycle.
+- [x] Normal baseline captured before fault with `candidates=0`, `incidents=0`.
+- [x] Operator fault injection captured through Flagd UI.
+- [x] Detector fired from live Prometheus telemetry.
+- [x] First detector fire timestamp and lead-time calculated.
+- [x] Incident ID captured through runtime API.
+- [x] Dedup shown by stable incident ID with increasing `occurrence_count`.
+- [x] Notification intent captured for the same checkout incident.
+- [x] User-visible impact captured on SLO dashboard.
+- [x] Recovery captured on SLO dashboard.
+- [x] Caveats documented for RCA, incident lifecycle, and rolling-24h burn-rate.
 
 ## 3. Runtime Configuration
 
-| Field | Giá trị |
+| Field | Value |
 | --- | --- |
-| Branch/commit | `feat/aio/v0.0.5 @ 8f1d1e8` + local burn-rate changes; commit link pending |
-| Working directory | `C:\Users\husky\Downloads\Capstone3\tf2-corp-platform\src\aio` |
-| Entrypoint | `src/aio/aiops/api/app.py` |
-| Environment | `src/aio/.env.live` |
+| Working directory | `src/aio` |
+| Runtime command | `python -m uvicorn aiops.api.app:create_app --factory --host 0.0.0.0 --port 8540` |
 | API | `http://localhost:8540` |
-| Auto-run / interval | `true` / `5 seconds` |
-| Policy | `dry-run` |
-| Prometheus / Grafana | `http://localhost:9090` / `http://localhost:3000` |
-| Jaeger | Used for trace enrichment at `http://localhost:16686/jaeger/ui` |
-| OpenSearch | Not used; credentials intentionally blank |
-| Kubernetes | Read-only enrichment through `http://localhost:8001` |
-| Traffic | Existing `load-generator`/Webstore traffic |
+| Policy mode | `dry-run` |
+| Auto-run | `true`, every `5s` |
+| Prometheus | `http://localhost:9090` through port-forward |
+| Grafana | `http://localhost:3000` through port-forward |
+| Jaeger | `http://localhost:16686` through port-forward |
+| Kubernetes API | `http://localhost:8001`, read-only enrichment |
+| OpenSearch | not used in this run |
+| Traffic | Locust `50 users`, ramp/spawn rate `1 user/s`, `10 workers`, about `12.8 RPS` |
+| Burn-rate detector in primary clean run | disabled to avoid polluted rolling-24h window from previous tests |
 
-```powershell
-cd C:\Users\husky\Downloads\Capstone3\tf2-corp-platform\src\aio
-$env:AIOPS_ENV_FILE = ".env.live"
-.\.venv\Scripts\python.exe -m uvicorn aiops.api.app:create_app `
-  --factory --host 0.0.0.0 --port 8540
+Local `.env` values used for this run:
+
+```env
+AIOPS_POLICY_MODE=dry-run
+AIOPS_AUTO_RUN_ENABLED=true
+AIOPS_AUTO_RUN_INTERVAL_SECONDS=5
+AIOPS_PROMETHEUS_BASE_URL=http://localhost:9090
+AIOPS_GRAFANA_WEBHOOK_SECRET=local-test-secret
+AIOPS_JAEGER_BASE_URL=http://localhost:16686
+AIOPS_KUBERNETES_API_URL=http://localhost:8001
+AIOPS_OPENSEARCH_BASE_URL=
+AIOPS_LIVE_EXECUTOR_URL=
 ```
 
-**Port-forward và runtime dependencies sẵn sàng:**
+The runtime config change for this clean run was limited to disabling `ops01_checkout_slo_burn_rate`. The reason is documented in [Section 10](#10-burn-rate-and-no-spam-caveat).
 
-![Port-forward endpoints ready](./01-port-forward-ready.png)
+## 4. Baseline
 
-## 4. Scenario và Timeline
+Baseline was taken under steady Locust load before enabling the fault.
 
-| Field | Giá trị thực tế |
+| Field | Evidence |
+| --- | --- |
+| Locust users | `50` users, `10` workers |
+| Locust failures | `0%` |
+| Checkout error ratio | `0%` on Grafana baseline |
+| AIOps detector candidates | `0` |
+| AIOps incidents | `0` |
+| RCA root causes | `0` |
+
+Runtime baseline proof:
+
+```text
+2026-07-24 01:00:54.255 +07
+AIOPS_DEDUP_RESULT input_candidates=0 incidents=0 ids=[] services=[] occurrences=[]
+AIOPS_BLOCK rca anomalies=0 root_causes=[]
+AIOPS_RUN_END candidates=0 incidents=0 root_causes=0
+```
+
+![Baseline checkout Grafana at 50 users](./04c-baseline-checkout-grafana-50u.png)
+
+![Baseline Locust 50 users, 0 percent failures](./04d-baseline-locust-50u.png)
+
+![Baseline AIOps runtime clean](./05b-baseline-runtime-clean-50u.png)
+
+## 5. Fault Injection
+
+The operator enabled `local-paymentFailure` at `50%`.
+
+| Field | Value |
 | --- | --- |
 | Fault | `local-paymentFailure` |
-| Injection owner/method | Operator / Flagd Configurator UI |
-| Fault percentage | `50%` |
-| Expected affected service/root cause | `checkout/payment` |
-| Runtime và baseline started | `2026-07-23 12:37:58.645 +07` |
-| Baseline ended / fault enabled | `2026-07-23 12:47:18 +07` |
-| First detector fire | `2026-07-23 12:51:37.852 +07` |
-| Fault disabled | `2026-07-23 12:56:59 +07` |
-| Recovery confirmed from telemetry | `2026-07-23 13:07:44 +07` |
+| Fault value | `50%` |
+| Owner/method | Operator through Flagd Configurator UI |
+| Fault start timestamp | `2026-07-24 01:03:03.077 +07` |
+| Expected affected service | `checkout` |
+| Expected dependency | `payment` |
 
-## 5. Normal Baseline
+![Fault start timestamp](./06a-fault-start-timestamp.png)
 
-Normal baseline được quan sát khoảng `9m19s` trước khi bật fault.
+![Flagd before payment failure](./06b-flagd-before-payment-failure-off.png)
 
-| Field | Giá trị |
-| --- | --- |
-| Detector candidates / incidents | `0 / 0` |
-| Actionable false-positive incidents | `0` |
-| Checkout success / error ratio | `100% / 0%` |
-| Checkout p95 / p99 | Khoảng `400 ms / 840 ms` |
+![Flagd local-paymentFailure at 50 percent](./06c-flagd-payment-failure-50.png)
+
+## 6. Detector Fire and Lead-Time
+
+First detector fire:
 
 ```text
-2026-07-23 12:42:30.471 INFO aiops.pipeline.runtime
-AIOPS_DEDUP_RESULT input_candidates=0 incidents=0 ids=[] services=[] occurrences=[]
+2026-07-24 01:06:28.494 +07 WARNING aiops.detectors.threshold
+AIOPS_DETECT threshold_fire
+  detector  : auto_checkout_error_rate
+  signal    : checkout_error_rate_5m
+  value     : 0.07857711542847343
+  threshold : 0.05
+  service   : checkout
+  severity  : SEV2
 ```
 
-Baseline có non-actionable RCA/anomaly noise cho `product-reviews` và
-`fraud-detection`, nhưng không tạo candidate hoặc incident. Vì vậy false-positive
-**incident** trong normal window là `0`; RCA noise được ghi nhận riêng.
-
-Evidence: `04-baseline-dashboard.png`, `04b-baseline-slo-dashboard.png`,
-`05-baseline-runtime.png`.
-
-**Baseline dashboard:**
-
-![Normal checkout metrics during baseline](./04-baseline-dashboard.png)
-
-**Baseline SLO dashboard:**
-
-![Normal checkout SLO values during baseline](./04b-baseline-slo-dashboard.png)
-
-**Runtime không tạo candidate/incident trong baseline:**
-
-![Baseline runtime showing zero candidates and incidents](./05-baseline-runtime.png)
-
-## 6. Fault Active và Detector Result
-
-Operator bật `local-paymentFailure=50%` lúc `12:47:18 +07`. Runtime,
-port-forward, traffic và Prometheus query tiếp tục chạy.
+Lead-time:
 
 ```text
-2026-07-23 12:51:37.852 WARNING aiops.detectors.threshold
-AIOPS_DETECT threshold_fire detector=auto_checkout_error_rate
-signal=checkout_error_rate_5m value=0.3360326154066231
-threshold=0.05 service=checkout severity=SEV2
-
-2026-07-23 12:51:37.852 WARNING aiops.detectors.threshold
-AIOPS_DETECT threshold_fire detector=auto_checkout_latency_p99
-signal=checkout_p99_latency_5m value=1.7590005000000002
-threshold=1.0 service=checkout severity=SEV1
-
-2026-07-23 12:51:37.859 INFO aiops.pipeline.runtime
-AIOPS_BLOCK detect candidates=2
-ids=['auto_checkout_error_rate', 'auto_checkout_latency_p99']
+lead_time = 01:06:28.494 - 01:03:03.077
+          = 205.417 seconds
+          ~= 3 minutes 25 seconds
 ```
 
 | Detector | Signal | Observed | Threshold | Severity | Incident |
 | --- | --- | ---: | ---: | --- | --- |
-| `auto_checkout_error_rate` | `checkout_error_rate_5m` | `33.60%` | `5%` | `SEV2` | `inc-b3d92ea50475` |
-| `auto_checkout_latency_p99` | `checkout_p99_latency_5m` | `1.759 s` | `1.0 s` | `SEV1` | `inc-8cd6d19cc778` |
+| `auto_checkout_error_rate` | `checkout_error_rate_5m` | `7.86%` | `5%` | `SEV2` | `inc-b3d92ea50475` |
 
-Incident API snapshot:
+The same runtime cycle also enqueued notification intent for the same checkout incident:
 
-```json
-[
-  {"incident_id":"inc-8cd6d19cc778","state":"open","severity":"SEV1","service":"checkout","occurrence_count":4},
-  {"incident_id":"inc-b3d92ea50475","state":"open","severity":"SEV2","service":"checkout","occurrence_count":2}
-]
+```text
+AIOPS_NOTIFY_ENQUEUED_READY
+  incident : inc-b3d92ea50475
+  service  : checkout
+  severity : SEV2
+  runbook  : RB-SERVICE-ERROR-RATE
+  status   : pending
 ```
 
-Dashboard trong fault:
+![Checkout error-rate detector fired](./07b-detector-fired-checkout-error-rate-clean.png)
 
-| Metric | Giá trị |
+## 7. Incident API and Dedup
+
+First incident API snapshot:
+
+| Field | Value |
 | --- | --- |
-| Checkout success rate | `57.8%` |
-| Error ratio | Khoảng `18.5%` tại thời điểm chụp |
-| Checkout p95 / p99 | Khoảng `695 ms / 1.52 s` |
+| `incident_id` | `inc-b3d92ea50475` |
+| `state` | `open` |
+| `severity` | `SEV2` |
+| `flow` | `checkout` |
+| `service` | `checkout` |
+| `detector` | `auto_checkout_error_rate` |
+| `occurrence_count` | `4` |
 
-Evidence: `06-flag-enabled.png`, `07-detector-fired.png`, `08-incident-api.png`,
-`12-fault-dashboard.png`, `12b-fault-slo-dashboard.png`.
+Later snapshot:
 
-**Operator bật fault qua Flagd:**
-
-![Flagd local-paymentFailure enabled at 50 percent](./06-flag-enabled.png)
-
-**Detector phát hiện hai checkout signals:**
-
-![Checkout error-rate and latency detectors fired](./07-detector-fired.png)
-
-**Incident API trong fault window:**
-
-![Checkout incidents returned by runtime API](./08-incident-api.png)
-
-**Grafana trong fault window:**
-
-![Checkout error and latency during fault](./12-fault-dashboard.png)
-
-**User-visible SLO impact:**
-
-![Checkout success degradation during fault](./12b-fault-slo-dashboard.png)
-
-## 7. Lead-Time
-
-```text
-lead_time = 12:51:37.852 - 12:47:18
-          = 259.852 seconds
-          ≈ 4 minutes 20 seconds
-```
-
-Timestamp source: Flagd screenshot capture time và runtime log.
-
-## 8. Dedup và chống spam
-
-| Incident | Detector | Snapshot 1 | Snapshot 2 |
-| --- | --- | ---: | ---: |
-| `inc-8cd6d19cc778` | `auto_checkout_latency_p99` | `4` | `6` |
-| `inc-b3d92ea50475` | `auto_checkout_error_rate` | `2` | `4` |
-
-Hai signal giữ nguyên hai incident ID, chỉ tăng `occurrence_count`; không tạo ID
-mới mỗi cycle. Dedup result: `PASS`.
-
-Evidence: `08-incident-api.png`, `11-dedup-repeat.png`.
-
-**Cùng incident IDs, occurrence count tăng qua các cycle:**
-
-![Dedup repeat showing stable incident IDs](./11-dedup-repeat.png)
-
-## 9. Impact-based Alerting, RCA và Safety
-
-Impact-based severity:
-
-- `SEV1`: checkout p99 vượt SLO `1 s`.
-- `SEV2`: checkout error rate vượt `5%`.
-- User-visible impact: checkout success giảm còn `57.8%`.
-
-Notification intent:
-
-```text
-2026-07-23 13:32:58.965 INFO aiops.pipeline.runtime
-AIOPS_NOTIFY_READY incident=inc-97d2a7043a2b service=checkout
-severity=SEV1 runbook=RB-SERVICE-LATENCY route=outbox status=pending
-```
-
-Log trên chứng minh notification intent đã đi qua pipeline cho đúng service `checkout`. External webhook không được cấu hình nên `route=outbox status=pending` là kết quả mong đợi; đây không phải bằng chứng gửi thành công tới kênh bên ngoài. Incident API xác nhận `inc-97d2a7043a2b` thuộc detector `auto_checkout_latency_p95`, signal `checkout_p95_latency_5m`, với `value=1.42443139027033s > threshold=1s`, severity `SEV1` và `occurrence_count=3`. Incident này xuất hiện ở runtime cycle sau hai incident ban đầu và sau mốc telemetry recovery đã ghi, vì vậy nó chỉ được dùng làm bằng chứng notification pipeline cho service `checkout`; không được tính thêm là correct fire của injected case và không được đồng nhất với `inc-8cd6d19cc778` hoặc `inc-b3d92ea50475`.
-
-### Burn-rate live E2E proof
-
-Official checkout SLO là success `>=99.0%`, nên error budget là `1%` (`0.01`) trên rolling `24h`. Runtime thu signal dẫn xuất:
-
-```text
-checkout_error_budget_burn_rate_24h = checkout_bad_ratio_24h / 0.01
-```
-
-Live Prometheus và pipeline run lúc `2026-07-23 14:34:44 +07` trả `8.320836872333707x`, vượt threshold `1x`:
-
-```text
-AIOPS_DETECT threshold_fire detector=ops01_checkout_slo_burn_rate
-signal=checkout_error_budget_burn_rate_24h value=8.320836872333707
-threshold=1.0 service=checkout severity=SEV1
-
-AIOPS_NOTIFY_ENQUEUED_READY incident=inc-ca09d8e8a247 service=checkout
-severity=SEV1 runbook=RB-CHECKOUT-SLO status=pending
-
-AIOPS_NOTIFY_READY incident=inc-ca09d8e8a247 service=checkout
-severity=SEV1 runbook=RB-CHECKOUT-SLO route=outbox status=pending
-```
-
-Cycle thứ hai dùng cùng state store vẫn giữ `inc-ca09d8e8a247`, tăng `occurrence_count` từ `1` lên `2` và không enqueue notification burn-rate lần hai trong cooldown:
-
-```text
-AIOPS_DEDUP_RESULT ids=['inc-ca09d8e8a247']
-services=['checkout'] occurrences=[2]
-```
-
-Kết quả: live calculation `PASS`, threshold detection `PASS`, incident/notification intent `PASS`, dedup/no-spam `PASS`. External webhook không cấu hình nên `outbox pending` là mong đợi. Không có live mutation.
-
-Evidence: [`16-burn-rate-live-e2e.log`](./16-burn-rate-live-e2e.log). Ảnh terminal có thể bổ sung sau nhưng log artifact đã chứa timestamp và chuỗi E2E kiểm chứng được.
-
-### Multi-service live proof
-
-Runtime cycle `run=84` lúc `2026-07-23 14:02:57 +07` tạo threshold fires trên hai service:
-
-| Service | Detector/signal | Observed | Threshold | Kết luận |
-| --- | --- | ---: | ---: | --- |
-| `checkout` | `auto_checkout_latency_p95` / `checkout_p95_latency_5m` | `2.388 s` | `1 s` | Live detector fire |
-| `checkout` | `auto_checkout_latency_p99` / `checkout_p99_latency_5m` | `4.388 s` | `1 s` | Live detector fire |
-| `frontend-proxy` | `auto_frontend_proxy_latency_p99` / `frontend_proxy_p99_latency_5m` | `1.181 s` | `1 s` | Live detector fire, unlabeled |
-
-Bằng chứng này xác nhận runtime detector hoạt động trên nhiều service (`checkout` và `frontend-proxy`). Ground truth được inject chỉ là `local-paymentFailure` cho luồng `checkout/payment`; không có labeled fault riêng cho `frontend-proxy`. Vì vậy fire `frontend-proxy` được ghi là **unexpected/unlabeled**, không được dùng để tăng true positive, recall hoặc precision và không được tuyên bố là root cause.
-
-![Live threshold detection on checkout and frontend-proxy](./10c-multi-service-live-detection.png)
-
-`cart` error-rate và `product-catalog` CPU saturation vẫn có trong thiết kế/implementation #7a nhưng chưa có live injection proof trong run này.
-| Safety field | Kết quả |
+| Field | Value |
 | --- | --- |
-| Policy mode | `dry-run` |
-| Live mutation | `No` |
-| Flagd mutation by AIOps | `No`; operator bật/tắt |
-| Kubernetes | Read-only; checkout `2/2` ready, `0` restarts trong incident evidence |
-| Jaeger | Có trace references trong enrichment |
-| OpenSearch | `N/A`; không cấu hình credentials |
+| `incident_id` | `inc-b3d92ea50475` |
+| `occurrence_count` | `9` |
+| detector events | same `auto_checkout_error_rate` signal |
 
-### RCA caveat
+Dedup result: `PASS`. The detector fired across multiple cycles while the fault was active, but the runtime kept the same incident ID and increased `occurrence_count` instead of creating duplicate checkout incidents.
 
-RCA không xác định đúng labeled root cause `payment`. RCA xếp hạng
-`recommendation`, `ad` hoặc `product-reviews`; incident có
-`likely_dependency=unknown`.
+![Incident API occurrence count 4](./08b-incident-api-checkout-error-rate-occurrence4.png)
 
-```text
-RCA top-k hit for payment: false
-Detector hit for affected checkout service: true
-```
+![Dedup repeat occurrence count 9](./11b-dedup-repeat-checkout-occurrence9-with-rca-caveat.png)
 
-Evidence: `10a-checkout-notify-ready.png`, `10b-checkout-notification-incident-api.png`, `14c-recovery-api-caveat.png`.
+## 8. User-Visible Impact
 
-**Checkout notification intent:**
+During the fault, the Webstore SLO dashboard showed checkout success degraded below the official SLO.
 
-![Checkout SEV1 notification intent stored in outbox](./10a-checkout-notify-ready.png)
+| Metric | Value |
+| --- | ---: |
+| Checkout success rate | `63.9%` |
+| Checkout SLO | `>= 99.0%` |
+| Checkout p95 latency | `132 ms` |
+| Checkout p99 latency | `368 ms` |
 
-**Notification incident mapped to checkout p95 detector:**
+This is the user-visible impact evidence for the injected checkout/payment fault.
 
-![Incident API showing auto_checkout_latency_p95 and checkout_p95_latency_5m](./10b-checkout-notification-incident-api.png)
+![Fault SLO dashboard checkout success 63.9 percent](./12c-fault-slo-dashboard-checkout-success-639.png)
 
-## 10. Recovery
+## 9. Recovery
 
-| Field | Giá trị |
+The operator disabled `local-paymentFailure`.
+
+| Field | Value |
 | --- | --- |
-| Fault disabled | `2026-07-23 12:56:59 +07` |
-| Recovery confirmed | `2026-07-23 13:07:44 +07` |
-| Recovery time | `645 seconds` (`10m45s`) |
-| Checkout success / error ratio | `100% / 0%` current |
-| Checkout p95 | Khoảng `426–630 ms` |
-| Checkout p99 | Khoảng `795–824 ms`, dưới threshold `1 s` |
-| Telemetry recovery | `PASS` |
+| Fault disabled timestamp | `2026-07-24 01:10:46.173 +07` |
+| Recovery dashboard captured | approx. `2026-07-24 01:17:03 +07` |
+| Recovery time from fault disabled | approx. `376.827 seconds` (`6m17s`) |
+| Checkout success rate after recovery | `100%` |
+| Checkout p95 after recovery | `350 ms` |
+| Checkout p99 after recovery | `775 ms`, below `1s` |
 
-Prometheus/Grafana telemetry đã hồi phục, nhưng incident API vẫn để
-`state=open`, `recovered_at=null`. Một `frontend-proxy SEV1` xuất hiện trong
-residual/recovery window. Đây là unexpected fire và incident lifecycle caveat,
-không phải bằng chứng checkout metric chưa recovery.
+Telemetry recovery result: `PASS`.
 
-Evidence: `13-flag-disabled.png`, `14a-recovery-in-progress.png`,
-`14-recovery-dashboard.png`, `14b-recovery-slo-dashboard.png`,
-`14c-recovery-api-caveat.png`.
+![Fault disabled timestamp](./13a-fault-disabled-timestamp.png)
 
-**Operator tắt fault:**
+![Flagd local-paymentFailure disabled](./13b-flagd-payment-failure-off-clean.png)
 
-![Flagd local-paymentFailure disabled](./13-flag-disabled.png)
+![Recovery SLO dashboard checkout 100 percent](./14d-recovery-slo-dashboard-checkout-100.png)
 
-**Telemetry đang hồi phục:**
+## 10. Burn-Rate and No-Spam Caveat
 
-![Checkout recovery in progress](./14a-recovery-in-progress.png)
+The mandate asks for impact-based alerting, including burn-rate and no-spam behavior. This clean run intentionally did **not** use `checkout_error_budget_burn_rate_24h` as the primary detector because previous fault tests remained in Prometheus's rolling 24h window. At baseline, the 24h burn-rate still exceeded `1x`, which would have created a false baseline incident for this clean labeled run.
 
-**Incident API trong recovery window:**
+For this run:
 
-![Incident API during recovery](./14b-recovery-api-in-progress.png)
+- Primary detection was based on the live 5m checkout error-rate detector.
+- User-visible impact was proven by checkout SLO success dropping to `63.9%`.
+- No duplicate checkout incident IDs were created; `inc-b3d92ea50475` was deduped from occurrence `4` to `9` and later `12`.
+- The rolling-24h burn-rate result should be documented separately as supplemental evidence, not as the primary clean-run detector.
 
-**Grafana sau recovery:**
-
-![Checkout error and latency recovered](./14-recovery-dashboard.png)
-
-**SLO sau recovery:**
-
-![Checkout success and latency after recovery](./14b-recovery-slo-dashboard.png)
-
-**Incident lifecycle caveat sau recovery:**
-
-![Open incident state after telemetry recovery](./14c-recovery-api-caveat.png)
-
-## 11. Labeled Incident Set và Metrics
-
-Directive định nghĩa:
+Recommended wording for Jira:
 
 ```text
-recall = số injected incidents bắt được / K
-precision = số lần kêu đúng / tổng số lần kêu
-lead-time = thời điểm kêu đầu tiên - thời điểm fault bắt đầu
+The rolling-24h burn-rate detector was excluded from the clean labeled run because previous tests remained inside the 24h Prometheus window. The labeled run uses 5m checkout error-rate for first-fire/lead-time and the SLO dashboard for impact. Burn-rate is tracked as a supplemental impact-based signal and should be retested on a clean Prometheus window or with a shorter demo window.
 ```
 
-| Case | Ground truth | Window | Expected | Kết quả | First fire | Lead-time |
-| --- | --- | --- | --- | --- | --- | --- |
-| `01` | Normal baseline | `12:37:58–12:47:18` | Không incident | `TN` | `N/A` | `N/A` |
-| `02` | `local-paymentFailure=50%` | `12:47:18–12:56:59` | `checkout/payment` | `TP`, caught | `12:51:37.852` | `259.852 s` |
-| `03` | Recovery/normal | Sau `12:56:59` | Không severe fire mới | `FP` conservative: frontend-proxy | `13:01` | `N/A` |
+## 11. RCA and Incident Lifecycle Caveats
 
-Hai đơn vị đếm được tách riêng để không trộn incident case với signal fire. Một `unique detector fire` được tính theo detector ID duy nhất trong labeled window; hai detector checkout có thể cùng thuộc một injected incident:
+RCA produced an unexpected `recommendation` root-cause candidate after the checkout incident. This is not counted as the true positive for the injected `local-paymentFailure` case.
 
-| Metric | Giá trị | Công thức |
-| --- | ---: | --- |
-| Injected incidents `K` / caught / FN | `1 / 1 / 0` | Case `02` |
-| Incident recall | `100%` | `1 / 1` |
-| Correct / unexpected unique detector fires | `2 / 1` | Hai checkout detector fires / frontend-proxy |
-| Unique detector-fire precision | `66.67%` | `2 / (2 + 1)` |
-| Detector-fire F1 | `80.00%` | `2PR / (P + R)` |
-| Conservative case-level precision | `50.00%` | `1 TP case / (1 TP + 1 FP)` |
-| Mean/median lead-time | `259.852 s` | Một injected case |
-| RCA top-k hit | `False` | `payment` không được xếp đúng |
+Post-recovery API also showed incidents still in `state=open`. Therefore, telemetry recovery is proven, but automatic incident resolution is not claimed.
 
-`K=1`, vì vậy đây là kết quả preliminary, không có ý nghĩa thống kê rộng. Muốn
-đánh giá production-quality cần mentor inject thêm fault types và normal windows.
-
-**Labeled result summary:**
-
-![Labeled TN TP FP cases and lead time](./15-labeled-results.png)
-
-## 12. Screenshot/Artifact Index
-
-Evidence trong repo: `docs/aiops/evidence`
-
-| File | Nội dung | Trạng thái |
+| Caveat | Evidence | Submission treatment |
 | --- | --- | --- |
-| `01-port-forward-ready.png` | Port-forward endpoints | Có |
-| `04-baseline-dashboard.png` | Normal checkout metrics | Có |
-| `04b-baseline-slo-dashboard.png` | Normal SLO values | Có |
-| `05-baseline-runtime.png` | `candidates=0`, `incidents=0` | Có |
-| `06-flag-enabled.png` | `local-paymentFailure=50%` | Có |
-| `07-detector-fired.png` | Hai checkout detector fires | Có |
-| `08-incident-api.png` | Hai checkout incident IDs | Có |
-| `10a-checkout-notify-ready.png` | Checkout SEV1 notification intent, outbox pending | Có |
-| `10b-checkout-notification-incident-api.png` | Maps notification incident to checkout p95 detector/signal | Có |
-| `10c-multi-service-live-detection.png` | Live fires trên checkout và frontend-proxy | Có |
-| `11-dedup-repeat.png` | Cùng IDs, occurrences tăng | Có |
-| `12-fault-dashboard.png` | Error ratio/p99 trong fault | Có |
-| `12b-fault-slo-dashboard.png` | Checkout success `57.8%` | Có |
-| `13-flag-disabled.png` | Fault về `off` | Có |
-| `14a-recovery-in-progress.png` | Partial recovery | Có |
-| `14b-recovery-api-in-progress.png` | Incident API trong recovery window | Có |
-| `14-recovery-dashboard.png` | Error `0%`, p99 dưới `1s` | Có |
-| `14b-recovery-slo-dashboard.png` | Success `100%`, p99 `824ms` | Có |
-| `14c-recovery-api-caveat.png` | Incident lifecycle caveat | Có |
-| `15-labeled-results.png` | Labeled cases: TN/TP/FP và lead-time | Có |
-| `16-burn-rate-live-e2e.log` | Burn-rate detect/incident/notify/dedup live proof | Có |
+| RCA unexpected service | `recommendation` root cause | record as caveat; do not count as TP |
+| Incident lifecycle | checkout incident still `open` after telemetry recovery | record as caveat; recovery claim is telemetry-only |
+| Burn-rate 24h | previous test data polluted rolling window | supplemental only for this clean run |
 
-## 13. Reproduce
+![Post-recovery incident API caveat](./14e-post-recovery-incident-api-open-caveat.png)
 
-Điều kiện trước khi chạy:
+![Post-recovery RCA recommendation caveat](./14f-post-recovery-rca-recommendation-caveat.png)
 
-- Webstore và traffic generator đang hoạt động.
-- Port-forward Prometheus `localhost:9090`, Grafana `localhost:3000`, Jaeger `localhost:16686` và Kubernetes read-only proxy `localhost:8001` đã sẵn sàng như ảnh `01-port-forward-ready.png`.
-- Operator có quyền dùng Flagd Configurator UI. AIOps không tự thay đổi flag.
+
+## 12. Supplemental Expanded-Service Proof
+
+This supplemental run proves detector coverage beyond the primary checkout/payment labeled scenario. It used a separate clean state store and is **excluded** from the primary `K=1` precision/recall calculation.
+
+| Field | Value |
+| --- | --- |
+| Supplemental fault | `local-cartFailure` |
+| Fault start timestamp | `2026-07-24 01:38:51.933 +07` |
+| Detector | `auto_cart_latency_p99` |
+| Signal | `cart_p99_latency_5m` |
+| Observed value | `3.0866666666666718s` |
+| Threshold | `1s` |
+| Service | `cart` |
+| Severity | `SEV1` |
+| Incident | `inc-c7f94b1816a6` |
+| Incident occurrence count | `2` |
+
+The Webstore SLO dashboard also showed `Cart Success Rate = 97.2%`, below its `>=99.5%` SLO. After disabling the flag, cart success returned to `100%`. This demonstrates a second live service path (`cart`) with detector fire, incident creation, and telemetry recovery.
+
+![Expanded service flag baseline all off](./17a-expanded-cart-flag-before-off.png)
+
+![Expanded service cart baseline healthy](./17b-expanded-cart-slo-baseline-healthy.png)
+
+![Expanded service cart observability baseline](./17c-expanded-cart-observability-baseline.png)
+
+![Expanded service cart fault timestamp](./17d-expanded-cart-fault-start-timestamp.png)
+
+![Expanded service cart flag enabled](./17e-expanded-cart-flag-enabled.png)
+
+![Expanded service cart fault SLO impact](./17f-expanded-cart-fault-slo-impact.png)
+
+![Expanded service cart detector fired](./17g-expanded-cart-detector-fired.png)
+
+![Expanded service cart incident API](./17h-expanded-cart-incident-api.png)
+
+![Expanded service cart flag disabled](./17i-expanded-cart-flag-disabled.png)
+
+![Expanded service cart recovery SLO dashboard](./17j-expanded-cart-recovery-slo-dashboard.png)
+
+![Expanded service cart recovery observability](./17k-expanded-cart-recovery-observability.png)
+
+## 13. Labeled Set and Metrics
+
+Definitions from mandate:
+
+```text
+recall = caught injected incidents / K
+precision = correct fires / total fires
+lead-time = first detector fire time - fault start time
+```
+
+Labeled cases for this clean run:
+
+| Case | Ground truth | Window | Expected | Result |
+| --- | --- | --- | --- | --- |
+| `01` | Normal baseline | before `01:03:03.077 +07` | no detector incident | `TN` |
+| `02` | `local-paymentFailure=50%` | `01:03:03.077` to `01:10:46.173 +07` | checkout/payment impact | `TP`, caught by checkout error-rate |
+| `03` | Recovery | after `01:10:46.173 +07` | telemetry returns normal | `PASS`, telemetry recovered |
+
+Metric summary:
+
+| Metric | Value | Formula / note |
+| --- | ---: | --- |
+| Injected incidents `K` | `1` | one labeled fault |
+| Caught incidents | `1` | checkout error-rate detector fired |
+| False negatives | `0` | `K - caught` |
+| Incident recall | `100%` | `1 / 1` |
+| Primary detector precision | `100%` | `1 correct primary fire / 1 primary labeled fire` |
+| Conservative precision with RCA caveat | `50%` | checkout TP + unexpected RCA caveat |
+| Lead-time | `205.417s` | first fire - fault start |
+| Recovery time | `~376.827s` | recovery dashboard capture - fault disabled |
+| RCA payment hit | `False` | RCA did not identify `payment` |
+
+Because `K=1`, these metrics are preliminary and not statistically broad. They are sufficient as a live working proof for #7b but should not be presented as production-quality model evaluation.
+
+## 14. Evidence Index
+
+| File | Purpose |
+| --- | --- |
+| `04c-baseline-checkout-grafana-50u.png` | Baseline checkout Grafana at 50 users |
+| `04d-baseline-locust-50u.png` | Locust 50 users, 0% failures |
+| `05b-baseline-runtime-clean-50u.png` | Runtime baseline, `candidates=0`, `incidents=0` |
+| `06a-fault-start-timestamp.png` | Fault start timestamp |
+| `06b-flagd-before-payment-failure-off.png` | Flagd before fault |
+| `06c-flagd-payment-failure-50.png` | Flagd fault enabled at 50% |
+| `07b-detector-fired-checkout-error-rate-clean.png` | Checkout error-rate detector fire and notification intent |
+| `08b-incident-api-checkout-error-rate-occurrence4.png` | Incident API first snapshot |
+| `11b-dedup-repeat-checkout-occurrence9-with-rca-caveat.png` | Dedup repeat and RCA caveat |
+| `12c-fault-slo-dashboard-checkout-success-639.png` | User-visible checkout SLO impact |
+| `13a-fault-disabled-timestamp.png` | Fault disabled timestamp |
+| `13b-flagd-payment-failure-off-clean.png` | Flagd fault disabled |
+| `14d-recovery-slo-dashboard-checkout-100.png` | Recovery dashboard |
+| `14e-post-recovery-incident-api-open-caveat.png` | Incident lifecycle caveat |
+| `14f-post-recovery-rca-recommendation-caveat.png` | RCA caveat |
+| `17a-expanded-cart-flag-before-off.png` | Supplemental cart flag baseline |
+| `17b-expanded-cart-slo-baseline-healthy.png` | Supplemental healthy SLO baseline |
+| `17c-expanded-cart-observability-baseline.png` | Supplemental cart observability baseline |
+| `17d-expanded-cart-fault-start-timestamp.png` | Supplemental cart fault timestamp |
+| `17e-expanded-cart-flag-enabled.png` | Supplemental cart flag enabled |
+| `17f-expanded-cart-fault-slo-impact.png` | Supplemental cart SLO impact |
+| `17g-expanded-cart-detector-fired.png` | Supplemental cart detector fire |
+| `17h-expanded-cart-incident-api.png` | Supplemental cart incident API |
+| `17i-expanded-cart-flag-disabled.png` | Supplemental cart flag disabled |
+| `17j-expanded-cart-recovery-slo-dashboard.png` | Supplemental cart recovery SLO dashboard |
+| `17k-expanded-cart-recovery-observability.png` | Supplemental cart recovery observability |
+
+## 15. Reproduce
+
+Terminal 1 - port-forward dependencies:
 
 ```powershell
-cd C:\Users\husky\Downloads\Capstone3\tf2-corp-platform\src\aio
-$env:AIOPS_ENV_FILE = ".env.live"
-.\.venv\Scripts\python.exe -m uvicorn aiops.api.app:create_app `
-  --factory --host 0.0.0.0 --port 8540
+cd C:\Users\AdminPC\Downloads\projectx-brain\tf2-corp-platform\src\aio
+if (-not (Test-Path .env)) {
+    Copy-Item .env.example .env
+}
+powershell -File scripts\port_forward.ps1
 ```
 
+Terminal 2 - run AIOps API runtime:
 
-Kiểm tra runtime và incident API:
+```powershell
+cd C:\Users\AdminPC\Downloads\projectx-brain\tf2-corp-platform\src\aio
+.\.venv\Scripts\activate
+python -m uvicorn aiops.api.app:create_app --factory --host 0.0.0.0 --port 8540
+```
+
+Terminal 3 - verify runtime:
 
 ```powershell
 Invoke-RestMethod http://localhost:8540/health/ready
 Invoke-RestMethod http://localhost:8540/api/v1/incidents
 ```
 
-1. Giữ baseline bình thường tối thiểu 5 phút; xác nhận `candidates=0 incidents=0`.
-2. Operator bật `local-paymentFailure=50%` và ghi timestamp.
-3. Giữ traffic; theo dõi `AIOPS_DETECT threshold_fire`, `AIOPS_DEDUP_RESULT` và `AIOPS_NOTIFY_READY`.
-4. Gọi `GET /api/v1/incidents`; lưu ID, severity, state, `occurrence_count` và dashboard fault.
-5. Operator tắt `local-paymentFailure` và ghi timestamp.
-6. Chờ checkout success về `100%`, error về `0%`, p99 dưới `1s`; lưu dashboard và incident API recovery.
+Run flow:
 
-## 14. Submission Links và Sign-Off
-
-| Evidence | Link/trạng thái |
-| --- | --- |
-| Commit | [`d8300a5`](https://github.com/tf2-team/tf2-corp-platform/commit/d8300a5) |
-| ADR | [`ADR-DETECT-001`](../../../src/aio/docs/mandates/7a/ADR-DETECT-001.md) |
-| ADR reviewer sign-off | **Pending review**; chưa được tuyên bố là signed |
-
-Trước khi đóng Jira ticket, reviewer phải cập nhật bảng `Reviewer Sign-Off` trong ADR bằng quyết định và ngày ký thực tế.
-
-## 15. Kết luận
-
-- `local-paymentFailure=50%` làm checkout success giảm `100% → 57.8%`.
-- Detector tự phát hiện error rate `33.60% > 5%` và p99 `1.759s > 1s`.
-- First fire sau `259.852s`.
-- Dedup giữ nguyên hai incident IDs và tăng occurrence thay vì spam ID mới.
-- Sau khi tắt fault, success về `100%`, error về `0%`, p99 dưới `1s` sau `645s`.
-- Recall `100%` trên `K=1`; fire-level precision `66.67%`.
-- RCA miss `payment`, incident chưa auto-resolve và có một unexpected
-  `frontend-proxy` fire; các điểm này được ghi thành caveat.
-- Burn-rate live E2E đạt `8.3208x > 1x`, tạo `inc-ca09d8e8a247`, notification intent và dedup `1→2`. Multi-service live detection đã được chứng minh trên `checkout` và `frontend-proxy`; fire `frontend-proxy` là unexpected/unlabeled và không được tính vào quality metrics.
+1. Start Locust with `50` users and ramp/spawn rate `1 user/s`.
+2. Wait for a normal baseline and confirm `AIOPS_DEDUP_RESULT input_candidates=0 incidents=0`.
+3. Record timestamp with `Get-Date -Format "yyyy-MM-dd HH:mm:ss.fff zzz"`.
+4. In Flagd Configurator, set `local-paymentFailure=50%`.
+5. Capture first `AIOPS_DETECT threshold_fire` for `auto_checkout_error_rate`.
+6. Call `GET /api/v1/incidents` and capture incident ID and occurrence count.
+7. Wait more cycles and capture dedup with the same incident ID and higher occurrence count.
+8. Capture SLO impact dashboard.
+9. Set `local-paymentFailure=off`, record timestamp, and capture recovery dashboard.
 
 ## 16. Jira Paste Block
 
 ```text
-AI MANDATE #7b — API runtime live proof
+AI MANDATE #7b - API runtime live proof
 
-- Branch/base commit: feat/aio/v0.0.5 @ 8f1d1e8; burn-rate commit link pending
-- Runtime: uvicorn aiops.api.app:create_app --factory --host 0.0.0.0 --port 8540
-- Flow: baseline → flagd fault → detection/dedup → recovery
-- Scenario: local-paymentFailure=50%, expected checkout/payment
-- Baseline: 12:37:58–12:47:18 +07; candidates=0, incidents=0
-- Fault enabled: 2026-07-23 12:47:18 +07
-- First fire: 2026-07-23 12:51:37.852 +07
-- Lead-time: 259.852s (~4m20s)
-- Detector: checkout error 33.60% > 5% SEV2; checkout p99 1.759s > 1s SEV1
-- Incidents: inc-b3d92ea50475 and inc-8cd6d19cc778
-- Dedup: same IDs; occurrences 2→4 and 4→6; no duplicate IDs
-- Impact: checkout success 100%→57.8%
-- Alert: checkout SEV1 notification intent; route=outbox status=pending
-- Recovery: fault off 12:56:59; telemetry recovered 13:07:44; 645s
-- Labeled set: K=1 injected incident + normal baseline/recovery windows
-- Recall: 100% (1/1); unique detector-fire precision: 66.67% (2/3); F1: 80%
-- Burn-rate: checkout rolling-24h 8.3208x > 1x SEV1; incident inc-ca09d8e8a247; same ID occurrence 1→2; outbox pending
-- Safety: dry-run; no Kubernetes/flagd mutation by AIOps
-- ADR: src/aio/docs/mandates/7a/ADR-DETECT-001.md (reviewer sign-off still pending)
-- Caveats: K=1; RCA payment miss; frontend-proxy FP; no incident auto-resolution; frontend-proxy multi-service fire is unlabeled and excluded from quality metrics
-- Evidence markdown/images: docs/aiops/evidence
-- Additional dashboard evidence: C:\Users\husky\Downloads\Capstone3\assets
+- Runtime: local AIOps API on http://localhost:8540, Prometheus/Grafana/Jaeger/K8s through port-forward
+- Mode: dry-run; no Kubernetes or Flagd mutation by AIOps
+- Traffic: Locust 50 users, ramp 1 user/s, 10 workers, about 12.8 RPS, 0% failures during baseline
+- Baseline: 2026-07-24 01:00:54 +07; AIOPS_DEDUP_RESULT input_candidates=0 incidents=0; root_causes=[]
+- Fault: local-paymentFailure=50%, operator enabled through Flagd
+- Fault start: 2026-07-24 01:03:03.077 +07
+- First detector fire: 2026-07-24 01:06:28.494 +07
+- Lead-time: 205.417s (~3m25s)
+- Detector: auto_checkout_error_rate on checkout_error_rate_5m, value 0.078577 > threshold 0.05, SEV2
+- Incident: inc-b3d92ea50475, service checkout, runbook RB-SERVICE-ERROR-RATE
+- Notification intent: AIOPS_NOTIFY_ENQUEUED_READY for inc-b3d92ea50475, status pending
+- Dedup/no duplicate ID: same incident inc-b3d92ea50475, occurrence_count 4 -> 9 -> 12
+- Impact: checkout success dropped to 63.9% against SLO >=99.0%
+- Fault disabled: 2026-07-24 01:10:46.173 +07
+- Recovery: checkout success 100%, p95 350ms, p99 775ms (<1s), captured around 01:17 +07
+- Recall: 100% on K=1 labeled injected incident
+- Primary precision: 100% for labeled detector fire; conservative precision 50% if counting unexpected RCA recommendation as FP
+- Supplemental expanded-service proof: local-cartFailure produced auto_cart_latency_p99 on cart_p99_latency_5m, value 3.0867s > 1s, incident inc-c7f94b1816a6; cart SLO recovered to 100%; excluded from primary K=1 precision/recall
+- Caveats: RCA produced recommendation root-cause instead of payment; incident state remains open after telemetry recovery; rolling-24h burn-rate excluded from primary clean run because previous tests polluted the 24h window
+- Evidence: docs/aiops/evidence/MANDATE-07b-api-runtime-draft.md and linked screenshots in docs/aiops/evidence
 ```
+
+## 17. Conclusion
+
+The clean run demonstrates that the AIOps runtime detected a live checkout-impacting injected fault from Prometheus telemetry, created a stable checkout incident, deduped repeated detections, recorded notification intent, and showed user-visible SLO degradation followed by telemetry recovery. The main limitations are RCA quality, lack of automatic incident resolution, and the fact that rolling-24h burn-rate needs a clean Prometheus window or shorter demo window before it can be used as primary labeled-run evidence.
