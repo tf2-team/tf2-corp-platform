@@ -13,6 +13,7 @@ MISSPELL = $(TOOLS_DIR)/$(MISSPELL_BINARY)
 DOCKER_COMPOSE_CMD ?= docker compose
 DOCKER_COMPOSE_ENV=--env-file .env --env-file .env.override
 DOCKER_COMPOSE_BUILD_ARGS=
+DOCKER_COMPOSE_AI_DEV=$(DOCKER_COMPOSE_CMD) $(DOCKER_COMPOSE_ENV) -f docker-compose.yml -f docker-compose.ai-dev.yml
 
 # Java Workaround for macOS 15.2+ and M4 chips (see https://bugs.openjdk.org/browse/JDK-8345296)
 ifeq ($(shell uname -m),arm64)
@@ -237,6 +238,12 @@ ifdef service
 else
 	@echo "Please provide a service name using `service=[service name]` or `SERVICE=[service name]`"
 endif
+
+# Refresh the shared ai-common Python source in both AI services without a build.
+# Dependency changes still require: make redeploy service=product-reviews and shopping-copilot.
+.PHONY: ai-dev-restart
+ai-dev-restart:
+	$(DOCKER_COMPOSE_AI_DEV) up --detach --force-recreate --no-deps product-reviews shopping-copilot
 
 # Use to rebuild and restart (redeploy) a single service component
 # Example: make redeploy service=frontend
