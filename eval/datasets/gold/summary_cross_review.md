@@ -1,7 +1,7 @@
 # Summary Gold Dataset - Cross-review
 
-Reviewer: Grok (independent review)
-Date: 2026-07-21
+Reviewer: Lê Duy Khánh (independent review)
+Date: 2026-07-23
 
 | Case ID | Verdict | Lý do / field cần sửa |
 |---|---|---|
