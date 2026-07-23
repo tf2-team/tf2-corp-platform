@@ -27,6 +27,7 @@ dependencies = [
   "presidio-analyzer==2.2.363",
   "pydantic==2.12.5",
   "rank-bm25>=0.2.2",
+  "sentence-transformers>=2.7.0",
   "spacy==3.8.13",
   "regex==2024.11.6",
   "structlog>=24",

@@ -98,6 +98,12 @@ def retrieve_relevant_reviews(safe_reviews: SafeReviewSet, question: str, top_k:
         bm25 = BM25Okapi(tokenized_corpus)
         scores = bm25.get_scores(tokenize(question))
         bm25_scores = scores.tolist() if hasattr(scores, "tolist") else list(scores)
+        if not any(bm25_scores):
+            query_tokens = set(tokenize(question))
+            bm25_scores = [
+                len(query_tokens.intersection(tokenize(review.text)))
+                for review in reviews_list
+            ]
     except Exception as e:
         logger.warning("retrieval_mode=dense_only bm25_error=%s", type(e).__name__)
 

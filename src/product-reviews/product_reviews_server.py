@@ -489,6 +489,11 @@ def get_ai_assistant_response(request_product_id, question, user_id="anonymous")
                     answer=grounded.reason or ABSTAIN_MESSAGE,
                     reason=grounded.reason or ABSTAIN_MESSAGE,
                 )
+        elif safe_reviews is not None:
+            candidate_text = ABSTAIN_MESSAGE
+            structured_response = _build_structured_response(
+                status="ABSTAINED", answer=ABSTAIN_MESSAGE, reason=ABSTAIN_MESSAGE
+            )
         elif tool_calls:
             # Fallback for non-review tool calls (e.g. fetch_product_info)
             if llm_inaccurate_response and request_product_id == "L9ECAV7KIM":
