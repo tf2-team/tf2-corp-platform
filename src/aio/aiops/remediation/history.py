@@ -23,7 +23,7 @@ class IncidentHistoryStore:
         actions = [
             HistoryAction(action_id=decision.selected_action, target=decision.target, outcome="success")
             for decision in decisions
-            if not decision.fallback
+            if not decision.fallback and decision.would_execute
         ]
         if not actions:
             return

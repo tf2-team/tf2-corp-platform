@@ -167,6 +167,14 @@ class RuntimeConfigTest(unittest.TestCase):
 
         self.assertTrue(runbook_ids.issubset({path.stem for path in Path("runbooks").glob("*.md")}))
 
+    def test_service_runbook_map_covers_key_services(self):
+        runbook_map = json.loads(Path("runbooks/service_runbook_map.json").read_text(encoding="utf-8"))
+
+        self.assertIn("RB-KAFKA-PIPELINE", runbook_map["runbooks"])
+        self.assertIn("RB-DATASTORE-POSTGRESQL", runbook_map["services"]["postgresql"])
+        self.assertIn("RB-CHECKOUT-SLO", runbook_map["services"]["checkout"])
+        self.assertIn("RB-AI-DEPENDENCY", runbook_map["services"]["shopping-copilot"])
+
     def test_rejects_detector_with_unknown_signal(self):
         config = json.loads(Path("config/runtime.json").read_text(encoding="utf-8"))
         config["detectors"][0]["signal_id"] = "missing_signal"

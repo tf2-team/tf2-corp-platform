@@ -6,6 +6,7 @@ pydantic>=2,<3
 pydantic-settings>=2,<3
 statsmodels>=0.14,<1
 scikit-learn>=1.4,<2
+scipy>=1.11,<2
 tqdm>=4.66,<5
 drain3>=0.9,<1
 uvicorn[standard]>=0.35,<1

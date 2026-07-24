@@ -349,7 +349,7 @@ class E2EPipelineRegressionTest(unittest.TestCase):
         self.assertEqual(result.remediation_decisions[0].selected_action, "restart_payment")
         self.assertEqual(result.remediation_decisions[0].matched_history, ["hist-payment-dependency"])
 
-    def test_verified_recovery_appends_success_to_history(self):
+    def test_dry_run_recovery_does_not_append_success_to_history(self):
         with temp_workspace() as tmp:
             root = Path(tmp)
             actions_path = root / "actions.json"
@@ -393,12 +393,15 @@ class E2EPipelineRegressionTest(unittest.TestCase):
             result = pipeline.run_once()
             store.close()
             history = json.loads(history_path.read_text(encoding="utf-8"))
+            audit_rows = [json.loads(line) for line in audit_path.read_text(encoding="utf-8").splitlines()]
 
+        decision = result.remediation_decisions[0]
         self.assertEqual(result.verification_results[0].status, "recovered")
-        self.assertEqual(result.remediation_decisions[0].selected_action, "restart_payment")
-        self.assertEqual(len(history), 2)
-        self.assertEqual(history[1]["incident_id"], result.incidents[0].incident_id)
-        self.assertEqual(history[1]["actions_taken"][0]["outcome"], "success")
+        self.assertEqual(decision.selected_action, "restart_payment")
+        self.assertEqual(decision.policy_result, "dry-run-recorded")
+        self.assertFalse(decision.would_execute)
+        self.assertEqual(len(history), 1)
+        self.assertEqual(audit_rows[0]["selected_action"], "restart_payment")
 
 
 if __name__ == "__main__":

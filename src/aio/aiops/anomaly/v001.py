@@ -13,7 +13,7 @@ import warnings
 
 from aiops.anomaly.stats import mean, median, robust_score, stdev
 from aiops.schemas import AnomalyFinding, MetricSeries
-from aiops.shared.tail import evaluate_tail_change, fixed_baseline_and_tail, median3, metric_group, normal_traffic_growth_decision, point_changed, series_step_seconds, tail_increase_timestamps, tail_indexes
+from aiops.shared.tail import evaluate_tail_change, fixed_baseline_and_tail, median3, metric_group, normal_traffic_growth_decision, point_changed, series_step_seconds, tail_indexes
 
 logger = logging.getLogger(__name__)
 
@@ -281,7 +281,7 @@ class V001AnomalyEngine:
         min_tail_anomaly_buckets: dict[str, int],
         min_relative_change_ratio: dict[str, float],
         min_absolute_change: dict[str, float],
-        correlation_lag_buckets: dict[str, int],
+        traffic_shape_min_pearson: float,
         detection_window_seconds: int | None,
     ):
         self.algorithm_weights = algorithm_weights
@@ -292,7 +292,7 @@ class V001AnomalyEngine:
         self.min_tail_anomaly_buckets = min_tail_anomaly_buckets
         self.min_relative_change_ratio = min_relative_change_ratio
         self.min_absolute_change = min_absolute_change
-        self.correlation_lag_buckets = correlation_lag_buckets
+        self.traffic_shape_min_pearson = traffic_shape_min_pearson
         self.detection_window_seconds = detection_window_seconds
         self.thresholds = {
             "robust_drift": robust_drift_threshold,
@@ -419,17 +419,7 @@ class V001AnomalyEngine:
             self.min_tail_anomaly_buckets,
             self.min_relative_change_ratio,
             self.min_absolute_change,
-            self.correlation_lag_buckets,
-        )
-
-    def _increase_timestamps(self, metric: MetricSeries, group: str) -> set[int]:
-        return _tail_increase_timestamps(
-            metric,
-            self.detection_window_seconds,
-            self.min_points - 1,
-            self.min_tail_anomaly_buckets[group],
-            self.min_relative_change_ratio[group],
-            self.min_absolute_change[group],
+            self.traffic_shape_min_pearson,
         )
 
 def _is_cpu_metric(metric: str) -> bool:
@@ -479,7 +469,7 @@ def _normal_traffic_growth_decision(
     min_tail_anomaly_buckets: dict[str, int],
     min_relative_change_ratio: dict[str, float],
     min_absolute_change: dict[str, float],
-    correlation_lag_buckets: dict[str, int],
+    traffic_shape_min_pearson: float,
 ) -> tuple[bool, str]:
     return normal_traffic_growth_decision(
         series,
@@ -488,19 +478,8 @@ def _normal_traffic_growth_decision(
         min_tail_anomaly_buckets,
         min_relative_change_ratio,
         min_absolute_change,
-        correlation_lag_buckets,
+        traffic_shape_min_pearson,
     )
-
-
-def _tail_increase_timestamps(
-    metric: MetricSeries,
-    detection_window_seconds: int | None,
-    start: int,
-    min_buckets: int,
-    min_relative: float,
-    min_absolute: float,
-) -> set[int]:
-    return tail_increase_timestamps(metric, detection_window_seconds, start, min_buckets, min_relative, min_absolute)
 
 
 def _tail_context(metric: MetricSeries, detection_window_seconds: int | None, start: int) -> tuple[list[int], list[float], float]:
@@ -545,6 +524,6 @@ def build_v001_anomaly_engine(config: dict, **overrides) -> V001AnomalyEngine:
         min_tail_anomaly_buckets={key: int(value) for key, value in anomaly["min_tail_anomaly_buckets"].items()},
         min_relative_change_ratio={key: float(value) for key, value in anomaly["min_relative_change_ratio"].items()},
         min_absolute_change={key: float(value) for key, value in anomaly["min_absolute_change"].items()},
-        correlation_lag_buckets={key: int(value) for key, value in anomaly["correlation_lag_buckets"].items()},
+        traffic_shape_min_pearson=float(anomaly["traffic_shape_min_pearson"]),
         detection_window_seconds=int(anomaly["detection_window_seconds"]) or None,
     )

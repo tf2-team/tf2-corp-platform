@@ -1,0 +1,139 @@
+{
+  "schema_version": "1.0",
+  "default_runbooks": [
+    "RB-SERVICE-ERROR-RATE",
+    "RB-SERVICE-LATENCY"
+  ],
+  "runbooks": {
+    "RB-AIOPS-RUNTIME": {
+      "owner": "platform-oncall",
+      "title": "AIOps Runtime Health",
+      "checks": ["runtime logs", "SQLite/WAL state", "notification outbox", "collector freshness"]
+    },
+    "RB-AI-DEPENDENCY": {
+      "owner": "aie-oncall",
+      "title": "AI Dependency Failure",
+      "checks": ["llm service health", "external provider latency/errors", "catalog/reviews context", "cache/store health"]
+    },
+    "RB-CART-ERROR-RATE": {
+      "owner": "checkout-oncall",
+      "title": "Cart Error Rate",
+      "checks": ["cart errors", "Valkey health", "cart deployment", "checkout caller impact"]
+    },
+    "RB-CHECKOUT-DEPENDENCY": {
+      "owner": "checkout-oncall",
+      "title": "Checkout Dependency Failure",
+      "checks": ["likely dependency", "checkout traces", "dependency logs", "recent deploys"]
+    },
+    "RB-CHECKOUT-LATENCY": {
+      "owner": "checkout-oncall",
+      "title": "Checkout Latency",
+      "checks": ["p95/p99 latency", "checkout pods", "downstream latency", "recent deploys"]
+    },
+    "RB-CHECKOUT-SLO": {
+      "owner": "checkout-oncall",
+      "title": "Checkout SLO Breach",
+      "checks": ["PlaceOrder bad ratio", "customer impact", "dependency health", "recent deploys"]
+    },
+    "RB-DATASTORE-POSTGRESQL": {
+      "owner": "data-platform-oncall",
+      "title": "PostgreSQL Datastore Issue",
+      "checks": ["active connections", "pool utilization", "catalog/accounting callers", "do not auto-restart"]
+    },
+    "RB-DATASTORE-VALKEY-CART": {
+      "owner": "checkout-oncall",
+      "title": "Valkey Cart Datastore Issue",
+      "checks": ["memory usage", "cart dependency errors", "checkout/cart impact", "do not auto-restart"]
+    },
+    "RB-EDGE-ROUTING": {
+      "owner": "platform-oncall",
+      "title": "Edge Routing Failure",
+      "checks": ["frontend-proxy routes", "ingress/Envoy", "frontend health", "public path blocks"]
+    },
+    "RB-FEATURE-FLAG-FLAGD": {
+      "owner": "platform-oncall",
+      "title": "Feature Flag Failure",
+      "checks": ["flagd health", "flag rollout", "BTC/fault injection state", "affected services"]
+    },
+    "RB-KAFKA-PIPELINE": {
+      "owner": "platform-oncall",
+      "title": "Kafka Async Pipeline",
+      "checks": ["consumer lag", "checkout outbox", "accounting/fraud consumers", "managed Kafka health"]
+    },
+    "RB-LOAD-GENERATOR": {
+      "owner": "platform-oncall",
+      "title": "Load Generator Issue",
+      "checks": ["test traffic shape", "frontend-proxy target", "exclude from production remediation"]
+    },
+    "RB-MEM0-MEMORY-STORE": {
+      "owner": "aie-oncall",
+      "title": "Mem0 Memory Store Issue",
+      "checks": ["memory store health", "shopping-copilot dependency", "AI retrieval latency/errors"]
+    },
+    "RB-MONITORING-LOSS": {
+      "owner": "platform-oncall",
+      "title": "Monitoring Loss",
+      "checks": ["Prometheus scrape health", "AIOps collector", "signal freshness", "otel-collector queue"]
+    },
+    "RB-OBSERVABILITY-STACK": {
+      "owner": "platform-oncall",
+      "title": "Observability Stack Issue",
+      "checks": ["otel-collector", "Jaeger", "Grafana", "OpenSearch", "Prometheus"]
+    },
+    "RB-PRODUCT-CATALOG-CPU": {
+      "owner": "catalog-oncall",
+      "title": "Product Catalog CPU",
+      "checks": ["CPU saturation", "PostgreSQL health", "pod readiness", "catalog callers"]
+    },
+    "RB-SERVICE-ERROR-RATE": {
+      "owner": "platform-oncall",
+      "title": "Service Error Rate",
+      "checks": ["affected service errors", "recent deploys", "dependency health", "logs", "pod restarts"]
+    },
+    "RB-SERVICE-LATENCY": {
+      "owner": "platform-oncall",
+      "title": "Service Latency",
+      "checks": ["p95/p99 latency", "request rate", "CPU/memory", "dependency path"]
+    },
+    "RB-SHIPPING-QUOTE-DEPENDENCY": {
+      "owner": "checkout-oncall",
+      "title": "Shipping Quote Dependency",
+      "checks": ["shipping errors", "quote latency/errors", "checkout shipping path"]
+    }
+  },
+  "services": {
+    "accounting": ["RB-SERVICE-ERROR-RATE", "RB-SERVICE-LATENCY", "RB-KAFKA-PIPELINE", "RB-DATASTORE-POSTGRESQL"],
+    "ad": ["RB-SERVICE-ERROR-RATE", "RB-SERVICE-LATENCY", "RB-FEATURE-FLAG-FLAGD"],
+    "aiops": ["RB-MONITORING-LOSS", "RB-AIOPS-RUNTIME"],
+    "aws-bedrock": ["RB-AI-DEPENDENCY"],
+    "cart": ["RB-CART-ERROR-RATE", "RB-SERVICE-LATENCY", "RB-DATASTORE-VALKEY-CART"],
+    "checkout": ["RB-CHECKOUT-SLO", "RB-CHECKOUT-DEPENDENCY", "RB-CHECKOUT-LATENCY", "RB-SERVICE-ERROR-RATE", "RB-KAFKA-PIPELINE"],
+    "currency": ["RB-SERVICE-ERROR-RATE", "RB-SERVICE-LATENCY"],
+    "email": ["RB-SERVICE-ERROR-RATE", "RB-SERVICE-LATENCY"],
+    "external-llm": ["RB-AI-DEPENDENCY"],
+    "flagd": ["RB-FEATURE-FLAG-FLAGD"],
+    "flagd-ui": ["RB-FEATURE-FLAG-FLAGD"],
+    "fraud-detection": ["RB-SERVICE-ERROR-RATE", "RB-SERVICE-LATENCY", "RB-KAFKA-PIPELINE", "RB-DATASTORE-VALKEY-CART"],
+    "frontend": ["RB-SERVICE-ERROR-RATE", "RB-SERVICE-LATENCY", "RB-EDGE-ROUTING", "RB-FEATURE-FLAG-FLAGD"],
+    "frontend-proxy": ["RB-EDGE-ROUTING", "RB-SERVICE-LATENCY", "RB-SERVICE-ERROR-RATE"],
+    "grafana": ["RB-OBSERVABILITY-STACK", "RB-MONITORING-LOSS"],
+    "image-provider": ["RB-SERVICE-ERROR-RATE", "RB-SERVICE-LATENCY", "RB-FEATURE-FLAG-FLAGD"],
+    "jaeger": ["RB-OBSERVABILITY-STACK"],
+    "kafka": ["RB-KAFKA-PIPELINE"],
+    "llm": ["RB-AI-DEPENDENCY", "RB-SERVICE-ERROR-RATE", "RB-SERVICE-LATENCY"],
+    "load-generator": ["RB-LOAD-GENERATOR"],
+    "mem0": ["RB-AI-DEPENDENCY", "RB-MEM0-MEMORY-STORE"],
+    "opensearch": ["RB-OBSERVABILITY-STACK"],
+    "otel-collector": ["RB-MONITORING-LOSS", "RB-OBSERVABILITY-STACK"],
+    "payment": ["RB-SERVICE-ERROR-RATE", "RB-SERVICE-LATENCY", "RB-FEATURE-FLAG-FLAGD"],
+    "postgresql": ["RB-DATASTORE-POSTGRESQL"],
+    "product-catalog": ["RB-PRODUCT-CATALOG-CPU", "RB-SERVICE-ERROR-RATE", "RB-SERVICE-LATENCY", "RB-DATASTORE-POSTGRESQL"],
+    "product-reviews": ["RB-SERVICE-ERROR-RATE", "RB-SERVICE-LATENCY", "RB-DATASTORE-POSTGRESQL", "RB-AI-DEPENDENCY"],
+    "prometheus": ["RB-MONITORING-LOSS", "RB-OBSERVABILITY-STACK"],
+    "quote": ["RB-SERVICE-ERROR-RATE", "RB-SERVICE-LATENCY"],
+    "recommendation": ["RB-SERVICE-ERROR-RATE", "RB-SERVICE-LATENCY", "RB-PRODUCT-CATALOG-CPU"],
+    "shipping": ["RB-SERVICE-ERROR-RATE", "RB-SERVICE-LATENCY", "RB-SHIPPING-QUOTE-DEPENDENCY"],
+    "shopping-copilot": ["RB-AI-DEPENDENCY", "RB-SERVICE-ERROR-RATE", "RB-SERVICE-LATENCY", "RB-DATASTORE-VALKEY-CART"],
+    "valkey-cart": ["RB-DATASTORE-VALKEY-CART"]
+  }
+}

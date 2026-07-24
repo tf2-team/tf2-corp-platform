@@ -4,7 +4,8 @@
 from __future__ import annotations
 
 from collections import defaultdict
-import math
+
+from scipy.stats import pearsonr
 
 from aiops.anomaly.stats import median, robust_score
 from aiops.rca.graph import GraphTraversalRca
@@ -31,7 +32,7 @@ class V001RcaEngine:
         self.min_tail_anomaly_buckets = {key: int(value) for key, value in combined_hyperparameters["min_tail_anomaly_buckets"].items()}
         self.min_relative_change_ratio = {key: float(value) for key, value in combined_hyperparameters["min_relative_change_ratio"].items()}
         self.min_absolute_change = {key: float(value) for key, value in combined_hyperparameters["min_absolute_change"].items()}
-        self.correlation_lag_buckets = {key: int(value) for key, value in combined_hyperparameters["correlation_lag_buckets"].items()}
+        self.traffic_shape_min_pearson = float(combined_hyperparameters["traffic_shape_min_pearson"])
         self.canonical_service_suffixes = tuple(combined_hyperparameters["canonical_service_suffixes"])
         self.metric_aliases = combined_hyperparameters["metric_aliases"]
         self.graph = GraphTraversalRca(
@@ -244,20 +245,6 @@ class V001RcaEngine:
         top = max(findings, key=lambda finding: finding.score)
         return next((metric for metric in series if metric.signal_id == top.signal_id), None)
 
-    def _pearson(self, left: list[float], right: list[float]) -> float:
-        length = min(len(left), len(right))
-        if length < 3:
-            return 0.0
-        left = left[-length:]
-        right = right[-length:]
-        left_mean = sum(left) / length
-        right_mean = sum(right) / length
-        numerator = sum((left[index] - left_mean) * (right[index] - right_mean) for index in range(length))
-        left_denominator = math.sqrt(sum((value - left_mean) ** 2 for value in left))
-        right_denominator = math.sqrt(sum((value - right_mean) ** 2 for value in right))
-        denominator = left_denominator * right_denominator
-        return numerator / denominator if denominator else 0.0
-
     def _aligned_pearson(self, left: MetricSeries, right: MetricSeries) -> float:
         tolerance = max(series_step_seconds(left), series_step_seconds(right))
         pairs = []
@@ -267,7 +254,10 @@ class V001RcaEngine:
                 right_index += 1
             if right.points and abs(right.points[right_index].timestamp - point.timestamp) <= tolerance:
                 pairs.append((point.value, right.points[right_index].value))
-        return self._pearson([left_value for left_value, _ in pairs], [right_value for _, right_value in pairs])
+        if len(pairs) < 3:
+            return 0.0
+        coefficient = pearsonr(*zip(*pairs)).statistic
+        return float(coefficient) if coefficient == coefficient else 0.0
 
     def _weighted_rrf(self, rankers: dict[str, dict[str, float]]) -> dict[str, float]:
         scores: dict[str, float] = defaultdict(float)
@@ -314,7 +304,7 @@ class V001RcaEngine:
             self.min_tail_anomaly_buckets,
             self.min_relative_change_ratio,
             self.min_absolute_change,
-            self.correlation_lag_buckets,
+            self.traffic_shape_min_pearson,
         )
         return normal and not self._failure_signal_increased(service, timestamp, series, findings)
 
