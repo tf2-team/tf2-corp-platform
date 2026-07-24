@@ -8,3 +8,4 @@ python-dotenv==1.2.1
 python-json-logger==4.0.0
 psycopg2-binary==2.9.11
 simplejson==3.20.2
+valkey==6.1.0

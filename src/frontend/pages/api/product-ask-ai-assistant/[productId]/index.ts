@@ -13,9 +13,13 @@ const handler = async ({ method, body, query }: NextApiRequest, res: NextApiResp
     switch (method) {
         case 'POST': {
             const { productId = '' } = query;
-            const { question } = body ;
+            const { question, userId } = body ;
 
-            const response = await ProductReviewService.askProductAIAssistant(productId as string, question as string);
+            const response = await ProductReviewService.askProductAIAssistant(
+                productId as string,
+                question as string,
+                userId as string,
+            );
 
             return res.status(200).json(response);
         }

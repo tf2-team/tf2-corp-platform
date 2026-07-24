@@ -10,7 +10,8 @@ import { ThemeProvider } from 'styled-components';
 import Theme from '../styles/Theme';
 import FrontendTracer from '../utils/telemetry/FrontendTracer';
 import SessionGateway from '../gateways/Session.gateway';
-import { OpenFeatureProvider, OpenFeature } from '@openfeature/react-sdk';
+import { OpenFeatureProvider } from '@openfeature/react-sdk';
+import { OpenFeature } from '@openfeature/web-sdk';
 import { FlagdWebProvider } from '@openfeature/flagd-web-provider';
 
 declare global {
