@@ -173,7 +173,7 @@
       "query_id_template": "$service.memory_usage_bytes",
       "signal_id_template": "${service_id}_memory_usage_bytes",
       "promql": "sum(container_memory_working_set_bytes{container=\"$service\"}) or sum(container_memory_usage_bytes{container=\"$service\"}) or sum(container_memory_usage_bytes{container_name=~\".*$service.*\"}) or sum(k8s_pod_memory_usage{k8s_deployment_name=\"$service\"})",
-      "unit": "bytes_per_second",
+      "unit": "bytes",
       "window": "instant",
       "metric": "memory_usage_bytes",
       "feature_role": "anomaly_input"
@@ -192,7 +192,7 @@
       "query_id_template": "$service.socket_io_bytes_per_second",
       "signal_id_template": "${service_id}_socket_io_bytes_per_second",
       "promql": "((sum(rate(container_network_receive_bytes_total{pod=~\"$service.*\"}[5m])) or 0 * sum(rate(container_network_transmit_bytes_total{pod=~\"$service.*\"}[5m]))) + (sum(rate(container_network_transmit_bytes_total{pod=~\"$service.*\"}[5m])) or 0 * sum(rate(container_network_receive_bytes_total{pod=~\"$service.*\"}[5m])))) or ((sum(rate(container_network_io_usage_rx_bytes{container_name=~\".*$service.*\"}[5m])) or 0 * sum(rate(container_network_io_usage_tx_bytes{container_name=~\".*$service.*\"}[5m]))) + (sum(rate(container_network_io_usage_tx_bytes{container_name=~\".*$service.*\"}[5m])) or 0 * sum(rate(container_network_io_usage_rx_bytes{container_name=~\".*$service.*\"}[5m]))))",
-      "unit": "bytes",
+      "unit": "bytes_per_second",
       "window": "5m",
       "metric": "socket_io_bytes_per_second",
       "feature_role": "anomaly_input",

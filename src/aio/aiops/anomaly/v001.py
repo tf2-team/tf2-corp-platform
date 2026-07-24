@@ -107,10 +107,33 @@ class RobustDriftDetector:
 
 
 class ServiceIsolationForestDetector:
-    def __init__(self, score_threshold: float, min_points: int, detection_window_seconds: int | None = None):
+    def __init__(
+        self,
+        score_threshold: float,
+        min_points: int,
+        detection_window_seconds: int | None = None,
+        min_tail_anomaly_buckets: dict[str, int] | None = None,
+        min_relative_change_ratio: dict[str, float] | None = None,
+        min_absolute_change: dict[str, float] | None = None,
+    ):
         self.score_threshold = score_threshold
         self.min_points = min_points
         self.detection_window_seconds = detection_window_seconds
+        self.min_tail_anomaly_buckets = min_tail_anomaly_buckets or {}
+        self.min_relative_change_ratio = min_relative_change_ratio or {}
+        self.min_absolute_change = min_absolute_change or {}
+
+    def _min_tail_buckets(self, metric: str) -> int:
+        group = metric_group(metric)
+        return self.min_tail_anomaly_buckets.get(group, self.min_tail_anomaly_buckets.get("default", 2))
+
+    def _min_relative_ratio(self, metric: str) -> float:
+        group = metric_group(metric)
+        return self.min_relative_change_ratio.get(group, self.min_relative_change_ratio.get("default", 0.3))
+
+    def _min_absolute_delta(self, metric: str) -> float:
+        group = metric_group(metric)
+        return self.min_absolute_change.get(group, self.min_absolute_change.get("default", 1.0))
 
     def evaluate(self, series: list[MetricSeries]) -> list[AnomalyFinding]:
         by_service: dict[str, list[MetricSeries]] = defaultdict(list)
@@ -133,7 +156,7 @@ class ServiceIsolationForestDetector:
             tail_indexes = list(range(max(self.min_points, first_tail), len(rows)))
             if not tail_indexes:
                 continue
-            rows = self._normalized_rows(rows, tail_indexes[0])
+            rows = self._normalized_rows(rows, eligible, tail_indexes[0])
             baseline_rows = rows[: tail_indexes[0]]
             tail_rows = [rows[index] for index in tail_indexes]
             scored = [(score * 10.0, index) for score, index in zip(self._scores(baseline_rows, tail_rows), tail_indexes)]
@@ -143,7 +166,19 @@ class ServiceIsolationForestDetector:
             latest_values = rows[service_index]
             baseline_values = rows[:service_index]
             baseline_center = [mean([row[index] for row in baseline_values]) for index in range(len(eligible))]
-            top_metric = max(eligible, key=lambda metric: abs(latest_values[eligible.index(metric)] - baseline_center[eligible.index(metric)]))
+            significant_eligible = [
+                metric for metric in eligible
+                if _is_error_metric(metric.metric) or _is_oom_metric(metric.metric) or evaluate_tail_change(
+                    metric,
+                    self.detection_window_seconds,
+                    self.min_points - 1,
+                    self._min_tail_buckets(metric.metric),
+                    self._min_relative_ratio(metric.metric),
+                    self._min_absolute_delta(metric.metric),
+                ).significant
+            ]
+            candidates = significant_eligible if significant_eligible else eligible
+            top_metric = max(candidates, key=lambda metric: abs(latest_values[eligible.index(metric)] - baseline_center[eligible.index(metric)]))
             findings.append(
                 AnomalyFinding(
                     algorithm="isolation_forest",
@@ -171,18 +206,27 @@ class ServiceIsolationForestDetector:
         timestamps = timestamps if timestamps is not None else sorted(set.intersection(*(set(values) for values in values_by_metric)))
         return [[values[timestamp] for values in values_by_metric] for timestamp in timestamps]
 
-    def _normalized_rows(self, rows: list[list[float]], baseline_count: int | None = None) -> list[list[float]]:
+    def _normalized_rows(self, rows: list[list[float]], metrics: list[MetricSeries] | None = None, baseline_count: int | None = None) -> list[list[float]]:
         if not rows:
             return []
         columns = list(zip(*rows))
         normalized_columns = []
-        for column in columns:
-            baseline = column[:baseline_count]
+        for index, column in enumerate(columns):
+            baseline = column[:baseline_count] if baseline_count is not None else column
             low = min(baseline)
             high = max(baseline)
-            spread = high - low or 1.0
+            min_spread = self._min_absolute_delta(metrics[index].metric) if metrics and index < len(metrics) else 1.0
+            spread = max(high - low, min_spread)
             normalized_columns.append([(value - low) / spread for value in column])
         return [list(row) for row in zip(*normalized_columns)]
+
+
+def _drain3_config(config_path: str | Path):
+    config = TemplateMinerConfig()
+    path = Path(config_path)
+    if path.exists():
+        config.load(str(path))
+    return config
 
 
 class LogTemplateMetricBuilder:
