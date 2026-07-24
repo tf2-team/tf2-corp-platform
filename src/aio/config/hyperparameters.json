@@ -139,7 +139,7 @@
       "min_absolute_change": {
         "error": 0.005,
         "latency": 0.05,
-        "cpu": 10.0,
+        "cpu": 100.0,
         "memory": 104857600.0,
         "disk": 1048576.0,
         "socket_io": 1048576.0,
