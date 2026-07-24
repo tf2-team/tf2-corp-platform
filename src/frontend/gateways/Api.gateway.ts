@@ -88,7 +88,7 @@ const Apis = () => ({
     return request<any>({
       url: `${basePath}/product-ask-ai-assistant/${productId}`,
       method: 'POST',
-      body: { question },
+      body: { question, userId: getUserId() },
     });
   },
   listRecommendations(productIds: string[], currencyCode: string) {

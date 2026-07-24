@@ -648,12 +648,15 @@ services:
       - FLAGD_PORT
       - LLM_HOST
       - LLM_PORT
+      - VALKEY_ADDR
     depends_on:
       product-catalog:
         condition: service_started
       llm:
         condition: service_started
       postgresql:
+        condition: service_started
+      valkey-cart:
         condition: service_started
       otel-collector:
         condition: service_started

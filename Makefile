@@ -13,6 +13,7 @@ MISSPELL = $(TOOLS_DIR)/$(MISSPELL_BINARY)
 DOCKER_COMPOSE_CMD ?= docker compose
 DOCKER_COMPOSE_ENV=--env-file .env --env-file .env.override
 DOCKER_COMPOSE_BUILD_ARGS=
+DOCKER_COMPOSE_AI_DEV=$(DOCKER_COMPOSE_CMD) $(DOCKER_COMPOSE_ENV) -f docker-compose.yml -f docker-compose.ai-dev.yml
 
 # Java Workaround for macOS 15.2+ and M4 chips (see https://bugs.openjdk.org/browse/JDK-8345296)
 ifeq ($(shell uname -m),arm64)
@@ -142,6 +143,14 @@ run-tests:
 	$(DOCKER_COMPOSE_CMD) $(DOCKER_COMPOSE_ENV) -f docker-compose-tests.yml run frontendTests
 	$(DOCKER_COMPOSE_CMD) $(DOCKER_COMPOSE_ENV) -f docker-compose-tests.yml run traceBasedTests
 
+.PHONY: eval
+eval:
+	@test -n "$(DATASET)" || (echo "Usage: make eval DATASET=eval/datasets/gold/<file>.jsonl" && exit 1)
+	python -m pip install -r eval/requirements.txt
+	cd eval && python -m unittest harness.test_loader
+	cd eval && python -c "from harness.loader import load_dataset; load_dataset(r'$(abspath $(DATASET))')"
+	@echo "Dataset validation complete. Full adapter and grader execution will be added in EV-2.4."
+
 .PHONY: run-tracetesting
 run-tracetesting:
 	$(DOCKER_COMPOSE_CMD) $(DOCKER_COMPOSE_ENV) -f docker-compose-tests.yml run traceBasedTests ${SERVICES_TO_TEST}
@@ -229,6 +238,12 @@ ifdef service
 else
 	@echo "Please provide a service name using `service=[service name]` or `SERVICE=[service name]`"
 endif
+
+# Refresh the shared ai-common Python source in both AI services without a build.
+# Dependency changes still require: make redeploy service=product-reviews and shopping-copilot.
+.PHONY: ai-dev-restart
+ai-dev-restart:
+	$(DOCKER_COMPOSE_AI_DEV) up --detach --force-recreate --no-deps product-reviews shopping-copilot
 
 # Use to rebuild and restart (redeploy) a single service component
 # Example: make redeploy service=frontend

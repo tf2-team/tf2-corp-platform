@@ -11,6 +11,7 @@ version = "0.1.0"
 description = "Shared AI safety, grounding, and protobuf contracts for TechX services"
 requires-python = ">=3.12"
 dependencies = [
+  "boto3==1.38.46",
   "grpcio==1.71.0",
   "instructor==1.15.4",
   # llm-guard 0.3.16 and presidio-anonymizer 2.2.363 are installed --no-deps
@@ -25,6 +26,8 @@ dependencies = [
   "openai==2.14.0",
   "presidio-analyzer==2.2.363",
   "pydantic==2.12.5",
+  "rank-bm25>=0.2.2",
+  "sentence-transformers>=2.7.0",
   "spacy==3.8.13",
   "regex==2024.11.6",
   "structlog>=24",

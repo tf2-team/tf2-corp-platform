@@ -1,0 +1,208 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eval-case.schema.json",
+  "title": "Eval Case",
+  "description": "Schema for AI evaluation test cases — covers both Review Summary and Shopping Copilot surfaces.",
+  "type": "object",
+  "required": ["case_id", "surface", "input", "labels"],
+  "additionalProperties": false,
+  "properties": {
+    "case_id": {
+      "type": "string",
+      "pattern": "^(summary|copilot)_[a-z_]+_\\d{3}$",
+      "description": "Unique identifier. Format: {surface}_{case_type}_{number}. Example: copilot_unanswerable_001"
+    },
+    "surface": {
+      "type": "string",
+      "enum": ["summary", "copilot"],
+      "description": "Which AI surface this case targets."
+    },
+    "input": {
+      "type": "object",
+      "description": "Input data for the eval case. Fields vary by surface.",
+      "properties": {
+        "product_id": {
+          "type": "string",
+          "description": "Product ID for summary surface. Required when surface=summary."
+        },
+        "question": {
+          "type": "string",
+          "description": "User question for summary surface. Required when surface=summary."
+        },
+        "user_message": {
+          "type": "string",
+          "description": "Free-text user message for copilot surface. Required when surface=copilot."
+        },
+        "mock_reviews": {
+          "type": "array",
+          "items": {
+            "oneOf": [
+              { "type": "string" },
+              {
+                "type": "object",
+                "properties": {
+                  "text": { "type": "string" },
+                  "score": { "type": "string" },
+                  "id": { "type": "string" }
+                },
+                "required": ["text"]
+              }
+            ]
+          },
+          "description": "Mock review data to inject. Can be plain strings or objects with text/score/id."
+        },
+        "mock_product_description": {
+          "type": "string",
+          "description": "Product facts and specifications used to check factual claims."
+        },
+        "mock_catalog_products": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "product_id": { "type": "string" },
+              "name": { "type": "string" },
+              "price_units": { "type": "integer" },
+              "price_nanos": { "type": "integer", "default": 0 },
+              "currency_code": { "type": "string", "default": "USD" },
+              "categories": { "type": "array", "items": { "type": "string" } }
+            },
+            "required": ["product_id", "name"]
+          },
+          "description": "Mock catalog products for copilot search results."
+        },
+        "initial_cart_state": {
+          "type": "object",
+          "description": "Initial cart state for copilot cart tests.",
+          "properties": {
+            "items": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "product_id": { "type": "string" },
+                  "quantity": { "type": "integer" }
+                }
+              }
+            }
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "labels": {
+      "type": "object",
+      "required": ["case_type", "expected_behavior", "expected_status"],
+      "additionalProperties": false,
+      "properties": {
+        "case_type": {
+          "type": "string",
+          "enum": [
+            "grounded",
+            "hallucination",
+            "unanswerable",
+            "injection_user",
+            "injection_review",
+            "pii_in_review",
+            "pii_in_question",
+            "system_prompt_leak",
+            "unauthorized_write",
+            "confirmed_write",
+            "out_of_scope",
+            "false_block_check",
+            "search",
+            "product_qa"
+          ],
+          "description": "Category of this test case."
+        },
+        "expected_behavior": {
+          "type": "string",
+          "enum": ["answer", "abstain", "block", "confirm", "search_results"],
+          "description": "What the system should do."
+        },
+        "expected_status": {
+          "type": "string",
+          "enum": ["GROUNDED", "ABSTAINED", "BLOCKED", "FALLBACK", "NO_RESULTS"],
+          "description": "Expected CopilotStatus or ResponseStatus value."
+        },
+        "supported_claims": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Claims that should appear in the answer (grounded by source)."
+        },
+        "forbidden_claims": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Claims that must NOT appear (hallucination traps)."
+        },
+        "expected_contains_any": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Answer must contain at least one of these keywords."
+        },
+        "forbidden_contains": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Answer must NOT contain any of these keywords."
+        },
+        "allowed_tools": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Tools that may be called in this case."
+        },
+        "forbidden_tools": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Tools that must NOT be called."
+        },
+        "expected_pending_action": {
+          "type": "boolean",
+          "description": "True if the copilot should create a pending cart action token."
+        },
+        "expected_pending_product_id": {
+          "type": "string",
+          "description": "Product ID that must be stored in the pending cart action."
+        }
+      }
+    },
+    "metadata": {
+      "type": "object",
+      "properties": {
+        "source": {
+          "type": "string",
+          "enum": ["human", "production-derived", "synthetic"],
+          "description": "How the case was created."
+        },
+        "review_status": {
+          "type": "string",
+          "enum": ["candidate", "silver", "gold"],
+          "description": "Current review/approval status."
+        },
+        "reviewers": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Names/IDs of human reviewers who validated this case."
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "if": { "properties": { "surface": { "const": "summary" } } },
+  "then": {
+    "properties": {
+      "input": {
+        "required": ["product_id", "question", "mock_reviews"]
+      }
+    }
+  },
+  "else": {
+    "if": { "properties": { "surface": { "const": "copilot" } } },
+    "then": {
+      "properties": {
+        "input": {
+          "required": ["user_message"]
+        }
+      }
+    }
+  }
+}

@@ -25,6 +25,7 @@ from ai_contracts import (
 )
 from grounding import (
     ABSTAIN_MESSAGE,
+    GroundingMode,
     generate_grounded_summary,
     validate_grounded_summary,
 )
@@ -102,6 +103,47 @@ def test_claim_with_unrelated_content_is_dropped():
     )
 
     result = validate_grounded_summary(draft, safe_reviews)
+
+    assert result.status == ResponseStatus.ABSTAINED
+
+
+def test_bm25_keeps_claim_matching_a_single_cited_review():
+    """A cited review must be scored within the full retrieved corpus."""
+    safe_reviews = SafeReviewSet(
+        product_id="P001",
+        reviews=_reviews(
+            ("r1", "Manual controls are tricky at first but rewarding."),
+            ("r2", "Lightweight telescope for camping trips."),
+            ("r3", "Clear views of the moon and brighter planets."),
+            ("r4", "Good value for beginner astronomers."),
+        ),
+    )
+    draft = GroundedDraft(
+        answer="Manual controls are tricky at first.",
+        claims=[GroundedClaim(text="Manual controls are tricky at first.", sources=["r1"])],
+    )
+
+    result = validate_grounded_summary(draft, safe_reviews, mode=GroundingMode.BM25)
+
+    assert result.status == ResponseStatus.GROUNDED
+    assert result.claims[0].sources == ["r1"]
+
+
+def test_bm25_drops_claim_not_supported_by_its_cited_review():
+    safe_reviews = SafeReviewSet(
+        product_id="P001",
+        reviews=_reviews(
+            ("r1", "Manual controls are tricky at first but rewarding."),
+            ("r2", "Lightweight telescope for camping trips."),
+            ("r3", "Clear views of the moon and brighter planets."),
+        ),
+    )
+    draft = GroundedDraft(
+        answer="Battery life lasts all day.",
+        claims=[GroundedClaim(text="Battery life lasts all day.", sources=["r1"])],
+    )
+
+    result = validate_grounded_summary(draft, safe_reviews, mode=GroundingMode.BM25)
 
     assert result.status == ResponseStatus.ABSTAINED
 

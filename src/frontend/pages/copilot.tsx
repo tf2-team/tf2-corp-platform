@@ -288,7 +288,9 @@ const CopilotContent: React.FC = () => {
                     onSuggestionClick={handleSuggestionClick}
                   />
                   <CopilotCartConfirm pendingToken={turn.response.pendingActionToken} />
-                  <CopilotProductCard products={turn.response.products} />
+                  {(!turn.response.claims || turn.response.claims.length === 0) && (
+                    <CopilotProductCard products={turn.response.products} />
+                  )}
                   <CopilotClaims
                     claims={turn.response.claims}
                     sources={turn.response.sources}
