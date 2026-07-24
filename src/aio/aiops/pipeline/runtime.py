@@ -32,7 +32,7 @@ from aiops.remediation import (
     RemediationDecisionEngine,
     RemediationFeatureExtractor,
 )
-from aiops.schemas import CandidateEvent, Incident, RemediationDecision, VerificationResult
+from aiops.schemas import ActionCatalogItem, ActionProposal, CandidateEvent, Incident, RemediationDecision, VerificationResult
 from aiops.shared.series import prepare_detector_series
 from aiops.topology import TopologyGraph
 from aiops.verification import VerificationEngine
@@ -451,16 +451,46 @@ class AiopsPipeline:
         for incident in incidents:
             features = extractor.extract(incident, rca_result)
             decision = decider.decide(incident.incident_id, features, retriever.top_matches(features, records), actions)
+            decision = self._apply_remediation_policy(decision, actions)
             logger.info(
-                "AIOPS_BLOCK remediation_decide incident=%s action=%s decision=%s reasons=%s",
+                "AIOPS_BLOCK remediation_decide incident=%s action=%s decision=%s policy=%s reasons=%s policy_reasons=%s",
                 incident.incident_id,
                 decision.selected_action,
                 decision.decision,
+                decision.policy_result,
                 decision.reasons,
+                decision.policy_reasons,
             )
             audit.append(decision)
             decisions.append(decision)
         return decisions
+
+    def _apply_remediation_policy(self, decision: RemediationDecision, actions: dict[str, ActionCatalogItem]) -> RemediationDecision:
+        action = actions.get(decision.selected_action)
+        if decision.fallback or action is None or action.action_type == "page":
+            return decision.model_copy(
+                update={"policy_result": "not_mutating", "policy_allowed": False, "would_execute": False}
+            )
+        policy_decision = self.policy.evaluate(
+            ActionProposal(
+                action_type=action.action_type,
+                target=action.target,
+                target_kind=action.target_kind,
+                replicas=action.replicas,
+                mutating=True,
+                verification_defined=action.verification_defined,
+                rollback_defined=action.rollback_defined,
+                approved=action.approved,
+            )
+        )
+        return decision.model_copy(
+            update={
+                "policy_result": policy_decision.result,
+                "policy_reasons": policy_decision.reasons,
+                "policy_allowed": policy_decision.allowed,
+                "would_execute": False,
+            }
+        )
 
     def _suppress_related_notifications(self, incidents: list[Incident], rca_result: RcaResult) -> set[str]:
         suppressed = set()

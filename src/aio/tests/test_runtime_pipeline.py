@@ -1322,7 +1322,7 @@ class RuntimePipelineTest(unittest.TestCase):
 
         self.assertEqual({message.service for message in result.notifications}, {"checkout", "valkey-cart"})
 
-    def test_verified_remediation_is_added_to_incident_history(self):
+    def test_dry_run_remediation_is_not_added_to_success_history(self):
         settings = Settings()
         with TemporaryDirectory() as tmp:
             root = Path(tmp)
@@ -1408,12 +1408,19 @@ class RuntimePipelineTest(unittest.TestCase):
             result = pipeline.run_once()
             store.close()
             history = json.loads(history_path.read_text(encoding="utf-8"))
+            audit_rows = [json.loads(line) for line in audit_path.read_text(encoding="utf-8").splitlines()]
+
+        decision = result.remediation_decisions[0]
 
         self.assertEqual(result.verification_results[0].status, "recovered")
-        self.assertEqual(result.remediation_decisions[0].selected_action, "restart_payment")
-        self.assertEqual(len(history), 2)
-        self.assertEqual(history[1]["incident_id"], result.incidents[0].incident_id)
-        self.assertEqual(history[1]["actions_taken"][0]["outcome"], "success")
+        self.assertEqual(decision.selected_action, "restart_payment")
+        self.assertEqual(decision.decision, "dry-run-recorded")
+        self.assertEqual(decision.policy_result, "dry-run-recorded")
+        self.assertFalse(decision.policy_allowed)
+        self.assertFalse(decision.would_execute)
+        self.assertEqual(len(history), 1)
+        self.assertEqual(audit_rows[0]["selected_action"], "restart_payment")
+        self.assertEqual(audit_rows[0]["policy_result"], "dry-run-recorded")
 
 
 if __name__ == "__main__":

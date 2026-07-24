@@ -128,6 +128,9 @@ class ActionCatalogItem(AiopsModel):
     downtime_min: float
     blast_radius_services: list[str] = Field(default_factory=list)
     replicas: int = 3
+    verification_defined: bool = True
+    rollback_defined: bool = True
+    approved: bool = False
 
 
 class RemediationDecision(AiopsModel):
@@ -140,6 +143,10 @@ class RemediationDecision(AiopsModel):
     fallback: bool
     reasons: list[str] = Field(default_factory=list)
     matched_history: list[str] = Field(default_factory=list)
+    policy_result: str = "not_evaluated"
+    policy_reasons: tuple[str, ...] = ()
+    policy_allowed: bool = False
+    would_execute: bool = False
 
 
 class EvidenceItem(AiopsModel):
