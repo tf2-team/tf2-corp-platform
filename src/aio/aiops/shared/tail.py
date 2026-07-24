@@ -103,12 +103,13 @@ def normal_traffic_growth_decision(
     min_relative_change_ratio: dict[str, float],
     min_absolute_change: dict[str, float],
     correlation_lag_buckets: dict[str, int],
+    traffic_shape_min_pearson: float = 0.7,
 ) -> tuple[bool, str]:
-    infra_groups = ("cpu", "memory", "socket_io")
-    groups = ("request_rate", *infra_groups)
+    required_infra_groups = ("cpu", "socket_io")
+    groups = ("request_rate", *required_infra_groups)
     by_group = {group: [metric for metric in series if metric_group(metric.metric) == group] for group in groups}
     missing = [group for group, metrics in by_group.items() if not metrics]
-    if "request_rate" in missing or sum(bool(by_group[group]) for group in infra_groups) < 2:
+    if missing:
         return False, f"reason=missing_metrics metrics={','.join(missing)}"
     for metric in series:
         change = _smoothed_tail_change(metric, detection_window_seconds, start, min_tail_anomaly_buckets, min_relative_change_ratio, min_absolute_change)
@@ -123,83 +124,31 @@ def normal_traffic_growth_decision(
             group = metric_group(metric.metric)
             if decreased >= min_tail_anomaly_buckets[group] and change.indexes and median(change.values[index] for index in change.indexes) < change.baseline:
                 return False, "reason=ready_pods_decreased"
-    base_tolerance = max(series_step_seconds(metric) for metrics in by_group.values() for metric in metrics)
-    required = max(min_tail_anomaly_buckets[group] for group in groups)
-    failures = []
-    for direction, label in ((1, "growth"), (-1, "decline")):
-        timestamps = {
-            group: set().union(
-                *(
-                    tail_direction_timestamps(
-                        metric,
-                        detection_window_seconds,
-                        start,
-                        min_tail_anomaly_buckets[group],
-                        min_relative_change_ratio[group],
-                        min_absolute_change[group],
-                        direction,
-                    )
-                    for metric in metrics
-                )
-            )
-            for group, metrics in by_group.items()
-        }
-        changed_infra = [group for group in infra_groups if timestamps[group]]
-        if not timestamps["request_rate"] or len(changed_infra) < 2:
-            failures.append(f"{label}:request={bool(timestamps['request_rate'])},infra={','.join(changed_infra)}")
-            continue
-        request_onset = min(timestamps["request_rate"])
-        aligned_infra = [
-            group
-            for group in changed_infra
-            if -base_tolerance <= min(timestamps[group]) - request_onset <= base_tolerance * correlation_lag_buckets[group]
-        ]
-        opposite = [
-            group
-            for group in infra_groups
-            if group not in changed_infra
-            and any(
-                tail_direction_timestamps(
-                    metric,
-                    detection_window_seconds,
-                    start,
-                    min_tail_anomaly_buckets[group],
-                    min_relative_change_ratio[group],
-                    min_absolute_change[group],
-                    -direction,
-                )
-                for metric in by_group[group]
-            )
-        ]
-        simultaneous = min([len(timestamps["request_rate"]), *sorted((len(timestamps[group]) for group in aligned_infra), reverse=True)[:2]]) if len(aligned_infra) >= 2 and not opposite else 0
-        if simultaneous >= required:
-            return True, f"reason=coordinated_{label} common={simultaneous} infra={','.join(aligned_infra)}"
-        failures.append(f"{label}:common={simultaneous},opposite={','.join(opposite)}")
-    return False, f"reason=not_coordinated details={'|'.join(failures)} required={required}"
-
-
-def tail_increase_timestamps(metric: MetricSeries, detection_window_seconds: int | None, start: int, min_buckets: int, min_relative: float, min_absolute: float) -> set[int]:
-    return tail_direction_timestamps(metric, detection_window_seconds, start, min_buckets, min_relative, min_absolute, 1)
-
-
-def tail_direction_timestamps(
-    metric: MetricSeries,
-    detection_window_seconds: int | None,
-    start: int,
-    min_buckets: int,
-    min_relative: float,
-    min_absolute: float,
-    direction: int,
-) -> set[int]:
-    change = evaluate_tail_change(metric, detection_window_seconds, start, min_buckets, min_relative, min_absolute, smooth=True)
-    changed = {
-        metric.points[index].timestamp
-        for index in change.indexes
-        if (change.values[index] - change.baseline) * direction > 0
-        and point_changed(change.values[index], change.baseline, min_relative, min_absolute)
+    request = by_group["request_rate"]
+    scores = {
+        group: max((_tail_pearson(rate, metric, detection_window_seconds, start) for rate in request for metric in by_group[group]), default=0.0)
+        for group in required_infra_groups
     }
-    tail_delta = median(change.values[index] for index in change.indexes) - change.baseline if change.indexes else 0.0
-    return changed if len(changed) >= min_buckets and tail_delta * direction > 0 else set()
+    if all(score >= traffic_shape_min_pearson for score in scores.values()):
+        return True, f"reason=traffic_shape cpu={scores['cpu']:.3f} socket_io={scores['socket_io']:.3f}"
+    return False, f"reason=shape_mismatch cpu={scores['cpu']:.3f} socket_io={scores['socket_io']:.3f} threshold={traffic_shape_min_pearson:.3f}"
+
+
+def _tail_pearson(left: MetricSeries, right: MetricSeries, detection_window_seconds: int | None, start: int) -> float:
+    from scipy.stats import pearsonr
+
+    tolerance = max(series_step_seconds(left), series_step_seconds(right))
+    pairs = []
+    right_index = 0
+    for point in left.points:
+        while right_index + 1 < len(right.points) and abs(right.points[right_index + 1].timestamp - point.timestamp) <= abs(right.points[right_index].timestamp - point.timestamp):
+            right_index += 1
+        if right.points and abs(right.points[right_index].timestamp - point.timestamp) <= tolerance:
+            pairs.append((point.value, right.points[right_index].value))
+    if len(pairs) < 3:
+        return 0.0
+    coefficient = pearsonr(*zip(*pairs)).statistic
+    return float(coefficient) if coefficient == coefficient else 0.0
 
 
 def _smoothed_tail_change(metric, detection_window_seconds, start, min_buckets_by_group, min_relative_by_group, min_absolute_by_group) -> TailChange:

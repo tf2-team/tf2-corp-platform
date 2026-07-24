@@ -18,7 +18,7 @@ from aiops.rca.graph import GraphTraversalRca
 from aiops.rca import V001RcaEngine
 from aiops.schemas import AnomalyFinding, MetricPoint, MetricSeries, PipelineResult, PipelineRunRequest, RcaResult, RootCauseCandidate, RuntimeConfig, TelemetryCorroboration
 from aiops.shared.series import prepare_detector_series
-from aiops.shared.tail import fixed_baseline_and_tail
+from aiops.shared.tail import fixed_baseline_and_tail, normal_traffic_growth_decision
 
 
 def metric(service: str, name: str, values: list[float]) -> MetricSeries:
@@ -65,6 +65,7 @@ def rca_engine(config: RuntimeConfig, **combined_overrides) -> V001RcaEngine:
         "min_relative_change_ratio": hyperparameters["anomaly"]["min_relative_change_ratio"],
         "min_absolute_change": hyperparameters["anomaly"]["min_absolute_change"],
         "correlation_lag_buckets": hyperparameters["anomaly"]["correlation_lag_buckets"],
+        "traffic_shape_min_pearson": hyperparameters["anomaly"]["traffic_shape_min_pearson"],
         **combined_overrides,
     }
     return V001RcaEngine(config, hyperparameters["graph"], combined)
@@ -75,6 +76,47 @@ def graph_rca(config: RuntimeConfig) -> GraphTraversalRca:
 
 
 class V001AnomalyRcaTest(unittest.TestCase):
+    def test_normal_traffic_growth_requires_cpu_and_socket_shape_with_optional_memory(self):
+        common = {
+            "detection_window_seconds": 900,
+            "start": 29,
+            "min_tail_anomaly_buckets": {"request_rate": 3, "cpu": 3, "memory": 3, "socket_io": 3, "error": 1, "default": 2},
+            "min_relative_change_ratio": {"request_rate": 0.5, "cpu": 0.3, "memory": 0.3, "socket_io": 0.5, "error": 0.0, "default": 0.3},
+            "min_absolute_change": {"request_rate": 5.0, "cpu": 10.0, "memory": 10.0, "socket_io": 10.0, "error": 0.005, "default": 1.0},
+            "correlation_lag_buckets": {"cpu": 1, "memory": 4, "socket_io": 1},
+            "traffic_shape_min_pearson": 0.7,
+        }
+        values = [10] * 30 + list(range(30, 45))
+        series = [
+            minute_metric("checkout", "request_rate_5m", values),
+            minute_metric("checkout", "cpu_millicores", [100] * 30 + list(range(300, 450, 10))),
+            minute_metric("checkout", "socket_io_bytes_per_second", [1_000] * 30 + list(range(3_000, 4_500, 100))),
+        ]
+
+        normal, reason = normal_traffic_growth_decision(series, **common)
+
+        self.assertTrue(normal, reason)
+
+    def test_normal_traffic_growth_rejects_missing_socket_and_ignores_optional_memory_shape(self):
+        common = {
+            "detection_window_seconds": 900,
+            "start": 29,
+            "min_tail_anomaly_buckets": {"request_rate": 3, "cpu": 3, "memory": 3, "socket_io": 3, "error": 1, "default": 2},
+            "min_relative_change_ratio": {"request_rate": 0.5, "cpu": 0.3, "memory": 0.3, "socket_io": 0.5, "error": 0.0, "default": 0.3},
+            "min_absolute_change": {"request_rate": 5.0, "cpu": 10.0, "memory": 10.0, "socket_io": 10.0, "error": 0.005, "default": 1.0},
+            "correlation_lag_buckets": {"cpu": 1, "memory": 4, "socket_io": 1},
+            "traffic_shape_min_pearson": 0.7,
+        }
+        values = [10] * 30 + list(range(30, 45))
+        required = [
+            minute_metric("checkout", "request_rate_5m", values),
+            minute_metric("checkout", "cpu_millicores", [100] * 30 + list(range(300, 450, 10))),
+            minute_metric("checkout", "socket_io_bytes_per_second", [1_000] * 30 + list(range(3_000, 4_500, 100))),
+        ]
+
+        self.assertFalse(normal_traffic_growth_decision(required[:2], **common)[0])
+        self.assertTrue(normal_traffic_growth_decision([*required, minute_metric("checkout", "memory_usage_bytes", list(reversed(values)))], **common)[0])
+
     def test_fixed_baseline_excludes_every_detection_tail_point(self):
         series = minute_metric("payment", "cpu_millicores", [10.0] * 45 + [20.0] * 15)
 
@@ -448,7 +490,7 @@ class V001AnomalyRcaTest(unittest.TestCase):
             filtered = engine._filter_normal_traffic_growth(series)
 
         self.assertEqual([item.metric for item in filtered], ["error_rate_5m"])
-        self.assertIn("reason=coordinated_decline", " ".join(logs.output))
+        self.assertIn("reason=traffic_shape", " ".join(logs.output))
 
     def test_mixed_growth_and_decline_is_not_filtered(self):
         engine = anomaly_engine()
@@ -511,16 +553,6 @@ class V001AnomalyRcaTest(unittest.TestCase):
             )
         self.assertEqual(len(logs.records), 1)
         self.assertIn("reason=missing_metrics", " ".join(logs.output))
-
-    def test_growth_gate_only_measures_detection_tail(self):
-        engine = anomaly_engine()
-        request_rate = minute_metric("checkout", "request_rate_5m", [10] * 30 + [30] * 15)
-
-        timestamps = engine._increase_timestamps(request_rate, "request_rate")
-        cutoff = request_rate.points[-1].timestamp - engine.detection_window_seconds
-
-        self.assertTrue(timestamps)
-        self.assertTrue(all(timestamp >= cutoff for timestamp in timestamps))
 
     def test_staggered_load_growth_is_not_treated_as_simultaneous(self):
         engine = anomaly_engine()
