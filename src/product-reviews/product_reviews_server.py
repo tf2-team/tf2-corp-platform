@@ -42,9 +42,10 @@ from openai import OpenAI
 from google.protobuf.json_format import MessageToJson, MessageToDict
 
 # AI trustworthiness pipeline (A1.2 guardrails -> A1.1 grounding -> A1.2 output scan)
-from techx_ai_common.contracts import GuardrailAction, ResponseStatus
+from techx_ai_common.contracts import GroundedDraft, GuardrailAction, ResponseStatus
 from techx_ai_common import guardrails
-from techx_ai_common.bedrock import converse_text, is_bedrock_provider
+from techx_ai_common import grounding as grounding_module
+from techx_ai_common.bedrock import converse_json, is_bedrock_provider, peek_breaker_state
 from techx_ai_common.grounding import generate_grounded_summary, validate_grounded_summary
 from techx_ai_common.rate_limiter import check_rate_limit
 from techx_ai_common.retrieval import retrieve_relevant_reviews
@@ -167,6 +168,15 @@ def get_average_product_review_score(request_product_id):
 FALLBACK_MESSAGE = "AI summary is temporarily unavailable."
 ABSTAIN_MESSAGE = "The current reviews do not provide enough information."
 
+# Created against the global MeterProvider directly (rather than relying on
+# product_review_svc_metrics / init_metrics(), which run later in __main__)
+# so this counter works the same in tests and doesn't require touching
+# metrics.py to add a new instrument.
+_fallback_counter = metrics.get_meter_provider().get_meter("product-reviews").create_counter(
+    "app_ai_assistant_fallback_total",
+    description="AskProductAIAssistant requests that resolved to a FALLBACK status",
+)
+
 
 def _build_structured_response(status: str, answer: str = "", reason: str = "", claims: list = None) -> str:
     payload = {
@@ -203,19 +213,51 @@ def _rate_limited_response(reason: str | None):
 
 def _fallback_response(error_class: str = ""):
     """gRPC response when the LLM or a dependency fails.
-    Logs the error class but never raw prompts, PII, or secrets."""
+    Logs the error class but never raw prompts, PII, or secrets.
+
+    This is the one place that actually turns an upstream failure into the
+    FALLBACK status the caller sees, so it's also where we confirm — via a
+    dedicated log event and metric — that a controlled fallback really was
+    returned to the user (the adapter only knows it raised, not what the
+    caller ultimately did with that error).
+    """
     ai_assistant_response = demo_pb2.AskProductAIAssistantResponse()
     ai_assistant_response.response = _build_structured_response(
         status="FALLBACK",
         answer=FALLBACK_MESSAGE,
         reason=f"LLM or dependency error: {error_class}" if error_class else "LLM error",
     )
-    logger.warning(f"Returning fallback response. error_class={error_class}")
+    try:
+        breaker_state = peek_breaker_state() if is_bedrock_provider() else "not_applicable"
+    except Exception:
+        breaker_state = "unknown"
+    logger.warning(
+        "bedrock_fallback_returned",
+        extra={
+            "surface": "product-reviews",
+            "provider": "bedrock" if is_bedrock_provider() else "openai",
+            "fallback_reason": error_class or "unknown",
+            "breaker_state": breaker_state or "uninitialized",
+        },
+    )
+    _fallback_counter.add(
+        1,
+        {
+            "provider": "bedrock" if is_bedrock_provider() else "openai",
+            "error_class": error_class or "unknown",
+        },
+    )
     return ai_assistant_response
 
 
 def _get_bedrock_response(request_product_id, question, system_prompt, span):
-    """Bedrock has no OpenAI-compatible client here; fetch trusted data directly via RAG pipeline."""
+    """Run the direct review RAG path through the Mandate #25 Bedrock replica.
+
+    Bedrock never asks the model to choose a tool on this surface: trusted
+    review data is fetched first, then only a schema-validated GroundedDraft
+    is accepted from the model.  This explicit call avoids silently using the
+    production ``grounding.py`` adapter while this file is still a mock.
+    """
     try:
         safe_reviews = guardrails.sanitize_reviews(
             request_product_id, fetch_product_reviews(product_id=request_product_id)
@@ -228,9 +270,12 @@ def _get_bedrock_response(request_product_id, question, system_prompt, span):
                 status="ABSTAINED", answer=ABSTAIN_MESSAGE, reason=ABSTAIN_MESSAGE
             )
         else:
-            grounded = validate_grounded_summary(
-                generate_grounded_summary(safe_reviews, question=question), safe_reviews
+            draft = converse_json(
+                GroundedDraft,
+                grounding_module._SYSTEM_PROMPT,
+                grounding_module._build_review_prompt(safe_reviews, question),
             )
+            grounded = validate_grounded_summary(draft, safe_reviews)
             span.set_attribute("app.grounding.status", grounded.status.value)
             candidate_text = grounded.answer if grounded.status == ResponseStatus.GROUNDED else grounded.reason
             structured_response = _build_structured_response(
