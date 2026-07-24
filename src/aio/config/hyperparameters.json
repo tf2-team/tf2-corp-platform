@@ -118,12 +118,12 @@
       "log_max_events_per_evidence": 100,
       "min_tail_anomaly_buckets": {
         "error": 1,
-        "latency": 3,
-        "cpu": 3,
-        "memory": 3,
-        "disk": 3,
-        "socket_io": 3,
-        "request_rate": 3,
+        "latency": 2,
+        "cpu": 2,
+        "memory": 2,
+        "disk": 2,
+        "socket_io": 2,
+        "request_rate": 2,
         "default": 2
       },
       "min_relative_change_ratio": {
@@ -132,8 +132,8 @@
         "cpu": 0.3,
         "memory": 0.3,
         "disk": 0.3,
-        "socket_io": 0.5,
-        "request_rate": 0.5,
+        "socket_io": 0.3,
+        "request_rate": 0.3,
         "default": 0.3
       },
       "min_absolute_change": {
