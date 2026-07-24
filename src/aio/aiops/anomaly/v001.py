@@ -281,7 +281,6 @@ class V001AnomalyEngine:
         min_tail_anomaly_buckets: dict[str, int],
         min_relative_change_ratio: dict[str, float],
         min_absolute_change: dict[str, float],
-        correlation_lag_buckets: dict[str, int],
         traffic_shape_min_pearson: float,
         detection_window_seconds: int | None,
     ):
@@ -293,7 +292,6 @@ class V001AnomalyEngine:
         self.min_tail_anomaly_buckets = min_tail_anomaly_buckets
         self.min_relative_change_ratio = min_relative_change_ratio
         self.min_absolute_change = min_absolute_change
-        self.correlation_lag_buckets = correlation_lag_buckets
         self.traffic_shape_min_pearson = traffic_shape_min_pearson
         self.detection_window_seconds = detection_window_seconds
         self.thresholds = {
@@ -421,7 +419,6 @@ class V001AnomalyEngine:
             self.min_tail_anomaly_buckets,
             self.min_relative_change_ratio,
             self.min_absolute_change,
-            self.correlation_lag_buckets,
             self.traffic_shape_min_pearson,
         )
 
@@ -472,7 +469,6 @@ def _normal_traffic_growth_decision(
     min_tail_anomaly_buckets: dict[str, int],
     min_relative_change_ratio: dict[str, float],
     min_absolute_change: dict[str, float],
-    correlation_lag_buckets: dict[str, int],
     traffic_shape_min_pearson: float,
 ) -> tuple[bool, str]:
     return normal_traffic_growth_decision(
@@ -482,7 +478,6 @@ def _normal_traffic_growth_decision(
         min_tail_anomaly_buckets,
         min_relative_change_ratio,
         min_absolute_change,
-        correlation_lag_buckets,
         traffic_shape_min_pearson,
     )
 
@@ -529,7 +524,6 @@ def build_v001_anomaly_engine(config: dict, **overrides) -> V001AnomalyEngine:
         min_tail_anomaly_buckets={key: int(value) for key, value in anomaly["min_tail_anomaly_buckets"].items()},
         min_relative_change_ratio={key: float(value) for key, value in anomaly["min_relative_change_ratio"].items()},
         min_absolute_change={key: float(value) for key, value in anomaly["min_absolute_change"].items()},
-        correlation_lag_buckets={key: int(value) for key, value in anomaly["correlation_lag_buckets"].items()},
         traffic_shape_min_pearson=float(anomaly["traffic_shape_min_pearson"]),
         detection_window_seconds=int(anomaly["detection_window_seconds"]) or None,
     )

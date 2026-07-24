@@ -102,7 +102,6 @@ def normal_traffic_growth_decision(
     min_tail_anomaly_buckets: dict[str, int],
     min_relative_change_ratio: dict[str, float],
     min_absolute_change: dict[str, float],
-    correlation_lag_buckets: dict[str, int],
     traffic_shape_min_pearson: float = 0.7,
 ) -> tuple[bool, str]:
     required_infra_groups = ("cpu", "socket_io")

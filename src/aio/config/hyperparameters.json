@@ -144,11 +144,6 @@
         "request_rate": 5.0,
         "default": 1.0
       },
-      "correlation_lag_buckets": {
-        "cpu": 1,
-        "socket_io": 1,
-        "memory": 4
-      },
       "traffic_shape_min_pearson": 0.6
     },
     "graph": {

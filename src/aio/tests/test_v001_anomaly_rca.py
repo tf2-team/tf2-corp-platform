@@ -64,7 +64,6 @@ def rca_engine(config: RuntimeConfig, **combined_overrides) -> V001RcaEngine:
         "min_tail_anomaly_buckets": hyperparameters["anomaly"]["min_tail_anomaly_buckets"],
         "min_relative_change_ratio": hyperparameters["anomaly"]["min_relative_change_ratio"],
         "min_absolute_change": hyperparameters["anomaly"]["min_absolute_change"],
-        "correlation_lag_buckets": hyperparameters["anomaly"]["correlation_lag_buckets"],
         "traffic_shape_min_pearson": hyperparameters["anomaly"]["traffic_shape_min_pearson"],
         **combined_overrides,
     }
@@ -83,7 +82,6 @@ class V001AnomalyRcaTest(unittest.TestCase):
             "min_tail_anomaly_buckets": {"request_rate": 3, "cpu": 3, "memory": 3, "socket_io": 3, "error": 1, "default": 2},
             "min_relative_change_ratio": {"request_rate": 0.5, "cpu": 0.3, "memory": 0.3, "socket_io": 0.5, "error": 0.0, "default": 0.3},
             "min_absolute_change": {"request_rate": 5.0, "cpu": 10.0, "memory": 10.0, "socket_io": 10.0, "error": 0.005, "default": 1.0},
-            "correlation_lag_buckets": {"cpu": 1, "memory": 4, "socket_io": 1},
             "traffic_shape_min_pearson": 0.7,
         }
         values = [10] * 30 + list(range(30, 45))
@@ -104,7 +102,6 @@ class V001AnomalyRcaTest(unittest.TestCase):
             "min_tail_anomaly_buckets": {"request_rate": 3, "cpu": 3, "memory": 3, "socket_io": 3, "error": 1, "default": 2},
             "min_relative_change_ratio": {"request_rate": 0.5, "cpu": 0.3, "memory": 0.3, "socket_io": 0.5, "error": 0.0, "default": 0.3},
             "min_absolute_change": {"request_rate": 5.0, "cpu": 10.0, "memory": 10.0, "socket_io": 10.0, "error": 0.005, "default": 1.0},
-            "correlation_lag_buckets": {"cpu": 1, "memory": 4, "socket_io": 1},
             "traffic_shape_min_pearson": 0.7,
         }
         values = [10] * 30 + list(range(30, 45))
@@ -359,10 +356,10 @@ class V001AnomalyRcaTest(unittest.TestCase):
         with self.assertRaises(KeyError):
             build_v001_anomaly_engine({**config, "anomaly": anomaly})
 
-    def test_anomaly_builder_requires_correlation_lag_buckets(self):
+    def test_anomaly_builder_requires_traffic_shape_threshold(self):
         config = rca_hyperparameters()
         anomaly = dict(config["anomaly"])
-        del anomaly["correlation_lag_buckets"]
+        del anomaly["traffic_shape_min_pearson"]
 
         with self.assertRaises(KeyError):
             build_v001_anomaly_engine({**config, "anomaly": anomaly})
