@@ -32,7 +32,8 @@ from aiops.remediation import (
     RemediationDecisionEngine,
     RemediationFeatureExtractor,
 )
-from aiops.schemas import CandidateEvent, Incident, RemediationDecision, VerificationResult
+from aiops.remediation.closed_loop import ClosedLoopController
+from aiops.schemas import CandidateEvent, Incident, RemediationDecision, RemediationLifecycle, VerificationResult
 from aiops.shared.series import prepare_detector_series
 from aiops.topology import TopologyGraph
 from aiops.verification import VerificationEngine
@@ -111,6 +112,7 @@ class AiopsPipeline:
         enricher: Enricher | None = None,
         notification_sender: NotificationSender | None = None,
         rca_history_path: Path | None = None,
+        closed_loop: ClosedLoopController | None = None,
     ):
         self.collector = collector
         self.qualification = QualificationGate(
@@ -141,6 +143,12 @@ class AiopsPipeline:
         self.remediation = remediation
         self.notification_sender = notification_sender
         self.rca_history_path = rca_history_path
+        self.closed_loop = closed_loop
+
+    def collect_fresh_features(self):
+        collected = self.collector.collect()
+        observations = self.qualification.evaluate(self.normalizer.normalize(collected))
+        return self.feature_builder.build(observations)
 
     def run_once(self, metric_series: list[MetricSeries] | None = None) -> PipelineResult:
         run_number = next(_RUN_COUNTER)
@@ -209,7 +217,7 @@ class AiopsPipeline:
         for incident in actionable_incidents:
             proposal = self.policy.proposal_for(incident)
             if proposal is not None:
-                decisions.append(self.policy.evaluate(proposal))
+                decisions.append(self.policy.evaluate(proposal, incident_id=incident.incident_id))
         logger.debug("AIOPS_BLOCK policy decisions=%s results=%s suppressed=%s", len(decisions), [decision.result for decision in decisions], len(suppressed_incident_ids))
         remediation_decisions = self._run_remediation_strategy(actionable_incidents, rca_result)
         logger.debug(
@@ -217,6 +225,19 @@ class AiopsPipeline:
             len(remediation_decisions),
             [decision.selected_action for decision in remediation_decisions],
         )
+        remediation_lifecycles: list[RemediationLifecycle] = []
+        if self.closed_loop is not None:
+            remediation_lifecycles, post_action_verifications = self.closed_loop.run(
+                actionable_incidents,
+                remediation_decisions,
+                decisions,
+            )
+            if post_action_verifications:
+                post_by_incident = {item.incident_id: item for item in post_action_verifications}
+                verification_results = [
+                    post_by_incident.get(item.incident_id, item)
+                    for item in verification_results
+                ]
         self._record_verified_history(incidents, verification_results, remediation_decisions, rca_result)
 
         result = PipelineResult(
@@ -227,6 +248,7 @@ class AiopsPipeline:
             notifications=notifications,
             policy_decisions=decisions,
             remediation_decisions=remediation_decisions,
+            remediation_lifecycles=remediation_lifecycles,
             verification_results=verification_results,
             rca_result=rca_result,
         )
@@ -280,7 +302,14 @@ class AiopsPipeline:
     def _upsert_rca_root_incidents(self, rca_result: RcaResult, incidents: list[Incident]) -> list[Incident]:
         severity = min((incident.severity for incident in incidents), default="SEV2")
         threshold = float(self.correlation_hyperparameters.get("rca_notification_min_score", 0.8))
-        valid_roots = [root for root in rca_result.root_causes if root.score >= threshold and root.root_cause_metrics]
+        directly_detected_services = {incident.service for incident in incidents}
+        valid_roots = [
+            root
+            for root in rca_result.root_causes
+            if root.score >= threshold
+            and root.root_cause_metrics
+            and root.service not in directly_detected_services
+        ]
         rows = []
         for root in self._dedup_rca_root_causes(valid_roots):
             metric = root.root_cause_metrics[0]

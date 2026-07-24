@@ -16,6 +16,7 @@ class PolicyEngine:
         action_type: str,
         target_kind: str,
         default_replicas: int,
+        live_action_approved: bool = False,
     ):
         if mode not in {"observe", "dry-run", "live-approved"}:
             raise ValueError(f"unsupported mode: {mode}")
@@ -26,6 +27,7 @@ class PolicyEngine:
         self.action_type = action_type
         self.target_kind = target_kind
         self.default_replicas = default_replicas
+        self.live_action_approved = live_action_approved
 
     def proposal_for(self, incident: Incident) -> ActionProposal | None:
         if incident.flow in self.non_actionable_flows:
@@ -39,17 +41,39 @@ class PolicyEngine:
             mutating=True,
             verification_defined=True,
             rollback_defined=True,
+            approved=self.live_action_approved,
         )
 
-    def evaluate(self, proposal: ActionProposal) -> PolicyDecision:
+    def evaluate(self, proposal: ActionProposal, incident_id: str = "") -> PolicyDecision:
         reasons = self._rejection_reasons(proposal)
         if reasons:
-            return PolicyDecision(allowed=False, result="blocked", reasons=tuple(reasons))
+            return PolicyDecision(
+                incident_id=incident_id,
+                action_type=proposal.action_type,
+                target=proposal.target,
+                allowed=False,
+                result="blocked",
+                reasons=tuple(reasons),
+            )
 
         if self.mode != "live-approved":
-            return PolicyDecision(allowed=False, result="dry-run-recorded", reasons=("mode_not_live_approved",))
+            return PolicyDecision(
+                incident_id=incident_id,
+                action_type=proposal.action_type,
+                target=proposal.target,
+                allowed=False,
+                result="dry-run-recorded",
+                reasons=("mode_not_live_approved",),
+            )
 
-        return PolicyDecision(allowed=True, result="allowed", executed=False)
+        return PolicyDecision(
+            incident_id=incident_id,
+            action_type=proposal.action_type,
+            target=proposal.target,
+            allowed=True,
+            result="allowed",
+            executed=False,
+        )
 
     def _rejection_reasons(self, proposal: ActionProposal) -> list[str]:
         reasons: list[str] = []

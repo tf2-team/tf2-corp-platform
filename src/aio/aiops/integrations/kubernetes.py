@@ -33,3 +33,10 @@ class KubernetesClient:
     def list_pods(self, namespace: str) -> dict:
         return self._http.get(f"/api/v1/namespaces/{namespace}/pods")
 
+    def patch_deployment(self, namespace: str, name: str, patch: dict) -> dict:
+        return self._http.patch(
+            f"/apis/apps/v1/namespaces/{namespace}/deployments/{name}",
+            json=patch,
+            headers={"Content-Type": "application/strategic-merge-patch+json"},
+        )
+

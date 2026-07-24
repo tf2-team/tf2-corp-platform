@@ -1,14 +1,17 @@
 #!/usr/bin/python
 # Copyright The OpenTelemetry Authors
 # SPDX-License-Identifier: Apache-2.0
+import asyncio
+import threading
 import unittest
 from pathlib import Path
 from tempfile import TemporaryDirectory
+from unittest.mock import patch
 
 from fastapi import HTTPException
 
 from aiops.api import create_app
-from aiops.api.app import build_enricher, handle_grafana_webhook, run_static_pipeline
+from aiops.api.app import auto_run_loop, build_enricher, handle_grafana_webhook, run_static_pipeline
 from aiops.config import Settings, load_runtime_config
 from aiops.models import Observation as LegacyObservation
 from aiops.schemas import GrafanaWebhookEvent, Observation, PipelineRunRequest, SignalQuality
@@ -53,6 +56,7 @@ class FastApiAppTest(unittest.TestCase):
         self.assertIn("/metrics", paths)
         self.assertIn("/api/v1/pipeline/run", paths)
         self.assertIn("/api/v1/pipeline/run/live", paths)
+        self.assertIn("/api/v1/replay", paths)
         self.assertIn("/api/v1/incidents", paths)
         self.assertIn("/api/v1/events/grafana", paths)
 
@@ -111,6 +115,29 @@ class FastApiAppTest(unittest.TestCase):
             )
 
         self.assertEqual(raised.exception.status_code, 503)
+
+
+class AutoRunShutdownTest(unittest.IsolatedAsyncioTestCase):
+    async def test_stop_waits_for_in_flight_pipeline_then_exits_without_orphaning_thread(self):
+        started = threading.Event()
+        release = threading.Event()
+        stop = asyncio.Event()
+        settings = Settings(_env_file=None, auto_run_interval_seconds=3600)
+
+        def blocking_run(_settings):
+            started.set()
+            release.wait(timeout=5)
+
+        with patch("aiops.api.app.run_live_pipeline", side_effect=blocking_run):
+            task = asyncio.create_task(auto_run_loop(settings, stop))
+            await asyncio.to_thread(started.wait, 2)
+            stop.set()
+            await asyncio.sleep(0)
+            self.assertFalse(task.done())
+            release.set()
+            await asyncio.wait_for(task, timeout=2)
+
+        self.assertTrue(task.done())
 
 
 if __name__ == "__main__":

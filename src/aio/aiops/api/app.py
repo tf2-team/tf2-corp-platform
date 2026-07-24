@@ -17,7 +17,7 @@ from fastapi import FastAPI, Header, HTTPException
 from aiops.collectors import PrometheusCollector, StaticCollector
 from aiops.config import Settings, build_detectors, load_hyperparameters, load_runtime_config
 from aiops.enrichment import Enricher
-from aiops.integrations import JaegerClient, KubernetesClient, NotificationClient, OpenSearchClient, PrometheusClient
+from aiops.integrations import JaegerClient, KubernetesClient, LiveExecutorClient, NotificationClient, OpenSearchClient, PrometheusClient
 from aiops.normalization import load_normalization_schema
 from aiops.observability.logging import configure_root_logging
 from aiops.observability import metrics_response, record_pipeline_failure, record_pipeline_success
@@ -25,6 +25,7 @@ from aiops.pipeline import AiopsPipeline
 from aiops.qualification import load_qualification_schema
 from aiops.remediation import (
     ActionCatalog,
+    ClosedLoopController,
     HistoryRetriever,
     IncidentHistoryStore,
     PolicyEngine,
@@ -32,7 +33,17 @@ from aiops.remediation import (
     RemediationDecisionEngine,
     RemediationFeatureExtractor,
 )
-from aiops.schemas import GrafanaNormalizedEvent, GrafanaWebhookEvent, HealthResponse, Incident, PipelineResult, PipelineRunRequest
+from aiops.replay import evaluate_replay
+from aiops.schemas import (
+    GrafanaNormalizedEvent,
+    GrafanaWebhookEvent,
+    HealthResponse,
+    Incident,
+    PipelineResult,
+    PipelineRunRequest,
+    ReplayReport,
+    ReplayRequest,
+)
 from aiops.storage import SQLiteIncidentStore
 from aiops.topology import TopologyGraph
 
@@ -80,6 +91,7 @@ def run_live_pipeline(settings: Settings | None = None) -> PipelineResult:
 
 def run_pipeline_with_collector(collector, settings: Settings, runtime_config, metric_series=None) -> PipelineResult:
     started = time.monotonic()
+    _validate_closed_loop_settings(settings)
     hyperparameters = load_hyperparameters(settings.hyperparameters_path)
     topology_graph = TopologyGraph(runtime_config)
     store = SQLiteIncidentStore(
@@ -103,6 +115,7 @@ def run_pipeline_with_collector(collector, settings: Settings, runtime_config, m
             action_type=settings.action_type_restart,
             target_kind=settings.action_target_kind_deployment,
             default_replicas=settings.default_action_replicas,
+            live_action_approved=settings.live_action_approved,
         ),
         runtime_config=runtime_config,
         qualification_schema=load_qualification_schema(settings.qualification_schema_path),
@@ -128,6 +141,18 @@ def run_pipeline_with_collector(collector, settings: Settings, runtime_config, m
         notification_sender=NotificationClient(settings) if _configured_url(settings.notification_webhook_url) else None,
         rca_history_path=settings.rca_history_path,
     )
+    if settings.closed_loop_enabled:
+        pipeline.closed_loop = ClosedLoopController(
+            executor=LiveExecutorClient(settings),
+            catalog=ActionCatalog(settings.actions_catalog_path),
+            audit=RemediationAuditLog(settings.remediation_audit_path),
+            cooldown_store=store,
+            fresh_features=pipeline.collect_fresh_features,
+            cooldown_seconds=settings.action_cooldown_seconds,
+            blast_radius_limit=settings.action_blast_radius_limit,
+            verification_attempts=settings.action_verification_attempts,
+            verification_interval_seconds=settings.action_verification_interval_seconds,
+        )
     try:
         result = pipeline.run_once(metric_series=metric_series or [])
         record_pipeline_success(result, time.monotonic() - started)
@@ -167,13 +192,19 @@ def print_rca_result(result: PipelineResult) -> None:
         )
 
 
-async def auto_run_loop(settings: Settings) -> None:
-    while True:
+async def auto_run_loop(settings: Settings, stop_event: asyncio.Event | None = None) -> None:
+    stop_event = stop_event or asyncio.Event()
+    while not stop_event.is_set():
         try:
             await asyncio.to_thread(run_live_pipeline, settings)
         except Exception:
             logger.exception("AIOps live pipeline run failed")
-        await asyncio.sleep(settings.auto_run_interval_seconds)
+        if stop_event.is_set():
+            break
+        try:
+            await asyncio.wait_for(stop_event.wait(), timeout=settings.auto_run_interval_seconds)
+        except TimeoutError:
+            pass
 
 
 def build_enricher(settings: Settings, runtime_config) -> Enricher:
@@ -207,6 +238,17 @@ def _configured_kubernetes(settings: Settings) -> bool:
     )
 
 
+def _validate_closed_loop_settings(settings: Settings) -> None:
+    if not settings.closed_loop_enabled:
+        return
+    if settings.policy_mode != "live-approved":
+        raise RuntimeError("closed-loop execution requires live-approved policy mode")
+    if not settings.live_action_approved:
+        raise RuntimeError("closed-loop execution requires explicit live action approval")
+    if not _configured_url(settings.live_executor_url):
+        raise RuntimeError("closed-loop execution requires a configured live executor")
+
+
 def readiness(settings: Settings) -> HealthResponse:
     try:
         load_runtime_config(settings.runtime_config_path, settings.prometheus_registry_path)
@@ -215,6 +257,8 @@ def readiness(settings: Settings) -> HealthResponse:
         load_normalization_schema(settings.normalization_schema_path)
         if settings.auto_run_enabled and not _configured_url(settings.prometheus_base_url):
             raise RuntimeError("automatic runs require Prometheus")
+        if settings.closed_loop_enabled:
+            _validate_closed_loop_settings(settings)
         if not _configured_secret(settings.grafana_webhook_secret):
             raise RuntimeError("Grafana webhook secret is not configured")
         state_parent = settings.state_store_path.parent
@@ -258,14 +302,18 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     @asynccontextmanager
     async def lifespan(app: FastAPI):
         app.state.aiops_auto_run_task = None
+        app.state.aiops_stop_event = asyncio.Event()
         if settings.auto_run_enabled:
-            app.state.aiops_auto_run_task = asyncio.create_task(auto_run_loop(settings))
+            app.state.aiops_auto_run_task = asyncio.create_task(
+                auto_run_loop(settings, app.state.aiops_stop_event)
+            )
         try:
             yield
         finally:
+            app.state.aiops_stop_event.set()
             task = app.state.aiops_auto_run_task
             if task is not None:
-                task.cancel()
+                await task
 
     app = FastAPI(title=settings.app_title, lifespan=lifespan)
 
@@ -288,6 +336,13 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     @app.post("/api/v1/pipeline/run/live", response_model=PipelineResult)
     def run_live() -> PipelineResult:
         return run_live_pipeline(settings)
+
+    @app.post("/api/v1/replay", response_model=ReplayReport)
+    def replay(request: ReplayRequest) -> ReplayReport:
+        replay_settings = settings
+        if not request.execute_remediation:
+            replay_settings = settings.model_copy(update={"closed_loop_enabled": False})
+        return evaluate_replay(request, lambda item: run_static_pipeline(item, replay_settings))
 
     @app.get("/api/v1/incidents", response_model=list[Incident])
     def list_incidents() -> list[Incident]:

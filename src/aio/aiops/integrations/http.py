@@ -53,3 +53,8 @@ class HttpApiClient:
         response = self._client.post(path, json=json)
         response.raise_for_status()
         return self._decode_response(response)
+
+    def patch(self, path: str, json: dict[str, Any], headers: dict[str, str] | None = None) -> Any:
+        response = self._client.patch(path, json=json, headers=headers)
+        response.raise_for_status()
+        return self._decode_response(response)

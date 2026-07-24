@@ -97,6 +97,15 @@ class SQLiteIncidentStore:
             )
             """
         )
+        self._connection.execute(
+            """
+            CREATE TABLE IF NOT EXISTS remediation_action_cooldowns (
+                target TEXT PRIMARY KEY,
+                cooldown_until TEXT NOT NULL,
+                updated_at TEXT NOT NULL
+            )
+            """
+        )
         self._ensure_event_columns()
         self._ensure_active_root_columns()
 
@@ -445,6 +454,27 @@ class SQLiteIncidentStore:
 
     def close(self) -> None:
         self._connection.close()
+
+    def action_cooldown_active(self, target: str) -> bool:
+        row = self._connection.execute(
+            "SELECT cooldown_until FROM remediation_action_cooldowns WHERE target = ?",
+            (target,),
+        ).fetchone()
+        return row is not None and datetime.fromisoformat(row[0]) > datetime.now(UTC)
+
+    def set_action_cooldown(self, target: str, cooldown_seconds: int) -> None:
+        cooldown_until = datetime.now(UTC) + timedelta(seconds=cooldown_seconds)
+        with self._connection:
+            self._connection.execute(
+                """
+                INSERT INTO remediation_action_cooldowns (target, cooldown_until, updated_at)
+                VALUES (?, ?, ?)
+                ON CONFLICT(target) DO UPDATE SET
+                    cooldown_until = excluded.cooldown_until,
+                    updated_at = excluded.updated_at
+                """,
+                (target, cooldown_until.isoformat(), _now()),
+            )
 
     def _validate_runbook(self, runbook_id: str) -> None:
         if not (self.runbooks_dir / f"{runbook_id}.md").is_file():

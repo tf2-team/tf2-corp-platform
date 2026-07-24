@@ -595,7 +595,7 @@ class RuntimePipelineTest(unittest.TestCase):
         text = "\n".join(logs.output)
         self.assertIn("service=payment kept_service=checkout", text)
 
-    def test_pipeline_keeps_slo_notification_and_adds_rca_root_notification(self):
+    def test_pipeline_keeps_slo_notification_and_adds_distinct_service_rca_notification(self):
         settings = Settings()
         sender = FakeNotificationSender()
         with TemporaryDirectory() as tmp:
@@ -1058,8 +1058,8 @@ class RuntimePipelineTest(unittest.TestCase):
         self.assertEqual(len(rows), 1)
         self.assertEqual(rows[0]["incidents"][0]["service"], "checkout")
         self.assertEqual(rows[0]["incidents"][0]["detectors"], ["ops01_checkout_slo"])
-        self.assertEqual([message.service for message in result.notifications], ["checkout", "checkout"])
-        self.assertEqual([incident.events[-1].detector_id for incident in result.incidents], ["ops01_checkout_slo", "rca_root_cause"])
+        self.assertEqual([message.service for message in result.notifications], ["checkout"])
+        self.assertEqual([incident.events[-1].detector_id for incident in result.incidents], ["ops01_checkout_slo"])
         self.assertEqual(rows[0]["parameters"]["min_points"], hyperparameters["min_points"])
         self.assertEqual(rows[0]["series_point_count"]["max"], 60)
         self.assertEqual(rows[0]["root_causes"][0]["service"], result.rca_result.root_causes[0].service)

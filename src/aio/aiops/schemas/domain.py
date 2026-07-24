@@ -212,6 +212,9 @@ class ActionProposal(AiopsModel):
 
 
 class PolicyDecision(AiopsModel):
+    incident_id: str = ""
+    action_type: str = ""
+    target: str = ""
     allowed: bool
     result: str
     reasons: tuple[str, ...] = ()
@@ -224,6 +227,21 @@ class VerificationResult(AiopsModel):
     reason: str
 
 
+class RemediationLifecycle(AiopsModel):
+    incident_id: str
+    trigger_detector: str
+    selected_action: str
+    target: str
+    safety_status: str
+    execution_status: str = "not-started"
+    verification_status: str = "not-started"
+    rollback_status: str = "not-required"
+    escalated: bool = False
+    reasons: list[str] = Field(default_factory=list)
+    started_at: str
+    completed_at: str | None = None
+
+
 class PipelineResult(AiopsModel):
     observations: list[Observation]
     features: list[Feature]
@@ -232,5 +250,6 @@ class PipelineResult(AiopsModel):
     notifications: list[NotificationMessage]
     policy_decisions: list[PolicyDecision]
     remediation_decisions: list[RemediationDecision] = Field(default_factory=list)
+    remediation_lifecycles: list[RemediationLifecycle] = Field(default_factory=list)
     verification_results: list[VerificationResult]
     rca_result: RcaResult = Field(default_factory=RcaResult)

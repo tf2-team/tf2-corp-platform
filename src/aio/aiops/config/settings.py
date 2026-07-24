@@ -45,6 +45,12 @@ class Settings(BaseSettings):
     qualification_max_sample_age_seconds: int = 300
     auto_run_enabled: bool = False
     auto_run_interval_seconds: int = 60
+    closed_loop_enabled: bool = False
+    live_action_approved: bool = False
+    action_cooldown_seconds: int = 900
+    action_blast_radius_limit: int = 3
+    action_verification_attempts: int = 3
+    action_verification_interval_seconds: float = 20.0
 
     action_type_restart: str = "restart"
     action_target_kind_deployment: str = "Deployment"
@@ -88,6 +94,11 @@ class Settings(BaseSettings):
     live_executor_url: str = ""
     live_executor_token: str = ""
     live_executor_account: str = ""
+    executor_shared_secret: str = ""
+    executor_allowed_targets: str = ""
+    executor_namespace: str = "techx-corp-prod"
+    executor_max_replicas: int = 10
+    executor_state_path: Path = Path("state/executor.sqlite3")
 
     @model_validator(mode="after")
     def align_state_paths(self) -> "Settings":

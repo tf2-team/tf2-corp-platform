@@ -5,7 +5,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from aiops.schemas import RemediationDecision
+from aiops.schemas import RemediationDecision, RemediationLifecycle
 
 
 class RemediationAuditLog:
@@ -16,3 +16,7 @@ class RemediationAuditLog:
     def append(self, decision: RemediationDecision) -> None:
         with self.path.open("a", encoding="utf-8") as handle:
             handle.write(decision.model_dump_json() + "\n")
+
+    def append_lifecycle(self, lifecycle: RemediationLifecycle) -> None:
+        with self.path.open("a", encoding="utf-8") as handle:
+            handle.write(lifecycle.model_dump_json() + "\n")

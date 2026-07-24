@@ -1,7 +1,18 @@
 #!/usr/bin/python
 # Copyright The OpenTelemetry Authors
 # SPDX-License-Identifier: Apache-2.0
-from aiops.schemas.api import GrafanaAlert, GrafanaNormalizedEvent, GrafanaWebhookEvent, HealthResponse, PipelineRunRequest
+from aiops.schemas.api import (
+    GrafanaAlert,
+    GrafanaNormalizedEvent,
+    GrafanaWebhookEvent,
+    HealthResponse,
+    PipelineRunRequest,
+    ReplayCaseResult,
+    ReplayMetrics,
+    ReplayReport,
+    ReplayRequest,
+    ReplayScenario,
+)
 from aiops.schemas.base import AiopsModel
 from aiops.schemas.config import (
     DetectorDefinition,
@@ -31,6 +42,7 @@ from aiops.schemas.domain import (
     PolicyDecision,
     RcaResult,
     RemediationDecision,
+    RemediationLifecycle,
     RootCauseCandidate,
     SignalQuality,
     TelemetryCorroboration,
@@ -88,6 +100,12 @@ __all__ = [
     "RcaConfig",
     "RcaResult",
     "RemediationDecision",
+    "RemediationLifecycle",
+    "ReplayCaseResult",
+    "ReplayMetrics",
+    "ReplayReport",
+    "ReplayRequest",
+    "ReplayScenario",
     "RootCauseCandidate",
     "RuntimeConfig",
     "RuntimePolicyConfig",
