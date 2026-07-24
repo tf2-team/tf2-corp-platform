@@ -178,8 +178,6 @@ Direct outbound clients live under `aiops/integrations/`:
 - `OpenSearchClient`
 - `KubernetesClient` for read-only status
 - `NotificationClient`
-- `AieClient`
-- `CostClient`
 - `LiveExecutorClient` for the optional separate executor
 
 Grafana is inbound at `POST /api/v1/events/grafana`.

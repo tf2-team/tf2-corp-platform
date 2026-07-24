@@ -60,6 +60,7 @@ def _settings_for_test(root: Path, policy_mode: str = "dry-run") -> Settings:
     return Settings().model_copy(
         update={
             "policy_mode": policy_mode,
+            "prometheus_base_url": "http://prometheus.example",
             "state_store_path": root / "state" / "aiops.sqlite3",
             "runtime_config_path": ROOT / "config" / "runtime.json",
             "actions_catalog_path": ROOT / "config" / "actions.json",
@@ -73,7 +74,7 @@ def _settings_for_test(root: Path, policy_mode: str = "dry-run") -> Settings:
 def prometheus_transport(requests: list[httpx.Request]) -> httpx.MockTransport:
     def handler(request: httpx.Request) -> httpx.Response:
         requests.append(request)
-        query = request.url.params["query"]
+        query = request.url.params.get("query", "")
         if request.url.path.endswith("/query"):
             value = "0.20" if "status_code" in query else "250.0"
             return httpx.Response(
@@ -100,7 +101,7 @@ def prometheus_transport(requests: list[httpx.Request]) -> httpx.MockTransport:
 class PrometheusCollectorTest(unittest.TestCase):
     def test_collects_verified_observations_and_rca_series(self):
         requests: list[httpx.Request] = []
-        settings = Settings()
+        settings = Settings().model_copy(update={"prometheus_base_url": "http://prometheus.example"})
         client = PrometheusClient(settings, transport=prometheus_transport(requests))
         plan = load_prometheus_collection_plan(ROOT / "config" / "prometheus_e2e.json")
 

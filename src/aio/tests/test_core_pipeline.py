@@ -2,6 +2,7 @@
 # Copyright The OpenTelemetry Authors
 # SPDX-License-Identifier: Apache-2.0
 import unittest
+from tempfile import TemporaryDirectory
 from inspect import signature
 from pathlib import Path
 
@@ -9,11 +10,11 @@ from pydantic import ValidationError
 
 from aiops.config import Settings, load_hyperparameters, load_runtime_config
 from aiops.correlation import Correlator
-from aiops.incidents import IncidentManager
 from aiops.detectors import DependencyDetector, DetectorEngine, NoDataDetector, ThresholdDetector
 from aiops.features import FeatureBuilder
 from aiops.schemas import ActionCatalogItem, ActionProposal, CandidateEvent, EvidenceItem, Feature, HistoryAction, IncidentFeatures, IncidentHistoryRecord, Observation, SignalQuality
 from aiops.remediation import HistoryRetriever, PolicyEngine, RemediationDecisionEngine
+from aiops.storage import SQLiteIncidentStore
 from aiops.topology import TopologyGraph
 
 
@@ -292,9 +293,17 @@ class DetectorEngineTest(unittest.TestCase):
         self.assertEqual(candidates[0].contributing_signals, ("checkout_bad_ratio_24h", "checkout_p95_latency_5m"))
 
 
-class IncidentManagerTest(unittest.TestCase):
+class SQLiteIncidentStoreDedupTest(unittest.TestCase):
+    def store(self, topology_graph=None):
+        self.tmp = TemporaryDirectory()
+        return SQLiteIncidentStore(Path(self.tmp.name) / "aiops.sqlite3", environment="tf2", topology_graph=topology_graph)
+
+    def tearDown(self):
+        if hasattr(self, "tmp"):
+            self.tmp.cleanup()
+
     def test_deduplicates_by_stable_fingerprint_not_metric_value(self):
-        manager = IncidentManager(environment="tf2")
+        store = self.store()
         detector = ThresholdDetector(
             detector_id="ops01_checkout_slo",
             signal_id="checkout_bad_ratio_24h",
@@ -316,15 +325,16 @@ class IncidentManagerTest(unittest.TestCase):
             )
         )[0]
 
-        incident = manager.upsert(first)
-        same_incident = manager.upsert(second)
+        incident = store.upsert(first)
+        same_incident = store.upsert(second)
+        store.close()
 
         self.assertEqual(incident.incident_id, same_incident.incident_id)
         self.assertEqual(same_incident.occurrence_count, 2)
 
     def test_topology_dependency_path_can_scope_fingerprint_to_dependency(self):
         graph = TopologyGraph(load_runtime_config(Path("config/runtime.json")))
-        manager = IncidentManager(environment="tf2", topology_graph=graph)
+        store = self.store(topology_graph=graph)
         checkout = CandidateEvent(
             detector_id="shared_dependency_detector",
             flow="checkout",
@@ -342,15 +352,16 @@ class IncidentManagerTest(unittest.TestCase):
         )
         frontend = checkout.model_copy(update={"service": "frontend", "signal_id": "frontend_product_catalog_error_rate_5m"})
 
-        incident = manager.upsert(checkout)
-        same_incident = manager.upsert(frontend)
+        incident = store.upsert(checkout)
+        same_incident = store.upsert(frontend)
+        store.close()
 
         self.assertEqual(incident.incident_id, same_incident.incident_id)
         self.assertEqual(same_incident.occurrence_count, 2)
 
     def test_slo_fingerprint_does_not_dedup_by_topology_dependency(self):
         graph = TopologyGraph(load_runtime_config(Path("config/runtime.json")))
-        manager = IncidentManager(environment="tf2", topology_graph=graph)
+        store = self.store(topology_graph=graph)
         checkout = CandidateEvent(
             detector_id="ops01_checkout_slo",
             flow="checkout",
@@ -368,13 +379,14 @@ class IncidentManagerTest(unittest.TestCase):
         )
         frontend = checkout.model_copy(update={"service": "frontend", "signal_id": "frontend_bad_ratio_24h"})
 
-        incident = manager.upsert(checkout)
-        other_incident = manager.upsert(frontend)
+        incident = store.upsert(checkout)
+        other_incident = store.upsert(frontend)
+        store.close()
 
         self.assertNotEqual(incident.incident_id, other_incident.incident_id)
 
     def test_rca_root_cause_fingerprint_includes_primary_metric(self):
-        manager = IncidentManager(environment="tf2")
+        store = self.store()
         latency = CandidateEvent(
             detector_id="rca_root_cause",
             flow="checkout",
@@ -391,8 +403,9 @@ class IncidentManagerTest(unittest.TestCase):
         )
         errors = latency.model_copy(update={"signal_id": "error_rate_5m"})
 
-        first = manager.upsert(latency)
-        second = manager.upsert(errors)
+        first = store.upsert(latency)
+        second = store.upsert(errors)
+        store.close()
 
         self.assertNotEqual(first.incident_id, second.incident_id)
 

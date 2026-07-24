@@ -9,7 +9,7 @@ from aiops.schemas import CandidateEvent, Incident, NotificationMessage
 def is_slo_notification(event: CandidateEvent) -> bool:
     return event.reason == "threshold_breached" and (
         "slo" in event.detector_id.lower()
-        or any(marker in event.signal_id for marker in ("latency", "error_ratio", "bad_ratio"))
+        or any(marker in event.signal_id for marker in ("latency", "error_rate", "error_ratio", "bad_ratio"))
     )
 
 

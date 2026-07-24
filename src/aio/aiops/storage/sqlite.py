@@ -296,14 +296,13 @@ class SQLiteIncidentStore:
             "SELECT root_service, root_score FROM active_root_causes WHERE expires_at > ? AND root_score > 0",
             (_now(),),
         ).fetchall()
-        return {
-            service
-            for root_service, root_score in rows
-            for service, score in service_scores.items()
-            if service != root_service
-            and service in self.topology_graph.neighborhood(root_service, max_hops=1)
-            and score >= float(root_score) * multiplier
-        }
+        required: dict[str, float] = {}
+        for root_service, root_score in rows:
+            threshold = float(root_score) * multiplier
+            for service in self.topology_graph.neighborhood(root_service, max_hops=1):
+                if service != root_service:
+                    required[service] = max(required.get(service, 0.0), threshold)
+        return {service for service, score in service_scores.items() if score >= required.get(service, float("inf"))}
 
     def suppress_related_notifications(
         self,
@@ -390,7 +389,7 @@ class SQLiteIncidentStore:
 
     def _suppression_parent(self, service: str) -> str | None:
         rows = self._connection.execute(
-            "SELECT root_service, affected_services_json FROM active_root_causes WHERE expires_at > ?",
+            "SELECT root_service, affected_services_json FROM active_root_causes WHERE expires_at > ? ORDER BY root_score DESC, root_service",
             (_now(),),
         ).fetchall()
         for root_service, affected_json in rows:

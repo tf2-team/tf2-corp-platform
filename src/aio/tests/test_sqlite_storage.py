@@ -12,6 +12,7 @@ from aiops.detectors import ThresholdDetector
 from aiops.features import FeatureBuilder
 from aiops.schemas import CandidateEvent, Observation, SignalQuality
 from aiops.storage import SQLiteIncidentStore
+from aiops.topology import TopologyGraph
 
 
 def candidate(value: float, timestamp: int = 0):
@@ -258,6 +259,17 @@ class SQLiteIncidentStoreTest(unittest.TestCase):
         self.assertEqual(suppressed, {incident.incident_id})
         self.assertEqual(notifications, [])
         self.assertEqual(status, ("suppressed",))
+
+    def test_breakout_requires_beating_strongest_covering_root(self):
+        graph = TopologyGraph(load_runtime_config(Path("config/runtime.json")))
+        with tempfile.TemporaryDirectory() as tmp:
+            store = SQLiteIncidentStore(Path(tmp) / "aiops.sqlite3", environment="tf2", topology_graph=graph)
+            store.register_active_root_cause("checkout", graph.neighborhood("checkout", max_hops=1), root_score=1.0)
+            store.register_active_root_cause("flagd", graph.neighborhood("flagd", max_hops=1), root_score=10.0)
+            breakout = store.breakout_services({"cart": 2.0}, 1.5)
+            store.close()
+
+        self.assertEqual(breakout, set())
 
     def test_repeated_active_root_cause_does_not_extend_suppression_ttl(self):
         with tempfile.TemporaryDirectory() as tmp:

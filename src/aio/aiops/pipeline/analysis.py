@@ -6,7 +6,7 @@ from __future__ import annotations
 from statistics import median
 
 from aiops.notifications import is_slo_notification
-from aiops.schemas import AnomalyFinding, Incident, MetricSeries, RuntimeConfig, TelemetryCorroboration
+from aiops.schemas import AnomalyFinding, Incident, MetricSeries, TelemetryCorroboration
 
 
 def apply_corroboration(
@@ -60,20 +60,3 @@ def slo_impact_findings(incidents: list[Incident]) -> list[AnomalyFinding]:
         for event in events.values()
     ]
 
-
-def blast_radius_services(config: RuntimeConfig, root_service: str, max_hops: int = 2) -> set[str]:
-    services = {service.name: service for service in config.topology.services}
-    if root_service not in services:
-        return {root_service}
-    graph = {name: set(service.dependencies) for name, service in services.items()}
-    for service in services.values():
-        for dependency in service.dependencies:
-            graph.setdefault(dependency, set()).add(service.name)
-    seen = {root_service}
-    frontier = {root_service}
-    for _ in range(max_hops):
-        frontier = {neighbor for service in frontier for neighbor in graph.get(service, set()) if neighbor not in seen}
-        seen.update(frontier)
-        if not frontier:
-            break
-    return seen

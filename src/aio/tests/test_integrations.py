@@ -10,8 +10,6 @@ import httpx
 
 from aiops.config import Settings
 from aiops.integrations import (
-    AieClient,
-    CostClient,
     JaegerClient,
     KubernetesClient,
     LiveExecutorClient,
@@ -64,19 +62,21 @@ class IntegrationClientTest(unittest.TestCase):
             return httpx.Response(200, json={"ok": True})
 
         transport = httpx.MockTransport(handler)
-        cfg = settings()
+        cfg = fixed_settings(
+            jaeger_base_url="https://jaeger.example/jaeger/ui",
+            opensearch_base_url="https://opensearch.example",
+            kubernetes_api_url="https://kubernetes.example",
+            live_executor_url="https://executor.example",
+        )
 
         JaegerClient(cfg, transport=transport).search_traces(service="checkout")
         OpenSearchClient(cfg, transport=transport).search(index="logs-*", body={"query": {"match_all": {}}})
         KubernetesClient(cfg, transport=transport).get_deployment(namespace="tf2", name="checkout")
-        AieClient(cfg, transport=transport).get_status()
-        CostClient(cfg, transport=transport).get_status()
         LiveExecutorClient(cfg, transport=transport).submit_action({"action_id": "act-1"})
 
         self.assertIn(("GET", "/jaeger/ui/api/traces"), calls)
         self.assertIn(("POST", "/logs-*/_search"), calls)
         self.assertIn(("GET", "/apis/apps/v1/namespaces/tf2/deployments/checkout"), calls)
-        self.assertIn(("GET", "/status"), calls)
         self.assertIn(("POST", "/actions"), calls)
 
     def test_opensearch_uses_basic_auth(self):
@@ -191,7 +191,10 @@ class IntegrationClientTest(unittest.TestCase):
             likely_dependency="none",
             runbook_id="RB-SMOKE",
         )
-        response = NotificationClient(settings(), transport=httpx.MockTransport(handler)).send(message)
+        response = NotificationClient(
+            fixed_settings(notification_webhook_url="https://notify.example/"),
+            transport=httpx.MockTransport(handler),
+        ).send(message)
 
         self.assertEqual(response, {"status_code": 204})
 

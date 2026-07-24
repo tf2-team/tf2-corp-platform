@@ -6,7 +6,13 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Literal
 
+from pydantic import model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+
+DEFAULT_STATE_STORE_PATH = Path("state/aiops.sqlite3")
+DEFAULT_REMEDIATION_AUDIT_PATH = Path("state/remediation_audit.jsonl")
+DEFAULT_RCA_HISTORY_PATH = Path("state/rca_history.jsonl")
 
 
 class Settings(BaseSettings):
@@ -24,14 +30,14 @@ class Settings(BaseSettings):
     environment: str = "techx-corp-prod"
     policy_mode: str = "dry-run"
     evidence_dir: Path = Path("evidence")
-    state_store_path: Path = Path("state/aiops.sqlite3")
+    state_store_path: Path = DEFAULT_STATE_STORE_PATH
     runtime_config_path: Path = Path("config/runtime.json")
     prometheus_registry_path: Path = Path("config/prometheus_queries.json")
     hyperparameters_path: Path = Path("config/hyperparameters.json")
     actions_catalog_path: Path = Path("config/actions.json")
     incidents_history_path: Path = Path("config/incidents_history.json")
-    remediation_audit_path: Path = Path("state/remediation_audit.jsonl")
-    rca_history_path: Path = Path("state/rca_history.jsonl")
+    remediation_audit_path: Path = DEFAULT_REMEDIATION_AUDIT_PATH
+    rca_history_path: Path = DEFAULT_RCA_HISTORY_PATH
 
     qualification_gate_dev: bool = False
     qualification_schema_path: Path = Path("config/signal_qualification_schema.json")
@@ -82,3 +88,14 @@ class Settings(BaseSettings):
     live_executor_url: str = ""
     live_executor_token: str = ""
     live_executor_account: str = ""
+
+    @model_validator(mode="after")
+    def align_state_paths(self) -> "Settings":
+        if self.state_store_path == DEFAULT_STATE_STORE_PATH:
+            return self
+        state_dir = self.state_store_path.parent
+        if self.remediation_audit_path == DEFAULT_REMEDIATION_AUDIT_PATH:
+            self.remediation_audit_path = state_dir / DEFAULT_REMEDIATION_AUDIT_PATH.name
+        if self.rca_history_path == DEFAULT_RCA_HISTORY_PATH:
+            self.rca_history_path = state_dir / DEFAULT_RCA_HISTORY_PATH.name
+        return self

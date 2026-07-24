@@ -21,6 +21,15 @@ class SettingsTest(unittest.TestCase):
         self.assertEqual(settings.notification_provider, "auto")
         self.assertEqual(settings.runtime_config_path, Path("config/runtime.json"))
 
+    def test_state_path_override_moves_state_siblings(self):
+        with tempfile.TemporaryDirectory() as directory:
+            settings = Settings(
+                state_store_path=Path(directory) / "custom" / "aiops.sqlite3",
+            )
+
+        self.assertEqual(settings.remediation_audit_path, Path(directory) / "custom" / "remediation_audit.jsonl")
+        self.assertEqual(settings.rca_history_path, Path(directory) / "custom" / "rca_history.jsonl")
+
     def test_settings_load_from_env_file_and_drive_pipeline(self):
         with tempfile.TemporaryDirectory() as directory:
             env_file = Path(directory) / ".env"
@@ -122,6 +131,7 @@ class SettingsTest(unittest.TestCase):
             },
         )
         self.assertEqual(config["correlation"]["suppress_min_root_score"], 0.8)
+        self.assertEqual(config["correlation"]["rca_notification_min_score"], 0.8)
         self.assertEqual(config["correlation"]["topology_max_hops"], 1)
         self.assertEqual(
             config["rca"]["combined"],

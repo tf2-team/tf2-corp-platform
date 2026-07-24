@@ -293,6 +293,7 @@ class RuntimePipelineTest(unittest.TestCase):
         self.assertEqual([finding.signal_id for finding in findings], ["checkout_bad_ratio_24h"])
         self.assertTrue(is_slo_notification(event))
         self.assertTrue(is_slo_notification(event.model_copy(update={"signal_id": "checkout_p95_latency_5m"})))
+        self.assertTrue(is_slo_notification(event.model_copy(update={"detector_id": "auto_checkout_error_rate", "signal_id": "checkout_error_rate_5m"})))
 
     def test_slo_threshold_incident_is_added_to_rca_anomalies(self):
         settings = Settings()
@@ -337,6 +338,29 @@ class RuntimePipelineTest(unittest.TestCase):
             pipeline.store.close()
 
         self.assertIn("slo_threshold", {finding.algorithm for finding in result.anomalies})
+
+    def test_rca_dedup_respects_configured_one_hop_scope(self):
+        settings = Settings()
+        with TemporaryDirectory() as tmp:
+            store = SQLiteIncidentStore(Path(tmp) / "aiops.sqlite3", environment=settings.environment)
+            kwargs = runtime_kwargs(settings)
+            kwargs["correlation_hyperparameters"] = {**kwargs["correlation_hyperparameters"], "topology_max_hops": 1}
+            pipeline = AiopsPipeline(
+                collector=StaticCollector([]),
+                detectors=[],
+                store=store,
+                policy=policy(settings),
+                **kwargs,
+            )
+            roots = pipeline._dedup_rca_root_causes(
+                [
+                    RootCauseCandidate(service="frontend-proxy", score=1.0, root_cause_metrics=["latency"]),
+                    RootCauseCandidate(service="checkout", score=0.9, root_cause_metrics=["latency"]),
+                ]
+            )
+            store.close()
+
+        self.assertEqual([root.service for root in roots], ["frontend-proxy", "checkout"])
 
     def test_corroboration_keeps_hard_failure_confidence(self):
         finding = anomaly("error_rate_5m")
@@ -566,11 +590,10 @@ class RuntimePipelineTest(unittest.TestCase):
             notifications = store.pending_notifications_for(incidents)
             store.close()
 
-        self.assertEqual([incident.service for incident in incidents], ["checkout"])
-        self.assertEqual([message.service for message in notifications], ["checkout"])
+        self.assertEqual([incident.service for incident in incidents], ["checkout", "ad"])
+        self.assertEqual([message.service for message in notifications], ["checkout", "ad"])
         text = "\n".join(logs.output)
         self.assertIn("service=payment kept_service=checkout", text)
-        self.assertIn("service=ad kept_service=checkout", text)
 
     def test_pipeline_keeps_slo_notification_and_adds_rca_root_notification(self):
         settings = Settings()
@@ -1061,9 +1084,9 @@ class RuntimePipelineTest(unittest.TestCase):
             outbox_rows = store._connection.execute("SELECT incident_id, status FROM notification_outbox ORDER BY incident_id").fetchall()
             store.close()
 
-        self.assertEqual([message.service for message in result.notifications], ["checkout", "valkey-cart", "valkey-cart"])
-        self.assertEqual([status for _, status in outbox_rows].count("suppressed"), 1)
-        self.assertEqual([decision.result for decision in result.policy_decisions], ["blocked", "blocked"])
+        self.assertEqual([message.service for message in result.notifications], ["checkout", "cart", "valkey-cart", "valkey-cart"])
+        self.assertEqual([status for _, status in outbox_rows].count("suppressed"), 0)
+        self.assertEqual([decision.result for decision in result.policy_decisions], ["blocked"])
 
     def test_pipeline_does_not_suppress_children_for_low_confidence_root_cause(self):
         settings = Settings()
@@ -1106,7 +1129,7 @@ class RuntimePipelineTest(unittest.TestCase):
             result = pipeline.run_once()
             store.close()
 
-        self.assertNotIn("cart", {message.service for message in result.notifications})
+        self.assertIn("cart", {message.service for message in result.notifications})
 
     def test_pipeline_suppresses_child_while_root_window_is_active(self):
         settings = Settings()

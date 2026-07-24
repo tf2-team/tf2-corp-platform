@@ -10,6 +10,7 @@
     "confidence_threshold": 0.5,
     "topology_max_hops": 1,
     "suppress_min_root_score": 0.8,
+    "rca_notification_min_score": 0.8,
     "suppress_breakout_multiplier": 1.5,
     "suppress_window_seconds": 300,
     "weights": {
