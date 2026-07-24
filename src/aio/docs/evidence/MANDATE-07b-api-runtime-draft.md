@@ -23,6 +23,9 @@ AIOps ran in `dry-run` mode. The operator manually changed the flag in Flagd Con
 - [x] Notification intent captured for the same checkout incident.
 - [x] User-visible impact captured on SLO dashboard.
 - [x] Recovery captured on SLO dashboard.
+- [x] Expanded-service live proof captured for a labeled cart fault.
+- [x] No-spam behavior demonstrated through stable incident IDs and notification dedup.
+- [ ] Burn-rate detector live proof on an isolated evaluation run.
 - [x] Caveats documented for RCA, incident lifecycle, and rolling-24h burn-rate.
 
 ## 3. Runtime Configuration
@@ -85,6 +88,28 @@ AIOPS_RUN_END candidates=0 incidents=0 root_causes=0
 ![Baseline Locust 50 users, 0 percent failures](./04d-baseline-locust-50u.png)
 
 ![Baseline AIOps runtime clean](./05b-baseline-runtime-clean-50u.png)
+
+### 4.1 Baseline and impact-gate interpretation
+
+The live fires in this document use fixed SLO/impact thresholds as the final
+alert gates. They are not presented as the complete adaptive-baseline
+implementation.
+
+Per-service statistical baseline and anomaly scoring are implemented and
+documented in Mandate #7a and
+[`ADR-DETECT-001`](../../../src/aio/docs/mandates/7a/ADR-DETECT-001.md).
+In this #7b run:
+
+- the normal windows establish that checkout and cart remain quiet under
+  expected load;
+- the 5m error-rate and p99 thresholds act as user-impact alert gates;
+- dedup and notification cooldown prevent repeated evaluation cycles from
+  producing duplicate alert incidents.
+
+Dynamic-baseline quality is evaluated separately from the fixed SLO-impact
+gates. This live run validates the runtime detection, incident, notification,
+and recovery path; the two threshold fires alone are not claimed as proof of
+adaptive-baseline quality.
 
 ## 5. Fault Injection
 
@@ -220,7 +245,28 @@ For this run:
 - No duplicate checkout incident IDs were created; `inc-b3d92ea50475` was deduped from occurrence `4` to `9` and later `12`.
 - The rolling-24h burn-rate result should be documented separately as supplemental evidence, not as the primary clean-run detector.
 
-Recommended wording for Jira:
+Current status:
+
+| Requirement | Status | Evidence / next action |
+| --- | --- | --- |
+| Impact-based user-visible alerting | `PASS` | Checkout success dropped to `63.9%` against SLO `>=99.0%` |
+| Dedup/no duplicate incident | `PASS` | Stable incident `inc-b3d92ea50475`, occurrence `4 -> 9 -> 12` |
+| Notification no-spam | `PASS` | Notification intent is associated with the deduplicated incident |
+| Live burn-rate proof on isolated run | `PENDING` | Retest after obtaining a clean/isolated evaluation window |
+
+The future supplemental burn-rate evidence must capture:
+
+1. The live Prometheus burn-rate value and query window.
+2. `AIOPS_DETECT threshold_fire` for the burn-rate detector.
+3. The created incident ID and notification intent.
+4. A second cycle using the same incident ID with a higher
+   `occurrence_count`.
+5. Proof that notification was not enqueued again during cooldown.
+
+Until that evidence is attached, burn-rate must remain marked `PENDING` and is
+not claimed as complete.
+
+Jira wording until the supplemental test is completed:
 
 ```text
 The rolling-24h burn-rate detector was excluded from the clean labeled run because previous tests remained inside the 24h Prometheus window. The labeled run uses 5m checkout error-rate for first-fire/lead-time and the SLO dashboard for impact. Burn-rate is tracked as a supplemental impact-based signal and should be retested on a clean Prometheus window or with a shorter demo window.
@@ -245,12 +291,19 @@ Post-recovery API also showed incidents still in `state=open`. Therefore, teleme
 
 ## 12. Supplemental Expanded-Service Proof
 
-This supplemental run proves detector coverage beyond the primary checkout/payment labeled scenario. It used a separate clean state store and is **excluded** from the primary `K=1` precision/recall calculation.
+This second labeled run proves detector coverage beyond the primary
+checkout/payment scenario. It used a separate clean state store to prevent
+incident-state contamination between scenarios. The cart fault is included as
+the second labeled injected incident because it has explicit ground truth,
+fault-start evidence, detector evidence, incident evidence, user-visible
+impact, and recovery evidence.
 
 | Field | Value |
 | --- | --- |
 | Supplemental fault | `local-cartFailure` |
 | Fault start timestamp | `2026-07-24 01:38:51.933 +07` |
+| First detector fire timestamp | `Pending exact timestamp extraction from runtime evidence` |
+| Lead-time | `Pending first-fire timestamp` |
 | Detector | `auto_cart_latency_p99` |
 | Signal | `cart_p99_latency_5m` |
 | Observed value | `3.0866666666666718s` |
@@ -294,29 +347,47 @@ precision = correct fires / total fires
 lead-time = first detector fire time - fault start time
 ```
 
-Labeled cases for this clean run:
+Counting rule for precision:
+
+```text
+One "fire" is one deduplicated alert incident, identified by its stable
+incident ID. Repeated detector evaluation cycles that only increase
+occurrence_count on the same incident are not counted as new alerts.
+RCA candidates are evaluated separately and are not counted as detector fires.
+```
+
+Labeled cases across the two isolated clean runs:
 
 | Case | Ground truth | Window | Expected | Result |
 | --- | --- | --- | --- | --- |
-| `01` | Normal baseline | before `01:03:03.077 +07` | no detector incident | `TN` |
+| `01` | Normal checkout baseline | before `01:03:03.077 +07` | no alert incident | `TN` |
 | `02` | `local-paymentFailure=50%` | `01:03:03.077` to `01:10:46.173 +07` | checkout/payment impact | `TP`, caught by checkout error-rate |
-| `03` | Recovery | after `01:10:46.173 +07` | telemetry returns normal | `PASS`, telemetry recovered |
+| `03` | Checkout recovery | after `01:10:46.173 +07` | telemetry returns normal | `PASS`, telemetry recovered |
+| `04` | Normal cart baseline | before `01:38:51.933 +07` | no cart alert incident | `TN` |
+| `05` | `local-cartFailure` | from `01:38:51.933 +07` until fault disabled | cart impact | `TP`, caught by cart p99 latency |
+| `06` | Cart recovery | after fault disabled | telemetry returns normal | `PASS`, telemetry recovered |
 
 Metric summary:
 
 | Metric | Value | Formula / note |
 | --- | ---: | --- |
-| Injected incidents `K` | `1` | one labeled fault |
-| Caught incidents | `1` | checkout error-rate detector fired |
+| Injected incidents `K` | `2` | payment failure + cart failure |
+| Caught incidents | `2` | both labeled incidents detected |
 | False negatives | `0` | `K - caught` |
-| Incident recall | `100%` | `1 / 1` |
-| Primary detector precision | `100%` | `1 correct primary fire / 1 primary labeled fire` |
-| Conservative precision with RCA caveat | `50%` | checkout TP + unexpected RCA caveat |
-| Lead-time | `205.417s` | first fire - fault start |
-| Recovery time | `~376.827s` | recovery dashboard capture - fault disabled |
-| RCA payment hit | `False` | RCA did not identify `payment` |
+| Incident recall | `100%` | `2 / 2` |
+| Alert-incident precision | `100%` | `2 correct deduplicated alert incidents / 2 total alert incidents` |
+| Checkout lead-time | `205.417s` | checkout first fire - checkout fault start |
+| Cart lead-time | `Pending` | exact detector timestamp must be extracted before final submission |
+| Mean/median lead-time | `Pending` | calculate after cart lead-time is available |
+| Checkout recovery time | `~376.827s` | recovery dashboard capture - fault disabled |
+| RCA checkout root-cause hit | `False` | RCA did not identify `payment`; reported separately from detection precision |
 
-Because `K=1`, these metrics are preliminary and not statistically broad. They are sufficient as a live working proof for #7b but should not be presented as production-quality model evaluation.
+Because `K=2`, these metrics remain preliminary and are not statistically
+broad. They demonstrate two working live service paths for #7b but should not
+be presented as production-quality model evaluation. The `100%` precision
+assumes the isolated labeled windows contain only the two documented alert
+incident IDs; this must be rechecked against the final incident snapshots
+before submission.
 
 ## 14. Evidence Index
 
@@ -354,7 +425,8 @@ Because `K=1`, these metrics are preliminary and not statistically broad. They a
 Terminal 1 - port-forward dependencies:
 
 ```powershell
-cd C:\Users\AdminPC\Downloads\projectx-brain\tf2-corp-platform\src\aio
+# Run from the repository root
+Set-Location .\src\aio
 if (-not (Test-Path .env)) {
     Copy-Item .env.example .env
 }
@@ -364,8 +436,9 @@ powershell -File scripts\port_forward.ps1
 Terminal 2 - run AIOps API runtime:
 
 ```powershell
-cd C:\Users\AdminPC\Downloads\projectx-brain\tf2-corp-platform\src\aio
-.\.venv\Scripts\activate
+# Run from the repository root
+Set-Location .\src\aio
+.\.venv\Scripts\Activate.ps1
 python -m uvicorn aiops.api.app:create_app --factory --host 0.0.0.0 --port 8540
 ```
 
@@ -380,15 +453,36 @@ Run flow:
 
 1. Start Locust with `50` users and ramp/spawn rate `1 user/s`.
 2. Wait for a normal baseline and confirm `AIOPS_DEDUP_RESULT input_candidates=0 incidents=0`.
-3. Record timestamp with `Get-Date -Format "yyyy-MM-dd HH:mm:ss.fff zzz"`.
-4. In Flagd Configurator, set `local-paymentFailure=50%`.
+3. In Flagd Configurator, set `local-paymentFailure=50%`.
+4. Record the fault-start timestamp immediately after the UI confirms the new
+   value with `Get-Date -Format "yyyy-MM-dd HH:mm:ss.fff zzz"`. Prefer a Flagd
+   audit/event timestamp when available.
 5. Capture first `AIOPS_DETECT threshold_fire` for `auto_checkout_error_rate`.
 6. Call `GET /api/v1/incidents` and capture incident ID and occurrence count.
 7. Wait more cycles and capture dedup with the same incident ID and higher occurrence count.
 8. Capture SLO impact dashboard.
 9. Set `local-paymentFailure=off`, record timestamp, and capture recovery dashboard.
 
-## 16. Jira Paste Block
+The measured checkout lead-time may include a short Flagd UI interaction delay
+because the operator timestamp was captured manually.
+
+## 16. Submission Traceability
+
+| Item | Evidence |
+| --- | --- |
+| Branch tested | `feat/aio/v0.0.5` |
+| Evidence commit | `c11e4bd` (`docs(aiops): refresh mandate 7b live evidence`) |
+| Repository HEAD when this document was reviewed | `1206411` |
+| Runtime implementation PR/commit | `TODO: add final runtime implementation PR or commit link` |
+| ADR | [`ADR-DETECT-001`](../../../src/aio/docs/mandates/7a/ADR-DETECT-001.md) |
+| ADR sign-off | `Pending reviewer sign-off` |
+| Policy mode | `dry-run` |
+| Burn-rate supplemental evidence | `Pending retest` |
+
+Before submission, replace all `TODO`/`Pending` traceability values with the
+final reviewed links or explicit final status.
+
+## 17. Jira Paste Block
 
 ```text
 AI MANDATE #7b - API runtime live proof
@@ -408,13 +502,27 @@ AI MANDATE #7b - API runtime live proof
 - Impact: checkout success dropped to 63.9% against SLO >=99.0%
 - Fault disabled: 2026-07-24 01:10:46.173 +07
 - Recovery: checkout success 100%, p95 350ms, p99 775ms (<1s), captured around 01:17 +07
-- Recall: 100% on K=1 labeled injected incident
-- Primary precision: 100% for labeled detector fire; conservative precision 50% if counting unexpected RCA recommendation as FP
-- Supplemental expanded-service proof: local-cartFailure produced auto_cart_latency_p99 on cart_p99_latency_5m, value 3.0867s > 1s, incident inc-c7f94b1816a6; cart SLO recovered to 100%; excluded from primary K=1 precision/recall
-- Caveats: RCA produced recommendation root-cause instead of payment; incident state remains open after telemetry recovery; rolling-24h burn-rate excluded from primary clean run because previous tests polluted the 24h window
+- Labeled set: K=2 injected incidents - local-paymentFailure and local-cartFailure
+- Recall: 100% (2 caught / 2 injected incidents)
+- Alert-incident precision: 100% (2 correct deduplicated alert incidents / 2 total alert incidents)
+- Counting unit: one stable deduplicated incident ID is one alert; occurrence_count increments are not new alerts
+- Checkout lead-time: 205.417s
+- Cart lead-time: PENDING exact first-fire timestamp extraction
+- Expanded service: local-cartFailure produced auto_cart_latency_p99 on cart_p99_latency_5m, value 3.0867s > 1s, incident inc-c7f94b1816a6; cart SLO recovered to 100%
+- RCA quality is reported separately: payment root-cause hit=false; RCA output is not counted as a detection false positive
+- Burn-rate: PENDING isolated supplemental retest; do not claim complete until evidence is attached
+- Caveats: incident state remains open after telemetry recovery; rolling-24h burn-rate was excluded from the clean labeled runs because previous tests polluted the 24h window
 - Evidence: docs/aiops/evidence/MANDATE-07b-api-runtime-draft.md and linked screenshots in docs/aiops/evidence
 ```
 
-## 17. Conclusion
+## 18. Conclusion
 
-The clean run demonstrates that the AIOps runtime detected a live checkout-impacting injected fault from Prometheus telemetry, created a stable checkout incident, deduped repeated detections, recorded notification intent, and showed user-visible SLO degradation followed by telemetry recovery. The main limitations are RCA quality, lack of automatic incident resolution, and the fact that rolling-24h burn-rate needs a clean Prometheus window or shorter demo window before it can be used as primary labeled-run evidence.
+The two isolated labeled runs demonstrate that the AIOps runtime detected live
+checkout and cart faults from Prometheus telemetry, created stable incidents,
+deduped repeated detections, recorded notification intent for the primary
+checkout case, and showed user-visible SLO degradation followed by telemetry
+recovery. Detection recall and alert-incident precision are both `100%` on the
+preliminary `K=2` labeled set, subject to final verification that no additional
+alert incident IDs occurred inside the labeled windows. RCA quality, automatic
+incident resolution, the exact cart lead-time, and isolated live burn-rate
+proof remain explicit follow-up items.
