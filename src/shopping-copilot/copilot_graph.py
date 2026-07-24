@@ -265,8 +265,8 @@ def make_nodes(deps: CopilotDeps):
                 valkey_client=deps.valkey_client,
             )
             return {**state, "pending_action": action}
-        except Exception as exc:
-            logger.error("Cart pending-action creation failed: %s", type(exc).__name__)
+        except Exception:
+            logger.error("Pending cart action creation failed")
             # Non-fatal.
             return {**state, "pending_action": None}
 
@@ -446,4 +446,3 @@ def run_copilot(user_message: str, deps: CopilotDeps, user_id: str = "anonymous"
             "reason": "An unexpected error occurred.",
             "error": str(exc),
         }
-# Change trail: @hungxqt - 2026-07-20 - Avoid logging token-related strings on pending-action create failure

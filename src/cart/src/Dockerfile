@@ -32,6 +32,9 @@ RUN dotnet publish ./src/cart.csproj -r linux-musl-$TARGETARCH --no-restore -o /
 # https://mcr.microsoft.com/v2/dotnet/runtime-deps/tags/list
 FROM mcr.microsoft.com/dotnet/runtime-deps:10.0-alpine3.22@sha256:dede21dd11890c0f687e49408e4479e129fb9464809b9a1ce162fbad004cf987
 
+# Apply Alpine security updates (OpenSSL and friends) for Trivy HIGH/CRITICAL.
+RUN apk upgrade --no-cache
+
 WORKDIR /usr/src/app/
 
 RUN addgroup -g 10001 -S appgroup && \
@@ -47,3 +50,4 @@ ENV DOTNET_HOSTBUILDER__RELOADCONFIGONCHANGE=false
 
 EXPOSE ${CART_PORT}
 ENTRYPOINT [ "./cart" ]
+# Change trail: @hungxqt - 2026-07-20 - apk upgrade on cart runtime for Trivy OpenSSL and Alpine CVEs

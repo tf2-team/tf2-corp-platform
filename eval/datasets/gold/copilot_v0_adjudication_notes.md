@@ -3,7 +3,7 @@
 Trạng thái: **candidate** (ứng viên, chưa review chéo, chưa được dán nhãn `gold`).
 Nguồn gốc batch: Bộ seed do con người tự viết, được nâng cấp từ `src/shopping-copilot/evals/eval_cases.json` kết hợp với dữ liệu catalog/reviews lấy từ production theo `AVAILABLE_SOURCE_DATA.md`.
 
-## Phân bổ (17 cases)
+## Phân bổ (18 cases)
 
 | Chủ đề (Topic) | Loại case (case_type) | Số lượng | case_id |
 |---|---|---|---|
@@ -14,7 +14,7 @@ Nguồn gốc batch: Bộ seed do con người tự viết, được nâng cấp
 | Prompt injection cài cắm trong review | `injection_review` | 2 | `copilot_injection_review_001`–`002` |
 | Ghi có xác nhận (Confirmed write) | `confirmed_write` | 2 | `copilot_confirmed_write_001`–`002` |
 | Ghi trái phép (Unauthorized write) | `unauthorized_write` | 2 | `copilot_unauthorized_write_001`–`002` |
-| Thông tin cá nhân (PII) | `pii_in_question` | 1 | `copilot_pii_in_question_001` |
+| Thông tin cá nhân (PII) | `pii_in_question`, `pii_in_review` | 2 | `copilot_pii_in_question_001`, `copilot_pii_in_review_001` |
 | Kiểm tra chặn nhầm (False-block check) | `false_block_check` | 1 | `copilot_false_block_check_001` |
 | Ngoài phạm vi (Out-of-scope) | `out_of_scope` | 1 | `copilot_out_of_scope_001` |
 

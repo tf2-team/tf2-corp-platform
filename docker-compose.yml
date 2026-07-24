@@ -636,6 +636,12 @@ services:
       - LLM_HOST
       - LLM_PORT
       - VALKEY_ADDR
+      - AI_CACHE_ADDR=${AI_CACHE_ADDR:-valkey-ai-cache:6379}
+      - AI_CACHE_ENABLED=${AI_CACHE_ENABLED:-false}
+      - AI_CACHE_TLS=${AI_CACHE_TLS:-false}
+      - AI_CACHE_TTL_SECONDS=${AI_CACHE_TTL_SECONDS:-3600}
+      - AI_CACHE_MAX_DISTANCE=${AI_CACHE_MAX_DISTANCE:-0.12}
+      - AI_CACHE_USER_HMAC_SECRET=${AI_CACHE_USER_HMAC_SECRET:-local-only-cache-scope-secret}
     depends_on:
       product-catalog:
         condition: service_started
@@ -645,6 +651,8 @@ services:
         condition: service_started
       valkey-cart:
         condition: service_started
+      ai-cache-bootstrap:
+        condition: service_completed_successfully
       otel-collector:
         condition: service_started
     volumes:
@@ -690,6 +698,12 @@ services:
       - PRODUCT_REVIEWS_ADDR
       - CART_ADDR
       - VALKEY_ADDR
+      - AI_CACHE_ADDR=${AI_CACHE_ADDR:-valkey-ai-cache:6379}
+      - AI_CACHE_ENABLED=${AI_CACHE_ENABLED:-false}
+      - AI_CACHE_TLS=${AI_CACHE_TLS:-false}
+      - AI_CACHE_TTL_SECONDS=${AI_CACHE_TTL_SECONDS:-3600}
+      - AI_CACHE_MAX_DISTANCE=${AI_CACHE_MAX_DISTANCE:-0.12}
+      - AI_CACHE_USER_HMAC_SECRET=${AI_CACHE_USER_HMAC_SECRET:-local-only-cache-scope-secret}
       - FLAGD_HOST
       - FLAGD_PORT
     depends_on:
@@ -699,6 +713,8 @@ services:
         condition: service_started
       valkey-cart:
         condition: service_started
+      ai-cache-bootstrap:
+        condition: service_completed_successfully
       otel-collector:
         condition: service_started
     volumes:
@@ -911,6 +927,7 @@ services:
     environment:
       - FLAGD_HOST
       - FLAGD_PORT
+      - APP_PORT=8000
     ports:
       - "${LLM_PORT}"
     depends_on:
@@ -968,6 +985,45 @@ services:
       interval: 5s
       timeout: 3s
       retries: 5
+    logging: *logging
+
+  # Valkey Search runtime dedicated to AI cache. Cart remains isolated above.
+  valkey-ai-cache:
+    image: ${AI_CACHE_IMAGE:-valkey/valkey-bundle:9.0.4-alpine}
+    container_name: valkey-ai-cache
+    restart: unless-stopped
+    ports:
+      - "6380:6379"
+    volumes:
+      - valkey-ai-cache-data:/data
+    healthcheck:
+      test: ["CMD", "valkey-cli", "ping"]
+      start_period: 5s
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    logging: *logging
+
+  ai-cache-bootstrap:
+    image: ${AI_CACHE_IMAGE:-valkey/valkey-bundle:9.0.4-alpine}
+    depends_on:
+      valkey-ai-cache:
+        condition: service_healthy
+    entrypoint: ["/bin/sh", "-ec"]
+    command:
+      - |
+        create_index() {
+          index="$$1"
+          prefix="$$2"
+          valkey-cli -h valkey-ai-cache FT._LIST | grep -qx "$$index" && return
+          valkey-cli -h valkey-ai-cache FT.CREATE "$$index" ON HASH PREFIX 1 "$$prefix" SCHEMA \
+            kind TAG user_scope TAG product_scope TAG source_hash TAG prompt_scope TAG \
+            model_scope TAG embedding_scope TAG embedding VECTOR HNSW 6 \
+            TYPE FLOAT32 DIM 384 DISTANCE_METRIC COSINE
+        }
+        create_index ai_summary_cache_idx ai:cache:summary:
+        create_index ai_copilot_cache_idx ai:cache:copilot:
+    restart: "no"
     logging: *logging
 
 
@@ -1128,5 +1184,6 @@ volumes:
   mem0-fastembed-cache:
   mem0-postgresql-data:
   shopping-copilot-hf-cache:
+  valkey-ai-cache-data:
 
 # Change trail: @hungxqt - 2026-07-20 - Drop build from mem0-migrate/model-init so Compose builds match release catalog.

@@ -441,8 +441,8 @@ def get_ai_assistant_response(request_product_id, question, user_id="anonymous")
                     }
                 )
 
-        # Automatically fetch reviews from DB if model didn't call fetch_product_reviews
-        if safe_reviews is None:
+        # Automatically fetch reviews only when the model did not choose a tool.
+        if safe_reviews is None and not tool_calls:
             logger.info("Fetching reviews directly for RAG grounding pipeline.")
             raw_reviews = fetch_product_reviews(product_id=request_product_id)
             safe_reviews = guardrails.sanitize_reviews(request_product_id, raw_reviews)
@@ -489,7 +489,12 @@ def get_ai_assistant_response(request_product_id, question, user_id="anonymous")
                     answer=grounded.reason or ABSTAIN_MESSAGE,
                     reason=grounded.reason or ABSTAIN_MESSAGE,
                 )
-        elif tool_calls:
+        elif safe_reviews is not None:
+            candidate_text = ABSTAIN_MESSAGE
+            structured_response = _build_structured_response(
+                status="ABSTAINED", answer=ABSTAIN_MESSAGE, reason=ABSTAIN_MESSAGE
+            )
+        elif any(tool_call.function.name == "fetch_product_info" for tool_call in tool_calls or []):
             # Fallback for non-review tool calls (e.g. fetch_product_info)
             if llm_inaccurate_response and request_product_id == "L9ECAV7KIM":
                 logger.info(f"Returning an inaccurate response for product_id: {request_product_id}")

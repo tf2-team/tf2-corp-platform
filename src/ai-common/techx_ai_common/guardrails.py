@@ -87,6 +87,7 @@ HARD_INJECTION_KEYWORDS = [
     "dan mode",
     "do anything now",
     "bypass instructions",
+    "bypass instruction",
     "bypass safety",
 ]
 

@@ -29,7 +29,7 @@ jobs:
         # actions/setup-go@v6.5.0
         uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16
         with:
-          go-version: "1.24.x"
+          go-version: "1.25.x"
           cache-dependency-path: internal/tools/go.sum
 
       - name: Setup Node
@@ -76,6 +76,9 @@ jobs:
           - name: mem0 (Python)
             kind: python
             workdir: src/mem0
+          - name: frontend resilience (Node)
+            kind: node
+            workdir: src/frontend
     steps:
       - name: Checkout
         # actions/checkout@v7.0.0
@@ -88,7 +91,7 @@ jobs:
         # actions/setup-go@v6.5.0
         uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16
         with:
-          go-version: "1.24.x"
+          go-version: "1.25.x"
           cache-dependency-path: ${{ matrix.workdir }}/go.sum
 
       - name: Setup .NET
@@ -107,6 +110,14 @@ jobs:
           cache: pip
           cache-dependency-path: src/mem0/requirements-production.txt
 
+      - name: Setup Node
+        if: matrix.kind == 'node'
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: ${{ matrix.workdir }}/package-lock.json
+
       - name: Install Python dependencies
         if: matrix.kind == 'python'
         run: python -m pip install -r src/mem0/requirements-production.txt
@@ -124,6 +135,13 @@ jobs:
       - name: Python test
         if: matrix.kind == 'python'
         run: python -m unittest discover -s src/mem0/tests -v
+
+      - name: Node test
+        if: matrix.kind == 'node'
+        working-directory: ${{ matrix.workdir }}
+        run: |
+          npm ci
+          npm run test:resilience
 
   # ---------------------------------------------------------------------------
   # PR-only: bake changed release images locally (no ECR login, no --push).
@@ -312,7 +330,11 @@ jobs:
           echo "  DEMO_VERSION=${DEMO_VERSION}"
           echo "  platform=linux/amd64 (PR validation only)"
           echo "  cache=disabled (no ECR)"
-          echo "  output=type=cacheonly (no load/push)"
+          OUTPUT_TYPE="cacheonly"
+          case "${SERVICE}" in
+            email|llm|opensearch) OUTPUT_TYPE="docker" ;;
+          esac
+          echo "  output=type=${OUTPUT_TYPE} (no push)"
 
           # Overrides:
           # - single platform for PR speed (publish path still multi-arch)
@@ -326,7 +348,12 @@ jobs:
             --set "*.cache-from=" \
             --set "*.cache-to=" \
             --set "*.tags=${IMAGE_NAME}/${SERVICE}:${DEMO_VERSION}" \
-            --set "*.output=type=cacheonly"
+            --set "*.output=type=${OUTPUT_TYPE}"
+
+          if [[ "${OUTPUT_TYPE}" == "docker" ]]; then
+            bash scripts/smoke_runtime_image.sh \
+              "${SERVICE}" "${IMAGE_NAME}/${SERVICE}:${DEMO_VERSION}"
+          fi
 
       - name: Job summary
         if: always()
@@ -482,7 +509,10 @@ jobs:
             src/ai-common/pyproject.toml
 
       - name: Install dependencies
-        run: python -m pip install -r src/product-reviews/requirements-dev.txt
+        run: |
+          python -m pip install --no-deps \
+            llm-guard==0.3.16 presidio-anonymizer==2.2.363
+          python -m pip install -r src/product-reviews/requirements-dev.txt
 
       - name: Validate spaCy model
         run: python -c "import spacy; spacy.load('en_core_web_lg')"
@@ -527,9 +557,11 @@ jobs:
             src/shopping-copilot/requirements.txt
 
       - name: Install dependencies
-        run: >-
-          python -m pip install ./src/ai-common
-          -r src/shopping-copilot/requirements.txt pytest==9.1.1
+        run: |
+          python -m pip install --no-deps \
+            llm-guard==0.3.16 presidio-anonymizer==2.2.363
+          python -m pip install ./src/ai-common \
+            -r src/shopping-copilot/requirements.txt pytest==9.1.1
 
       - name: Run shopping copilot tests
         env:
@@ -540,4 +572,4 @@ jobs:
       - name: Validate shared guardrail dependency
         run: >-
           python -c "from llm_guard.input_scanners import PromptInjection; from techx_ai_common import guardrails"
-# Change trail: @hungxqt - 2026-07-20 - Shared release catalog; skip SAST/secrets/IaC on workflow_call.
+# Change trail: @hungxqt - 2026-07-20 - Bump setup-go to 1.25.x to match checkout/product-catalog go.mod

@@ -220,11 +220,11 @@ if __name__ == '__main__':
 
     app.logger.info(f"Loaded product review summaries count: {len(product_review_summaries)}")
 
-    # Bind from env (default all interfaces for container networking). Never enable
-    # Flask debug in-process — the interactive debugger leaks state if reached.
-    host = os.environ.get("LLM_BIND_HOST", "0.0.0.0")
-    port = int(os.environ.get("LLM_PORT", os.environ.get("PORT", "8000")))
-    print(f"OpenAI API server starting on http://{host}:{port}")
-    print(f"Set your OpenAI base URL to: http://{host}:{port}/v1")
-    app.run(host=host, port=port, debug=False)
-# Change trail: @hungxqt - 2026-07-20 - Disable Flask debug; bind host/port via env (no hardcode in app.run)
+    app_port = int(os.environ.get("APP_PORT", "8000"))
+    print(f"OpenAI API server starting on http://localhost:{app_port}")
+    print(f"Set your OpenAI base URL to: http://localhost:{app_port}/v1")
+    app.run(
+        host=os.environ.get("LLM_HOST", "0.0.0.0"),
+        port=app_port,
+    )
+# Change trail: @MinhKhoa2209 - 2026-07-22 - Avoid Kubernetes LLM_PORT service-link collision.
