@@ -85,6 +85,7 @@ class RuntimeConfig(AiopsModel):
     prometheus_services: list[str] = Field(default_factory=list)
     signals: list[SignalDefinition]
     detectors: list[DetectorDefinition]
+    auto_detector_generation_enabled: bool = True
     detector_thresholds: dict[str, float] = Field(default_factory=dict)
     detector_confidences: dict[str, float] = Field(default_factory=dict)
     policy: RuntimePolicyConfig

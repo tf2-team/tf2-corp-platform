@@ -15,6 +15,33 @@ from aiops.schemas import RuntimeConfig
 
 
 class RuntimeConfigTest(unittest.TestCase):
+    def test_can_disable_automatic_detector_generation_for_isolated_runs(self):
+        with tempfile.TemporaryDirectory() as directory:
+            runtime_path = Path(directory) / "runtime.json"
+            runtime = json.loads(Path("config/runtime.json").read_text(encoding="utf-8"))
+            runtime["auto_detector_generation_enabled"] = False
+            runtime["detectors"] = [
+                detector
+                for detector in runtime["detectors"]
+                if detector["id"] == "ops01_checkout_slo_burn_rate"
+            ]
+            runtime["detectors"][0]["enabled"] = True
+            runtime_path.write_text(json.dumps(runtime), encoding="utf-8")
+
+            config = load_runtime_config(runtime_path, Path("config/prometheus_queries.json"))
+            hyperparameters = load_hyperparameters(Settings().hyperparameters_path)
+            detectors = build_detectors(
+                config,
+                Settings(),
+                hyperparameters["no_data"],
+                hyperparameters["detectors"],
+            )
+
+            self.assertEqual(
+                [detector.detector_id for detector in detectors],
+                ["ops01_checkout_slo_burn_rate"],
+            )
+
     def test_loads_runtime_json_and_builds_detectors(self):
         config = load_runtime_config(Path("config/runtime.json"))
         hyperparameters = load_hyperparameters(Settings().hyperparameters_path)

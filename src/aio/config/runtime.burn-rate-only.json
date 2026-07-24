@@ -1,0 +1,335 @@
+{
+  "schema_version": "1.0",
+  "environment": "techx-corp-prod",
+  "topology": {
+    "services": [
+      {
+        "name": "checkout",
+        "namespace": "techx-corp-prod",
+        "kind": "Deployment",
+        "owner": "checkout-oncall",
+        "flow": "checkout",
+        "dependencies": [
+          "cart",
+          "currency",
+          "product-catalog",
+          "shipping",
+          "payment",
+          "email",
+          "kafka",
+          "flagd"
+        ]
+      },
+      {
+        "name": "payment",
+        "namespace": "techx-corp-prod",
+        "kind": "Deployment",
+        "owner": "payments-oncall",
+        "flow": "checkout",
+        "dependencies": [
+          "flagd"
+        ]
+      },
+      {
+        "name": "frontend-proxy",
+        "namespace": "techx-corp-prod",
+        "kind": "Deployment",
+        "owner": "platform-oncall",
+        "flow": "edge",
+        "dependencies": [
+          "frontend",
+          "image-provider"
+        ]
+      },
+      {
+        "name": "frontend",
+        "namespace": "techx-corp-prod",
+        "kind": "Deployment",
+        "owner": "frontend-oncall",
+        "flow": "web",
+        "dependencies": [
+          "product-catalog",
+          "product-reviews",
+          "recommendation",
+          "checkout",
+          "cart",
+          "ad",
+          "currency",
+          "shipping",
+          "shopping-copilot",
+          "flagd"
+        ]
+      },
+      {
+        "name": "product-catalog",
+        "namespace": "techx-corp-prod",
+        "kind": "Deployment",
+        "owner": "catalog-oncall",
+        "flow": "catalog",
+        "dependencies": [
+          "postgresql",
+          "flagd"
+        ]
+      },
+      {
+        "name": "product-reviews",
+        "namespace": "techx-corp-prod",
+        "kind": "Deployment",
+        "owner": "catalog-oncall",
+        "flow": "catalog",
+        "dependencies": [
+          "product-catalog",
+          "postgresql",
+          "flagd",
+          "llm",
+          "external-llm"
+        ]
+      },
+      {
+        "name": "recommendation",
+        "namespace": "techx-corp-prod",
+        "kind": "Deployment",
+        "owner": "recommendation-oncall",
+        "flow": "recommendation",
+        "dependencies": [
+          "product-catalog",
+          "flagd"
+        ]
+      },
+      {
+        "name": "cart",
+        "namespace": "techx-corp-prod",
+        "kind": "Deployment",
+        "owner": "checkout-oncall",
+        "flow": "checkout",
+        "dependencies": [
+          "flagd",
+          "valkey-cart"
+        ]
+      },
+      {
+        "name": "ad",
+        "namespace": "techx-corp-prod",
+        "kind": "Deployment",
+        "owner": "platform-oncall",
+        "flow": "platform",
+        "dependencies": [
+          "flagd"
+        ]
+      },
+      {
+        "name": "currency",
+        "namespace": "techx-corp-prod",
+        "kind": "Deployment",
+        "owner": "checkout-oncall",
+        "flow": "checkout",
+        "dependencies": []
+      },
+      {
+        "name": "shipping",
+        "namespace": "techx-corp-prod",
+        "kind": "Deployment",
+        "owner": "checkout-oncall",
+        "flow": "checkout",
+        "dependencies": [
+          "quote"
+        ]
+      },
+      {
+        "name": "email",
+        "namespace": "techx-corp-prod",
+        "kind": "Deployment",
+        "owner": "checkout-oncall",
+        "flow": "checkout",
+        "dependencies": []
+      },
+      {
+        "name": "quote",
+        "namespace": "techx-corp-prod",
+        "kind": "Deployment",
+        "owner": "checkout-oncall",
+        "flow": "checkout",
+        "dependencies": []
+      },
+      {
+        "name": "flagd",
+        "namespace": "techx-corp-prod",
+        "kind": "Deployment",
+        "owner": "platform-oncall",
+        "flow": "platform",
+        "dependencies": []
+      },
+      {
+        "name": "fraud-detection",
+        "namespace": "techx-corp-prod",
+        "kind": "Deployment",
+        "owner": "checkout-oncall",
+        "flow": "checkout",
+        "dependencies": [
+          "flagd",
+          "kafka",
+          "valkey-cart"
+        ]
+      },
+      {
+        "name": "accounting",
+        "namespace": "techx-corp-prod",
+        "kind": "Deployment",
+        "owner": "finance-oncall",
+        "flow": "checkout",
+        "dependencies": [
+          "kafka",
+          "postgresql"
+        ]
+      },
+      {
+        "name": "shopping-copilot",
+        "namespace": "techx-corp-prod",
+        "kind": "Deployment",
+        "owner": "aie-oncall",
+        "flow": "shopping-copilot",
+        "dependencies": [
+          "product-catalog",
+          "product-reviews",
+          "cart",
+          "valkey-cart",
+          "aws-bedrock"
+        ]
+      },
+      {
+        "name": "image-provider",
+        "namespace": "techx-corp-prod",
+        "kind": "Deployment",
+        "owner": "frontend-oncall",
+        "flow": "web",
+        "dependencies": [
+          "flagd"
+        ]
+      },
+      {
+        "name": "llm",
+        "namespace": "techx-corp-prod",
+        "kind": "Deployment",
+        "owner": "aie-oncall",
+        "flow": "catalog",
+        "dependencies": [
+          "flagd"
+        ]
+      },
+      {
+        "name": "external-llm",
+        "namespace": "external",
+        "kind": "ExternalAPI",
+        "owner": "aie-oncall",
+        "flow": "catalog",
+        "dependencies": []
+      },
+      {
+        "name": "aws-bedrock",
+        "namespace": "external",
+        "kind": "ExternalAPI",
+        "owner": "aie-oncall",
+        "flow": "shopping-copilot",
+        "dependencies": []
+      },
+      {
+        "name": "load-generator",
+        "namespace": "techx-corp-prod",
+        "kind": "Deployment",
+        "owner": "platform-oncall",
+        "flow": "testing",
+        "dependencies": [
+          "frontend-proxy",
+          "flagd"
+        ]
+      },
+      {
+        "name": "jaeger",
+        "namespace": "techx-corp-prod",
+        "kind": "Deployment",
+        "owner": "platform-oncall",
+        "flow": "observability",
+        "dependencies": []
+      },
+      {
+        "name": "otel-collector",
+        "namespace": "techx-corp-prod",
+        "kind": "DaemonSet",
+        "owner": "platform-oncall",
+        "flow": "observability",
+        "dependencies": []
+      },
+      {
+        "name": "kafka",
+        "namespace": "external",
+        "kind": "ManagedService",
+        "owner": "platform-oncall",
+        "flow": "platform",
+        "dependencies": []
+      },
+      {
+        "name": "postgresql",
+        "namespace": "external",
+        "kind": "Database",
+        "owner": "data-platform-oncall",
+        "flow": "data",
+        "dependencies": []
+      },
+      {
+        "name": "valkey-cart",
+        "namespace": "external",
+        "kind": "Database",
+        "owner": "checkout-oncall",
+        "flow": "checkout",
+        "dependencies": []
+      },
+      {
+        "name": "opensearch",
+        "namespace": "techx-corp-prod",
+        "kind": "StatefulSet",
+        "owner": "platform-oncall",
+        "flow": "observability",
+        "dependencies": []
+      }
+    ]
+  },
+  "signals": [],
+  "detectors": [
+    {
+      "id": "ops01_checkout_slo_burn_rate",
+      "type": "threshold",
+      "enabled": true,
+      "signal_id": "checkout_error_budget_burn_rate_24h",
+      "flow": "checkout",
+      "service": "checkout",
+      "severity": "SEV1",
+      "runbook_id": "RB-CHECKOUT-SLO"
+    }
+  ],
+  "policy": {
+    "protected_targets": [
+      "aiops",
+      "flagd",
+      "jaeger",
+      "load-generator",
+      "postgresql",
+      "valkey-cart",
+      "opensearch"
+    ],
+    "stateful_kinds": [
+      "StatefulSet",
+      "Database",
+      "ManagedService",
+      "ExternalAPI"
+    ],
+    "non_actionable_flows": [
+      "monitoring",
+      "observability",
+      "testing"
+    ]
+  },
+  "rca": {
+    "enabled": false
+  },
+  "auto_detector_generation_enabled": false
+}
