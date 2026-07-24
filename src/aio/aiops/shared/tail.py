@@ -190,9 +190,12 @@ def normal_traffic_growth_decision(
                     r = tail_pearson_correlation(req_metric, infra_metric, detection_window_seconds, start)
                     change = _smoothed_tail_change(infra_metric, detection_window_seconds, start, min_tail_anomaly_buckets, min_relative_change_ratio, min_absolute_change)
                     tail_delta = median(change.values[i] for i in change.indexes) - change.baseline if change.indexes else 0.0
+                    
+                    # Đồng biến: r cao và biến động cùng hướng với request_rate
                     if r >= min_pearson_correlation and tail_delta * direction > 0:
                         r_scores.append(r)
-                    elif (r <= -min_pearson_correlation) or (r >= min_pearson_correlation and tail_delta * direction < 0):
+                    # Bất thường/Nghịch biến: r âm hoặc biến động ngược hướng có ý nghĩa
+                    elif (r <= -min_pearson_correlation) or (tail_delta * direction < 0 and abs(tail_delta) >= min_absolute_change.get(group, 1.0)):
                         opposite_infra.append(group)
             if r_scores:
                 correlated_infra.append(group)
