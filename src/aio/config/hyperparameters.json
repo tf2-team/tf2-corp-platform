@@ -140,15 +140,16 @@
         "cpu": 10.0,
         "memory": 104857600.0,
         "disk": 1048576.0,
-        "socket_io": 102400.0,
+        "socket_io": 1048576.0,
         "request_rate": 5.0,
         "default": 1.0
       },
       "correlation_lag_buckets": {
-        "cpu": 2,
-        "socket_io": 2,
+        "cpu": 1,
+        "socket_io": 1,
         "memory": 4
-      }
+      },
+      "min_pearson_correlation": 0.5
     },
     "graph": {
       "damping": 0.85,
