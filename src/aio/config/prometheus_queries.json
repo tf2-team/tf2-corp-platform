@@ -173,7 +173,7 @@
       "query_id_template": "$service.memory_usage_bytes",
       "signal_id_template": "${service_id}_memory_usage_bytes",
       "promql": "sum(container_memory_working_set_bytes{container=\"$service\"}) or sum(container_memory_usage_bytes{container=\"$service\"}) or sum(container_memory_usage_bytes{container_name=~\".*$service.*\"}) or sum(k8s_pod_memory_usage{k8s_deployment_name=\"$service\"})",
-      "unit": "bytes_per_second",
+      "unit": "bytes",
       "window": "instant",
       "metric": "memory_usage_bytes",
       "feature_role": "anomaly_input"
@@ -192,7 +192,7 @@
       "query_id_template": "$service.socket_io_bytes_per_second",
       "signal_id_template": "${service_id}_socket_io_bytes_per_second",
       "promql": "((sum(rate(container_network_receive_bytes_total{pod=~\"$service.*\"}[5m])) or 0 * sum(rate(container_network_transmit_bytes_total{pod=~\"$service.*\"}[5m]))) + (sum(rate(container_network_transmit_bytes_total{pod=~\"$service.*\"}[5m])) or 0 * sum(rate(container_network_receive_bytes_total{pod=~\"$service.*\"}[5m])))) or ((sum(rate(container_network_io_usage_rx_bytes{container_name=~\".*$service.*\"}[5m])) or 0 * sum(rate(container_network_io_usage_tx_bytes{container_name=~\".*$service.*\"}[5m]))) + (sum(rate(container_network_io_usage_tx_bytes{container_name=~\".*$service.*\"}[5m])) or 0 * sum(rate(container_network_io_usage_rx_bytes{container_name=~\".*$service.*\"}[5m]))))",
-      "unit": "bytes",
+      "unit": "bytes_per_second",
       "window": "5m",
       "metric": "socket_io_bytes_per_second",
       "feature_role": "anomaly_input",
@@ -297,7 +297,7 @@
   },
   "service_groups": [
     {
-      "services": ["frontend", "cart", "quote", "llm"],
+      "services": ["frontend", "quote"],
       "template_ids": ["red.http.p95_latency", "red.http.p99_latency", "red.http.error_ratio", "red.http.request_rate"]
     },
     {
@@ -305,7 +305,7 @@
       "template_ids": ["red.spans.server.p95_latency", "red.spans.server.p99_latency", "red.spans.server.error_ratio", "red.spans.server.request_rate"]
     },
     {
-      "services": ["checkout", "payment", "product-catalog", "product-reviews", "recommendation", "ad", "currency", "shipping", "email"],
+      "services": ["checkout", "payment", "product-catalog", "product-reviews", "recommendation", "ad", "currency", "shipping", "email", "cart", "shopping-copilot"],
       "template_ids": ["red.grpc.p95_latency", "red.grpc.p99_latency", "red.grpc.error_ratio", "red.grpc.request_rate"]
     },
     {
@@ -313,7 +313,7 @@
       "template_ids": ["red.consumer.p95_latency", "red.consumer.p99_latency", "red.consumer.error_ratio", "red.consumer.request_rate"]
     },
     {
-      "services": ["checkout", "payment", "frontend-proxy", "frontend", "product-catalog", "product-reviews", "recommendation", "ad", "currency", "cart", "shipping", "email", "quote", "fraud-detection", "accounting", "llm"],
+      "services": ["checkout", "payment", "frontend-proxy", "frontend", "product-catalog", "product-reviews", "recommendation", "ad", "currency", "cart", "shipping", "email", "quote", "fraud-detection", "accounting", "shopping-copilot"],
       "template_ids": ["resource.cpu_millicores", "resource.memory_usage_bytes", "resource.disk_io_bytes_per_second", "resource.socket_io_bytes_per_second", "resource.workload_ready_pods", "resource.workload_ready_ratio"]
     }
   ],
