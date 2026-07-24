@@ -23,6 +23,8 @@
     }
   },
   "detectors": {
+    "default_error_rate": 0.05,
+    "default_latency_slo": 1.0,
     "latency_slo_overrides": {
       "frontend": 1,
       "frontend-proxy": 1.5,
@@ -144,7 +146,7 @@
         "request_rate": 5.0,
         "default": 1.0
       },
-      "traffic_shape_min_pearson": 0.6
+      "traffic_shape_min_pearson": 0.7
     },
     "graph": {
       "damping": 0.85,

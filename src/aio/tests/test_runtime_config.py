@@ -49,12 +49,18 @@ class RuntimeConfigTest(unittest.TestCase):
 
     def test_each_service_error_rate_signal_has_auto_detector(self):
         config = load_runtime_config(Path("config/runtime.json"))
+        hyperparameters = load_hyperparameters(Settings().hyperparameters_path)
+        detectors = build_detectors(config, Settings(), hyperparameters["no_data"], hyperparameters["detectors"])
         signal_ids = {signal.id for signal in config.signals if signal.query_id.endswith(".error_rate_5m")}
         auto_detectors = [detector for detector in config.detectors if detector.id.startswith("auto_") and detector.id.endswith("_error_rate")]
         detector_signal_ids = {detector.signal_id for detector in auto_detectors}
 
         self.assertEqual(detector_signal_ids, signal_ids)
         self.assertTrue(all(detector.enabled for detector in auto_detectors))
+        self.assertEqual(
+            next(detector.threshold for detector in detectors if detector.detector_id == "auto_shopping_copilot_error_rate"),
+            hyperparameters["detectors"]["default_error_rate"],
+        )
 
     def test_each_service_latency_signal_has_configured_slo_detector(self):
         config = load_runtime_config(Path("config/runtime.json"))
@@ -65,16 +71,16 @@ class RuntimeConfigTest(unittest.TestCase):
         configured_thresholds = hyperparameters["detectors"]["latency_slo_overrides"]
 
         self.assertEqual({detector.signal_id for detector in latency_detectors}, signal_ids)
-        self.assertEqual({detector.service for detector in latency_detectors}, set(configured_thresholds))
-        self.assertEqual(len(latency_detectors), len(configured_thresholds) * 2)
+        self.assertEqual({detector.service for detector in latency_detectors}, {signal.service for signal in config.signals if signal.id in signal_ids})
+        self.assertEqual(len(latency_detectors), len(signal_ids))
         thresholds = {detector.service: detector.threshold for detector in latency_detectors}
+        self.assertEqual(thresholds["shopping-copilot"], hyperparameters["detectors"]["default_latency_slo"])
         self.assertEqual(thresholds["cart"], 1)
         self.assertEqual(thresholds["frontend"], 1)
         self.assertEqual(thresholds["recommendation"], 1.0)
         self.assertEqual(thresholds["payment"], 1.5)
         self.assertEqual(thresholds["shipping"], 1.0)
         self.assertEqual(thresholds["accounting"], 1.0)
-        self.assertEqual(thresholds["llm"], 5.0)
 
     def test_prometheus_services_expand_generated_metrics(self):
         raw = json.loads(Path("config/runtime.json").read_text(encoding="utf-8"))

@@ -225,11 +225,12 @@ def build_detectors(
         if not item.enabled:
             continue
         if item.type == "threshold":
-            threshold = (
-                detector_hyperparameters["latency_slo_overrides"][item.service]
-                if item.id.endswith(("_latency_p95", "_latency_p99"))
-                else thresholds[item.id]
-            )
+            if item.id.endswith(("_latency_p95", "_latency_p99")):
+                threshold = detector_hyperparameters["latency_slo_overrides"].get(item.service, detector_hyperparameters["default_latency_slo"])
+            elif item.id.startswith("auto_") and item.id.endswith("_error_rate"):
+                threshold = thresholds.get(item.id, detector_hyperparameters["default_error_rate"])
+            else:
+                threshold = thresholds[item.id]
             detectors.append(
                 ThresholdDetector(
                     detector_id=item.id,
