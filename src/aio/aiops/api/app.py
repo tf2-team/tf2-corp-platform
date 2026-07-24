@@ -19,6 +19,7 @@ from aiops.config import Settings, build_detectors, load_hyperparameters, load_r
 from aiops.enrichment import Enricher
 from aiops.integrations import JaegerClient, KubernetesClient, NotificationClient, OpenSearchClient, PrometheusClient
 from aiops.normalization import load_normalization_schema
+from aiops.observability.logging import configure_root_logging
 from aiops.observability import metrics_response, record_pipeline_failure, record_pipeline_success
 from aiops.pipeline import AiopsPipeline
 from aiops.qualification import load_qualification_schema
@@ -40,7 +41,11 @@ logger = logging.getLogger(__name__)
 
 
 def configure_logging() -> None:
-    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
+    configure_root_logging(
+        level=os.getenv("AIOPS_LOG_LEVEL", "INFO"),
+        output_format=os.getenv("AIOPS_LOG_FORMAT", "pretty"),
+    )
+
     logging.getLogger("httpx").setLevel(logging.WARNING)
     logging.getLogger("httpcore").setLevel(logging.WARNING)
     logging.getLogger("drain3").setLevel(logging.WARNING)
