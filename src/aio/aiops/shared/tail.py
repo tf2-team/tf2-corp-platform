@@ -114,25 +114,27 @@ def normal_traffic_growth_decision(
     missing = [group for group in ("request_rate", *required_infra_groups) if not by_group[group]]
     if missing:
         return False, f"reason=missing_metrics metrics={','.join(missing)}"
-    for metric in series:
-        if "oom_events_total" in metric.metric:
-            values = [point.value for point in metric.points]
-            baseline, indexes = fixed_baseline_and_tail(metric, detection_window_seconds, start, values)
-            if baseline and indexes and max(values[index] for index in indexes) > max(baseline):
-                return False, "reason=oom_increased"
-        if memory_oom_detector is not None and metric_group(metric.metric) == "memory" and memory_oom_detector(metric):
-            return False, "reason=memory_oom_pattern"
     request_increased = any(
         (change := _smoothed_tail_change(metric, detection_window_seconds, start, min_tail_anomaly_buckets, min_relative_change_ratio, min_absolute_change)).significant
         and any(change.values[index] > change.baseline for index in change.indexes)
         for metric in by_group["request_rate"]
     )
+    for metric in series:
+        if "oom_events_total" in metric.metric:
+            values = [point.value for point in metric.points]
+            baseline, indexes = fixed_baseline_and_tail(metric, detection_window_seconds, start, values)
+            if not request_increased and baseline and indexes and max(values[index] for index in indexes) > max(baseline):
+                return False, "reason=oom_increased"
+        if not request_increased and memory_oom_detector is not None and metric_group(metric.metric) == "memory" and memory_oom_detector(metric):
+            return False, "reason=memory_oom_pattern"
     memory_shape_metrics = []
     for metric in series:
         change = _smoothed_tail_change(metric, detection_window_seconds, start, min_tail_anomaly_buckets, min_relative_change_ratio, min_absolute_change)
         if metric_group(metric.metric) == "memory" and change.significant and not request_increased and any(change.values[index] > change.baseline for index in change.indexes):
             return False, "reason=memory_increased_without_traffic"
         if metric_group(metric.metric) == "memory" and change.significant and change.indexes:
+            if request_increased and memory_oom_detector is not None and memory_oom_detector(metric):
+                continue
             tail_median = median(change.values[index] for index in change.indexes)
             if request_increased and tail_median < change.baseline:
                 return False, "reason=memory_shape_mismatch"

@@ -420,7 +420,7 @@ class V001AnomalyEngine:
         return [
             metric
             for metric in series
-            if metric.service not in normal_services or _is_error_metric(metric.metric) or _is_oom_metric(metric.metric)
+            if metric.service not in normal_services or _is_error_metric(metric.metric)
         ]
 
     def _normal_traffic_growth_decision(self, series: list[MetricSeries]) -> tuple[bool, str]:

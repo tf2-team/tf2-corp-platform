@@ -474,7 +474,7 @@ class V001AnomalyRcaTest(unittest.TestCase):
         self.assertEqual(len(logs.records), 1)
         self.assertIn("service=checkout result=detect breakout=true reason=error_increased", logs.output[0])
 
-    def test_oom_increase_keeps_all_metrics_during_coordinated_load_growth(self):
+    def test_oom_increase_does_not_break_normal_growth_when_request_increases(self):
         engine = anomaly_engine()
         series = [
             minute_metric("checkout", "request_rate_5m", [10] * 30 + [30] * 15),
@@ -483,9 +483,9 @@ class V001AnomalyRcaTest(unittest.TestCase):
             minute_metric("checkout", "oom_events_total", [0] * 44 + [1]),
         ]
 
-        self.assertEqual(engine._filter_normal_traffic_growth(series), series)
+        self.assertEqual(engine._filter_normal_traffic_growth(series), [])
 
-    def test_memory_oom_pattern_keeps_metrics_during_coordinated_load_growth(self):
+    def test_memory_oom_pattern_does_not_break_normal_growth_when_request_increases(self):
         engine = anomaly_engine()
         memory = minute_metric("checkout", "memory_usage_bytes", [100_000_000] * 30 + [240_000_000] * 12 + [55_000_000] * 3)
         series = [
@@ -496,7 +496,7 @@ class V001AnomalyRcaTest(unittest.TestCase):
         ]
 
         self.assertTrue(engine._memory_oom_detected(memory))
-        self.assertEqual(engine._filter_normal_traffic_growth(series), series)
+        self.assertEqual(engine._filter_normal_traffic_growth(series), [])
 
     def test_memory_oom_pattern_requires_configured_anomaly_bucket_count(self):
         engine = anomaly_engine()
