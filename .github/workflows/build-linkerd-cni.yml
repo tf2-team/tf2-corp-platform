@@ -215,6 +215,10 @@ jobs:
     if: github.event_name == 'workflow_dispatch' && inputs.target_environment == 'production' || github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    # IMAGE_NAME and the chart token are production Environment-scoped values.
+    # Without this binding GitHub resolves vars.IMAGE_NAME to an empty string,
+    # producing the invalid image reference "/linkerd-cni:<tag>".
+    environment: production
     permissions:
       contents: read
     env:
