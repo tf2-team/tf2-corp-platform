@@ -518,6 +518,9 @@ jobs:
           version: v0.69.3
           scan-type: config
           scan-ref: .
+          # The action does not auto-discover .trivyignore.yaml; pass the
+          # path explicitly so its narrowly scoped CNI root exception applies.
+          trivyignores: .trivyignore.yaml
           skip-dirs: node_modules
           format: table
           severity: HIGH,CRITICAL

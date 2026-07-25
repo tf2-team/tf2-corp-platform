@@ -12,6 +12,7 @@ RUN chmod 0755 /linkerd/linkerd-cni-token-aware-install.sh
 
 # The installer writes CNI binaries and configuration into hostPath mounts.
 # It must therefore run as root, while the DaemonSet remains non-privileged.
+# nosemgrep: dockerfile.security.last-user-is-root.last-user-is-root -- CNI hostPath writes require UID 0.
 USER root
 
 CMD ["linkerd-cni-token-aware-install.sh"]
