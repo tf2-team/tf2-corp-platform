@@ -5,7 +5,7 @@ from __future__ import annotations
 
 from collections import defaultdict
 
-from aiops.anomaly.stats import rolling_robust_scores
+from aiops.anomaly.stats import robust_score
 from aiops.rca.graph import GraphTraversalRca
 from aiops.schemas import AnomalyFinding, MetricSeries, RcaResult, RootCauseCandidate, RuntimeConfig, TelemetryCorroboration
 from aiops.shared.tail import evaluate_tail_change, fixed_baseline_and_tail, metric_group, tail_aligned_spearman
@@ -172,8 +172,8 @@ class V001RcaEngine:
         if not self._significant_tail_change(metric):
             return None
         baseline, indexes = fixed_baseline_and_tail(metric, self.detection_window_seconds, self.drift_min_points - 1, values)
-        for score, index in rolling_robust_scores(values, indexes, self.drift_min_points - 1, len(baseline)):
-            if score >= self.drift_score_threshold:
+        for index in indexes:
+            if robust_score(baseline, [values[index]]) >= self.drift_score_threshold:
                 return index
         return None
 
@@ -185,7 +185,7 @@ class V001RcaEngine:
                 continue
             baseline, indexes = fixed_baseline_and_tail(metric, self.detection_window_seconds, self.drift_min_points - 1, values)
             score, index = max(
-                rolling_robust_scores(values, indexes, self.drift_min_points - 1, len(baseline)),
+                ((robust_score(baseline, [values[index]]), index) for index in indexes),
                 default=(0.0, 0),
             )
             if score >= self.drift_score_threshold:

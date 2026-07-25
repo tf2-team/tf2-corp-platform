@@ -11,7 +11,7 @@ from pathlib import Path
 import re
 import warnings
 
-from aiops.anomaly.stats import mean, median, rolling_robust_scores
+from aiops.anomaly.stats import mean, median, rolling_robust_scores, stdev
 from aiops.schemas import AnomalyFinding, MetricSeries
 from aiops.shared.tail import evaluate_tail_change, fixed_baseline_and_tail, metric_group, normal_traffic_growth_decision
 
@@ -43,7 +43,8 @@ class EwmaStlDetector:
                 continue
             residuals = self._residuals(values)
             baseline, indexes = fixed_baseline_and_tail(metric, self.detection_window_seconds, self.min_points - 1, residuals)
-            scored = rolling_robust_scores(residuals, indexes, self.min_points - 1, len(baseline))
+            center, spread = mean(baseline), stdev(baseline) or 1.0
+            scored = [(abs(residuals[index] - center) / spread, index) for index in indexes]
             score, index = max(scored, default=(0.0, 0))
             if score >= self.z_threshold:
                 findings.append(self._finding(metric, "ewma_stl", score, metric.points[index].timestamp))
