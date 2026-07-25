@@ -28,11 +28,12 @@ class DigestOverlayTests(unittest.TestCase):
         self.assertIn("  image:\n    digest:", overlay)
 
     def test_aio_source_changes_select_aiops_image(self) -> None:
-        workflow = (
-            Path(__file__).resolve().parents[1] / ".github" / "workflows" / "ci.yml"
-        ).read_text(encoding="utf-8")
-        self.assertIn("src/aio|src/aio/*)", workflow)
-        self.assertIn('BUILD_SET["aiops"]=1', workflow)
+        workflow_dir = Path(__file__).resolve().parents[1] / ".github" / "workflows"
+        for workflow_name in ("ci.yml", "build-and-push.yml"):
+            with self.subTest(workflow=workflow_name):
+                workflow = (workflow_dir / workflow_name).read_text(encoding="utf-8")
+                self.assertIn("src/aio|src/aio/*)", workflow)
+                self.assertIn('BUILD_SET["aiops"]=1', workflow)
 
     def test_load_generator_updates_worker_alias(self) -> None:
         overlay = render("load-generator", self.digest)

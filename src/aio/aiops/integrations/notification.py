@@ -136,4 +136,3 @@ def _discord_payload(message: NotificationMessage) -> dict[str, Any]:
             }
         ],
     }
-

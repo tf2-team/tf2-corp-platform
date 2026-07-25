@@ -59,4 +59,3 @@ def slo_impact_findings(incidents: list[Incident]) -> list[AnomalyFinding]:
         )
         for event in events.values()
     ]
-

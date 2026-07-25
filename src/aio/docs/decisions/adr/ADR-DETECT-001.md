@@ -1,9 +1,9 @@
 # ADR-DETECT-001 - Mandate 7a Anomaly Detector Architecture
 
-> Status: Proposed, pending reviewer sign-off  
-> Owner: Nguyen Quy Hung  
-> Reviewers: Pending team review  
-> Last updated: 2026-07-15  
+> Status: Proposed, pending reviewer sign-off
+> Owner: Nguyen Quy Hung
+> Reviewers: Pending team review
+> Last updated: 2026-07-15
 > Related docs: `docs/aiops/mandate/MANDATE-07a-detection-analysis.md`
 
 ## Summary
@@ -284,4 +284,3 @@ Tradeoffs:
 - Prototype thresholds may need tuning after incident replay.
 - This does not replace official SLO alerting.
 - Production deployment and auto-remediation still need separate approval.
-

@@ -1,7 +1,7 @@
 # Ghi chú môi trường kiểm thử AIOps
 
-> Cập nhật: 2026-07-16  
-> Môi trường: AWS EKS, namespace `techx-corp-prod`  
+> Cập nhật: 2026-07-16
+> Môi trường: AWS EKS, namespace `techx-corp-prod`
 > Phương thức kết nối: `kubectl port-forward` và `kubectl proxy`
 
 ## 1. Tổng quan

@@ -8,4 +8,3 @@ from pydantic import BaseModel, ConfigDict
 
 class AiopsModel(BaseModel):
     model_config = ConfigDict(extra="forbid", validate_assignment=True)
-

@@ -355,6 +355,10 @@ jobs:
                   BUILD_SET["mem0"]=1
                   echo "Service change: mem0 (${f})"
                   ;;
+                src/aio|src/aio/*)
+                  BUILD_SET["aiops"]=1
+                  echo "Service change: aiops (${f})"
+                  ;;
                 src/*)
                   rest="${f#src/}"
                   svc="${rest%%/*}"

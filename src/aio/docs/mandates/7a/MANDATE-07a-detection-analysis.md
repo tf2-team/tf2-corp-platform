@@ -1,10 +1,10 @@
 # AI MANDATE #7a — Detection · Implement + Phân tích
 
-**Team:** AIO4 (AIOps sub-team) · **Task Force:** TF2  
-**Directive:** #7 — Sự cố phải tự lộ ra — dựng mắt cho hệ thống  
-**Chặng:** #7a — implement + phân tích  
-**Hạn nộp:** Thứ Bảy 18/07/2026  
-**Tác giả:** AIO4 AIOps Team  
+**Team:** AIO4 (AIOps sub-team) · **Task Force:** TF2
+**Directive:** #7 — Sự cố phải tự lộ ra — dựng mắt cho hệ thống
+**Chặng:** #7a — implement + phân tích
+**Hạn nộp:** Thứ Bảy 18/07/2026
+**Tác giả:** AIO4 AIOps Team
 **Label:** `ai-mandate`, `m7`
 
 ---
@@ -393,7 +393,7 @@ Telemetry Sources          Detection Layer                    Output
 ─────────────────    ─────────────────────────────    ─────────────────────
 
                      ┌─────────────────────────────┐
-  Prometheus    ───  │     V001AnomalyEngine       │ 
+  Prometheus    ───  │     V001AnomalyEngine       │
   (metrics)          │                             │
                      │  ┌──────────────────────┐   │
                      │  │ 1. EwmaStlDetector   │   │
@@ -532,5 +532,5 @@ curl -X POST http://localhost:8090/api/v1/pipeline/run \
 
 ---
 
-*Tài liệu này phục vụ cho Jira ticket `AI MANDATE #7a Detection · implement + phân tích`.*  
+*Tài liệu này phục vụ cho Jira ticket `AI MANDATE #7a Detection · implement + phân tích`.*
 *Chặng sau (#7b) sẽ bổ sung bằng chứng chạy thật, screenshot alert, và số precision/recall.*

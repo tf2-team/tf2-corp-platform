@@ -13,4 +13,3 @@ class StaticCollector(Collector):
 
     def collect(self) -> list[Observation]:
         return list(self._observations)
-
