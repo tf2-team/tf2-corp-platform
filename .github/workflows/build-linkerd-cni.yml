@@ -150,6 +150,9 @@ jobs:
       AWS_REGION: ${{ vars.AWS_REGION || 'us-east-1' }}
       IMAGE_NAME: ${{ vars.IMAGE_NAME }}
       COSIGN_KEY: ${{ vars.COSIGN_KMS_KEY || 'awskms:///alias/tf2-cosign-signing-key' }}
+      # Runtime tags are immutable. Cosign's read-append-write signature and
+      # attestation tags must live in the dedicated mutable artifact repository.
+      COSIGN_REPOSITORY: ${{ vars.IMAGE_NAME }}/cosign-artifacts
       PROVENANCE_TYPE: https://techx-corp.dev/attestations/provenance/v1
     steps:
       - name: Checkout
