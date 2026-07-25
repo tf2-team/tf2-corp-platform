@@ -290,6 +290,7 @@ class V001AnomalyEngine:
         traffic_shape_max_lag_buckets: int,
         memory_oom: dict[str, float | int] | None,
         detection_window_seconds: int | None,
+        normal_growth_detection_window_seconds: int | None,
     ):
         self.algorithm_weights = algorithm_weights
         self.weighted_score_threshold = weighted_score_threshold
@@ -309,6 +310,7 @@ class V001AnomalyEngine:
         self.memory_oom_min_points = int(memory_oom["min_points"])
         self.memory_oom_detection_window_seconds = int(memory_oom["detection_window_seconds"]) or None
         self.detection_window_seconds = detection_window_seconds
+        self.normal_growth_detection_window_seconds = normal_growth_detection_window_seconds
         self.thresholds = {
             "robust_drift": robust_drift_threshold,
             "ewma_stl": ewma_z_threshold,
@@ -424,7 +426,7 @@ class V001AnomalyEngine:
     def _normal_traffic_growth_decision(self, series: list[MetricSeries]) -> tuple[bool, str]:
         return normal_traffic_growth_decision(
             series,
-            self.detection_window_seconds,
+            self.normal_growth_detection_window_seconds,
             self.min_points - 1,
             self.min_tail_anomaly_buckets,
             self.min_relative_change_ratio,
@@ -506,4 +508,5 @@ def build_v001_anomaly_engine(config: dict, **overrides) -> V001AnomalyEngine:
         traffic_shape_max_lag_buckets=int(anomaly["traffic_shape_max_lag_buckets"]),
         memory_oom=anomaly["memory_oom"],
         detection_window_seconds=int(anomaly["detection_window_seconds"]) or None,
+        normal_growth_detection_window_seconds=int(anomaly["normal_growth_detection_window_seconds"]) or None,
     )

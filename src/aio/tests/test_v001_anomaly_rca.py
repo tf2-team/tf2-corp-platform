@@ -534,6 +534,12 @@ class V001AnomalyRcaTest(unittest.TestCase):
         self.assertEqual(engine.memory_oom_min_points, 100)
         self.assertFalse(engine._memory_oom_detected(memory))
 
+    def test_normal_growth_gate_uses_separate_detection_window(self):
+        engine = anomaly_engine()
+
+        self.assertEqual(engine.detection_window_seconds, 900)
+        self.assertEqual(engine.normal_growth_detection_window_seconds, 1800)
+
     def test_memory_oom_pattern_only_accepts_memory_metric(self):
         engine = anomaly_engine()
         cpu = minute_metric("checkout", "cpu_millicores", [100] * 30 + [240] * 12 + [55] * 3)

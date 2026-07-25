@@ -83,6 +83,7 @@ class SettingsTest(unittest.TestCase):
         self.assertEqual(config["rca"]["anomaly"]["robust_drift_threshold"], 4.0)
         self.assertEqual(config["rca"]["anomaly"]["robust_drift_min_baseline_points"], 30)
         self.assertEqual(config["rca"]["anomaly"]["detection_window_seconds"], 900)
+        self.assertEqual(config["rca"]["anomaly"]["normal_growth_detection_window_seconds"], 1800)
         self.assertEqual(config["rca"]["anomaly"]["evidence_window_seconds"], 900)
         self.assertEqual(config["rca"]["anomaly"]["no_evidence_multiplier"], 0.5)
         self.assertEqual(config["rca"]["anomaly"]["single_evidence_bonus"], 0.15)
