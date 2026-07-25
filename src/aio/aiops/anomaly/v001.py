@@ -282,6 +282,7 @@ class V001AnomalyEngine:
         min_relative_change_ratio: dict[str, float],
         min_absolute_change: dict[str, float],
         traffic_shape_min_pearson: float,
+        memory_oom: dict[str, float | int] | None,
         detection_window_seconds: int | None,
     ):
         self.algorithm_weights = algorithm_weights
@@ -293,6 +294,13 @@ class V001AnomalyEngine:
         self.min_relative_change_ratio = min_relative_change_ratio
         self.min_absolute_change = min_absolute_change
         self.traffic_shape_min_pearson = traffic_shape_min_pearson
+        memory_oom = memory_oom or {}
+        self.memory_oom_pre_tail_growth_ratio = float(memory_oom.get("pre_tail_growth_ratio", 1.2))
+        self.memory_oom_tail_drop_ratio = float(memory_oom.get("tail_drop_ratio", 0.7))
+        self.memory_oom_min_period = int(memory_oom.get("min_period", 2))
+        self.memory_oom_max_period = int(memory_oom.get("max_period", 7))
+        self.memory_oom_min_points = int(memory_oom.get("min_points", min_points))
+        self.memory_oom_detection_window_seconds = int(memory_oom.get("detection_window_seconds", detection_window_seconds or 0)) or None
         self.detection_window_seconds = detection_window_seconds
         self.thresholds = {
             "robust_drift": robust_drift_threshold,
@@ -301,6 +309,13 @@ class V001AnomalyEngine:
         }
         self.robust_drift = RobustDriftDetector(robust_drift_threshold, min_points, robust_drift_min_baseline_points, detection_window_seconds)
         self.ewma_stl = EwmaStlDetector(ewma_alpha, ewma_z_threshold, min_points, seasonal_period, detection_window_seconds)
+        self.memory_oom_ewma_stl = EwmaStlDetector(
+            float(memory_oom.get("ewma_alpha", ewma_alpha)),
+            float(memory_oom.get("ewma_z_threshold", ewma_z_threshold)),
+            self.memory_oom_min_points,
+            int(memory_oom.get("seasonal_period", seasonal_period)),
+            self.memory_oom_detection_window_seconds,
+        )
         self.isolation_forest = ServiceIsolationForestDetector(isolation_score_threshold, min_points, detection_window_seconds)
         self.log_templates = LogTemplateMetricBuilder(
             drain3_config_path,
@@ -420,6 +435,44 @@ class V001AnomalyEngine:
             self.min_relative_change_ratio,
             self.min_absolute_change,
             self.traffic_shape_min_pearson,
+            self._memory_oom_detected,
+        )
+
+    def _memory_oom_detected(self, memory: MetricSeries) -> bool:
+        if not _is_memory_metric(memory.metric) or len(memory.points) < self.memory_oom_min_points:
+            return False
+        values = [point.value for point in memory.points]
+        if max(values) <= 0:
+            return False
+        period = max(self.memory_oom_min_period, min(self.memory_oom_max_period, len(values) // 3))
+        baseline = values[: -2 * period]
+        pre_tail = values[-2 * period : -period]
+        tail = values[-max(2, period // 2) :]
+        if not baseline or not pre_tail or not tail:
+            return False
+        if (
+            median(pre_tail) <= median(baseline) * self.memory_oom_pre_tail_growth_ratio
+            or median(tail) > median(pre_tail) * self.memory_oom_tail_drop_ratio
+        ):
+            return False
+        return self._memory_ewma_stl_tail_anomaly_count(memory) >= self.min_tail_anomaly_buckets["memory"]
+
+    def _memory_ewma_stl_tail_anomaly_count(self, memory: MetricSeries) -> int:
+        values = [point.value for point in memory.points]
+        residuals = self.memory_oom_ewma_stl._residuals(values)
+        baseline, indexes = fixed_baseline_and_tail(
+            memory,
+            self.memory_oom_detection_window_seconds,
+            self.memory_oom_min_points - 1,
+            residuals,
+        )
+        if len(baseline) < 2 or not indexes:
+            return 0
+        center, spread = mean(baseline), stdev(baseline) or 1.0
+        return sum(
+            1
+            for index in indexes
+            if (center - residuals[index]) / spread >= self.memory_oom_ewma_stl.z_threshold
         )
 
 def _is_cpu_metric(metric: str) -> bool:
@@ -470,6 +523,7 @@ def _normal_traffic_growth_decision(
     min_relative_change_ratio: dict[str, float],
     min_absolute_change: dict[str, float],
     traffic_shape_min_pearson: float,
+    memory_oom_detector=None,
 ) -> tuple[bool, str]:
     return normal_traffic_growth_decision(
         series,
@@ -479,6 +533,7 @@ def _normal_traffic_growth_decision(
         min_relative_change_ratio,
         min_absolute_change,
         traffic_shape_min_pearson,
+        memory_oom_detector=memory_oom_detector,
     )
 
 
@@ -525,5 +580,6 @@ def build_v001_anomaly_engine(config: dict, **overrides) -> V001AnomalyEngine:
         min_relative_change_ratio={key: float(value) for key, value in anomaly["min_relative_change_ratio"].items()},
         min_absolute_change={key: float(value) for key, value in anomaly["min_absolute_change"].items()},
         traffic_shape_min_pearson=float(anomaly["traffic_shape_min_pearson"]),
+        memory_oom=anomaly.get("memory_oom"),
         detection_window_seconds=int(anomaly["detection_window_seconds"]) or None,
     )

@@ -37,12 +37,20 @@ class Enricher:
         opensearch: OpenSearchClientLike | None = None,
         kubernetes: KubernetesClientLike | None = None,
         opensearch_index: str = "otel-logs-*",
+        hyperparameters: dict[str, int | float] | None = None,
     ):
+        hyperparameters = hyperparameters or {}
         self.runtime_config = runtime_config
         self.jaeger = jaeger
         self.opensearch = opensearch
         self.kubernetes = kubernetes
         self.opensearch_index = opensearch_index
+        self.corroboration_log_hits = int(hyperparameters.get("corroboration_log_hits", 1))
+        self.corroboration_trace_limit = int(hyperparameters.get("corroboration_trace_limit", 20))
+        self.corroboration_trace_max_request_seconds = float(hyperparameters.get("corroboration_trace_max_request_seconds", 300))
+        self.trace_evidence_limit = int(hyperparameters.get("trace_evidence_limit", 1))
+        self.log_evidence_hits = int(hyperparameters.get("log_evidence_hits", 3))
+        self.log_excerpt_max_chars = int(hyperparameters.get("log_excerpt_max_chars", 240))
 
     def enrich(self, candidates: list[CandidateEvent], features: list[Feature]) -> list[CandidateEvent]:
         by_signal = index_features(features)
@@ -80,7 +88,7 @@ class Enricher:
                 data = self.opensearch.search(
                     self.opensearch_index,
                     {
-                        "size": 1,
+                        "size": self.corroboration_log_hits,
                         "query": {
                             "bool": {
                                 "must": [
@@ -97,7 +105,7 @@ class Enricher:
                 total = hits.get("total", 0)
                 count = int(total.get("value", 0) if isinstance(total, dict) else total)
                 hit = next(iter(hits.get("hits", [])), {})
-                excerpt = _redact(_hit_text(hit)) if hit else None
+                excerpt = _redact(_hit_text(hit, self.log_excerpt_max_chars)) if hit else None
                 classification = _classify_log(excerpt or "") if count else None
                 update.update(
                     log_failure=classification == "hard_failure",
@@ -111,13 +119,13 @@ class Enricher:
                 pass
         if self.jaeger is not None:
             try:
-                traces = self.jaeger.search_traces(service, limit=20, start=(end - window_seconds) * 1_000_000, end=end * 1_000_000).get("data", [])
+                traces = self.jaeger.search_traces(service, limit=self.corroboration_trace_limit, start=(end - window_seconds) * 1_000_000, end=end * 1_000_000).get("data", [])
                 update["available_sources"].add("trace")
                 failures = [
                     (int(span.get("startTime", end * 1_000_000)) // 1_000_000, trace, span)
                     for trace in traces
                     for span in trace.get("spans", [])
-                    if _span_is_corroborating_failure(span, window_seconds)
+                    if _span_is_corroborating_failure(span, window_seconds, self.corroboration_trace_max_request_seconds)
                 ]
                 if failures:
                     timestamp, trace, span = min(failures, key=lambda item: item[0])
@@ -151,7 +159,7 @@ class Enricher:
             start, end = _time_bounds(candidate)
             traces = self.jaeger.search_traces(
                 candidate.likely_dependency if candidate.likely_dependency != "unknown" else candidate.service,
-                limit=1,
+                limit=self.trace_evidence_limit,
                 start=start * 1_000_000,
                 end=end * 1_000_000,
             ).get("data", [])
@@ -175,7 +183,7 @@ class Enricher:
             data = self.opensearch.search(
                 self.opensearch_index,
                 {
-                    "size": 3,
+                    "size": self.log_evidence_hits,
                     "query": {
                         "bool": {
                             "must": [
@@ -195,7 +203,7 @@ class Enricher:
             total = hits.get("total", 0)
             if isinstance(total, dict):
                 total = total.get("value", 0)
-            excerpts = [_redact(_hit_text(hit)) for hit in hits.get("hits", [])[:3]]
+            excerpts = [_redact(_hit_text(hit, self.log_excerpt_max_chars)) for hit in hits.get("hits", [])[: self.log_evidence_hits]]
             return [EvidenceItem(source="log", reference=f"{self.opensearch_index}:bounded-search", summary=f"count={total} excerpts={excerpts}")]
         except Exception as exc:
             return [EvidenceItem(source="enrichment_failure", reference="opensearch", summary=type(exc).__name__)]
@@ -250,15 +258,14 @@ def _span_has_failure(span: dict) -> bool:
     return _span_has_error(span) or status == "ERROR" or http_error or "timeout" in text or "timed out" in text
 
 
-def _span_is_corroborating_failure(span: dict, window_seconds: int) -> bool:
+def _span_is_corroborating_failure(span: dict, window_seconds: int, max_request_seconds: float) -> bool:
     if not _span_has_failure(span):
         return False
     operation = str(span.get("operationName", "")).lower()
     if any(marker in operation for marker in ("eventstream", "event_stream", "subscribe", "watch")):
         return False
     duration_seconds = float(span.get("duration", 0) or 0) / 1_000_000
-    max_request_seconds = min(float(window_seconds), 300.0)
-    return duration_seconds <= max_request_seconds
+    return duration_seconds <= min(float(window_seconds), max_request_seconds)
 
 
 def _span_failure_status(span: dict) -> str:
@@ -275,13 +282,13 @@ def _span_service(trace: dict, span: dict) -> str:
     return trace.get("processes", {}).get(process_id, {}).get("serviceName", "unknown")
 
 
-def _hit_text(hit: dict) -> str:
+def _hit_text(hit: dict, limit: int) -> str:
     source = hit.get("_source", {})
     for key in ("message", "body", "log"):
         value = source.get(key)
         if value:
-            return str(value)[:240]
-    return str(source)[:240]
+            return str(value)[:limit]
+    return str(source)[:limit]
 
 
 def _classify_log(text: str) -> str:

@@ -487,6 +487,61 @@ class V001AnomalyRcaTest(unittest.TestCase):
 
         self.assertEqual(engine._filter_normal_traffic_growth(series), series)
 
+    def test_memory_oom_pattern_keeps_metrics_during_coordinated_load_growth(self):
+        engine = anomaly_engine()
+        memory = minute_metric("checkout", "memory_usage_bytes", [100_000_000] * 30 + [240_000_000] * 12 + [55_000_000] * 3)
+        series = [
+            minute_metric("checkout", "request_rate_5m", [10] * 30 + [30] * 15),
+            minute_metric("checkout", "cpu_millicores", [100] * 30 + [300] * 15),
+            memory,
+            minute_metric("checkout", "socket_io_bytes_per_second", [1_000_000] * 30 + [3_000_000] * 15),
+        ]
+
+        self.assertTrue(engine._memory_oom_detected(memory))
+        self.assertEqual(engine._filter_normal_traffic_growth(series), series)
+
+    def test_memory_oom_pattern_requires_configured_anomaly_bucket_count(self):
+        engine = anomaly_engine()
+        memory = minute_metric("checkout", "memory_usage_bytes", [100_000_000] * 30 + [240_000_000] * 14 + [55_000_000])
+        series = [
+            minute_metric("checkout", "request_rate_5m", [10] * 30 + [30] * 15),
+            minute_metric("checkout", "cpu_millicores", [100] * 30 + [300] * 15),
+            memory,
+            minute_metric("checkout", "socket_io_bytes_per_second", [1_000_000] * 30 + [3_000_000] * 15),
+            minute_metric("checkout", "error_rate_5m", [0] * 45),
+        ]
+
+        self.assertLess(engine._memory_ewma_stl_tail_anomaly_count(memory), engine.min_tail_anomaly_buckets["memory"])
+        self.assertEqual([item.metric for item in engine._filter_normal_traffic_growth(series)], ["error_rate_5m"])
+
+    def test_memory_oom_gate_uses_separate_ewma_stl_hyperparameters(self):
+        config = rca_hyperparameters()
+        anomaly = {
+            **config["anomaly"],
+            "memory_oom": {
+                **config["anomaly"]["memory_oom"],
+                "ewma_z_threshold": 1_000_000_000.0,
+                "min_points": 100,
+            },
+            "robust_drift_min_baseline_points": 8,
+            "log_history_buckets": 8,
+            "log_min_nonzero_buckets": 1,
+        }
+        engine = build_v001_anomaly_engine({**config, "anomaly": anomaly, "min_points": 8})
+        memory = minute_metric("checkout", "memory_usage_bytes", [100_000_000] * 30 + [240_000_000] * 12 + [55_000_000] * 3)
+
+        self.assertEqual(engine.ewma_stl.z_threshold, config["ewma_z_threshold"])
+        self.assertEqual(engine.memory_oom_ewma_stl.z_threshold, 1_000_000_000.0)
+        self.assertEqual(engine.min_points, 8)
+        self.assertEqual(engine.memory_oom_min_points, 100)
+        self.assertFalse(engine._memory_oom_detected(memory))
+
+    def test_memory_oom_pattern_only_accepts_memory_metric(self):
+        engine = anomaly_engine()
+        cpu = minute_metric("checkout", "cpu_millicores", [100] * 30 + [240] * 12 + [55] * 3)
+
+        self.assertFalse(engine._memory_oom_detected(cpu))
+
     def test_memory_growth_without_request_growth_keeps_all_metrics(self):
         engine = anomaly_engine()
         series = [

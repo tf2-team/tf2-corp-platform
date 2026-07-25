@@ -61,6 +61,7 @@ def _settings_for_test(root: Path, policy_mode: str = "dry-run") -> Settings:
         update={
             "policy_mode": policy_mode,
             "prometheus_base_url": "http://prometheus.example",
+            "notification_webhook_url": "",
             "state_store_path": root / "state" / "aiops.sqlite3",
             "runtime_config_path": ROOT / "config" / "runtime.json",
             "actions_catalog_path": ROOT / "config" / "actions.json",

@@ -131,12 +131,20 @@ def build_acceptance_result(result: PipelineResult, observations: list, metric_s
     verified_signal_ids = {
         observation.signal_id for observation in observations if observation.quality == SignalQuality.VERIFIED
     }
+    verified_metric_services = {
+        series.service for series in metric_series if series.quality == SignalQuality.VERIFIED and series.points
+    }
+    range_sample_count = sum(len(series.points) for series in metric_series)
     real_metric_incidents = [
         incident
         for incident in result.incidents
         if any(event.signal_id in verified_signal_ids for event in incident.events)
+        or (
+            any(event.detector_id == "rca_root_cause" for event in incident.events)
+            and bool(metric_series)
+            and range_sample_count > 0
+        )
     ]
-    range_sample_count = sum(len(series.points) for series in metric_series)
     policy_is_safe = all(
         not decision.allowed and not decision.executed and decision.result in {"blocked", "dry-run-recorded"}
         for decision in result.policy_decisions
@@ -151,6 +159,7 @@ def build_acceptance_result(result: PipelineResult, observations: list, metric_s
             "passed": bool(real_metric_incidents),
             "details": {
                 "verified_signal_ids": sorted(verified_signal_ids),
+                "verified_metric_services": sorted(verified_metric_services),
                 "incident_ids": [incident.incident_id for incident in real_metric_incidents],
             },
         },

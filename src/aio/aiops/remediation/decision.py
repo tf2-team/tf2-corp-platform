@@ -15,11 +15,15 @@ class RemediationDecisionEngine:
         cost_page: float,
         blast_radius_limit: int,
         confidence_threshold: float,
+        downtime_cost_multiplier: float = 2.0,
+        outcome_weights: dict[str, float] | None = None,
     ):
         self.ood_threshold = ood_threshold
         self.cost_page = cost_page
         self.blast_radius_limit = blast_radius_limit
         self.confidence_threshold = confidence_threshold
+        self.downtime_cost_multiplier = downtime_cost_multiplier
+        self.outcome_weights = outcome_weights or {"success": 1.0, "partial": 0.5, "failed": 0.0}
 
     def decide(
         self,
@@ -50,7 +54,7 @@ class RemediationDecisionEngine:
 
         confidence = (vote / total) * max_similarity
         reasons = self._guardrail_reasons(action, features, confidence)
-        expected_cost = action.cost_min + 2 * action.downtime_min + (1.0 - confidence) * self.cost_page
+        expected_cost = action.cost_min + self.downtime_cost_multiplier * action.downtime_min + (1.0 - confidence) * self.cost_page
         if expected_cost >= self.cost_page:
             reasons.append("page_cheaper_than_action")
 
@@ -120,4 +124,4 @@ class RemediationDecisionEngine:
         )
 
     def _outcome_weight(self, outcome: str) -> float:
-        return {"success": 1.0, "partial": 0.5, "failed": 0.0}.get(outcome, 0.0)
+        return self.outcome_weights.get(outcome, 0.0)

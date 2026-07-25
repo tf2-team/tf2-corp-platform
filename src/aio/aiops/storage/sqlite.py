@@ -26,6 +26,9 @@ class SQLiteIncidentStore:
         slo_dedup_seconds: int = 300,
         rca_dedup_seconds: int = 300,
         incident_count_reset_seconds: int = 900,
+        notification_retry_base_seconds: int = 60,
+        notification_retry_max_seconds: int = 3600,
+        notification_error_max_chars: int = 512,
         topology_graph=None,
     ):
         self.path = path
@@ -35,6 +38,9 @@ class SQLiteIncidentStore:
         self.slo_dedup_seconds = slo_dedup_seconds
         self.rca_dedup_seconds = rca_dedup_seconds
         self.incident_count_reset_seconds = incident_count_reset_seconds
+        self.notification_retry_base_seconds = notification_retry_base_seconds
+        self.notification_retry_max_seconds = notification_retry_max_seconds
+        self.notification_error_max_chars = notification_error_max_chars
         self.topology_graph = topology_graph
         self._last_enqueued_incident_ids: set[str] = set()
         self.path.parent.mkdir(parents=True, exist_ok=True)
@@ -432,7 +438,8 @@ class SQLiteIncidentStore:
         if row is None:
             return
         attempt_count = int(row[0]) + 1
-        retry_at = datetime.now(UTC) + timedelta(seconds=min(60 * (2 ** (attempt_count - 1)), 3600))
+        retry_seconds = min(self.notification_retry_base_seconds * (2 ** (attempt_count - 1)), self.notification_retry_max_seconds)
+        retry_at = datetime.now(UTC) + timedelta(seconds=retry_seconds)
         with self._connection:
             self._connection.execute(
                 """
@@ -440,7 +447,7 @@ class SQLiteIncidentStore:
                 SET status = 'retry', attempt_count = ?, next_attempt_at = ?, last_error = ?, updated_at = ?
                 WHERE incident_id = ?
                 """,
-                (attempt_count, retry_at.isoformat(), error[:512], _now(), incident_id),
+                (attempt_count, retry_at.isoformat(), error[: self.notification_error_max_chars], _now(), incident_id),
             )
 
     def close(self) -> None:

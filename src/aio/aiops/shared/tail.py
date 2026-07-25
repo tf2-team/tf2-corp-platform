@@ -6,6 +6,7 @@ from __future__ import annotations
 import warnings
 from dataclasses import dataclass
 from statistics import median
+from typing import Callable
 
 from aiops.schemas import MetricSeries
 
@@ -104,6 +105,7 @@ def normal_traffic_growth_decision(
     min_relative_change_ratio: dict[str, float],
     min_absolute_change: dict[str, float],
     traffic_shape_min_pearson: float = 0.7,
+    memory_oom_detector: Callable[[MetricSeries], bool] | None = None,
 ) -> tuple[bool, str]:
     required_infra_groups = ("cpu", "socket_io")
     groups = ("request_rate", *required_infra_groups)
@@ -117,6 +119,8 @@ def normal_traffic_growth_decision(
             baseline, indexes = fixed_baseline_and_tail(metric, detection_window_seconds, start, values)
             if baseline and indexes and max(values[index] for index in indexes) > max(baseline):
                 return False, "reason=oom_increased"
+        if memory_oom_detector is not None and metric_group(metric.metric) == "memory" and memory_oom_detector(metric):
+            return False, "reason=memory_oom_pattern"
     request_increased = any(
         (change := _smoothed_tail_change(metric, detection_window_seconds, start, min_tail_anomaly_buckets, min_relative_change_ratio, min_absolute_change)).significant
         and any(change.values[index] > change.baseline for index in change.indexes)

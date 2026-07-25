@@ -89,6 +89,9 @@ def run_pipeline_with_collector(collector, settings: Settings, runtime_config, m
         slo_dedup_seconds=int(hyperparameters["incident"]["slo_dedup_seconds"]),
         rca_dedup_seconds=int(hyperparameters["incident"]["rca_dedup_seconds"]),
         incident_count_reset_seconds=int(hyperparameters["incident"]["count_reset_seconds"]),
+        notification_retry_base_seconds=int(hyperparameters["incident"]["notification_retry_base_seconds"]),
+        notification_retry_max_seconds=int(hyperparameters["incident"]["notification_retry_max_seconds"]),
+        notification_error_max_chars=int(hyperparameters["incident"]["notification_error_max_chars"]),
         topology_graph=topology_graph,
     )
     pipeline = AiopsPipeline(
@@ -111,7 +114,7 @@ def run_pipeline_with_collector(collector, settings: Settings, runtime_config, m
         qualification_max_sample_age_seconds=settings.qualification_max_sample_age_seconds,
         rca_hyperparameters=hyperparameters["rca"],
         correlation_hyperparameters=hyperparameters["correlation"],
-        enricher=build_enricher(settings, runtime_config),
+        enricher=build_enricher(settings, runtime_config, hyperparameters["enrichment"]),
         remediation=(
             RemediationFeatureExtractor(),
             HistoryRetriever(hyperparameters["remediation"]["similarity_weights"], hyperparameters["remediation"]["history_top_k"]),
@@ -120,6 +123,8 @@ def run_pipeline_with_collector(collector, settings: Settings, runtime_config, m
                 cost_page=hyperparameters["remediation"]["cost_page"],
                 blast_radius_limit=hyperparameters["remediation"]["blast_radius_limit"],
                 confidence_threshold=hyperparameters["remediation"]["confidence_threshold"],
+                downtime_cost_multiplier=hyperparameters["remediation"]["downtime_cost_multiplier"],
+                outcome_weights=hyperparameters["remediation"]["outcome_weights"],
             ),
             ActionCatalog(settings.actions_catalog_path),
             IncidentHistoryStore(settings.incidents_history_path),
@@ -176,7 +181,7 @@ async def auto_run_loop(settings: Settings) -> None:
         await asyncio.sleep(settings.auto_run_interval_seconds)
 
 
-def build_enricher(settings: Settings, runtime_config) -> Enricher:
+def build_enricher(settings: Settings, runtime_config, enrichment_hyperparameters: dict | None = None) -> Enricher:
     jaeger = JaegerClient(settings) if _configured_url(settings.jaeger_base_url) else None
     opensearch = (
         OpenSearchClient(settings)
@@ -184,7 +189,13 @@ def build_enricher(settings: Settings, runtime_config) -> Enricher:
         else None
     )
     kubernetes = KubernetesClient(settings) if _configured_kubernetes(settings) else None
-    return Enricher(runtime_config=runtime_config, jaeger=jaeger, opensearch=opensearch, kubernetes=kubernetes)
+    return Enricher(
+        runtime_config=runtime_config,
+        jaeger=jaeger,
+        opensearch=opensearch,
+        kubernetes=kubernetes,
+        hyperparameters=enrichment_hyperparameters,
+    )
 
 
 def _configured_url(value: str) -> bool:
