@@ -883,6 +883,10 @@ jobs:
           version: v0.69.3
           scan-type: config
           scan-ref: .
+          # Keep this aligned with ci.yml. Linkerd CNI needs root only to
+          # update its explicitly mounted host CNI directories; the exception
+          # is scoped to src/linkerd-cni/Dockerfile in .trivyignore.yaml.
+          trivyignores: .trivyignore.yaml
           skip-dirs: node_modules
           format: table
           severity: HIGH,CRITICAL
