@@ -16,6 +16,14 @@ from aiops.schemas import AnomalyFinding, MetricSeries
 from aiops.shared.tail import evaluate_tail_change, fixed_baseline_and_tail, metric_group, normal_traffic_growth_decision
 
 logger = logging.getLogger(__name__)
+NORMAL_GROWTH_BREAKOUT_REASONS = (
+    "reason=oom_increased",
+    "reason=memory_oom_pattern",
+    "reason=memory_increased_without_traffic",
+    "reason=memory_shape_mismatch",
+    "reason=error_increased",
+    "reason=ready_pods_decreased",
+)
 
 os.environ.setdefault("MPLCONFIGDIR", "/tmp")
 
@@ -282,6 +290,7 @@ class V001AnomalyEngine:
         traffic_shape_max_lag_buckets: int,
         memory_oom: dict[str, float | int] | None,
         detection_window_seconds: int | None,
+        normal_growth_detection_window_seconds: int | None,
     ):
         self.algorithm_weights = algorithm_weights
         self.weighted_score_threshold = weighted_score_threshold
@@ -301,6 +310,7 @@ class V001AnomalyEngine:
         self.memory_oom_min_points = int(memory_oom["min_points"])
         self.memory_oom_detection_window_seconds = int(memory_oom["detection_window_seconds"]) or None
         self.detection_window_seconds = detection_window_seconds
+        self.normal_growth_detection_window_seconds = normal_growth_detection_window_seconds
         self.thresholds = {
             "robust_drift": robust_drift_threshold,
             "ewma_stl": ewma_z_threshold,
@@ -400,24 +410,13 @@ class V001AnomalyEngine:
             by_service[metric.service].append(metric)
         decisions = {service: self._normal_traffic_growth_decision(service_series) for service, service_series in by_service.items()}
         normal_services = {service for service, (normal, _) in decisions.items() if normal}
-        for service, (normal, detail) in decisions.items():
-            breakout = not normal and detail.startswith(
-                (
-                    "reason=oom_increased",
-                    "reason=memory_oom_pattern",
-                    "reason=memory_increased_without_traffic",
-                    "reason=memory_shape_mismatch",
-                    "reason=error_increased",
-                    "reason=ready_pods_decreased",
-                )
+        (logger.warning if any("zero_metrics=" in detail for _, detail in decisions.values()) else logger.info)(
+            "AIOPS_NORMAL_GROWTH_GATE %s",
+            " | ".join(
+                f"service={service} result={'skip' if normal else 'detect'} breakout={str(not normal and detail.startswith(NORMAL_GROWTH_BREAKOUT_REASONS)).lower()} {detail}"
+                for service, (normal, detail) in decisions.items()
             )
-            (logger.warning if "zero_metrics=" in detail else logger.info)(
-                "AIOPS_NORMAL_GROWTH_GATE service=%s result=%s breakout=%s %s",
-                service,
-                "skip" if normal else "detect",
-                str(breakout).lower(),
-                detail,
-            )
+        )
         return [
             metric
             for metric in series
@@ -427,7 +426,7 @@ class V001AnomalyEngine:
     def _normal_traffic_growth_decision(self, series: list[MetricSeries]) -> tuple[bool, str]:
         return normal_traffic_growth_decision(
             series,
-            self.detection_window_seconds,
+            self.normal_growth_detection_window_seconds,
             self.min_points - 1,
             self.min_tail_anomaly_buckets,
             self.min_relative_change_ratio,
@@ -509,4 +508,5 @@ def build_v001_anomaly_engine(config: dict, **overrides) -> V001AnomalyEngine:
         traffic_shape_max_lag_buckets=int(anomaly["traffic_shape_max_lag_buckets"]),
         memory_oom=anomaly["memory_oom"],
         detection_window_seconds=int(anomaly["detection_window_seconds"]) or None,
+        normal_growth_detection_window_seconds=int(anomaly["normal_growth_detection_window_seconds"]) or None,
     )

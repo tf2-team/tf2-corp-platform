@@ -123,6 +123,7 @@
       "robust_drift_threshold": 4.0,
       "robust_drift_min_baseline_points": 30,
       "detection_window_seconds": 900,
+      "normal_growth_detection_window_seconds": 1800,
       "evidence_window_seconds": 900,
       "no_evidence_multiplier": 0.5,
       "single_evidence_bonus": 0.15,
