@@ -180,6 +180,8 @@ def _expand_detector_signal_groups(raw: dict) -> None:
     for detector in raw.get("detectors", []):
         if "__all_prometheus__" in detector.get("signal_ids", []):
             detector["signal_ids"] = prometheus_signal_ids
+    if not raw.get("auto_detector_generation_enabled", True):
+        return
     existing_signal_ids = {detector.get("signal_id") for detector in raw.get("detectors", [])}
     raw.setdefault("detectors", []).extend(
         {
