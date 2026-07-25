@@ -31,7 +31,7 @@ class V001RcaEngine:
         self.min_relative_change_ratio = {key: float(value) for key, value in combined_hyperparameters["min_relative_change_ratio"].items()}
         self.min_absolute_change = {key: float(value) for key, value in combined_hyperparameters["min_absolute_change"].items()}
         self.traffic_shape_min_spearman = float(combined_hyperparameters["traffic_shape_min_spearman"])
-        self.traffic_shape_max_lag_buckets = int(combined_hyperparameters.get("traffic_shape_max_lag_buckets", 0))
+        self.traffic_shape_max_lag_buckets = int(combined_hyperparameters["traffic_shape_max_lag_buckets"])
         self.canonical_service_suffixes = tuple(combined_hyperparameters["canonical_service_suffixes"])
         self.metric_aliases = combined_hyperparameters["metric_aliases"]
         self.graph = GraphTraversalRca(

@@ -15,15 +15,15 @@ class RemediationDecisionEngine:
         cost_page: float,
         blast_radius_limit: int,
         confidence_threshold: float,
-        downtime_cost_multiplier: float = 2.0,
-        outcome_weights: dict[str, float] | None = None,
+        downtime_cost_multiplier: float,
+        outcome_weights: dict[str, float],
     ):
         self.ood_threshold = ood_threshold
         self.cost_page = cost_page
         self.blast_radius_limit = blast_radius_limit
         self.confidence_threshold = confidence_threshold
         self.downtime_cost_multiplier = downtime_cost_multiplier
-        self.outcome_weights = outcome_weights or {"success": 1.0, "partial": 0.5, "failed": 0.0}
+        self.outcome_weights = outcome_weights
 
     def decide(
         self,

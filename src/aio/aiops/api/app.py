@@ -111,13 +111,17 @@ def run_pipeline_with_collector(collector, settings: Settings, runtime_config, m
         qualification_schema=load_qualification_schema(settings.qualification_schema_path),
         normalization_schema=load_normalization_schema(settings.normalization_schema_path),
         qualification_dev=settings.qualification_gate_dev,
-        qualification_max_sample_age_seconds=settings.qualification_max_sample_age_seconds,
+        qualification_max_sample_age_seconds=int(hyperparameters["qualification"]["max_sample_age_seconds"]),
         rca_hyperparameters=hyperparameters["rca"],
         correlation_hyperparameters=hyperparameters["correlation"],
         enricher=build_enricher(settings, runtime_config, hyperparameters["enrichment"]),
         remediation=(
             RemediationFeatureExtractor(),
-            HistoryRetriever(hyperparameters["remediation"]["similarity_weights"], hyperparameters["remediation"]["history_top_k"]),
+            HistoryRetriever(
+                hyperparameters["remediation"]["similarity_weights"],
+                hyperparameters["remediation"]["history_top_k"],
+                hyperparameters["remediation"]["metric_similarity_epsilon"],
+            ),
             RemediationDecisionEngine(
                 ood_threshold=hyperparameters["remediation"]["ood_threshold"],
                 cost_page=hyperparameters["remediation"]["cost_page"],

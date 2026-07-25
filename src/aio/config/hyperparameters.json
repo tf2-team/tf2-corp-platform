@@ -81,6 +81,9 @@
     "missing_confidence": 1.0,
     "unknown_confidence": 0.7
   },
+  "qualification": {
+    "max_sample_age_seconds": 300
+  },
   "remediation": {
     "history_top_k": 3,
     "ood_threshold": 0.2,
@@ -98,7 +101,8 @@
       "log": 0.25,
       "trace": 0.2,
       "metric": 0.2
-    }
+    },
+    "metric_similarity_epsilon": 1.0e-9
   },
   "rca": {
     "enabled": true,

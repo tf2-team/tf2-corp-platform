@@ -77,7 +77,7 @@ def runtime_kwargs(settings: Settings) -> dict:
         "qualification_schema": load_qualification_schema(settings.qualification_schema_path),
         "normalization_schema": load_normalization_schema(settings.normalization_schema_path),
         "qualification_dev": settings.qualification_gate_dev,
-        "qualification_max_sample_age_seconds": settings.qualification_max_sample_age_seconds,
+        "qualification_max_sample_age_seconds": hyperparameters["qualification"]["max_sample_age_seconds"],
         "correlation_hyperparameters": hyperparameters["correlation"],
     }
 
@@ -1397,12 +1397,18 @@ class RuntimePipelineTest(unittest.TestCase):
                 correlation_hyperparameters=hyperparameters["correlation"],
                 remediation=(
                     RemediationFeatureExtractor(),
-                    HistoryRetriever(hyperparameters["remediation"]["similarity_weights"], hyperparameters["remediation"]["history_top_k"]),
+                    HistoryRetriever(
+                        hyperparameters["remediation"]["similarity_weights"],
+                        hyperparameters["remediation"]["history_top_k"],
+                        hyperparameters["remediation"]["metric_similarity_epsilon"],
+                    ),
                     RemediationDecisionEngine(
                         ood_threshold=hyperparameters["remediation"]["ood_threshold"],
                         cost_page=hyperparameters["remediation"]["cost_page"],
                         blast_radius_limit=hyperparameters["remediation"]["blast_radius_limit"],
                         confidence_threshold=hyperparameters["remediation"]["confidence_threshold"],
+                        downtime_cost_multiplier=hyperparameters["remediation"]["downtime_cost_multiplier"],
+                        outcome_weights=hyperparameters["remediation"]["outcome_weights"],
                     ),
                     ActionCatalog(actions_path),
                     IncidentHistoryStore(history_path),

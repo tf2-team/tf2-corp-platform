@@ -294,12 +294,12 @@ class V001AnomalyEngine:
         self.traffic_shape_min_spearman = traffic_shape_min_spearman
         self.traffic_shape_max_lag_buckets = traffic_shape_max_lag_buckets
         memory_oom = memory_oom or {}
-        self.memory_oom_pre_tail_growth_ratio = float(memory_oom.get("pre_tail_growth_ratio", 1.2))
-        self.memory_oom_tail_drop_ratio = float(memory_oom.get("tail_drop_ratio", 0.7))
-        self.memory_oom_min_period = int(memory_oom.get("min_period", 2))
-        self.memory_oom_max_period = int(memory_oom.get("max_period", 7))
-        self.memory_oom_min_points = int(memory_oom.get("min_points", min_points))
-        self.memory_oom_detection_window_seconds = int(memory_oom.get("detection_window_seconds", detection_window_seconds or 0)) or None
+        self.memory_oom_pre_tail_growth_ratio = float(memory_oom["pre_tail_growth_ratio"])
+        self.memory_oom_tail_drop_ratio = float(memory_oom["tail_drop_ratio"])
+        self.memory_oom_min_period = int(memory_oom["min_period"])
+        self.memory_oom_max_period = int(memory_oom["max_period"])
+        self.memory_oom_min_points = int(memory_oom["min_points"])
+        self.memory_oom_detection_window_seconds = int(memory_oom["detection_window_seconds"]) or None
         self.detection_window_seconds = detection_window_seconds
         self.thresholds = {
             "robust_drift": robust_drift_threshold,
@@ -309,10 +309,10 @@ class V001AnomalyEngine:
         self.robust_drift = RobustDriftDetector(robust_drift_threshold, min_points, robust_drift_min_baseline_points, detection_window_seconds)
         self.ewma_stl = EwmaStlDetector(ewma_alpha, ewma_z_threshold, min_points, seasonal_period, detection_window_seconds)
         self.memory_oom_ewma_stl = EwmaStlDetector(
-            float(memory_oom.get("ewma_alpha", ewma_alpha)),
-            float(memory_oom.get("ewma_z_threshold", ewma_z_threshold)),
+            float(memory_oom["ewma_alpha"]),
+            float(memory_oom["ewma_z_threshold"]),
             self.memory_oom_min_points,
-            int(memory_oom.get("seasonal_period", seasonal_period)),
+            int(memory_oom["seasonal_period"]),
             self.memory_oom_detection_window_seconds,
         )
         self.isolation_forest = ServiceIsolationForestDetector(isolation_score_threshold, min_points, detection_window_seconds)
@@ -493,6 +493,6 @@ def build_v001_anomaly_engine(config: dict, **overrides) -> V001AnomalyEngine:
         min_absolute_change={key: float(value) for key, value in anomaly["min_absolute_change"].items()},
         traffic_shape_min_spearman=float(anomaly["traffic_shape_min_spearman"]),
         traffic_shape_max_lag_buckets=int(anomaly["traffic_shape_max_lag_buckets"]),
-        memory_oom=anomaly.get("memory_oom"),
+        memory_oom=anomaly["memory_oom"],
         detection_window_seconds=int(anomaly["detection_window_seconds"]) or None,
     )

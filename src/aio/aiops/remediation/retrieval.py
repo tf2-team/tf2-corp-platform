@@ -9,9 +9,10 @@ from aiops.schemas import IncidentFeatures, IncidentHistoryRecord
 
 
 class HistoryRetriever:
-    def __init__(self, weights: dict[str, float], top_k: int):
+    def __init__(self, weights: dict[str, float], top_k: int, metric_similarity_epsilon: float):
         self.weights = weights
         self.top_k = top_k
+        self.metric_similarity_epsilon = metric_similarity_epsilon
 
     def top_matches(self, current: IncidentFeatures, history: list[IncidentHistoryRecord]) -> list[tuple[IncidentHistoryRecord, float]]:
         scored = [(record, self._similarity(current, record)) for record in history]
@@ -36,6 +37,6 @@ class HistoryRetriever:
         common = set(left) & set(right)
         if not common:
             return 0.0
-        eps = 1.0e-9
+        eps = self.metric_similarity_epsilon
         scores = [1 / (1 + abs(log((max(left[key], 0.0) + eps) / (max(right[key], 0.0) + eps)))) for key in common]
         return sum(scores) / len(scores)

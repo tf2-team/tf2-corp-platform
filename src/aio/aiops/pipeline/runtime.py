@@ -240,8 +240,10 @@ class AiopsPipeline:
         return notifications
 
     def _upsert_rca_root_incidents(self, rca_result: RcaResult, incidents: list[Incident]) -> list[Incident]:
+        if not rca_result.root_causes:
+            return []
         severity = min((incident.severity for incident in incidents), default="SEV2")
-        threshold = float(self.correlation_hyperparameters.get("rca_notification_min_score", 0.8))
+        threshold = float(self.correlation_hyperparameters["rca_notification_min_score"])
         valid_roots = [root for root in rca_result.root_causes if root.score >= threshold and root.root_cause_metrics]
         rows = []
         for root in self._dedup_rca_root_causes(valid_roots):
@@ -272,7 +274,7 @@ class AiopsPipeline:
 
     def _dedup_rca_root_causes(self, root_causes: list[RootCauseCandidate]) -> list[RootCauseCandidate]:
         kept: list[RootCauseCandidate] = []
-        max_hops = int(self.correlation_hyperparameters.get("topology_max_hops", 2))
+        max_hops = int(self.correlation_hyperparameters["topology_max_hops"])
         for root in root_causes:
             duplicate = next((item for item in kept if self._same_rca_topology_scope(root.service, item.service, max_hops)), None)
             if duplicate is None:
@@ -293,18 +295,26 @@ class AiopsPipeline:
         return other in self.topology_graph.neighborhood(service, max_hops)
 
     def _run_v001_rca(self, metric_series: list[MetricSeries], incidents: list[Incident] | None = None) -> RcaResult:
-        log_messages = self._log_messages(incidents or [])
         detector_series = prepare_detector_series(metric_series)
         impact_findings = _slo_impact_findings(incidents or [])
-        if self.runtime_config is None or not self.rca_hyperparameters or not self.rca_hyperparameters.get("enabled", self.runtime_config.rca.enabled) or (not detector_series and not log_messages and not impact_findings):
+        if self.runtime_config is None or not self.rca_hyperparameters or not self.rca_hyperparameters["enabled"]:
             logger.info(
                 "AIOPS_BLOCK rca skipped enabled=%s metric_series=%s log_messages=%s",
                 self.rca_hyperparameters.get("enabled", None),
                 len(metric_series),
-                len(log_messages),
+                0,
             )
             return RcaResult()
         config = self.rca_hyperparameters
+        log_messages = self._log_messages(incidents or [], int(config["anomaly"]["log_max_events_per_evidence"]))
+        if not detector_series and not log_messages and not impact_findings:
+            logger.info(
+                "AIOPS_BLOCK rca skipped enabled=%s metric_series=%s log_messages=%s",
+                config["enabled"],
+                len(metric_series),
+                len(log_messages),
+            )
+            return RcaResult()
         anomaly_engine = build_v001_anomaly_engine(config)
         findings = anomaly_engine.evaluate(detector_series, logs=log_messages) if log_messages else anomaly_engine.evaluate(detector_series)
         anomaly_config = config["anomaly"]
@@ -388,9 +398,8 @@ class AiopsPipeline:
                 ",".join(dict.fromkeys(incident.service for incident in incidents)),
             )
 
-    def _log_messages(self, incidents: list[Incident]) -> list[tuple[str, int, str]]:
+    def _log_messages(self, incidents: list[Incident], max_events: int) -> list[tuple[str, int, str]]:
         messages = []
-        max_events = int(self.rca_hyperparameters.get("anomaly", {}).get("log_max_events_per_evidence", 100))
         for incident in incidents:
             for event in incident.events:
                 service = incident.likely_dependency if incident.likely_dependency != "unknown" else event.likely_dependency
@@ -461,15 +470,15 @@ class AiopsPipeline:
         affected_services: set[str] = set()
         if self.runtime_config is not None and rca_result.root_causes:
             root = rca_result.root_causes[0]
-            if root.score >= float(self.correlation_hyperparameters.get("suppress_min_root_score", 0.8)):
+            if root.score >= float(self.correlation_hyperparameters["suppress_min_root_score"]):
                 root_service = root.service
                 current_root_service = root_service
-                max_hops = int(self.correlation_hyperparameters.get("topology_max_hops", 2))
+                max_hops = int(self.correlation_hyperparameters["topology_max_hops"])
                 affected_services = self.topology_graph.neighborhood(root_service, max_hops) if self.topology_graph is not None else {root_service}
                 self.store.register_active_root_cause(
                     root_service,
                     affected_services,
-                    int(self.correlation_hyperparameters.get("suppress_window_seconds", 900)),
+                    int(self.correlation_hyperparameters["suppress_window_seconds"]),
                     service_scores.get(root_service, 0.0),
                 )
         breakout_services = (
@@ -566,7 +575,7 @@ def _rca_runbook_id(root: RootCauseCandidate) -> str:
     return "RB-SERVICE-RESOURCE"
 
 
-def _log_excerpts(summary: str, max_events: int = 100) -> list[str]:
+def _log_excerpts(summary: str, max_events: int) -> list[str]:
     marker = "excerpts="
     if marker not in summary:
         return [summary]

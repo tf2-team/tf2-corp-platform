@@ -6,8 +6,10 @@ from __future__ import annotations
 import re
 import time
 from datetime import UTC, datetime
+from pathlib import Path
 from typing import Any, Protocol
 
+from aiops.config.hyperparameters import load_hyperparameters
 from aiops.schemas import AnomalyFinding, CandidateEvent, EvidenceItem, Feature, TelemetryCorroboration
 from aiops.schemas import RuntimeConfig
 from aiops.shared.features import index_features
@@ -39,18 +41,18 @@ class Enricher:
         opensearch_index: str = "otel-logs-*",
         hyperparameters: dict[str, int | float] | None = None,
     ):
-        hyperparameters = hyperparameters or {}
+        hyperparameters = hyperparameters or load_hyperparameters(Path("config/hyperparameters.json"))["enrichment"]
         self.runtime_config = runtime_config
         self.jaeger = jaeger
         self.opensearch = opensearch
         self.kubernetes = kubernetes
         self.opensearch_index = opensearch_index
-        self.corroboration_log_hits = int(hyperparameters.get("corroboration_log_hits", 1))
-        self.corroboration_trace_limit = int(hyperparameters.get("corroboration_trace_limit", 20))
-        self.corroboration_trace_max_request_seconds = float(hyperparameters.get("corroboration_trace_max_request_seconds", 300))
-        self.trace_evidence_limit = int(hyperparameters.get("trace_evidence_limit", 1))
-        self.log_evidence_hits = int(hyperparameters.get("log_evidence_hits", 3))
-        self.log_excerpt_max_chars = int(hyperparameters.get("log_excerpt_max_chars", 240))
+        self.corroboration_log_hits = int(hyperparameters["corroboration_log_hits"])
+        self.corroboration_trace_limit = int(hyperparameters["corroboration_trace_limit"])
+        self.corroboration_trace_max_request_seconds = float(hyperparameters["corroboration_trace_max_request_seconds"])
+        self.trace_evidence_limit = int(hyperparameters["trace_evidence_limit"])
+        self.log_evidence_hits = int(hyperparameters["log_evidence_hits"])
+        self.log_excerpt_max_chars = int(hyperparameters["log_excerpt_max_chars"])
 
     def enrich(self, candidates: list[CandidateEvent], features: list[Feature]) -> list[CandidateEvent]:
         by_signal = index_features(features)

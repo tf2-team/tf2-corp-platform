@@ -167,6 +167,8 @@ class SettingsTest(unittest.TestCase):
         self.assertEqual(config["remediation"]["similarity_weights"]["trace"], 0.2)
         self.assertEqual(config["remediation"]["downtime_cost_multiplier"], 2.0)
         self.assertEqual(config["remediation"]["outcome_weights"]["partial"], 0.5)
+        self.assertEqual(config["remediation"]["metric_similarity_epsilon"], 1.0e-9)
+        self.assertEqual(config["qualification"]["max_sample_age_seconds"], 300)
         self.assertEqual(config["no_data"]["missing_confidence"], 1.0)
         self.assertNotIn("ops01_checkout_slo", config["detectors"]["thresholds"])
         profile = load_prometheus_query_registry(Path("config/prometheus_queries.json")).collection_profiles["one_second"]

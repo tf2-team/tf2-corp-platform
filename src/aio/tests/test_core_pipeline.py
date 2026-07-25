@@ -509,8 +509,19 @@ class PolicyEngineTest(unittest.TestCase):
 
 
 class RemediationEngineTest(unittest.TestCase):
+    def remediation_hyperparameters(self) -> dict:
+        return load_hyperparameters(Path("config/hyperparameters.json"))["remediation"]
+
     def test_deadlock_guard_matches_substring_log_signature(self):
-        decision = RemediationDecisionEngine(ood_threshold=0.1, cost_page=20.0, blast_radius_limit=3, confidence_threshold=0.7).decide(
+        hyperparameters = self.remediation_hyperparameters()
+        decision = RemediationDecisionEngine(
+            ood_threshold=0.1,
+            cost_page=20.0,
+            blast_radius_limit=3,
+            confidence_threshold=0.7,
+            downtime_cost_multiplier=hyperparameters["downtime_cost_multiplier"],
+            outcome_weights=hyperparameters["outcome_weights"],
+        ).decide(
             "inc-1",
             IncidentFeatures(affected_services={"postgresql"}, log_signatures={"database deadlock detected"}),
             [
@@ -540,7 +551,7 @@ class RemediationEngineTest(unittest.TestCase):
         self.assertIn("deadlock_pool_size_forbidden", decision.reasons)
 
     def test_retrieval_scores_trace_signatures(self):
-        retriever = HistoryRetriever({"service": 0.0, "log": 0.0, "trace": 1.0, "metric": 0.0}, top_k=1)
+        retriever = HistoryRetriever({"service": 0.0, "log": 0.0, "trace": 1.0, "metric": 0.0}, top_k=1, metric_similarity_epsilon=self.remediation_hyperparameters()["metric_similarity_epsilon"])
 
         matches = retriever.top_matches(
             IncidentFeatures(trace_signatures={"checkout->payment:5xx"}),
@@ -553,7 +564,7 @@ class RemediationEngineTest(unittest.TestCase):
         self.assertEqual(matches[0][0].incident_id, "hist-trace")
 
     def test_retrieval_scores_metric_ratios_by_log_distance(self):
-        retriever = HistoryRetriever({"service": 0.0, "log": 0.0, "trace": 0.0, "metric": 1.0}, top_k=2)
+        retriever = HistoryRetriever({"service": 0.0, "log": 0.0, "trace": 0.0, "metric": 1.0}, top_k=2, metric_similarity_epsilon=self.remediation_hyperparameters()["metric_similarity_epsilon"])
 
         matches = retriever.top_matches(
             IncidentFeatures(metric_ratios={"latency": 100.0}),
@@ -566,7 +577,15 @@ class RemediationEngineTest(unittest.TestCase):
         self.assertEqual(matches[0][0].incident_id, "same_ratio")
 
     def test_translates_historical_action_to_current_affected_target(self):
-        decision = RemediationDecisionEngine(ood_threshold=0.1, cost_page=20.0, blast_radius_limit=3, confidence_threshold=0.7).decide(
+        hyperparameters = self.remediation_hyperparameters()
+        decision = RemediationDecisionEngine(
+            ood_threshold=0.1,
+            cost_page=20.0,
+            blast_radius_limit=3,
+            confidence_threshold=0.7,
+            downtime_cost_multiplier=hyperparameters["downtime_cost_multiplier"],
+            outcome_weights=hyperparameters["outcome_weights"],
+        ).decide(
             "inc-1",
             IncidentFeatures(affected_services={"payment-v2"}),
             [

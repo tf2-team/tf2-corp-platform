@@ -67,7 +67,7 @@ def prod_pipeline(root: Path, sender: FakeNotificationSender, repeat_seconds: in
         qualification_schema=load_qualification_schema(settings.qualification_schema_path),
         normalization_schema=load_normalization_schema(settings.normalization_schema_path),
         qualification_dev=settings.qualification_gate_dev,
-        qualification_max_sample_age_seconds=settings.qualification_max_sample_age_seconds,
+        qualification_max_sample_age_seconds=hyperparameters["qualification"]["max_sample_age_seconds"],
         rca_hyperparameters=hyperparameters["rca"],
         correlation_hyperparameters=correlation_hyperparameters,
         notification_sender=sender,
