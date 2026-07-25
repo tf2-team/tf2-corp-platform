@@ -48,14 +48,20 @@ class V001RcaEngine:
         series: list[MetricSeries],
         top_k: int,
         corroboration: dict[str, TelemetryCorroboration] | None = None,
+        breakout_metrics: dict[str, set[str]] | None = None,
     ) -> RcaResult:
+        breakout_metrics = {
+            self._canonical_service(service): set(metrics)
+            for service, metrics in (breakout_metrics or {}).items()
+            if metrics
+        }
         root_findings = [
             finding.model_copy(update={"service": self._canonical_service(finding.service)})
             if finding.service != "global"
             else finding
             for finding in findings
             if (finding.service == "global" or not self._excluded_root_cause(finding.service))
-            and is_root_cause_metric(finding.metric)
+            and (is_root_cause_metric(finding.metric) or self._is_breakout_metric(self._canonical_service(finding.service), finding.metric, breakout_metrics))
         ]
         rca_series = [metric for metric in series if is_root_cause_metric(metric.metric)]
         drift_metrics = self._drift_metrics(rca_series)
@@ -93,7 +99,7 @@ class V001RcaEngine:
         for finding in root_findings:
             if finding.service == "global":
                 continue
-            if not is_root_cause_metric(finding.metric):
+            if not is_root_cause_metric(finding.metric) and not self._is_breakout_metric(finding.service, finding.metric, breakout_metrics):
                 continue
             metrics_by_service[finding.service].append((finding.metric, finding.score, "anomaly"))
         for service, metric, _, score, _ in drift_metrics:
@@ -130,7 +136,9 @@ class V001RcaEngine:
                 continue
             if not metrics_by_service[service]:
                 continue
-            metric_scores = sorted(metrics_by_service[service], key=lambda item: (_metric_priority(item[0]), item[1]), reverse=True)
+            metric_scores = sorted(metrics_by_service[service], key=lambda item: (self._is_breakout_metric(service, item[0], breakout_metrics), _metric_priority(item[0]), item[1]), reverse=True)
+            if breakout_metrics.get(service) and not self._is_breakout_metric(service, metric_scores[0][0], breakout_metrics):
+                continue
             metrics = list(dict.fromkeys(alias for metric, _, _ in metric_scores for alias in self._metric_aliases(metric)))
             candidates.append(
                 RootCauseCandidate(
@@ -269,6 +277,9 @@ class V001RcaEngine:
             if marker in metric:
                 aliases.extend(values)
         return tuple(aliases)
+
+    def _is_breakout_metric(self, service: str, metric: str, breakout_metrics: dict[str, set[str]]) -> bool:
+        return metric in breakout_metrics.get(service, set())
 
     def _canonical_service(self, service: str) -> str:
         for suffix in self.canonical_service_suffixes:

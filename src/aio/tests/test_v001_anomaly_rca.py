@@ -473,6 +473,7 @@ class V001AnomalyRcaTest(unittest.TestCase):
             self.assertEqual(engine._filter_normal_traffic_growth(series), series)
         self.assertEqual(len(logs.records), 1)
         self.assertIn("service=checkout result=detect breakout=true reason=error_increased", logs.output[0])
+        self.assertEqual(engine.last_normal_growth_breakout_metrics, {"checkout": {"error_rate_5m"}})
 
     def test_oom_increase_does_not_break_normal_growth_when_request_increases(self):
         engine = anomaly_engine()
@@ -1037,6 +1038,28 @@ class V001AnomalyRcaTest(unittest.TestCase):
         result = rca_engine(runtime_config).rank(findings, [], top_k=5)
 
         self.assertEqual(result.root_causes[0].root_cause_metrics, ["cpu_millicores"])
+
+    def test_rca_promotes_breakout_metric_for_breakout_service_only(self):
+        runtime_config = load_runtime_config(Path("config/runtime.json"))
+        findings = [
+            AnomalyFinding(algorithm="weighted_sum", service="checkout", metric="cpu_millicores", signal_id="checkout_cpu_millicores", score=99.0, timestamp=5),
+            AnomalyFinding(algorithm="weighted_sum", service="checkout", metric="error_rate_5m", signal_id="checkout_error_rate_5m", score=1.0, timestamp=5),
+        ]
+
+        result = rca_engine(runtime_config).rank(findings, [], top_k=5, breakout_metrics={"checkout": {"error_rate_5m"}})
+
+        self.assertEqual(result.root_causes[0].root_cause_metrics[0], "error_rate_5m")
+
+    def test_rca_ignores_breakout_service_when_breakout_metric_is_absent(self):
+        runtime_config = load_runtime_config(Path("config/runtime.json"))
+        findings = [
+            AnomalyFinding(algorithm="weighted_sum", service="checkout", metric="cpu_millicores", signal_id="checkout_cpu_millicores", score=99.0, timestamp=5),
+            AnomalyFinding(algorithm="weighted_sum", service="payment", metric="cpu_millicores", signal_id="payment_cpu_millicores", score=1.0, timestamp=5),
+        ]
+
+        result = rca_engine(runtime_config).rank(findings, [], top_k=5, breakout_metrics={"checkout": {"error_rate_5m"}})
+
+        self.assertEqual(result.root_causes[0].service, "payment")
 
     def test_rca_drops_context_only_root_cause_candidates(self):
         runtime_config = load_runtime_config(Path("config/runtime.json"))

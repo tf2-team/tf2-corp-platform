@@ -333,6 +333,7 @@ class V001AnomalyEngine:
             log_max_templates_per_service,
             log_min_nonzero_buckets,
         )
+        self.last_normal_growth_breakout_metrics: dict[str, set[str]] = {}
         self.last_algorithm_findings: list[AnomalyFinding] = []
 
     def evaluate(self, series: list[MetricSeries], logs: list[tuple[str, int, str]] | None = None) -> list[AnomalyFinding]:
@@ -410,6 +411,11 @@ class V001AnomalyEngine:
             by_service[metric.service].append(metric)
         decisions = {service: self._normal_traffic_growth_decision(service_series) for service, service_series in by_service.items()}
         normal_services = {service for service, (normal, _) in decisions.items() if normal}
+        self.last_normal_growth_breakout_metrics = {
+            service: _breakout_metrics_for_reason(detail, by_service[service])
+            for service, (normal, detail) in decisions.items()
+            if not normal and detail.startswith(NORMAL_GROWTH_BREAKOUT_REASONS)
+        }
         (logger.warning if any("zero_metrics=" in detail for _, detail in decisions.values()) else logger.info)(
             "AIOPS_NORMAL_GROWTH_GATE %s",
             " | ".join(
@@ -479,6 +485,16 @@ def _is_oom_metric(metric: str) -> bool:
 
 def _is_error_metric(metric: str) -> bool:
     return "error_rate" in metric or "error_ratio" in metric
+
+
+def _breakout_metrics_for_reason(detail: str, series: list[MetricSeries]) -> set[str]:
+    if detail.startswith(("reason=memory_", "reason=oom_")):
+        return {metric.metric for metric in series if _is_memory_metric(metric.metric) or _is_oom_metric(metric.metric)}
+    if detail.startswith("reason=error_"):
+        return {metric.metric for metric in series if _is_error_metric(metric.metric)}
+    if detail.startswith("reason=ready_pods_"):
+        return {metric.metric for metric in series if "ready_pods" in metric.metric}
+    return set()
 
 
 def build_v001_anomaly_engine(config: dict, **overrides) -> V001AnomalyEngine:

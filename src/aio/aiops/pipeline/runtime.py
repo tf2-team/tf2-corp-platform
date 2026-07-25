@@ -333,7 +333,14 @@ class AiopsPipeline:
             _combined_rca_hyperparameters(config),
             topology_graph=self.topology_graph,
         )
-        result = rca_engine.rank(findings, detector_series, top_k=int(config["top_k"]), corroboration=corroboration)
+        breakout_metrics = getattr(anomaly_engine, "last_normal_growth_breakout_metrics", {})
+        result = rca_engine.rank(
+            findings,
+            detector_series,
+            top_k=int(config["top_k"]),
+            corroboration=corroboration,
+            **({"breakout_metrics": breakout_metrics} if breakout_metrics else {}),
+        )
         algorithm_findings = list(getattr(anomaly_engine, "last_algorithm_findings", []) or [])
         _log_final_root_cause_algorithm_scores(result, algorithm_findings)
         return result.model_copy(update={"algorithm_findings": algorithm_findings})
