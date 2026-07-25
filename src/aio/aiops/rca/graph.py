@@ -47,4 +47,4 @@ class GraphTraversalRca:
         oldest = min(timestamps.values())
         if newest == oldest:
             return {service: 1.0 for service in timestamps}
-        return {service: (timestamp - oldest) / (newest - oldest) for service, timestamp in timestamps.items()}
+        return {service: 1.0 - ((timestamp - oldest) / (newest - oldest)) for service, timestamp in timestamps.items()}

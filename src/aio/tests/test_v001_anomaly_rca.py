@@ -17,7 +17,7 @@ from aiops.rca.graph import GraphTraversalRca
 from aiops.rca import V001RcaEngine
 from aiops.schemas import AnomalyFinding, MetricPoint, MetricSeries, PipelineResult, PipelineRunRequest, RcaResult, RootCauseCandidate, RuntimeConfig, TelemetryCorroboration
 from aiops.shared.series import prepare_detector_series
-from aiops.shared.tail import aligned_pearson, fixed_baseline_and_tail, median3, metric_group, normal_traffic_growth_decision, point_changed
+from aiops.shared.tail import aligned_spearman, fixed_baseline_and_tail, median3, metric_group, normal_traffic_growth_decision, point_changed
 from scipy.stats import ConstantInputWarning
 
 
@@ -64,7 +64,7 @@ def rca_engine(config: RuntimeConfig, **combined_overrides) -> V001RcaEngine:
         "min_tail_anomaly_buckets": hyperparameters["anomaly"]["min_tail_anomaly_buckets"],
         "min_relative_change_ratio": hyperparameters["anomaly"]["min_relative_change_ratio"],
         "min_absolute_change": hyperparameters["anomaly"]["min_absolute_change"],
-        "traffic_shape_min_pearson": hyperparameters["anomaly"]["traffic_shape_min_pearson"],
+        "traffic_shape_min_spearman": hyperparameters["anomaly"]["traffic_shape_min_spearman"],
         "traffic_shape_max_lag_buckets": hyperparameters["anomaly"]["traffic_shape_max_lag_buckets"],
         **combined_overrides,
     }
@@ -100,7 +100,7 @@ class V001AnomalyRcaTest(unittest.TestCase):
             "min_tail_anomaly_buckets": {"request_rate": 3, "cpu": 3, "memory": 3, "socket_io": 3, "error": 1, "default": 2},
             "min_relative_change_ratio": {"request_rate": 0.5, "cpu": 0.3, "memory": 0.3, "socket_io": 0.5, "error": 0.0, "default": 0.3},
             "min_absolute_change": {"request_rate": 5.0, "cpu": 10.0, "memory": 10.0, "socket_io": 10.0, "error": 0.005, "default": 1.0},
-            "traffic_shape_min_pearson": 0.7,
+            "traffic_shape_min_spearman": 0.7,
         }
         values = [10] * 30 + list(range(30, 45))
         series = [
@@ -120,7 +120,7 @@ class V001AnomalyRcaTest(unittest.TestCase):
             "min_tail_anomaly_buckets": {"request_rate": 3, "cpu": 3, "memory": 3, "socket_io": 3, "error": 1, "default": 2},
             "min_relative_change_ratio": {"request_rate": 0.5, "cpu": 0.3, "memory": 0.3, "socket_io": 0.5, "error": 0.0, "default": 0.3},
             "min_absolute_change": {"request_rate": 5.0, "cpu": 10.0, "memory": 10.0, "socket_io": 10.0, "error": 0.005, "default": 1.0},
-            "traffic_shape_min_pearson": 0.7,
+            "traffic_shape_min_spearman": 0.7,
         }
         request_tail = [30, 10, 50, 10, 20, 10, 45, 10, 15, 10, 35, 10, 25, 10, 40]
         infra_tail = [100, 100, *[100 + 10 * value for value in request_tail[:-2]]]
@@ -144,7 +144,7 @@ class V001AnomalyRcaTest(unittest.TestCase):
             "min_tail_anomaly_buckets": {"request_rate": 3, "cpu": 3, "memory": 3, "socket_io": 3, "error": 1, "default": 2},
             "min_relative_change_ratio": {"request_rate": 0.5, "cpu": 0.3, "memory": 0.3, "socket_io": 0.5, "error": 0.0, "default": 0.3},
             "min_absolute_change": {"request_rate": 5.0, "cpu": 10.0, "memory": 10.0, "socket_io": 10.0, "error": 0.005, "default": 1.0},
-            "traffic_shape_min_pearson": 0.7,
+            "traffic_shape_min_spearman": 0.7,
         }
         values = [10] * 30 + list(range(30, 45))
         required = [
@@ -362,7 +362,13 @@ class V001AnomalyRcaTest(unittest.TestCase):
             update={"points": [MetricPoint(timestamp=1000 + index, value=value) for index, value in enumerate([1, 2, 3])]}
         )
 
-        self.assertEqual(aligned_pearson(left, right), 0.0)
+        self.assertEqual(aligned_spearman(left, right), 0.0)
+
+    def test_rca_correlation_uses_spearman_for_monotonic_shape(self):
+        left = metric("checkout", "request_rate_5m", [1, 2, 3, 4, 5])
+        right = metric("payment", "cpu", [1, 4, 9, 16, 25])
+
+        self.assertAlmostEqual(aligned_spearman(left, right), 1.0)
 
     def test_isolation_forest_scores_tail_with_one_model_fit(self):
         detector = ServiceIsolationForestDetector(score_threshold=1.0, min_points=5)
@@ -403,7 +409,7 @@ class V001AnomalyRcaTest(unittest.TestCase):
     def test_anomaly_builder_requires_traffic_shape_threshold(self):
         config = rca_hyperparameters()
         anomaly = dict(config["anomaly"])
-        del anomaly["traffic_shape_min_pearson"]
+        del anomaly["traffic_shape_min_spearman"]
 
         with self.assertRaises(KeyError):
             build_v001_anomaly_engine({**config, "anomaly": anomaly})
@@ -1042,7 +1048,8 @@ class V001AnomalyRcaTest(unittest.TestCase):
 
     def test_graph_traversal_uses_pagerank_and_timestamp_scoring(self):
         runtime_config = load_runtime_config(Path("config/runtime.json"))
-        scores = graph_rca(runtime_config).rank_services(
+        engine = graph_rca(runtime_config)
+        scores = engine.rank_services(
             [
                 AnomalyFinding(algorithm="weighted_sum", service="checkout", metric="latency", signal_id="checkout_latency", score=1.0, timestamp=100),
                 AnomalyFinding(algorithm="weighted_sum", service="frontend", metric="latency", signal_id="frontend_latency", score=1.0, timestamp=90),
@@ -1050,7 +1057,7 @@ class V001AnomalyRcaTest(unittest.TestCase):
         )
 
         self.assertIn("product-catalog", scores)
-        self.assertGreater(scores["checkout"], scores["frontend"])
+        self.assertGreater(engine._timestamp_scores({"checkout": 100, "frontend": 90})["frontend"], engine._timestamp_scores({"checkout": 100, "frontend": 90})["checkout"])
 
     def test_graph_traversal_keeps_observed_service_missing_from_topology(self):
         runtime_config = load_runtime_config(Path("config/runtime.json"))

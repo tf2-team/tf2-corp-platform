@@ -104,7 +104,7 @@ def normal_traffic_growth_decision(
     min_tail_anomaly_buckets: dict[str, int],
     min_relative_change_ratio: dict[str, float],
     min_absolute_change: dict[str, float],
-    traffic_shape_min_pearson: float = 0.7,
+    traffic_shape_min_spearman: float = 0.7,
     traffic_shape_max_lag_buckets: int = 0,
     memory_oom_detector: Callable[[MetricSeries], bool] | None = None,
 ) -> tuple[bool, str]:
@@ -153,7 +153,7 @@ def normal_traffic_growth_decision(
     scores = {
         group: max(
             (
-                tail_aligned_pearson(rate, metric, detection_window_seconds, start, right_lag_buckets=lag)
+                tail_aligned_spearman(rate, metric, detection_window_seconds, start, right_lag_buckets=lag)
                 for lag in range(max(0, traffic_shape_max_lag_buckets) + 1)
                 for rate in request
                 for metric in (memory_shape_metrics if group == "memory" else by_group[group])
@@ -164,28 +164,28 @@ def normal_traffic_growth_decision(
         if group != "memory" or memory_shape_metrics
     }
     memory_detail = f" memory={scores['memory']:.3f}" if "memory" in scores else ""
-    if all(score >= traffic_shape_min_pearson for score in scores.values()):
+    if all(score >= traffic_shape_min_spearman for score in scores.values()):
         return True, f"reason=traffic_shape cpu={scores['cpu']:.3f} socket_io={scores['socket_io']:.3f}{memory_detail}"
     zero_metrics = [metric.metric for metrics in by_group.values() for metric in metrics if metric.points and all(point.value == 0 for point in metric.points)]
     zero_detail = f" zero_metrics={','.join(zero_metrics)}" if zero_metrics else ""
-    return False, f"reason=shape_mismatch cpu={scores['cpu']:.3f} socket_io={scores['socket_io']:.3f}{memory_detail} threshold={traffic_shape_min_pearson:.3f}{zero_detail}"
+    return False, f"reason=shape_mismatch cpu={scores['cpu']:.3f} socket_io={scores['socket_io']:.3f}{memory_detail} threshold={traffic_shape_min_spearman:.3f}{zero_detail}"
 
 
-def tail_aligned_pearson(left: MetricSeries, right: MetricSeries, detection_window_seconds: int | None, start: int, right_lag_buckets: int = 0) -> float:
+def tail_aligned_spearman(left: MetricSeries, right: MetricSeries, detection_window_seconds: int | None, start: int, right_lag_buckets: int = 0) -> float:
     tail = tail_indexes(left, detection_window_seconds, start)
     if not tail:
-        return aligned_pearson(left, right, right_lag_buckets)
+        return aligned_spearman(left, right, right_lag_buckets)
     first = max(0, tail.start - max(1, right_lag_buckets + 1))
     indexes = set(range(first, tail.stop))
-    return aligned_pearson(
+    return aligned_spearman(
         left.model_copy(update={"points": [point for index, point in enumerate(left.points) if index in indexes]}),
         right,
         right_lag_buckets,
     )
 
 
-def aligned_pearson(left: MetricSeries, right: MetricSeries, right_lag_buckets: int = 0) -> float:
-    from scipy.stats import ConstantInputWarning, pearsonr
+def aligned_spearman(left: MetricSeries, right: MetricSeries, right_lag_buckets: int = 0) -> float:
+    from scipy.stats import ConstantInputWarning, spearmanr
 
     tolerance = max(series_step_seconds(left), series_step_seconds(right))
     lag_seconds = max(0, right_lag_buckets) * series_step_seconds(right)
@@ -201,9 +201,8 @@ def aligned_pearson(left: MetricSeries, right: MetricSeries, right_lag_buckets: 
         return 0.0
     with warnings.catch_warnings():
         warnings.simplefilter("ignore", ConstantInputWarning)
-        coefficient = pearsonr(*zip(*pairs)).statistic
+        coefficient = spearmanr(*zip(*pairs)).statistic
     return float(coefficient) if coefficient == coefficient else 0.0
-
 
 def _smoothed_tail_change(metric, detection_window_seconds, start, min_buckets_by_group, min_relative_by_group, min_absolute_by_group) -> TailChange:
     group = metric_group(metric.metric)

@@ -3,6 +3,8 @@
 # SPDX-License-Identifier: Apache-2.0
 from __future__ import annotations
 
+from math import log
+
 from aiops.schemas import IncidentFeatures, IncidentHistoryRecord
 
 
@@ -34,5 +36,6 @@ class HistoryRetriever:
         common = set(left) & set(right)
         if not common:
             return 0.0
-        scores = [1 / (1 + abs(left[key] - right[key])) for key in common]
+        eps = 1.0e-9
+        scores = [1 / (1 + abs(log((max(left[key], 0.0) + eps) / (max(right[key], 0.0) + eps)))) for key in common]
         return sum(scores) / len(scores)

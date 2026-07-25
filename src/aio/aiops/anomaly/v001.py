@@ -281,7 +281,7 @@ class V001AnomalyEngine:
         min_tail_anomaly_buckets: dict[str, int],
         min_relative_change_ratio: dict[str, float],
         min_absolute_change: dict[str, float],
-        traffic_shape_min_pearson: float,
+        traffic_shape_min_spearman: float,
         traffic_shape_max_lag_buckets: int,
         memory_oom: dict[str, float | int] | None,
         detection_window_seconds: int | None,
@@ -294,7 +294,7 @@ class V001AnomalyEngine:
         self.min_tail_anomaly_buckets = min_tail_anomaly_buckets
         self.min_relative_change_ratio = min_relative_change_ratio
         self.min_absolute_change = min_absolute_change
-        self.traffic_shape_min_pearson = traffic_shape_min_pearson
+        self.traffic_shape_min_spearman = traffic_shape_min_spearman
         self.traffic_shape_max_lag_buckets = traffic_shape_max_lag_buckets
         memory_oom = memory_oom or {}
         self.memory_oom_pre_tail_growth_ratio = float(memory_oom.get("pre_tail_growth_ratio", 1.2))
@@ -421,7 +421,7 @@ class V001AnomalyEngine:
             self.min_tail_anomaly_buckets,
             self.min_relative_change_ratio,
             self.min_absolute_change,
-            self.traffic_shape_min_pearson,
+            self.traffic_shape_min_spearman,
             self.traffic_shape_max_lag_buckets,
             memory_oom_detector=self._memory_oom_detected,
         )
@@ -498,7 +498,7 @@ def build_v001_anomaly_engine(config: dict, **overrides) -> V001AnomalyEngine:
         min_tail_anomaly_buckets={key: int(value) for key, value in anomaly["min_tail_anomaly_buckets"].items()},
         min_relative_change_ratio={key: float(value) for key, value in anomaly["min_relative_change_ratio"].items()},
         min_absolute_change={key: float(value) for key, value in anomaly["min_absolute_change"].items()},
-        traffic_shape_min_pearson=float(anomaly["traffic_shape_min_pearson"]),
+        traffic_shape_min_spearman=float(anomaly["traffic_shape_min_spearman"]),
         traffic_shape_max_lag_buckets=int(anomaly["traffic_shape_max_lag_buckets"]),
         memory_oom=anomaly.get("memory_oom"),
         detection_window_seconds=int(anomaly["detection_window_seconds"]) or None,

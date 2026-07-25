@@ -552,6 +552,19 @@ class RemediationEngineTest(unittest.TestCase):
 
         self.assertEqual(matches[0][0].incident_id, "hist-trace")
 
+    def test_retrieval_scores_metric_ratios_by_log_distance(self):
+        retriever = HistoryRetriever({"service": 0.0, "log": 0.0, "trace": 0.0, "metric": 1.0}, top_k=2)
+
+        matches = retriever.top_matches(
+            IncidentFeatures(metric_ratios={"latency": 100.0}),
+            [
+                IncidentHistoryRecord(incident_id="same_ratio", metric_ratios={"latency": 200.0}),
+                IncidentHistoryRecord(incident_id="same_delta", metric_ratios={"latency": 1.0}),
+            ],
+        )
+
+        self.assertEqual(matches[0][0].incident_id, "same_ratio")
+
     def test_translates_historical_action_to_current_affected_target(self):
         decision = RemediationDecisionEngine(ood_threshold=0.1, cost_page=20.0, blast_radius_limit=3, confidence_threshold=0.7).decide(
             "inc-1",
