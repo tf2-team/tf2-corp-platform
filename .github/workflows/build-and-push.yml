@@ -25,6 +25,10 @@ on:
     # Tag pushes (v*) and workflow_dispatch always run (no path filter on those entry points).
     paths:
       - "src/**"
+      # Linkerd CNI is a node-networking prerequisite with its own signed,
+      # multi-architecture build workflow. It is not a storefront service and
+      # must not trigger the release catalog publish pipeline on its own.
+      - "!src/linkerd-cni/**"
       - "third-party/mem0"
       - ".gitmodules"
       - "pb/**"
