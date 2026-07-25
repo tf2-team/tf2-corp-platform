@@ -37,13 +37,7 @@ FROM cr.l5d.io/linkerd/cni-plugin:v1.7.0-alpha.1@sha256:44a882ca2f3ffa2a11a5c4be
 COPY --from=cni-go-builder /out/linkerd-cni /opt/cni/bin/linkerd-cni
 COPY --from=cni-go-builder /out/linkerd2-cni-install /usr/bin/linkerd2-cni-install
 
-COPY src/linkerd-cni/linkerd-cni-token-aware-install.sh /linkerd/linkerd-cni-token-aware-install.sh
-
-RUN chmod 0755 /linkerd/linkerd-cni-token-aware-install.sh
-
-# The installer writes CNI binaries and configuration into hostPath mounts.
-# It must therefore run as root, while the DaemonSet remains non-privileged.
-# nosemgrep: dockerfile.security.last-user-is-root.last-user-is-root -- CNI hostPath writes require UID 0.
-USER root
-
-CMD ["linkerd-cni-token-aware-install.sh"]
+# Keep the upstream CMD (/usr/bin/linkerd2-cni-install). Edge CNI natively
+# watches the projected ServiceAccount token and atomically rewrites the CNI
+# configuration on rotation. Its root runtime is required only for the explicit
+# hostPath CNI binary/configuration mounts; the DaemonSet remains non-privileged.
