@@ -16,6 +16,14 @@ from aiops.schemas import AnomalyFinding, MetricSeries
 from aiops.shared.tail import evaluate_tail_change, fixed_baseline_and_tail, metric_group, normal_traffic_growth_decision
 
 logger = logging.getLogger(__name__)
+NORMAL_GROWTH_BREAKOUT_REASONS = (
+    "reason=oom_increased",
+    "reason=memory_oom_pattern",
+    "reason=memory_increased_without_traffic",
+    "reason=memory_shape_mismatch",
+    "reason=error_increased",
+    "reason=ready_pods_decreased",
+)
 
 os.environ.setdefault("MPLCONFIGDIR", "/tmp")
 
@@ -400,24 +408,13 @@ class V001AnomalyEngine:
             by_service[metric.service].append(metric)
         decisions = {service: self._normal_traffic_growth_decision(service_series) for service, service_series in by_service.items()}
         normal_services = {service for service, (normal, _) in decisions.items() if normal}
-        for service, (normal, detail) in decisions.items():
-            breakout = not normal and detail.startswith(
-                (
-                    "reason=oom_increased",
-                    "reason=memory_oom_pattern",
-                    "reason=memory_increased_without_traffic",
-                    "reason=memory_shape_mismatch",
-                    "reason=error_increased",
-                    "reason=ready_pods_decreased",
-                )
+        (logger.warning if any("zero_metrics=" in detail for _, detail in decisions.values()) else logger.info)(
+            "AIOPS_NORMAL_GROWTH_GATE %s",
+            " | ".join(
+                f"service={service} result={'skip' if normal else 'detect'} breakout={str(not normal and detail.startswith(NORMAL_GROWTH_BREAKOUT_REASONS)).lower()} {detail}"
+                for service, (normal, detail) in decisions.items()
             )
-            (logger.warning if "zero_metrics=" in detail else logger.info)(
-                "AIOPS_NORMAL_GROWTH_GATE service=%s result=%s breakout=%s %s",
-                service,
-                "skip" if normal else "detect",
-                str(breakout).lower(),
-                detail,
-            )
+        )
         return [
             metric
             for metric in series

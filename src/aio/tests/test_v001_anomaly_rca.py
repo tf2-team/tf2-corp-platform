@@ -472,7 +472,7 @@ class V001AnomalyRcaTest(unittest.TestCase):
         with self.assertLogs("aiops.anomaly.v001", level="INFO") as logs:
             self.assertEqual(engine._filter_normal_traffic_growth(series), series)
         self.assertEqual(len(logs.records), 1)
-        self.assertIn("AIOPS_NORMAL_GROWTH_GATE service=checkout result=detect breakout=true reason=error_increased", logs.output[0])
+        self.assertIn("service=checkout result=detect breakout=true reason=error_increased", logs.output[0])
 
     def test_oom_increase_keeps_all_metrics_during_coordinated_load_growth(self):
         engine = anomaly_engine()
@@ -641,10 +641,10 @@ class V001AnomalyRcaTest(unittest.TestCase):
                     minute_metric("payment", "request_rate_5m", [10] * 45),
                 ]
             )
-        self.assertEqual(len(logs.records), 2)
-        self.assertTrue(any("service=checkout" in item for item in logs.output))
-        self.assertTrue(any("service=payment" in item for item in logs.output))
-        self.assertIn("reason=missing_metrics", " ".join(logs.output))
+        self.assertEqual(len(logs.records), 1)
+        self.assertIn("service=checkout", logs.output[0])
+        self.assertIn("service=payment", logs.output[0])
+        self.assertIn("reason=missing_metrics", logs.output[0])
 
     def test_staggered_load_growth_is_not_treated_as_simultaneous(self):
         engine = anomaly_engine()
