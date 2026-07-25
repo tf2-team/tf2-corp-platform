@@ -86,6 +86,18 @@ class RuntimeConfigTest(unittest.TestCase):
         self.assertEqual(thresholds["shipping"], 1.0)
         self.assertEqual(thresholds["accounting"], 1.0)
 
+    def test_detector_hyperparameters_point_at_loaded_detectors(self):
+        raw = json.loads(Path("config/runtime.json").read_text(encoding="utf-8"))
+        config = load_runtime_config(Path("config/runtime.json"))
+        hyperparameters = load_hyperparameters(Settings().hyperparameters_path)["detectors"]
+        detector_ids = {detector.id for detector in config.detectors}
+        latency_services = {detector.service for detector in config.detectors if detector.id.endswith(("_latency_p95", "_latency_p99"))}
+
+        self.assertFalse(any(detector["id"].startswith("auto_") for detector in raw["detectors"]))
+        self.assertFalse({detector["id"] for detector in raw["detectors"] if not detector.get("enabled", True)})
+        self.assertFalse(set(hyperparameters["thresholds"]) - detector_ids)
+        self.assertFalse(set(hyperparameters["latency_slo_overrides"]) - latency_services)
+
     def test_prometheus_services_expand_generated_metrics(self):
         raw = json.loads(Path("config/runtime.json").read_text(encoding="utf-8"))
         config = load_runtime_config(Path("config/runtime.json"))

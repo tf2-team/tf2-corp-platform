@@ -51,8 +51,7 @@
       "email": 1.0,
       "quote": 1.0,
       "fraud-detection": 1.0,
-      "accounting": 1.0,
-      "llm": 5.0
+      "accounting": 1.0
     },
     "thresholds": {
       "ops01_checkout_slo_burn_rate": 1.0,
@@ -71,10 +70,7 @@
       "auto_email_error_rate": 0.05,
       "auto_quote_error_rate": 0.05,
       "auto_fraud_detection_error_rate": 0.05,
-      "auto_accounting_error_rate": 0.05,
-      "auto_llm_error_rate": 0.05,
-      "ops05_cart_error_rate": 0.02,
-      "ops06_product_catalog_cpu": 50.0
+      "auto_accounting_error_rate": 0.05
     },
     "confidences": {
       "ops03_checkout_payment_dependency": 0.8
