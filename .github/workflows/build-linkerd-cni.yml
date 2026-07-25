@@ -1,0 +1,284 @@
+name: Build Linkerd CNI token-refresh image
+
+# This image is intentionally outside the storefront release catalog: it is a
+# node-networking prerequisite, not an application component. Promotion into
+# the production Linkerd Application remains a reviewed GitOps change.
+on:
+  push:
+    branches: [main, techx-dev-corp]
+    paths:
+      - "src/linkerd-cni/**"
+      - ".github/workflows/build-linkerd-cni.yml"
+  workflow_dispatch:
+    inputs:
+      target_environment:
+        description: GitHub Environment that owns the target ECR registry
+        required: true
+        type: choice
+        options: [development, production]
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build, scan and publish Linkerd CNI
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment: ${{ github.event_name == 'workflow_dispatch' && inputs.target_environment || (github.ref == 'refs/heads/main' && 'production' || 'development') }}
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      AWS_REGION: ${{ vars.AWS_REGION || 'us-east-1' }}
+      IMAGE_NAME: ${{ vars.IMAGE_NAME }}
+      SERVICE: linkerd-cni
+    steps:
+      - name: Checkout
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
+
+      - name: Resolve immutable tag and repository
+        id: image
+        env:
+          SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          if [[ -z "${IMAGE_NAME}" ]]; then
+            echo "::error::GitHub Environment variable IMAGE_NAME is required"
+            exit 1
+          fi
+          short_sha="$(printf '%s' "${SHA}" | cut -c1-7)"
+          image_ref="${IMAGE_NAME}/${SERVICE}:sha-${short_sha}"
+          {
+            echo "image_ref=${image_ref}"
+            echo "repository=${IMAGE_NAME#*/}/${SERVICE}"
+          } >> "${GITHUB_OUTPUT}"
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@517a711dbcd0e402f90c77e7e2f81e849156e31d
+        with:
+          role-to-assume: ${{ vars.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Verify the dedicated ECR repository exists
+        env:
+          REPOSITORY: ${{ steps.image.outputs.repository }}
+        run: |
+          set -euo pipefail
+          aws ecr describe-repositories --repository-names "${REPOSITORY}" --region "${AWS_REGION}" >/dev/null
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@96fe6ef7f33517b61c61be40b68a1882f3264fb8
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c
+        with:
+          driver-opts: image=moby/buildkit:buildx-stable-1
+          buildkitd-config: ./buildkitd.toml
+
+      - name: Build local arm64 image for vulnerability scan
+        env:
+          IMAGE_REF: ${{ steps.image.outputs.image_ref }}
+        run: |
+          set -euo pipefail
+          # Production nodes are Graviton, so scan the exact architecture
+          # that will execute the CNI binary before publishing any manifest.
+          docker buildx build \
+            --platform linux/arm64 \
+            --load \
+            --tag "${IMAGE_REF}" \
+            --file src/linkerd-cni/Dockerfile \
+            .
+
+      - name: Block HIGH and CRITICAL vulnerabilities before push
+        uses: aquasecurity/trivy-action@a9c7b0f06e461e9d4b4d1711f154ee024b8d7ab8
+        with:
+          version: v0.69.3
+          image-ref: ${{ steps.image.outputs.image_ref }}
+          format: table
+          exit-code: "1"
+          ignore-unfixed: true
+          severity: HIGH,CRITICAL
+
+      - name: Login to Amazon ECR
+        uses: aws-actions/amazon-ecr-login@d539f0932e70871a027e9d5a9d8fc38589180a64
+
+      - name: Push verified multi-architecture image
+        env:
+          IMAGE_REF: ${{ steps.image.outputs.image_ref }}
+        run: |
+          set -euo pipefail
+          docker buildx build \
+            --platform linux/amd64,linux/arm64 \
+            --push \
+            --tag "${IMAGE_REF}" \
+            --file src/linkerd-cni/Dockerfile \
+            .
+
+      - name: Resolve immutable image digest for GitOps promotion
+        id: digest
+        env:
+          REPOSITORY: ${{ steps.image.outputs.repository }}
+          IMAGE_REF: ${{ steps.image.outputs.image_ref }}
+        run: |
+          set -euo pipefail
+          tag="${IMAGE_REF##*:}"
+          digest="$(aws ecr describe-images --repository-name "${REPOSITORY}" --image-ids imageTag="${tag}" --query 'imageDetails[0].imageDigest' --output text --region "${AWS_REGION}")"
+          test "${digest}" != "None"
+          echo "digest=${digest}" >> "${GITHUB_OUTPUT}"
+          {
+            echo "## Linkerd CNI image ready"
+            echo ""
+            echo "Promote this exact immutable tag and record the digest in the reviewed chart change:"
+            echo "\`${IMAGE_REF}\`"
+            echo "\`${digest}\`"
+          } >> "${GITHUB_STEP_SUMMARY}"
+
+  sign-and-attest:
+    name: Sign and attest Linkerd CNI
+    needs: [build]
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    environment: ${{ github.event_name == 'workflow_dispatch' && inputs.target_environment || (github.ref == 'refs/heads/main' && 'production' || 'development') }}
+    permissions:
+      contents: read
+      id-token: write
+      pull-requests: read
+    env:
+      AWS_REGION: ${{ vars.AWS_REGION || 'us-east-1' }}
+      IMAGE_NAME: ${{ vars.IMAGE_NAME }}
+      COSIGN_KEY: ${{ vars.COSIGN_KMS_KEY || 'awskms:///alias/tf2-cosign-signing-key' }}
+      PROVENANCE_TYPE: https://techx-corp.dev/attestations/provenance/v1
+    steps:
+      - name: Checkout
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@517a711dbcd0e402f90c77e7e2f81e849156e31d
+        with:
+          role-to-assume: ${{ vars.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Login to Amazon ECR
+        uses: aws-actions/amazon-ecr-login@d539f0932e70871a027e9d5a9d8fc38589180a64
+
+      - name: Install Cosign
+        uses: sigstore/cosign-installer@d58896d6a1865668819e1d91763c7751a165e159
+
+      - name: Resolve immutable image reference
+        id: image
+        run: |
+          set -euo pipefail
+          short_sha="$(printf '%s' "${GITHUB_SHA}" | cut -c1-7)"
+          repository="${IMAGE_NAME#*/}/linkerd-cni"
+          digest="$(aws ecr describe-images --repository-name "${repository}" --image-ids "imageTag=sha-${short_sha}" --query 'imageDetails[0].imageDigest' --output text --region "${AWS_REGION}")"
+          [[ "${digest}" =~ ^sha256:[0-9a-f]{64}$ ]]
+          echo "ref=${IMAGE_NAME}/linkerd-cni@${digest}" >> "${GITHUB_OUTPUT}"
+
+      - name: Sign image and attest CycloneDX SBOM
+        env:
+          IMAGE: ${{ steps.image.outputs.ref }}
+          SYFT_VERSION: 1.28.0
+        run: |
+          set -euo pipefail
+          cosign sign --yes --key "${COSIGN_KEY}" "${IMAGE}"
+          base="https://github.com/anchore/syft/releases/download/v${SYFT_VERSION}"
+          archive="syft_${SYFT_VERSION}_linux_amd64.tar.gz"
+          curl --fail --location --silent --show-error -o "/tmp/${archive}" "${base}/${archive}"
+          curl --fail --location --silent --show-error -o /tmp/syft_checksums.txt "${base}/syft_${SYFT_VERSION}_checksums.txt"
+          grep " ${archive}$" /tmp/syft_checksums.txt | sed 's#  #  /tmp/#' | sha256sum --check --strict
+          tar -xzf "/tmp/${archive}" -C /tmp syft
+          /tmp/syft "${IMAGE}" -o cyclonedx-json=sbom.cdx.json
+          cosign attest --yes --predicate sbom.cdx.json --type cyclonedx --key "${COSIGN_KEY}" "${IMAGE}"
+
+      - name: Create and attest provenance
+        env:
+          IMAGE: ${{ steps.image.outputs.ref }}
+        run: |
+          set -euo pipefail
+          jq -n \
+            --arg commit "${GITHUB_SHA}" \
+            --arg signer "${COSIGN_KEY}" \
+            --arg workflow_run_url "${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}" \
+            '{schema_version:1,commit:$commit,signer:$signer,scans:{trivy_image:"pass"},sbom:{format:"cyclonedx",attested:true},workflow_run_url:$workflow_run_url}' \
+            > predicate.json
+          cosign attest --yes --predicate predicate.json --type "${PROVENANCE_TYPE}" --key "${COSIGN_KEY}" "${IMAGE}"
+
+  create-chart-prod-pr:
+    name: Create production chart image PR
+    needs: [build, sign-and-attest]
+    if: github.event_name == 'workflow_dispatch' && inputs.target_environment == 'production' || github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    env:
+      CHART_REPO: ${{ vars.CHART_REPO || 'tf2-team/tf2-corp-chart' }}
+      CHART_PROD_BRANCH: ${{ vars.CHART_PROD_BRANCH || 'main' }}
+      CHART_REPO_TOKEN: ${{ secrets.CHART_REPO_TOKEN }}
+      GH_TOKEN: ${{ secrets.CHART_REPO_TOKEN }}
+      IMAGE_NAME: ${{ vars.IMAGE_NAME }}
+    steps:
+      - name: Require chart repository token
+        run: |
+          test -n "${CHART_REPO_TOKEN}" || { echo "::error::CHART_REPO_TOKEN is required"; exit 1; }
+
+      - name: Checkout chart repository
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
+        with:
+          repository: ${{ env.CHART_REPO }}
+          ref: ${{ env.CHART_PROD_BRANCH }}
+          token: ${{ env.CHART_REPO_TOKEN }}
+          path: chart
+
+      - name: Update Linkerd CNI image tag
+        working-directory: chart
+        env:
+          GIT_AUTHOR_NAME: github-actions[bot]
+          GIT_AUTHOR_EMAIL: 41898282+github-actions[bot]@users.noreply.github.com
+          GIT_COMMITTER_NAME: github-actions[bot]
+          GIT_COMMITTER_EMAIL: 41898282+github-actions[bot]@users.noreply.github.com
+        run: |
+          set -euo pipefail
+          short_sha="$(printf '%s' "${GITHUB_SHA}" | cut -c1-7)"
+          image="${IMAGE_NAME}/linkerd-cni"
+          python3 - "gitops/linkerd/linkerd-cni.yaml" "${image}" "sha-${short_sha}" <<'PY'
+          import pathlib
+          import re
+          import sys
+
+          path = pathlib.Path(sys.argv[1])
+          image, tag = sys.argv[2:]
+          text = path.read_text(encoding="utf-8")
+          marker = '        priorityClassName: system-node-critical\n'
+          replacement = marker + (
+              '        # Custom image refreshes the projected CNI API token on every node.\n'
+              '        # Tag is immutable; CI signs and attests the corresponding digest.\n'
+              '        image:\n'
+              f'          name: {image}\n'
+              f'          version: "{tag}"\n'
+          )
+          if '        image:\n          name: ' in text:
+              text = re.sub(
+                  r'        image:\n          name: .*\n          version: ".*"\n',
+                  replacement[len(marker):],
+                  text,
+                  count=1,
+              )
+          elif marker in text:
+              text = text.replace(marker, replacement, 1)
+          else:
+              raise SystemExit('Linkerd CNI priorityClassName anchor not found')
+          path.write_text(text, encoding="utf-8", newline="\n")
+          PY
+          git add gitops/linkerd/linkerd-cni.yaml
+          if git diff --cached --quiet; then
+            echo "Chart already uses this Linkerd CNI image tag."
+            exit 0
+          fi
+          branch="promote/prod-linkerd-cni-sha-${short_sha}"
+          git checkout -B "${branch}"
+          git commit -m "fix(linkerd): refresh CNI API token automatically" -m "Platform commit: ${GITHUB_SHA}"
+          git push --force origin "HEAD:${branch}"
+          body="Promote the signed and Trivy-scanned Linkerd CNI token-refresh image. The CNI chain remains AWS CNI + Linkerd CNI; this fixes expiry of the projected Kubernetes API token."
+          gh pr create --repo "${CHART_REPO}" --base "${CHART_PROD_BRANCH}" --head "${branch}" --title "fix(linkerd): promote token-refresh CNI image" --body "${body}"
