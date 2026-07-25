@@ -3,6 +3,7 @@
 # SPDX-License-Identifier: Apache-2.0
 from __future__ import annotations
 
+import warnings
 from dataclasses import dataclass
 from statistics import median
 
@@ -130,11 +131,13 @@ def normal_traffic_growth_decision(
     }
     if all(score >= traffic_shape_min_pearson for score in scores.values()):
         return True, f"reason=traffic_shape cpu={scores['cpu']:.3f} socket_io={scores['socket_io']:.3f}"
-    return False, f"reason=shape_mismatch cpu={scores['cpu']:.3f} socket_io={scores['socket_io']:.3f} threshold={traffic_shape_min_pearson:.3f}"
+    zero_metrics = [metric.metric for metrics in by_group.values() for metric in metrics if metric.points and all(point.value == 0 for point in metric.points)]
+    zero_detail = f" zero_metrics={','.join(zero_metrics)}" if zero_metrics else ""
+    return False, f"reason=shape_mismatch cpu={scores['cpu']:.3f} socket_io={scores['socket_io']:.3f} threshold={traffic_shape_min_pearson:.3f}{zero_detail}"
 
 
 def _tail_pearson(left: MetricSeries, right: MetricSeries, detection_window_seconds: int | None, start: int) -> float:
-    from scipy.stats import pearsonr
+    from scipy.stats import ConstantInputWarning, pearsonr
 
     tolerance = max(series_step_seconds(left), series_step_seconds(right))
     pairs = []
@@ -146,7 +149,9 @@ def _tail_pearson(left: MetricSeries, right: MetricSeries, detection_window_seco
             pairs.append((point.value, right.points[right_index].value))
     if len(pairs) < 3:
         return 0.0
-    coefficient = pearsonr(*zip(*pairs)).statistic
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", ConstantInputWarning)
+        coefficient = pearsonr(*zip(*pairs)).statistic
     return float(coefficient) if coefficient == coefficient else 0.0
 
 

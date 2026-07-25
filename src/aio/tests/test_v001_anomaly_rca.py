@@ -4,6 +4,7 @@
 import io
 import unittest
 import warnings
+import warnings
 from contextlib import redirect_stdout
 from pathlib import Path
 from tempfile import TemporaryDirectory
@@ -19,6 +20,7 @@ from aiops.rca import V001RcaEngine
 from aiops.schemas import AnomalyFinding, MetricPoint, MetricSeries, PipelineResult, PipelineRunRequest, RcaResult, RootCauseCandidate, RuntimeConfig, TelemetryCorroboration
 from aiops.shared.series import prepare_detector_series
 from aiops.shared.tail import fixed_baseline_and_tail, normal_traffic_growth_decision
+from scipy.stats import ConstantInputWarning
 
 
 def metric(service: str, name: str, values: list[float]) -> MetricSeries:
@@ -75,6 +77,23 @@ def graph_rca(config: RuntimeConfig) -> GraphTraversalRca:
 
 
 class V001AnomalyRcaTest(unittest.TestCase):
+    def test_normal_traffic_growth_constant_vectors_do_not_warn(self):
+        common = {
+            "detection_window_seconds": 900,
+            "start": 0,
+            "min_tail_anomaly_buckets": {"request_rate": 3, "cpu": 3, "socket_io": 3, "error": 1, "default": 2},
+            "min_relative_change_ratio": {"request_rate": 0.5, "cpu": 0.3, "socket_io": 0.5, "error": 0.0, "default": 0.3},
+            "min_absolute_change": {"request_rate": 5.0, "cpu": 100.0, "socket_io": 1_048_576.0, "error": 0.005, "default": 1.0},
+        }
+        series = [minute_metric("checkout", metric, [0.0] * 45) for metric in ("request_rate_5m", "cpu_millicores", "socket_io_bytes_per_second")]
+
+        with warnings.catch_warnings():
+            warnings.simplefilter("error", ConstantInputWarning)
+            normal, _ = normal_traffic_growth_decision(series, **common)
+
+        self.assertFalse(normal)
+        self.assertIn("zero_metrics=request_rate_5m,cpu_millicores,socket_io_bytes_per_second", _)
+
     def test_normal_traffic_growth_requires_cpu_and_socket_shape_with_optional_memory(self):
         common = {
             "detection_window_seconds": 900,

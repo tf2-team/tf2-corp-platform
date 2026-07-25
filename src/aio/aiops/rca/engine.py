@@ -3,9 +3,10 @@
 # SPDX-License-Identifier: Apache-2.0
 from __future__ import annotations
 
+import warnings
 from collections import defaultdict
 
-from scipy.stats import pearsonr
+from scipy.stats import ConstantInputWarning, pearsonr
 
 from aiops.anomaly.stats import median, robust_score
 from aiops.rca.graph import GraphTraversalRca
@@ -256,7 +257,9 @@ class V001RcaEngine:
                 pairs.append((point.value, right.points[right_index].value))
         if len(pairs) < 3:
             return 0.0
-        coefficient = pearsonr(*zip(*pairs)).statistic
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", ConstantInputWarning)
+            coefficient = pearsonr(*zip(*pairs)).statistic
         return float(coefficient) if coefficient == coefficient else 0.0
 
     def _weighted_rrf(self, rankers: dict[str, dict[str, float]]) -> dict[str, float]:

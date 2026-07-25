@@ -401,7 +401,7 @@ class V001AnomalyEngine:
             by_service[metric.service].append(metric)
         decisions = {service: self._normal_traffic_growth_decision(service_series) for service, service_series in by_service.items()}
         normal_services = {service for service, (normal, _) in decisions.items() if normal}
-        logger.info(
+        (logger.warning if any("zero_metrics=" in detail for _, detail in decisions.values()) else logger.info)(
             "AIOPS_NORMAL_GROWTH_GATE %s",
             " | ".join(f"service={service} result={'skip' if normal else 'detect'} {detail}" for service, (normal, detail) in decisions.items()),
         )
