@@ -294,6 +294,7 @@ class RuntimePipelineTest(unittest.TestCase):
         self.assertTrue(is_slo_notification(event))
         self.assertTrue(is_slo_notification(event.model_copy(update={"signal_id": "checkout_p95_latency_5m"})))
         self.assertTrue(is_slo_notification(event.model_copy(update={"detector_id": "auto_checkout_error_rate", "signal_id": "checkout_error_rate_5m"})))
+        self.assertTrue(is_slo_notification(event.model_copy(update={"detector_id": "auto_checkout_burn_rate", "signal_id": "checkout_error_budget_burn_rate_24h"})))
 
     def test_slo_threshold_incident_is_added_to_rca_anomalies(self):
         settings = Settings()

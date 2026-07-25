@@ -32,7 +32,6 @@ class RuntimeConfigTest(unittest.TestCase):
             hyperparameters = load_hyperparameters(Settings().hyperparameters_path)
             detectors = build_detectors(
                 config,
-                Settings(),
                 hyperparameters["no_data"],
                 hyperparameters["detectors"],
             )
