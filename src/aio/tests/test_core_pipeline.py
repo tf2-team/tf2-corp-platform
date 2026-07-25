@@ -109,6 +109,27 @@ class DetectorEngineTest(unittest.TestCase):
         self.assertEqual(candidates[0].window, "24h")
         self.assertEqual(candidates[0].likely_dependency, "unknown")
 
+    def test_threshold_detector_fires_at_threshold(self):
+        features = FeatureBuilder(load_runtime_config(Path("config/runtime.json"))).build(
+            [Observation(signal_id="checkout_bad_ratio_24h", value=0.01, unit="ratio", window="24h", quality=SignalQuality.VERIFIED)]
+        )
+
+        candidates = DetectorEngine(
+            [
+                ThresholdDetector(
+                    detector_id="ops01_checkout_slo",
+                    signal_id="checkout_bad_ratio_24h",
+                    threshold=0.01,
+                    flow="checkout",
+                    service="checkout",
+                    severity="SEV1",
+                    runbook_id="RB-CHECKOUT-SLO",
+                )
+            ]
+        ).evaluate(features)
+
+        self.assertEqual(len(candidates), 1)
+
     def test_threshold_detector_ignores_diagnostic_feature(self):
         candidates = DetectorEngine(
             [

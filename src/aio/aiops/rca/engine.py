@@ -8,7 +8,7 @@ from collections import defaultdict
 from aiops.anomaly.stats import robust_score
 from aiops.rca.graph import GraphTraversalRca
 from aiops.schemas import AnomalyFinding, MetricSeries, RcaResult, RootCauseCandidate, RuntimeConfig, TelemetryCorroboration
-from aiops.shared.tail import aligned_pearson, evaluate_tail_change, fixed_baseline_and_tail, metric_group
+from aiops.shared.tail import evaluate_tail_change, fixed_baseline_and_tail, metric_group, tail_aligned_pearson
 from aiops.topology import TopologyGraph
 
 
@@ -31,6 +31,7 @@ class V001RcaEngine:
         self.min_relative_change_ratio = {key: float(value) for key, value in combined_hyperparameters["min_relative_change_ratio"].items()}
         self.min_absolute_change = {key: float(value) for key, value in combined_hyperparameters["min_absolute_change"].items()}
         self.traffic_shape_min_pearson = float(combined_hyperparameters["traffic_shape_min_pearson"])
+        self.traffic_shape_max_lag_buckets = int(combined_hyperparameters.get("traffic_shape_max_lag_buckets", 0))
         self.canonical_service_suffixes = tuple(combined_hyperparameters["canonical_service_suffixes"])
         self.metric_aliases = combined_hyperparameters["metric_aliases"]
         self.graph = GraphTraversalRca(
@@ -96,7 +97,8 @@ class V001RcaEngine:
                 continue
             metrics_by_service[finding.service].append((finding.metric, finding.score, "anomaly"))
         for service, metric, _, score, _ in drift_metrics:
-            metrics_by_service[service].append((metric, score, "drift"))
+            if service not in metrics_by_service:
+                metrics_by_service[service].append((metric, score, "drift"))
 
         candidates: list[RootCauseCandidate] = []
         trace_details = {
@@ -226,7 +228,11 @@ class V001RcaEngine:
         for metric in series:
             if metric.service == "global" or self._excluded_root_cause(metric.service):
                 continue
-            score = max(abs(aligned_pearson(primary, metric)) for primary in primaries)
+            score = max(
+                abs(tail_aligned_pearson(primary, metric, self.detection_window_seconds, self.drift_min_points - 1, right_lag_buckets=lag))
+                for lag in range(max(0, self.traffic_shape_max_lag_buckets) + 1)
+                for primary in primaries
+            )
             service = self._canonical_service(metric.service)
             scores[service] = max(scores.get(service, 0.0), score)
         return scores

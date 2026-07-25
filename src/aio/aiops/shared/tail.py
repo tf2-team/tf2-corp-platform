@@ -127,10 +127,17 @@ def normal_traffic_growth_decision(
         and any(change.values[index] > change.baseline for index in change.indexes)
         for metric in by_group["request_rate"]
     )
+    memory_shape_metrics = []
     for metric in series:
         change = _smoothed_tail_change(metric, detection_window_seconds, start, min_tail_anomaly_buckets, min_relative_change_ratio, min_absolute_change)
         if metric_group(metric.metric) == "memory" and change.significant and not request_increased and any(change.values[index] > change.baseline for index in change.indexes):
             return False, "reason=memory_increased_without_traffic"
+        if metric_group(metric.metric) == "memory" and change.significant and change.indexes:
+            tail_median = median(change.values[index] for index in change.indexes)
+            if request_increased and tail_median < change.baseline:
+                return False, "reason=memory_shape_mismatch"
+            if all(change.values[index] >= change.baseline for index in change.indexes) or all(change.values[index] <= change.baseline for index in change.indexes):
+                memory_shape_metrics.append(metric)
         if ("error_rate" in metric.metric or "error_ratio" in metric.metric) and any(
             change.values[index] > change.baseline
             and point_changed(change.values[index], change.baseline, 0.0, min_absolute_change["error"])
@@ -149,15 +156,15 @@ def normal_traffic_growth_decision(
                 tail_aligned_pearson(rate, metric, detection_window_seconds, start, right_lag_buckets=lag)
                 for lag in range(max(0, traffic_shape_max_lag_buckets) + 1)
                 for rate in request
-                for metric in by_group[group]
+                for metric in (memory_shape_metrics if group == "memory" else by_group[group])
             ),
             default=0.0,
         )
         for group in (*required_infra_groups, "memory")
-        if group != "memory" or any(metric_group(metric.metric) == "memory" for metric in series)
+        if group != "memory" or memory_shape_metrics
     }
     memory_detail = f" memory={scores['memory']:.3f}" if "memory" in scores else ""
-    if all(scores[group] >= traffic_shape_min_pearson for group in required_infra_groups):
+    if all(score >= traffic_shape_min_pearson for score in scores.values()):
         return True, f"reason=traffic_shape cpu={scores['cpu']:.3f} socket_io={scores['socket_io']:.3f}{memory_detail}"
     zero_metrics = [metric.metric for metrics in by_group.values() for metric in metrics if metric.points and all(point.value == 0 for point in metric.points)]
     zero_detail = f" zero_metrics={','.join(zero_metrics)}" if zero_metrics else ""
@@ -166,6 +173,8 @@ def normal_traffic_growth_decision(
 
 def tail_aligned_pearson(left: MetricSeries, right: MetricSeries, detection_window_seconds: int | None, start: int, right_lag_buckets: int = 0) -> float:
     tail = tail_indexes(left, detection_window_seconds, start)
+    if not tail:
+        return aligned_pearson(left, right, right_lag_buckets)
     first = max(0, tail.start - max(1, right_lag_buckets + 1))
     indexes = set(range(first, tail.stop))
     return aligned_pearson(

@@ -547,6 +547,7 @@ def _combined_rca_hyperparameters(config: dict) -> dict:
         "min_relative_change_ratio": anomaly["min_relative_change_ratio"],
         "min_absolute_change": anomaly["min_absolute_change"],
         "traffic_shape_min_pearson": anomaly["traffic_shape_min_pearson"],
+        "traffic_shape_max_lag_buckets": anomaly["traffic_shape_max_lag_buckets"],
     }
 
 

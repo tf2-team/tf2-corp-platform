@@ -39,7 +39,7 @@ class ThresholdDetector(Detector):
             or feature.status != "ready"
             or feature.feature_role not in {"official_slo", "anomaly_input"}
             or feature.value is None
-            or feature.value <= self.threshold
+            or feature.value < self.threshold
         ):
             return []
         logger.warning(

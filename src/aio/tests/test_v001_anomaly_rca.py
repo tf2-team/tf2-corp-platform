@@ -65,6 +65,7 @@ def rca_engine(config: RuntimeConfig, **combined_overrides) -> V001RcaEngine:
         "min_relative_change_ratio": hyperparameters["anomaly"]["min_relative_change_ratio"],
         "min_absolute_change": hyperparameters["anomaly"]["min_absolute_change"],
         "traffic_shape_min_pearson": hyperparameters["anomaly"]["traffic_shape_min_pearson"],
+        "traffic_shape_max_lag_buckets": hyperparameters["anomaly"]["traffic_shape_max_lag_buckets"],
         **combined_overrides,
     }
     return V001RcaEngine(config, hyperparameters["graph"], combined)
@@ -136,7 +137,7 @@ class V001AnomalyRcaTest(unittest.TestCase):
 
         self.assertTrue(normal, reason)
 
-    def test_normal_traffic_growth_rejects_missing_socket_and_ignores_optional_memory_shape(self):
+    def test_normal_traffic_growth_rejects_missing_socket_and_memory_shape_mismatch(self):
         common = {
             "detection_window_seconds": 900,
             "start": 29,
@@ -153,7 +154,9 @@ class V001AnomalyRcaTest(unittest.TestCase):
         ]
 
         self.assertFalse(normal_traffic_growth_decision(required[:2], **common)[0])
-        self.assertTrue(normal_traffic_growth_decision([*required, minute_metric("checkout", "memory_usage_bytes", list(reversed(values)))], **common)[0])
+        normal, reason = normal_traffic_growth_decision([*required, minute_metric("checkout", "memory_usage_bytes", list(reversed(values)))], **common)
+        self.assertFalse(normal)
+        self.assertIn("reason=memory_shape_mismatch", reason)
 
     def test_fixed_baseline_excludes_every_detection_tail_point(self):
         series = minute_metric("payment", "cpu_millicores", [10.0] * 45 + [20.0] * 15)
