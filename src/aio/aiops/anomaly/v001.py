@@ -11,7 +11,7 @@ from pathlib import Path
 import re
 import warnings
 
-from aiops.anomaly.stats import mean, median, robust_score, stdev
+from aiops.anomaly.stats import mean, median, rolling_robust_scores
 from aiops.schemas import AnomalyFinding, MetricSeries
 from aiops.shared.tail import evaluate_tail_change, fixed_baseline_and_tail, metric_group, normal_traffic_growth_decision
 
@@ -43,8 +43,7 @@ class EwmaStlDetector:
                 continue
             residuals = self._residuals(values)
             baseline, indexes = fixed_baseline_and_tail(metric, self.detection_window_seconds, self.min_points - 1, residuals)
-            center, spread = mean(baseline), stdev(baseline) or 1.0
-            scored = [(abs(residuals[index] - center) / spread, index) for index in indexes]
+            scored = rolling_robust_scores(residuals, indexes, self.min_points - 1, len(baseline))
             score, index = max(scored, default=(0.0, 0))
             if score >= self.z_threshold:
                 findings.append(self._finding(metric, "ewma_stl", score, metric.points[index].timestamp))
@@ -87,10 +86,7 @@ class RobustDriftDetector:
             if len(values) < self.min_points:
                 continue
             baseline, indexes = fixed_baseline_and_tail(metric, self.detection_window_seconds, self.min_baseline_points, values)
-            scored = [
-                (robust_score(baseline, [values[index]]), index)
-                for index in indexes
-            ]
+            scored = rolling_robust_scores(values, indexes, self.min_baseline_points, len(baseline))
             score, index = max(scored, default=(0.0, 0))
             if score >= self.score_threshold:
                 findings.append(
@@ -448,19 +444,15 @@ class V001AnomalyEngine:
     def _memory_ewma_stl_tail_anomaly_count(self, memory: MetricSeries) -> int:
         values = [point.value for point in memory.points]
         residuals = self.memory_oom_ewma_stl._residuals(values)
-        baseline, indexes = fixed_baseline_and_tail(
-            memory,
-            self.memory_oom_detection_window_seconds,
-            self.memory_oom_min_points - 1,
-            residuals,
-        )
-        if len(baseline) < 2 or not indexes:
+        period = max(self.memory_oom_min_period, min(self.memory_oom_max_period, len(values) // 3))
+        tail_window = max(2, period // 2)
+        indexes = range(max(0, len(values) - tail_window), len(values))
+        if len(values) < period + tail_window:
             return 0
-        center, spread = mean(baseline), stdev(baseline) or 1.0
         return sum(
             1
-            for index in indexes
-            if (center - residuals[index]) / spread >= self.memory_oom_ewma_stl.z_threshold
+            for score, index in rolling_robust_scores(residuals, indexes, period, period)
+            if residuals[index] < median(residuals[index - period : index]) and score >= self.memory_oom_ewma_stl.z_threshold
         )
 
 def _is_memory_metric(metric: str) -> bool:

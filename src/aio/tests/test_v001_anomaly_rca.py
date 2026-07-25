@@ -9,6 +9,7 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 
 from aiops.anomaly import V001AnomalyEngine, build_v001_anomaly_engine
+from aiops.anomaly.stats import rolling_robust_scores
 from aiops.anomaly.v001 import EwmaStlDetector, LogTemplateMetricBuilder, ServiceIsolationForestDetector
 from aiops.api.app import print_rca_result, run_static_pipeline
 from aiops.config import Settings, load_hyperparameters, load_runtime_config
@@ -217,6 +218,12 @@ class V001AnomalyRcaTest(unittest.TestCase):
             residuals = detector._residuals([1.0] * 8)
 
         self.assertEqual(len(residuals), 8)
+
+    def test_rolling_robust_scores_use_recent_median_baseline(self):
+        score, index = rolling_robust_scores([1, 1, 100, 1, 1, 10], [5], 4, 4)[0]
+
+        self.assertEqual(index, 5)
+        self.assertGreater(score, 4.0)
 
     def test_logs_algorithm_scores_for_final_root_cause_only(self):
         result = RcaResult(root_causes=[RootCauseCandidate(service="checkout", score=1.0, root_cause_metrics=["latency"])])
