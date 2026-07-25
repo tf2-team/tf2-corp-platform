@@ -476,6 +476,28 @@ class V001AnomalyRcaTest(unittest.TestCase):
         series[-1] = minute_metric("checkout", "error_rate_5m", [0] * 44 + [0.01])
         self.assertEqual(engine._filter_normal_traffic_growth(series), series)
 
+    def test_oom_increase_keeps_all_metrics_during_coordinated_load_growth(self):
+        engine = anomaly_engine()
+        series = [
+            minute_metric("checkout", "request_rate_5m", [10] * 30 + [30] * 15),
+            minute_metric("checkout", "cpu_millicores", [100] * 30 + [300] * 15),
+            minute_metric("checkout", "socket_io_bytes_per_second", [1_000_000] * 30 + [3_000_000] * 15),
+            minute_metric("checkout", "oom_events_total", [0] * 44 + [1]),
+        ]
+
+        self.assertEqual(engine._filter_normal_traffic_growth(series), series)
+
+    def test_memory_growth_without_request_growth_keeps_all_metrics(self):
+        engine = anomaly_engine()
+        series = [
+            minute_metric("checkout", "request_rate_5m", [30] * 30 + [10] * 15),
+            minute_metric("checkout", "cpu_millicores", [300] * 30 + [100] * 15),
+            minute_metric("checkout", "socket_io_bytes_per_second", [3_000_000] * 30 + [1_000_000] * 15),
+            minute_metric("checkout", "memory_usage_bytes", [100_000_000] * 30 + [200_000_000] * 15),
+        ]
+
+        self.assertEqual(engine._filter_normal_traffic_growth(series), series)
+
     def test_load_growth_allows_flat_memory_when_cpu_and_socket_increase(self):
         engine = anomaly_engine()
         series = [

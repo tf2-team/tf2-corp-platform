@@ -112,7 +112,20 @@ def normal_traffic_growth_decision(
     if missing:
         return False, f"reason=missing_metrics metrics={','.join(missing)}"
     for metric in series:
+        if "oom_events_total" in metric.metric:
+            values = [point.value for point in metric.points]
+            baseline, indexes = fixed_baseline_and_tail(metric, detection_window_seconds, start, values)
+            if baseline and indexes and max(values[index] for index in indexes) > max(baseline):
+                return False, "reason=oom_increased"
+    request_increased = any(
+        (change := _smoothed_tail_change(metric, detection_window_seconds, start, min_tail_anomaly_buckets, min_relative_change_ratio, min_absolute_change)).significant
+        and any(change.values[index] > change.baseline for index in change.indexes)
+        for metric in by_group["request_rate"]
+    )
+    for metric in series:
         change = _smoothed_tail_change(metric, detection_window_seconds, start, min_tail_anomaly_buckets, min_relative_change_ratio, min_absolute_change)
+        if metric_group(metric.metric) == "memory" and change.significant and not request_increased and any(change.values[index] > change.baseline for index in change.indexes):
+            return False, "reason=memory_increased_without_traffic"
         if ("error_rate" in metric.metric or "error_ratio" in metric.metric) and any(
             change.values[index] > change.baseline
             and point_changed(change.values[index], change.baseline, 0.0, min_absolute_change["error"])

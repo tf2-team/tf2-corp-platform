@@ -180,6 +180,16 @@
       "feature_role": "anomaly_input",
       "required_for_monitoring": true
     },
+    "resource.oom_events_total": {
+      "query_id_template": "$service.oom_events_total",
+      "signal_id_template": "${service_id}_oom_events_total",
+      "promql": "sum(container_oom_events_total{container=\"$service\"})",
+      "unit": "count",
+      "window": "instant",
+      "metric": "oom_events_total",
+      "feature_role": "anomaly_input",
+      "required_for_monitoring": true
+    },
     "resource.disk_io_bytes_per_second": {
       "query_id_template": "$service.disk_io_bytes_per_second",
       "signal_id_template": "${service_id}_disk_io_bytes_per_second",
@@ -321,7 +331,7 @@
     },
     {
       "services": ["checkout", "payment", "frontend-proxy", "frontend", "product-catalog", "product-reviews", "recommendation", "ad", "currency", "cart", "shipping", "email", "quote", "fraud-detection", "accounting", "shopping-copilot"],
-      "template_ids": ["resource.cpu_millicores", "resource.memory_usage_bytes", "resource.disk_io_bytes_per_second", "resource.socket_io_bytes_per_second", "resource.workload_ready_pods", "resource.workload_ready_ratio"]
+      "template_ids": ["resource.cpu_millicores", "resource.memory_usage_bytes", "resource.oom_events_total", "resource.disk_io_bytes_per_second", "resource.socket_io_bytes_per_second", "resource.workload_ready_pods", "resource.workload_ready_ratio"]
     }
   ],
   "instances": [
