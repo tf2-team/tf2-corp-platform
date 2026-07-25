@@ -52,7 +52,7 @@ def prod_pipeline(root: Path, sender: FakeNotificationSender, repeat_seconds: in
     )
     return AiopsPipeline(
         collector=StaticCollector(observations or []),
-        detectors=build_detectors(runtime_config, settings, hyperparameters["no_data"], hyperparameters["detectors"]),
+        detectors=build_detectors(runtime_config, hyperparameters["no_data"], hyperparameters["detectors"]),
         store=store,
         policy=PolicyEngine(
             mode=settings.policy_mode,

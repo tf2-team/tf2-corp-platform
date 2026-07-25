@@ -18,7 +18,7 @@ class RuntimeConfigTest(unittest.TestCase):
     def test_loads_runtime_json_and_builds_detectors(self):
         config = load_runtime_config(Path("config/runtime.json"))
         hyperparameters = load_hyperparameters(Settings().hyperparameters_path)
-        detectors = build_detectors(config, Settings(), hyperparameters["no_data"], hyperparameters["detectors"])
+        detectors = build_detectors(config, hyperparameters["no_data"], hyperparameters["detectors"])
 
         self.assertEqual(config.topology.services[0].name, "checkout")
         self.assertEqual(next(signal for signal in config.signals if signal.id == "checkout_bad_ratio_24h").feature_role, "official_slo")
@@ -31,7 +31,7 @@ class RuntimeConfigTest(unittest.TestCase):
     def test_checkout_burn_rate_signal_and_detector_use_official_error_budget(self):
         config = load_runtime_config(Path("config/runtime.json"))
         hyperparameters = load_hyperparameters(Settings().hyperparameters_path)
-        detectors = build_detectors(config, Settings(), hyperparameters["no_data"], hyperparameters["detectors"])
+        detectors = build_detectors(config, hyperparameters["no_data"], hyperparameters["detectors"])
 
         signal = next(item for item in config.signals if item.id == "checkout_error_budget_burn_rate_24h")
         detector = next(item for item in detectors if item.detector_id == "ops01_checkout_slo_burn_rate")
@@ -50,7 +50,7 @@ class RuntimeConfigTest(unittest.TestCase):
     def test_each_service_error_rate_signal_has_auto_detector(self):
         config = load_runtime_config(Path("config/runtime.json"))
         hyperparameters = load_hyperparameters(Settings().hyperparameters_path)
-        detectors = build_detectors(config, Settings(), hyperparameters["no_data"], hyperparameters["detectors"])
+        detectors = build_detectors(config, hyperparameters["no_data"], hyperparameters["detectors"])
         signal_ids = {signal.id for signal in config.signals if signal.query_id.endswith(".error_rate_5m")}
         auto_detectors = [detector for detector in config.detectors if detector.id.startswith("auto_") and detector.id.endswith("_error_rate")]
         detector_signal_ids = {detector.signal_id for detector in auto_detectors}
@@ -65,7 +65,7 @@ class RuntimeConfigTest(unittest.TestCase):
     def test_each_service_latency_signal_has_configured_slo_detector(self):
         config = load_runtime_config(Path("config/runtime.json"))
         hyperparameters = load_hyperparameters(Settings().hyperparameters_path)
-        detectors = build_detectors(config, Settings(), hyperparameters["no_data"], hyperparameters["detectors"])
+        detectors = build_detectors(config, hyperparameters["no_data"], hyperparameters["detectors"])
         signal_ids = {signal.id for signal in config.signals if any(signal.query_id.endswith(f".p{percentile}_latency_5m") for percentile in (95, 99))}
         latency_detectors = [detector for detector in detectors if detector.detector_id.endswith(("_latency_p95", "_latency_p99"))]
         configured_thresholds = hyperparameters["detectors"]["latency_slo_overrides"]

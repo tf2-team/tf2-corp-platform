@@ -96,7 +96,7 @@ def run_pipeline_with_collector(collector, settings: Settings, runtime_config, m
     )
     pipeline = AiopsPipeline(
         collector=collector,
-        detectors=build_detectors(runtime_config, settings, hyperparameters["no_data"], hyperparameters["detectors"]),
+        detectors=build_detectors(runtime_config, hyperparameters["no_data"], hyperparameters["detectors"]),
         store=store,
         policy=PolicyEngine(
             mode=settings.policy_mode,

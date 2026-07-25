@@ -133,7 +133,7 @@ def run_pipeline(
     store = SQLiteIncidentStore(root / "aiops.sqlite3", environment=settings.environment)
     pipeline = AiopsPipeline(
         collector=StaticCollector(observations),
-        detectors=build_detectors(runtime_config, settings, hyperparameters["no_data"], hyperparameters["detectors"]),
+        detectors=build_detectors(runtime_config, hyperparameters["no_data"], hyperparameters["detectors"]),
         store=store,
         policy=PolicyEngine(
             mode=settings.policy_mode,

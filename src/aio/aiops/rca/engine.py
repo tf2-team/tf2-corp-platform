@@ -3,15 +3,12 @@
 # SPDX-License-Identifier: Apache-2.0
 from __future__ import annotations
 
-import warnings
 from collections import defaultdict
 
-from scipy.stats import ConstantInputWarning, pearsonr
-
-from aiops.anomaly.stats import median, robust_score
+from aiops.anomaly.stats import robust_score
 from aiops.rca.graph import GraphTraversalRca
 from aiops.schemas import AnomalyFinding, MetricSeries, RcaResult, RootCauseCandidate, RuntimeConfig, TelemetryCorroboration
-from aiops.shared.tail import evaluate_tail_change, fixed_baseline_and_tail, metric_group, normal_traffic_growth_decision, series_step_seconds, tail_indexes
+from aiops.shared.tail import aligned_pearson, evaluate_tail_change, fixed_baseline_and_tail, metric_group
 from aiops.topology import TopologyGraph
 
 
@@ -58,10 +55,9 @@ class V001RcaEngine:
             for finding in findings
             if (finding.service == "global" or not self._excluded_root_cause(finding.service))
             and is_root_cause_metric(finding.metric)
-            and not self._busy_infra_without_failure(finding.service, finding.metric, finding.timestamp, series, findings)
         ]
         rca_series = [metric for metric in series if is_root_cause_metric(metric.metric)]
-        drift_metrics = self._drift_metrics(rca_series, series, findings)
+        drift_metrics = self._drift_metrics(rca_series)
         if not root_findings and any(finding.algorithm == "slo_threshold" for finding in findings):
             root_findings.extend(
                 AnomalyFinding(
@@ -155,9 +151,6 @@ class V001RcaEngine:
                 break
         return RcaResult(anomalies=findings, root_causes=candidates)
 
-    def _dependency_path_contains(self, source: str, target: str) -> bool:
-        return self.topology_graph.has_dependency_path(source, target)
-
     def _earliest_drift_scores(self, series: list[MetricSeries]) -> dict[str, float]:
         drift_indexes: dict[str, int] = {}
         for metric in series:
@@ -182,7 +175,7 @@ class V001RcaEngine:
                 return index
         return None
 
-    def _drift_metrics(self, series: list[MetricSeries], all_series: list[MetricSeries], findings: list[AnomalyFinding]) -> list[tuple[str, str, str, float, int]]:
+    def _drift_metrics(self, series: list[MetricSeries]) -> list[tuple[str, str, str, float, int]]:
         rows = []
         for metric in series:
             values = [point.value for point in metric.points]
@@ -195,8 +188,6 @@ class V001RcaEngine:
             )
             if score >= self.drift_score_threshold:
                 if not self._significant_tail_change(metric):
-                    continue
-                if self._busy_infra_without_failure(metric.service, metric.metric, metric.points[index].timestamp, all_series, findings):
                     continue
                 rows.append((self._canonical_service(metric.service), metric.metric, metric.signal_id, score, metric.points[index].timestamp))
         return rows
@@ -235,7 +226,7 @@ class V001RcaEngine:
         for metric in series:
             if metric.service == "global" or self._excluded_root_cause(metric.service):
                 continue
-            score = max(abs(self._aligned_pearson(primary, metric)) for primary in primaries)
+            score = max(abs(aligned_pearson(primary, metric)) for primary in primaries)
             service = self._canonical_service(metric.service)
             scores[service] = max(scores.get(service, 0.0), score)
         return scores
@@ -245,22 +236,6 @@ class V001RcaEngine:
             return None
         top = max(findings, key=lambda finding: finding.score)
         return next((metric for metric in series if metric.signal_id == top.signal_id), None)
-
-    def _aligned_pearson(self, left: MetricSeries, right: MetricSeries) -> float:
-        tolerance = max(series_step_seconds(left), series_step_seconds(right))
-        pairs = []
-        right_index = 0
-        for point in left.points:
-            while right_index + 1 < len(right.points) and abs(right.points[right_index + 1].timestamp - point.timestamp) <= abs(right.points[right_index].timestamp - point.timestamp):
-                right_index += 1
-            if right.points and abs(right.points[right_index].timestamp - point.timestamp) <= tolerance:
-                pairs.append((point.value, right.points[right_index].value))
-        if len(pairs) < 3:
-            return 0.0
-        with warnings.catch_warnings():
-            warnings.simplefilter("ignore", ConstantInputWarning)
-            coefficient = pearsonr(*zip(*pairs)).statistic
-        return float(coefficient) if coefficient == coefficient else 0.0
 
     def _weighted_rrf(self, rankers: dict[str, dict[str, float]]) -> dict[str, float]:
         scores: dict[str, float] = defaultdict(float)
@@ -295,40 +270,6 @@ class V001RcaEngine:
                 return service[: -len(suffix)]
         return service
 
-    def _busy_infra_without_failure(self, service: str, metric: str, timestamp: int, series: list[MetricSeries], findings: list[AnomalyFinding]) -> bool:
-        if not _is_busy_infra_metric(metric):
-            return False
-        service = self._canonical_service(service)
-        service_series = [item for item in series if self._canonical_service(item.service) == service]
-        normal, _ = normal_traffic_growth_decision(
-            service_series,
-            self.detection_window_seconds,
-            self.drift_min_points - 1,
-            self.min_tail_anomaly_buckets,
-            self.min_relative_change_ratio,
-            self.min_absolute_change,
-            self.traffic_shape_min_pearson,
-        )
-        return normal and not self._failure_signal_increased(service, timestamp, series, findings)
-
-    def _failure_signal_increased(self, service: str, timestamp: int, series: list[MetricSeries], findings: list[AnomalyFinding]) -> bool:
-        if any(
-            self._canonical_service(finding.service) == service
-            and finding.timestamp == timestamp
-            and (_is_error_metric(finding.metric) or _is_oom_metric(finding.metric))
-            for finding in findings
-        ):
-            return True
-        return any(
-            self._canonical_service(metric.service) == service
-            and (
-                (_is_error_metric(metric.metric) or _is_oom_metric(metric.metric))
-                and _robust_score_at(metric, timestamp, self.detection_window_seconds, self.drift_min_points - 1) >= self.drift_score_threshold
-                or "ready_pods" in metric.metric and _decreased_at(metric, timestamp, self.drift_score_threshold, self.detection_window_seconds, self.drift_min_points - 1)
-            )
-            for metric in series
-        )
-
 
 def _is_log_metric(metric: str) -> bool:
     return metric.startswith("log_template_count_")
@@ -360,17 +301,3 @@ def _metric_priority(metric: str) -> int:
     if _is_busy_infra_metric(metric) or _is_oom_metric(metric):
         return 1
     return 0
-
-
-def _robust_score_at(metric: MetricSeries, timestamp: int, detection_window_seconds: int | None, start: int) -> float:
-    values = [point.value for point in metric.points]
-    index = next((index for index, point in enumerate(metric.points) if point.timestamp >= timestamp), len(metric.points) - 1)
-    baseline, _ = fixed_baseline_and_tail(metric, detection_window_seconds, start, values)
-    return robust_score(baseline, [values[index]])
-
-
-def _decreased_at(metric: MetricSeries, timestamp: int, threshold: float, detection_window_seconds: int | None, start: int) -> bool:
-    values = [point.value for point in metric.points]
-    index = next((index for index, point in enumerate(metric.points) if point.timestamp >= timestamp), len(metric.points) - 1)
-    baseline, _ = fixed_baseline_and_tail(metric, detection_window_seconds, start, values)
-    return values[index] < median(baseline) and robust_score(baseline, [values[index]]) >= threshold

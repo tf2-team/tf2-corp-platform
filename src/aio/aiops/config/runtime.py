@@ -8,7 +8,6 @@ from pathlib import Path
 from string import Template
 
 from aiops.detectors import DependencyDetector, Detector, NoDataDetector, ThresholdDetector
-from aiops.config.settings import Settings
 from aiops.schemas import CompiledPrometheusQuery, PrometheusQueryRegistry, RuntimeConfig
 
 
@@ -213,14 +212,12 @@ def _expand_detector_signal_groups(raw: dict) -> None:
 
 def build_detectors(
     config: RuntimeConfig,
-    settings: Settings | None,
     no_data_hyperparameters: dict[str, float],
-    detector_hyperparameters: dict | None = None,
+    detector_hyperparameters: dict,
 ) -> list[Detector]:
     detectors: list[Detector] = []
-    detector_hyperparameters = detector_hyperparameters or {}
-    thresholds = detector_hyperparameters.get("thresholds") or config.detector_thresholds
-    confidences = detector_hyperparameters.get("confidences") or config.detector_confidences
+    thresholds = detector_hyperparameters["thresholds"]
+    confidences = detector_hyperparameters["confidences"]
     for item in config.detectors:
         if not item.enabled:
             continue

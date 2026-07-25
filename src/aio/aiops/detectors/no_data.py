@@ -5,9 +5,8 @@ from __future__ import annotations
 
 import logging
 
-from aiops.detectors.base import Detector
+from aiops.detectors.base import Detector, candidate_from_feature
 from aiops.schemas import CandidateEvent, Feature, SignalQuality
-from aiops.shared.features import feature_timestamp
 
 
 logger = logging.getLogger(__name__)
@@ -48,23 +47,16 @@ class NoDataDetector(Detector):
                 self.severity,
             )
             candidates.append(
-                CandidateEvent(
+                candidate_from_feature(
+                    feature,
                     detector_id=self.detector_id,
-                    timestamp=feature_timestamp(feature),
                     flow=self.flow,
                     service=self.service,
                     severity=self.severity,
-                    signal_id=feature.signal_id,
-                    value=None,
-                    unit=feature.unit,
-                    window=feature.window,
                     threshold=None,
-                    quality=feature.quality,
                     reason=f"signal_{feature.quality.value}",
                     runbook_id=self.runbook_id,
                     confidence=self.missing_confidence if feature.quality in {SignalQuality.MISSING, SignalQuality.STALE} else self.unknown_confidence,
-                    contributing_signals=(feature.signal_id,),
-                    labels=feature.labels,
                 )
             )
         return candidates

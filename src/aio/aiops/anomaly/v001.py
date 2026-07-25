@@ -13,7 +13,7 @@ import warnings
 
 from aiops.anomaly.stats import mean, median, robust_score, stdev
 from aiops.schemas import AnomalyFinding, MetricSeries
-from aiops.shared.tail import evaluate_tail_change, fixed_baseline_and_tail, median3, metric_group, normal_traffic_growth_decision, point_changed, series_step_seconds, tail_indexes
+from aiops.shared.tail import evaluate_tail_change, fixed_baseline_and_tail, metric_group, normal_traffic_growth_decision
 
 logger = logging.getLogger(__name__)
 
@@ -282,6 +282,7 @@ class V001AnomalyEngine:
         min_relative_change_ratio: dict[str, float],
         min_absolute_change: dict[str, float],
         traffic_shape_min_pearson: float,
+        traffic_shape_max_lag_buckets: int,
         memory_oom: dict[str, float | int] | None,
         detection_window_seconds: int | None,
     ):
@@ -294,6 +295,7 @@ class V001AnomalyEngine:
         self.min_relative_change_ratio = min_relative_change_ratio
         self.min_absolute_change = min_absolute_change
         self.traffic_shape_min_pearson = traffic_shape_min_pearson
+        self.traffic_shape_max_lag_buckets = traffic_shape_max_lag_buckets
         memory_oom = memory_oom or {}
         self.memory_oom_pre_tail_growth_ratio = float(memory_oom.get("pre_tail_growth_ratio", 1.2))
         self.memory_oom_tail_drop_ratio = float(memory_oom.get("tail_drop_ratio", 0.7))
@@ -346,10 +348,10 @@ class V001AnomalyEngine:
             metric_findings,
         )
         self.last_algorithm_findings = [*raw_metric_findings, *raw_log_findings]
-        return self._suppress_busy_infra([*metric_findings, *log_findings], [*series, *log_series])
+        return [*metric_findings, *log_findings]
 
     def _has_significant_tail_change(self, metric: MetricSeries) -> bool:
-        group = _metric_group(metric.metric)
+        group = metric_group(metric.metric)
         return evaluate_tail_change(
             metric,
             self.detection_window_seconds,
@@ -395,21 +397,6 @@ class V001AnomalyEngine:
             )
         return sorted(combined, key=lambda item: item.score, reverse=True)
 
-    def _suppress_busy_infra(self, findings: list[AnomalyFinding], series: list[MetricSeries]) -> list[AnomalyFinding]:
-        by_service_series: dict[str, list[MetricSeries]] = defaultdict(list)
-        for metric in series:
-            by_service_series[metric.service].append(metric)
-        normal_services = {
-            service
-            for service, service_series in by_service_series.items()
-            if self._normal_traffic_growth_decision(service_series)[0]
-        }
-        return [
-            finding
-            for finding in findings
-            if finding.service not in normal_services or not (_is_busy_infra_metric(finding.metric) or _is_latency_metric(finding.metric))
-        ]
-
     def _filter_normal_traffic_growth(self, series: list[MetricSeries]) -> list[MetricSeries]:
         by_service: dict[str, list[MetricSeries]] = defaultdict(list)
         for metric in series:
@@ -427,7 +414,7 @@ class V001AnomalyEngine:
         ]
 
     def _normal_traffic_growth_decision(self, series: list[MetricSeries]) -> tuple[bool, str]:
-        return _normal_traffic_growth_decision(
+        return normal_traffic_growth_decision(
             series,
             self.detection_window_seconds,
             self.min_points - 1,
@@ -435,7 +422,8 @@ class V001AnomalyEngine:
             self.min_relative_change_ratio,
             self.min_absolute_change,
             self.traffic_shape_min_pearson,
-            self._memory_oom_detected,
+            self.traffic_shape_max_lag_buckets,
+            memory_oom_detector=self._memory_oom_detected,
         )
 
     def _memory_oom_detected(self, memory: MetricSeries) -> bool:
@@ -475,18 +463,6 @@ class V001AnomalyEngine:
             if (center - residuals[index]) / spread >= self.memory_oom_ewma_stl.z_threshold
         )
 
-def _is_cpu_metric(metric: str) -> bool:
-    return "cpu" in metric
-
-
-def _is_disk_metric(metric: str) -> bool:
-    return "disk" in metric
-
-
-def _is_busy_infra_metric(metric: str) -> bool:
-    return _is_cpu_metric(metric) or _is_disk_metric(metric) or _is_memory_metric(metric)
-
-
 def _is_memory_metric(metric: str) -> bool:
     return "memory" in metric
 
@@ -495,65 +471,8 @@ def _is_oom_metric(metric: str) -> bool:
     return "oom" in metric
 
 
-def _is_latency_metric(metric: str) -> bool:
-    return "latency" in metric
-
-
-def _is_hard_failure_metric(metric: str) -> bool:
-    return "error_rate" in metric or "error_ratio" in metric or "ready_pods" in metric
-
-
 def _is_error_metric(metric: str) -> bool:
     return "error_rate" in metric or "error_ratio" in metric
-
-
-def _metric_group(metric: str) -> str:
-    return metric_group(metric)
-
-
-def _point_changed(value: float, baseline: float, min_relative: float, min_absolute: float) -> bool:
-    return point_changed(value, baseline, min_relative, min_absolute)
-
-
-def _normal_traffic_growth_decision(
-    series: list[MetricSeries],
-    detection_window_seconds: int | None,
-    start: int,
-    min_tail_anomaly_buckets: dict[str, int],
-    min_relative_change_ratio: dict[str, float],
-    min_absolute_change: dict[str, float],
-    traffic_shape_min_pearson: float,
-    memory_oom_detector=None,
-) -> tuple[bool, str]:
-    return normal_traffic_growth_decision(
-        series,
-        detection_window_seconds,
-        start,
-        min_tail_anomaly_buckets,
-        min_relative_change_ratio,
-        min_absolute_change,
-        traffic_shape_min_pearson,
-        memory_oom_detector=memory_oom_detector,
-    )
-
-
-def _tail_context(metric: MetricSeries, detection_window_seconds: int | None, start: int) -> tuple[list[int], list[float], float]:
-    indexes = list(_tail_indexes(metric, detection_window_seconds, start))
-    values = median3([point.value for point in metric.points])
-    baseline_values = values[: indexes[0]] if indexes else []
-    return (indexes, values, median(baseline_values)) if len(baseline_values) >= 4 else ([], values, 0.0)
-
-
-def _median3(values: list[float]) -> list[float]:
-    return median3(values)
-
-
-def _series_step_seconds(metric: MetricSeries) -> int:
-    return series_step_seconds(metric)
-
-
-def _tail_indexes(metric: MetricSeries, detection_window_seconds: int | None, start: int) -> range:
-    return tail_indexes(metric, detection_window_seconds, start)
 
 
 def build_v001_anomaly_engine(config: dict, **overrides) -> V001AnomalyEngine:
@@ -580,6 +499,7 @@ def build_v001_anomaly_engine(config: dict, **overrides) -> V001AnomalyEngine:
         min_relative_change_ratio={key: float(value) for key, value in anomaly["min_relative_change_ratio"].items()},
         min_absolute_change={key: float(value) for key, value in anomaly["min_absolute_change"].items()},
         traffic_shape_min_pearson=float(anomaly["traffic_shape_min_pearson"]),
+        traffic_shape_max_lag_buckets=int(anomaly["traffic_shape_max_lag_buckets"]),
         memory_oom=anomaly.get("memory_oom"),
         detection_window_seconds=int(anomaly["detection_window_seconds"]) or None,
     )

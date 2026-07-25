@@ -10,7 +10,6 @@ import re
 from datetime import UTC, datetime
 from itertools import count
 from pathlib import Path
-from typing import Protocol
 
 from aiops.collectors import Collector
 from aiops.correlation import Correlator
@@ -55,50 +54,12 @@ RemediationComponents = tuple[
 ]
 
 
-class IncidentStore(Protocol):
-    def upsert(self, candidate: CandidateEvent) -> Incident:
-        ...
-
-    def pending_notifications_for(self, incidents: list[Incident]) -> list[NotificationMessage]: ...
-
-    def due_notifications(self, limit: int = 100) -> list[NotificationMessage]: ...
-
-    def mark_notification_sent(self, incident_id: str) -> None: ...
-
-    def mark_notification_failed(self, incident_id: str, error: str) -> None: ...
-
-    def register_active_root_cause(
-        self,
-        root_service: str,
-        affected_services: set[str],
-        suppress_seconds: int = 900,
-        root_score: float = 0.0,
-    ) -> None: ...
-
-    def breakout_services(self, service_scores: dict[str, float], multiplier: float) -> set[str]: ...
-
-    def suppress_related_notifications(
-        self,
-        incidents: list[Incident],
-        root_service: str,
-        affected_services: set[str],
-        exempt_services: set[str] | None = None,
-    ) -> set[str]: ...
-
-    def suppress_active_root_notifications(self, incidents: list[Incident], exempt_services: set[str] | None = None) -> set[str]: ...
-
-
-class NotificationSender(Protocol):
-    def send(self, message: NotificationMessage) -> dict:
-        ...
-
-
 class AiopsPipeline:
     def __init__(
         self,
         collector: Collector,
         detectors: list[Detector],
-        store: IncidentStore,
+        store,
         policy: PolicyEngine,
         runtime_config: RuntimeConfig | None = None,
         rca_hyperparameters: dict[str, float | int | bool] | None = None,
@@ -109,7 +70,7 @@ class AiopsPipeline:
         correlation_hyperparameters: dict | None = None,
         remediation: RemediationComponents | None = None,
         enricher: Enricher | None = None,
-        notification_sender: NotificationSender | None = None,
+        notification_sender=None,
         rca_history_path: Path | None = None,
     ):
         self.collector = collector

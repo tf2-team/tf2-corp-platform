@@ -4,14 +4,12 @@
 import io
 import unittest
 import warnings
-import warnings
 from contextlib import redirect_stdout
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
 from aiops.anomaly import V001AnomalyEngine, build_v001_anomaly_engine
-from aiops.anomaly import v001 as anomaly_v001
-from aiops.anomaly.v001 import EwmaStlDetector, LogTemplateMetricBuilder, ServiceIsolationForestDetector, _metric_group, _point_changed
+from aiops.anomaly.v001 import EwmaStlDetector, LogTemplateMetricBuilder, ServiceIsolationForestDetector
 from aiops.api.app import print_rca_result, run_static_pipeline
 from aiops.config import Settings, load_hyperparameters, load_runtime_config
 from aiops.pipeline.runtime import _log_final_root_cause_algorithm_scores
@@ -19,7 +17,7 @@ from aiops.rca.graph import GraphTraversalRca
 from aiops.rca import V001RcaEngine
 from aiops.schemas import AnomalyFinding, MetricPoint, MetricSeries, PipelineResult, PipelineRunRequest, RcaResult, RootCauseCandidate, RuntimeConfig, TelemetryCorroboration
 from aiops.shared.series import prepare_detector_series
-from aiops.shared.tail import fixed_baseline_and_tail, normal_traffic_growth_decision
+from aiops.shared.tail import aligned_pearson, fixed_baseline_and_tail, median3, metric_group, normal_traffic_growth_decision, point_changed
 from scipy.stats import ConstantInputWarning
 
 
@@ -114,6 +112,30 @@ class V001AnomalyRcaTest(unittest.TestCase):
 
         self.assertTrue(normal, reason)
 
+    def test_normal_traffic_growth_allows_delayed_infra_shape(self):
+        common = {
+            "detection_window_seconds": 900,
+            "start": 29,
+            "min_tail_anomaly_buckets": {"request_rate": 3, "cpu": 3, "memory": 3, "socket_io": 3, "error": 1, "default": 2},
+            "min_relative_change_ratio": {"request_rate": 0.5, "cpu": 0.3, "memory": 0.3, "socket_io": 0.5, "error": 0.0, "default": 0.3},
+            "min_absolute_change": {"request_rate": 5.0, "cpu": 10.0, "memory": 10.0, "socket_io": 10.0, "error": 0.005, "default": 1.0},
+            "traffic_shape_min_pearson": 0.7,
+        }
+        request_tail = [30, 10, 50, 10, 20, 10, 45, 10, 15, 10, 35, 10, 25, 10, 40]
+        infra_tail = [100, 100, *[100 + 10 * value for value in request_tail[:-2]]]
+        request = [10] * 30 + request_tail
+        delayed = [100] * 30 + infra_tail
+        series = [
+            minute_metric("checkout", "request_rate_5m", request),
+            minute_metric("checkout", "cpu_millicores", delayed),
+            minute_metric("checkout", "socket_io_bytes_per_second", delayed),
+        ]
+
+        self.assertFalse(normal_traffic_growth_decision(series, **common)[0])
+        normal, reason = normal_traffic_growth_decision(series, **common, traffic_shape_max_lag_buckets=2)
+
+        self.assertTrue(normal, reason)
+
     def test_normal_traffic_growth_rejects_missing_socket_and_ignores_optional_memory_shape(self):
         common = {
             "detection_window_seconds": 900,
@@ -142,15 +164,15 @@ class V001AnomalyRcaTest(unittest.TestCase):
         self.assertEqual(list(tail), list(range(45, 60)))
 
     def test_cpu_millicores_metric_uses_cpu_thresholds(self):
-        self.assertEqual(_metric_group("cpu_millicores"), "cpu")
+        self.assertEqual(metric_group("cpu_millicores"), "cpu")
 
     def test_cpu_millicores_ignores_small_low_baseline_change(self):
-        self.assertFalse(_point_changed(8.75, 8.0, min_relative=0.3, min_absolute=1.0))
-        self.assertFalse(_point_changed(8.25, 8.0, min_relative=0.3, min_absolute=1.0))
-        self.assertTrue(_point_changed(11.0, 8.0, min_relative=0.3, min_absolute=1.0))
+        self.assertFalse(point_changed(8.75, 8.0, min_relative=0.3, min_absolute=1.0))
+        self.assertFalse(point_changed(8.25, 8.0, min_relative=0.3, min_absolute=1.0))
+        self.assertTrue(point_changed(11.0, 8.0, min_relative=0.3, min_absolute=1.0))
 
     def test_socket_io_metric_uses_socket_io_thresholds(self):
-        self.assertEqual(_metric_group("socket_io_bytes_per_second"), "socket_io")
+        self.assertEqual(metric_group("socket_io_bytes_per_second"), "socket_io")
 
     def test_detector_bucket_aggregation_matches_metric_type(self):
         series = prepare_detector_series(
@@ -337,7 +359,7 @@ class V001AnomalyRcaTest(unittest.TestCase):
             update={"points": [MetricPoint(timestamp=1000 + index, value=value) for index, value in enumerate([1, 2, 3])]}
         )
 
-        self.assertEqual(engine._aligned_pearson(left, right), 0.0)
+        self.assertEqual(aligned_pearson(left, right), 0.0)
 
     def test_isolation_forest_scores_tail_with_one_model_fit(self):
         detector = ServiceIsolationForestDetector(score_threshold=1.0, min_points=5)
@@ -413,49 +435,6 @@ class V001AnomalyRcaTest(unittest.TestCase):
 
         weights = rca_hyperparameters()["anomaly"]["algorithm_weights"]
         self.assertEqual([(finding.algorithm, finding.score) for finding in findings], [("weighted_sum", weights["isolation_forest"] + weights["ewma_stl"])])
-
-    def test_busy_cpu_without_coordinated_growth_is_not_suppressed(self):
-        engine = anomaly_engine()
-        findings = [
-            AnomalyFinding(algorithm="weighted_sum", service="checkout", metric="cpu_millicores", signal_id="checkout_cpu_millicores", score=0.5, timestamp=7)
-        ]
-        series = [
-            metric("checkout", "request_rate_5m", [10, 10, 10, 10, 10, 10, 10, 100]),
-            metric("checkout", "p95_latency_5m", [1, 1, 1, 1, 1, 1, 1, 1]),
-            metric("checkout", "error_rate_5m", [0, 0, 0, 0, 0, 0, 0, 0]),
-        ]
-
-        self.assertEqual(engine._suppress_busy_infra(findings, series), findings)
-
-    def test_single_request_spike_is_not_coordinated_growth(self):
-        engine = anomaly_engine()
-        findings = [
-            AnomalyFinding(algorithm="weighted_sum", service="checkout", metric="cpu_millicores", signal_id="checkout_cpu_millicores", score=0.5, timestamp=5)
-        ]
-        series = [
-            metric("checkout", "request_rate_5m", [10, 10, 10, 10, 10, 100, 10, 10]),
-            metric("checkout", "p95_latency_5m", [1, 1, 1, 1, 1, 1, 1, 1]),
-            metric("checkout", "error_rate_5m", [0, 0, 0, 0, 0, 0, 0, 0]),
-        ]
-
-        self.assertEqual(engine._suppress_busy_infra(findings, series), findings)
-
-    def test_traffic_driven_infra_with_flat_latency_is_suppressed(self):
-        engine = anomaly_engine()
-        findings = [
-            AnomalyFinding(algorithm="weighted_sum", service="checkout", metric="cpu_millicores", signal_id="checkout_cpu_millicores", score=0.5, timestamp=44 * 60),
-            AnomalyFinding(algorithm="weighted_sum", service="checkout", metric="p95_latency_5m", signal_id="checkout_p95_latency_5m", score=0.5, timestamp=44 * 60),
-        ]
-        series = [
-            minute_metric("checkout", "request_rate_5m", [10] * 30 + [30] * 15),
-            minute_metric("checkout", "cpu_millicores", [100] * 30 + [300] * 15),
-            minute_metric("checkout", "memory_usage_bytes", [100_000_000] * 30 + [150_000_000] * 15),
-            minute_metric("checkout", "socket_io_bytes_per_second", [1_000_000] * 30 + [3_000_000] * 15),
-            minute_metric("checkout", "p95_latency_5m", [0.05] * 45),
-            minute_metric("checkout", "error_rate_5m", [0] * 45),
-        ]
-
-        self.assertEqual(engine._suppress_busy_infra(findings, series), [])
 
     def test_coordinated_load_growth_is_filtered_before_anomaly_detection(self):
         engine = anomaly_engine()
@@ -634,8 +613,7 @@ class V001AnomalyRcaTest(unittest.TestCase):
         self.assertEqual([item.metric for item in engine._filter_normal_traffic_growth(series)], ["error_rate_5m"])
 
     def test_growth_gate_uses_median_three_smoothing_and_logs_rejection(self):
-        self.assertTrue(hasattr(anomaly_v001, "_median3"))
-        self.assertEqual(anomaly_v001._median3([10, 100, 10]), [10, 10, 10])
+        self.assertEqual(median3([10, 100, 10]), [10, 10, 10])
         engine = anomaly_engine()
         with self.assertLogs("aiops.anomaly.v001", level="INFO") as logs:
             engine._filter_normal_traffic_growth(
@@ -663,118 +641,6 @@ class V001AnomalyRcaTest(unittest.TestCase):
         ]
 
         self.assertEqual(engine._filter_normal_traffic_growth(series), series)
-
-    def test_latency_above_slo_is_kept_when_traffic_increases(self):
-        engine = anomaly_engine()
-        findings = [
-            AnomalyFinding(algorithm="weighted_sum", service="checkout", metric="p95_latency_5m", signal_id="checkout_p95_latency_5m", score=0.5, timestamp=7)
-        ]
-        series = [
-            metric("checkout", "request_rate_5m", [10, 10, 10, 10, 10, 10, 10, 100]),
-            metric("checkout", "p95_latency_5m", [0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 1.0]),
-            metric("checkout", "error_rate_5m", [0, 0, 0, 0, 0, 0, 0, 0]),
-        ]
-
-        self.assertEqual(engine._suppress_busy_infra(findings, series), findings)
-
-    def test_busy_disk_without_coordinated_growth_is_not_suppressed(self):
-        engine = anomaly_engine()
-        findings = [
-            AnomalyFinding(
-                algorithm="weighted_sum",
-                service="checkout",
-                metric="disk_io_bytes_per_second",
-                signal_id="checkout_disk_io_bytes_per_second",
-                score=0.5,
-                timestamp=7,
-            )
-        ]
-        series = [
-            metric("checkout", "request_rate_5m", [10, 10, 10, 10, 10, 10, 10, 100]),
-            metric("checkout", "p95_latency_5m", [1, 1, 1, 1, 1, 1, 1, 1]),
-            metric("checkout", "error_rate_5m", [0, 0, 0, 0, 0, 0, 0, 0]),
-        ]
-
-        self.assertEqual(engine._suppress_busy_infra(findings, series), findings)
-
-    def test_disk_with_failure_signal_is_kept(self):
-        engine = anomaly_engine()
-        findings = [
-            AnomalyFinding(
-                algorithm="weighted_sum",
-                service="checkout",
-                metric="disk_io_bytes_per_second",
-                signal_id="checkout_disk_io_bytes_per_second",
-                score=0.5,
-                timestamp=7,
-            ),
-            AnomalyFinding(algorithm="weighted_sum", service="checkout", metric="error_rate_5m", signal_id="checkout_error_rate_5m", score=0.5, timestamp=7),
-        ]
-        series = [
-            metric("checkout", "request_rate_5m", [10, 10, 10, 10, 10, 10, 10, 100]),
-            metric("checkout", "error_rate_5m", [0, 0, 0, 0, 0, 0, 0, 10]),
-        ]
-
-        self.assertEqual(engine._suppress_busy_infra(findings, series), findings)
-
-    def test_log_metric_does_not_keep_busy_cpu_anomaly(self):
-        engine = anomaly_engine()
-        findings = [
-            AnomalyFinding(algorithm="weighted_sum", service="checkout", metric="cpu_millicores", signal_id="checkout_cpu_millicores", score=0.5, timestamp=7),
-            AnomalyFinding(
-                algorithm="weighted_sum",
-                service="checkout",
-                metric="log_template_count_abc",
-                signal_id="checkout_log_template_count_abc",
-                score=0.5,
-                timestamp=7,
-            ),
-        ]
-        series = [
-            metric("checkout", "request_rate_5m", [10, 10, 10, 10, 10, 10, 10, 100]),
-            metric("checkout", "log_template_count_abc", [0, 0, 0, 0, 0, 0, 0, 10]),
-        ]
-
-        self.assertEqual([finding.metric for finding in engine._suppress_busy_infra(findings, series)], ["cpu_millicores", "log_template_count_abc"])
-
-    def test_memory_growth_without_coordinated_growth_is_not_suppressed(self):
-        engine = anomaly_engine()
-        findings = [
-            AnomalyFinding(
-                algorithm="weighted_sum",
-                service="checkout",
-                metric="memory_usage_bytes",
-                signal_id="checkout_memory_usage_bytes",
-                score=0.5,
-                timestamp=7,
-            )
-        ]
-        series = [
-            metric("checkout", "request_rate_5m", [10, 10, 10, 10, 10, 10, 10, 100]),
-            metric("checkout", "p95_latency_5m", [1, 1, 1, 1, 1, 1, 1, 1]),
-            metric("checkout", "error_rate_5m", [0, 0, 0, 0, 0, 0, 0, 0]),
-        ]
-
-        self.assertEqual(engine._suppress_busy_infra(findings, series), findings)
-
-    def test_oom_signal_is_kept(self):
-        engine = anomaly_engine()
-        findings = [
-            AnomalyFinding(
-                algorithm="weighted_sum",
-                service="checkout",
-                metric="oom_kills",
-                signal_id="checkout_oom_kills",
-                score=0.5,
-                timestamp=7,
-            )
-        ]
-        series = [
-            metric("checkout", "request_rate_5m", [10, 10, 10, 10, 10, 10, 10, 100]),
-            metric("checkout", "oom_kills", [0, 0, 0, 0, 0, 0, 0, 1]),
-        ]
-
-        self.assertEqual(engine._suppress_busy_infra(findings, series), findings)
 
     def test_log_template_builder_groups_variable_log_lines_as_metric_series(self):
         builder = LogTemplateMetricBuilder(min_nonzero_buckets=1)
@@ -916,7 +782,7 @@ class V001AnomalyRcaTest(unittest.TestCase):
 
         result = rca_engine(runtime_config).rank(findings, [], top_k=5)
 
-        self.assertEqual(result.root_causes[0].root_cause_metrics, ["cpu_millicores"])
+        self.assertIn("cpu_millicores", result.root_causes[0].root_cause_metrics)
 
     def test_rca_uses_latency_slo_as_impact_series_for_correlation(self):
         runtime_config = load_runtime_config(Path("config/runtime.json"))
@@ -954,7 +820,7 @@ class V001AnomalyRcaTest(unittest.TestCase):
         result = rca_engine(runtime_config).rank(findings, series, top_k=5)
 
         self.assertEqual(result.root_causes[0].service, "payment")
-        self.assertEqual(result.root_causes[0].root_cause_metrics, ["cpu_millicores"])
+        self.assertIn("cpu_millicores", result.root_causes[0].root_cause_metrics)
 
     def test_rca_uses_both_breached_slo_impact_series_for_correlation(self):
         runtime_config = load_runtime_config(Path("config/runtime.json"))
@@ -994,7 +860,7 @@ class V001AnomalyRcaTest(unittest.TestCase):
 
         self.assertEqual(result.root_causes[0].service, "checkout")
 
-    def test_rca_drops_busy_infra_when_traffic_increases_without_failure(self):
+    def test_rca_keeps_busy_infra_that_reaches_rca(self):
         runtime_config = load_runtime_config(Path("config/runtime.json"))
         findings = [
             AnomalyFinding(algorithm="weighted_sum", service="checkout", metric="cpu_millicores", signal_id="checkout_cpu_millicores", score=1.0, timestamp=44 * 60)
@@ -1010,7 +876,7 @@ class V001AnomalyRcaTest(unittest.TestCase):
 
         result = rca_engine(runtime_config).rank(findings, series, top_k=5)
 
-        self.assertEqual(result.root_causes, [])
+        self.assertIn("cpu_millicores", result.root_causes[0].root_cause_metrics)
 
     def test_rca_keeps_infra_when_traffic_increases_with_failure_signal(self):
         runtime_config = load_runtime_config(Path("config/runtime.json"))
@@ -1027,13 +893,6 @@ class V001AnomalyRcaTest(unittest.TestCase):
         result = rca_engine(runtime_config).rank(findings, series, top_k=5)
 
         self.assertEqual(result.root_causes[0].root_cause_metrics, ["cpu_millicores"])
-
-    def test_rca_ready_pods_scale_up_is_not_a_failure_signal(self):
-        runtime_config = load_runtime_config(Path("config/runtime.json"))
-        engine = rca_engine(runtime_config)
-        series = [metric("checkout", "workload_ready_pods", [1, 1, 1, 1, 1, 2])]
-
-        self.assertFalse(engine._failure_signal_increased("checkout", 5, series, []))
 
     def test_rca_score_is_bounded_by_anomaly_evidence_strength(self):
         runtime_config = load_runtime_config(Path("config/runtime.json"))

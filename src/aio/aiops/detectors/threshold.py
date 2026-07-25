@@ -5,9 +5,9 @@ from __future__ import annotations
 
 import logging
 
-from aiops.detectors.base import Detector
+from aiops.detectors.base import Detector, candidate_from_feature
 from aiops.schemas import CandidateEvent, Feature
-from aiops.shared.features import feature_timestamp, find_feature
+from aiops.shared.features import find_feature
 
 
 logger = logging.getLogger(__name__)
@@ -52,22 +52,15 @@ class ThresholdDetector(Detector):
             self.severity,
         )
         return [
-            CandidateEvent(
+            candidate_from_feature(
+                feature,
                 detector_id=self.detector_id,
-                timestamp=feature_timestamp(feature),
                 flow=self.flow,
                 service=self.service,
                 severity=self.severity,
-                signal_id=feature.signal_id,
-                value=feature.value,
-                unit=feature.unit,
-                window=feature.window,
                 threshold=self.threshold,
-                quality=feature.quality,
                 reason="threshold_breached",
                 runbook_id=self.runbook_id,
                 confidence=1.0,
-                contributing_signals=(feature.signal_id,),
-                labels=feature.labels,
             )
         ]

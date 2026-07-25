@@ -105,12 +105,13 @@ def normal_traffic_growth_decision(
     min_relative_change_ratio: dict[str, float],
     min_absolute_change: dict[str, float],
     traffic_shape_min_pearson: float = 0.7,
+    traffic_shape_max_lag_buckets: int = 0,
     memory_oom_detector: Callable[[MetricSeries], bool] | None = None,
 ) -> tuple[bool, str]:
     required_infra_groups = ("cpu", "socket_io")
-    groups = ("request_rate", *required_infra_groups)
+    groups = ("request_rate", *required_infra_groups, "memory")
     by_group = {group: [metric for metric in series if metric_group(metric.metric) == group] for group in groups}
-    missing = [group for group, metrics in by_group.items() if not metrics]
+    missing = [group for group in ("request_rate", *required_infra_groups) if not by_group[group]]
     if missing:
         return False, f"reason=missing_metrics metrics={','.join(missing)}"
     for metric in series:
@@ -143,26 +144,49 @@ def normal_traffic_growth_decision(
                 return False, "reason=ready_pods_decreased"
     request = by_group["request_rate"]
     scores = {
-        group: max((_tail_pearson(rate, metric, detection_window_seconds, start) for rate in request for metric in by_group[group]), default=0.0)
-        for group in required_infra_groups
+        group: max(
+            (
+                tail_aligned_pearson(rate, metric, detection_window_seconds, start, right_lag_buckets=lag)
+                for lag in range(max(0, traffic_shape_max_lag_buckets) + 1)
+                for rate in request
+                for metric in by_group[group]
+            ),
+            default=0.0,
+        )
+        for group in (*required_infra_groups, "memory")
+        if group != "memory" or any(metric_group(metric.metric) == "memory" for metric in series)
     }
-    if all(score >= traffic_shape_min_pearson for score in scores.values()):
-        return True, f"reason=traffic_shape cpu={scores['cpu']:.3f} socket_io={scores['socket_io']:.3f}"
+    memory_detail = f" memory={scores['memory']:.3f}" if "memory" in scores else ""
+    if all(scores[group] >= traffic_shape_min_pearson for group in required_infra_groups):
+        return True, f"reason=traffic_shape cpu={scores['cpu']:.3f} socket_io={scores['socket_io']:.3f}{memory_detail}"
     zero_metrics = [metric.metric for metrics in by_group.values() for metric in metrics if metric.points and all(point.value == 0 for point in metric.points)]
     zero_detail = f" zero_metrics={','.join(zero_metrics)}" if zero_metrics else ""
-    return False, f"reason=shape_mismatch cpu={scores['cpu']:.3f} socket_io={scores['socket_io']:.3f} threshold={traffic_shape_min_pearson:.3f}{zero_detail}"
+    return False, f"reason=shape_mismatch cpu={scores['cpu']:.3f} socket_io={scores['socket_io']:.3f}{memory_detail} threshold={traffic_shape_min_pearson:.3f}{zero_detail}"
 
 
-def _tail_pearson(left: MetricSeries, right: MetricSeries, detection_window_seconds: int | None, start: int) -> float:
+def tail_aligned_pearson(left: MetricSeries, right: MetricSeries, detection_window_seconds: int | None, start: int, right_lag_buckets: int = 0) -> float:
+    tail = tail_indexes(left, detection_window_seconds, start)
+    first = max(0, tail.start - max(1, right_lag_buckets + 1))
+    indexes = set(range(first, tail.stop))
+    return aligned_pearson(
+        left.model_copy(update={"points": [point for index, point in enumerate(left.points) if index in indexes]}),
+        right,
+        right_lag_buckets,
+    )
+
+
+def aligned_pearson(left: MetricSeries, right: MetricSeries, right_lag_buckets: int = 0) -> float:
     from scipy.stats import ConstantInputWarning, pearsonr
 
     tolerance = max(series_step_seconds(left), series_step_seconds(right))
+    lag_seconds = max(0, right_lag_buckets) * series_step_seconds(right)
     pairs = []
     right_index = 0
     for point in left.points:
-        while right_index + 1 < len(right.points) and abs(right.points[right_index + 1].timestamp - point.timestamp) <= abs(right.points[right_index].timestamp - point.timestamp):
+        target_timestamp = point.timestamp + lag_seconds
+        while right_index + 1 < len(right.points) and abs(right.points[right_index + 1].timestamp - target_timestamp) <= abs(right.points[right_index].timestamp - target_timestamp):
             right_index += 1
-        if right.points and abs(right.points[right_index].timestamp - point.timestamp) <= tolerance:
+        if right.points and abs(right.points[right_index].timestamp - target_timestamp) <= tolerance:
             pairs.append((point.value, right.points[right_index].value))
     if len(pairs) < 3:
         return 0.0
