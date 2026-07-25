@@ -143,6 +143,29 @@ jobs:
           npm ci
           npm run test:resilience
 
+  aio-tests:
+    name: AIOps unit tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        # actions/checkout@v7.0.0
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
+
+      - name: Setup Python
+        # actions/setup-python@v6.2.0
+        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: src/aio/requirements.lock
+
+      - name: Install AIOps dependencies
+        run: python -m pip install -r src/aio/requirements.lock
+
+      - name: Run AIOps unit tests
+        working-directory: src/aio
+        run: python -B -m unittest discover -s tests -v
+
   # ---------------------------------------------------------------------------
   # PR-only: bake changed release images locally, then Trivy-scan them
   # (no ECR login, no --push). Catches Dockerfile/context compile failures and
@@ -214,6 +237,10 @@ jobs:
               third-party/mem0|third-party/mem0/*)
                 BUILD_SET["mem0"]=1
                 echo "Service change: mem0 (${f})"
+                ;;
+              src/aio|src/aio/*)
+                BUILD_SET["aiops"]=1
+                echo "Service change: aiops (${f})"
                 ;;
               src/*)
                 rest="${f#src/}"

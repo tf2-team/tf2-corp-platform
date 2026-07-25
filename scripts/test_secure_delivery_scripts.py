@@ -27,6 +27,13 @@ class DigestOverlayTests(unittest.TestCase):
         self.assertIn("existingSecret: techx-corp-aiops-grafana-webhook", overlay)
         self.assertIn("  image:\n    digest:", overlay)
 
+    def test_aio_source_changes_select_aiops_image(self) -> None:
+        workflow = (
+            Path(__file__).resolve().parents[1] / ".github" / "workflows" / "ci.yml"
+        ).read_text(encoding="utf-8")
+        self.assertIn("src/aio|src/aio/*)", workflow)
+        self.assertIn('BUILD_SET["aiops"]=1', workflow)
+
     def test_load_generator_updates_worker_alias(self) -> None:
         overlay = render("load-generator", self.digest)
         self.assertIn("  load-generator:", overlay)
