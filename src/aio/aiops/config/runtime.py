@@ -208,6 +208,20 @@ def _expand_detector_signal_groups(raw: dict) -> None:
         for spec in raw.get("prometheus_query_specs", {}).values()
         if spec.get("metric") in {"p95_latency_5m", "p99_latency_5m"} and spec.get("signal_id") not in existing_signal_ids
     )
+    raw.setdefault("detectors", []).extend(
+        {
+            "id": f"auto_{spec['service'].replace('-', '_')}_burn_rate",
+            "type": "threshold",
+            "enabled": True,
+            "signal_id": spec["signal_id"],
+            "flow": spec["flow"],
+            "service": spec["service"],
+            "severity": "SEV1",
+            "runbook_id": "RB-SERVICE-ERROR-RATE",
+        }
+        for spec in raw.get("prometheus_query_specs", {}).values()
+        if spec.get("metric") == "error_budget_burn_rate_24h" and spec.get("signal_id") not in existing_signal_ids
+    )
 
 
 def build_detectors(
@@ -226,6 +240,8 @@ def build_detectors(
                 threshold = detector_hyperparameters["latency_slo_overrides"].get(item.service, detector_hyperparameters["default_latency_slo"])
             elif item.id.startswith("auto_") and item.id.endswith("_error_rate"):
                 threshold = thresholds.get(item.id, detector_hyperparameters["default_error_rate"])
+            elif item.id.startswith("auto_") and item.id.endswith("_burn_rate"):
+                threshold = thresholds.get(item.id, detector_hyperparameters["default_burn_rate_slo"])
             else:
                 threshold = thresholds[item.id]
             detectors.append(

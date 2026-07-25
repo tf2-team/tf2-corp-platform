@@ -35,6 +35,7 @@
   },
   "detectors": {
     "default_error_rate": 0.05,
+    "default_burn_rate_slo": 1.0,
     "default_latency_slo": 1.0,
     "latency_slo_overrides": {
       "frontend": 1,

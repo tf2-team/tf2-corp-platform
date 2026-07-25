@@ -47,6 +47,21 @@ class RuntimeConfigTest(unittest.TestCase):
         self.assertEqual(detector.severity, "SEV1")
         self.assertEqual(detector.runbook_id, "RB-CHECKOUT-SLO")
 
+    def test_each_service_error_rate_signal_has_burn_rate_slo(self):
+        config = load_runtime_config(Path("config/runtime.json"))
+        hyperparameters = load_hyperparameters(Settings().hyperparameters_path)
+        detectors = build_detectors(config, hyperparameters["no_data"], hyperparameters["detectors"])
+        error_rate_services = {signal.service for signal in config.signals if signal.query_id.endswith(".error_rate_5m")}
+        burn_rate_signals = {signal.service: signal for signal in config.signals if signal.unit == "burn_rate"}
+        detector_signal_ids = {detector.signal_id for detector in detectors if getattr(detector, "signal_id", "").endswith("_error_budget_burn_rate_24h")}
+
+        self.assertEqual(set(burn_rate_signals), error_rate_services)
+        self.assertTrue({signal.id for signal in burn_rate_signals.values()} <= detector_signal_ids)
+        self.assertEqual(
+            next(detector.threshold for detector in detectors if detector.detector_id == "auto_payment_burn_rate"),
+            hyperparameters["detectors"]["default_burn_rate_slo"],
+        )
+
     def test_each_service_error_rate_signal_has_auto_detector(self):
         config = load_runtime_config(Path("config/runtime.json"))
         hyperparameters = load_hyperparameters(Settings().hyperparameters_path)
