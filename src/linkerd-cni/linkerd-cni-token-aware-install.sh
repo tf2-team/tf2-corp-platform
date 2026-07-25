@@ -1,4 +1,7 @@
 #!/bin/sh
+# Copyright The OpenTelemetry Authors
+# SPDX-License-Identifier: Apache-2.0
+#
 # Keep the Linkerd CNI host configuration authenticated as Kubernetes rotates
 # the projected ServiceAccount token. The upstream installer only observes CNI
 # config-file CREATE/DELETE events, not token changes.

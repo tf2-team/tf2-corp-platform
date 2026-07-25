@@ -1,3 +1,5 @@
+# Copyright The OpenTelemetry Authors
+# SPDX-License-Identifier: Apache-2.0
 name: Build Linkerd CNI token-refresh image
 
 # This image is intentionally outside the storefront release catalog: it is a

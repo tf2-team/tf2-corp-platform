@@ -1,0 +1,12 @@
+# Copyright The OpenTelemetry Authors
+# SPDX-License-Identifier: Apache-2.0
+#
+# The Linkerd CNI installer is a node-networking component, not an application
+# workload. It must run as root only to update the explicitly mounted host CNI
+# binary/configuration directories. The exception is scoped to this Dockerfile;
+# its DaemonSet remains non-privileged and drops all Linux capabilities.
+misconfigurations:
+  - id: AVD-DS-0002
+    paths:
+      - src/linkerd-cni/Dockerfile
+    statement: Linkerd CNI must write CNI binaries and configuration to hostPath mounts.
