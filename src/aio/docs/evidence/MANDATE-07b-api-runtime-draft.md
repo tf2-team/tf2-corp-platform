@@ -25,7 +25,7 @@ AIOps ran in `dry-run` mode. The operator manually changed the flag in Flagd Con
 - [x] Recovery captured on SLO dashboard.
 - [x] Expanded-service live proof captured for a labeled cart fault.
 - [x] No-spam behavior demonstrated through stable incident IDs and notification dedup.
-- [ ] Burn-rate detector live proof on an isolated evaluation run.
+- [x] Burn-rate detector live proof on an isolated evaluation run.
 - [x] Caveats documented for RCA, incident lifecycle, and rolling-24h burn-rate.
 
 ## 3. Runtime Configuration
@@ -59,7 +59,7 @@ AIOPS_OPENSEARCH_BASE_URL=
 AIOPS_LIVE_EXECUTOR_URL=
 ```
 
-The runtime config change for this clean run was limited to disabling `ops01_checkout_slo_burn_rate`. The reason is documented in [Section 10](#10-burn-rate-and-no-spam-caveat).
+The runtime config change for this clean run was limited to disabling `ops01_checkout_slo_burn_rate`. The reason is documented in [Section 10](#10-supplemental-burn-rate-and-no-spam-proof).
 
 ## 4. Baseline
 
@@ -234,43 +234,92 @@ Telemetry recovery result: `PASS`.
 
 ![Recovery SLO dashboard checkout 100 percent](./14d-recovery-slo-dashboard-checkout-100.png)
 
-## 10. Burn-Rate and No-Spam Caveat
+## 10. Supplemental Burn-Rate and No-Spam Proof
 
-The mandate asks for impact-based alerting, including burn-rate and no-spam behavior. This clean run intentionally did **not** use `checkout_error_budget_burn_rate_24h` as the primary detector because previous fault tests remained in Prometheus's rolling 24h window. At baseline, the 24h burn-rate still exceeded `1x`, which would have created a false baseline incident for this clean labeled run.
+The primary labeled run used the live 5m checkout error-rate detector because
+previous tests remained in the rolling-24h window. A separate supplemental run
+was subsequently completed with only `ops01_checkout_slo_burn_rate` enabled.
 
-For this run:
+The official signal is the checkout PlaceOrder 24h bad ratio divided by
+`0.01`, the allowed error ratio for the checkout SLO of `99%`. The detector
+fires when `checkout_error_budget_burn_rate_24h > 1.0x`.
 
-- Primary detection was based on the live 5m checkout error-rate detector.
-- User-visible impact was proven by checkout SLO success dropping to `63.9%`.
-- No duplicate checkout incident IDs were created; `inc-b3d92ea50475` was deduped from occurrence `4` to `9` and later `12`.
-- The rolling-24h burn-rate result should be documented separately as supplemental evidence, not as the primary clean-run detector.
+### 10.1 Baseline and fault timeline
 
-Current status:
+At `2026-07-24 11:23:32 +07`, AIOps reported zero candidates and zero
+incidents. Grafana showed a latest burn rate of `0.790x`, mean `0.818x`,
+and maximum `0.845x`. This establishes the below-threshold no-fire baseline.
 
-| Requirement | Status | Evidence / next action |
+![Burn-rate baseline runtime with no fire](./18a-burn-rate-baseline-runtime-no-fire.png)
+
+![Burn-rate baseline below 1x](./18b-burn-rate-baseline-below-1x.png)
+
+| Time (+07) | Operator change |
+| --- | --- |
+| `2026-07-24 11:26:13` | `local-paymentFailure=50%` |
+| `2026-07-24 11:30:45` | escalated to `75%` |
+| `2026-07-24 11:40:58` | escalated to `100%` |
+
+![Burn-rate fault enabled at 50 percent](./18c-burn-rate-fault-enabled-50-percent.png)
+
+![Burn-rate fault escalated to 75 percent](./18d-burn-rate-fault-escalated-75-percent.png)
+
+![Burn-rate fault escalated to 100 percent](./18e-burn-rate-fault-escalated-100-percent.png)
+
+Grafana captured the rolling-24h burn rate above threshold at `1.03x`.
+An initial missing AIOps result was traced to an unset Prometheus URL
+(`quality=missing`, `status=unknown`, `error=UnsupportedProtocol`). After
+correcting that test setup, the collector returned a verified value and the
+detector fired. This setup error is not counted as a detector false negative.
+
+![Burn rate crossed 1x in Grafana](./18f-burn-rate-crossed-1x-grafana.png)
+
+### 10.2 Detector fire, incident, dedup, and no-spam
+
+`ops01_checkout_slo_burn_rate` first fired at
+`2026-07-24 11:49:52.261 +07` with value `1.146865926137082x > 1.0x`,
+service `checkout`, severity `SEV1`. The same cycle created incident
+`inc-ca09d8e8a247`, selected `RB-CHECKOUT-SLO`, and emitted one
+`AIOPS_NOTIFY_ENQUEUED_READY` intent.
+
+Elapsed time from the initial 50% fault was approximately `23m39s`. Because
+the fault intensity changed during that interval, this is supplemental
+operational context and is not mixed into the primary labeled-set lead-time
+statistics.
+
+![Burn-rate detector fire, incident, and notification](./18g-burn-rate-detector-fired-incident-notification.png)
+
+Repeated verified fires retained the same incident and increased
+`occurrence_count` from `1` to `2` and then `3`. Only the first
+occurrence emitted a notification-enqueue event; no additional enqueue event
+appeared during the subsequent deduplicated cycles.
+
+![Burn-rate dedup with same incident at occurrence 2](./18h-burn-rate-dedup-same-incident-occurrence2.png)
+
+![Burn-rate final incident API at occurrence 3](./18j-burn-rate-final-incident-api-occurrence3.png)
+
+The final API snapshot records three verified events at `1.2185x`,
+`1.2379x`, and `1.2412x`, all above `1.0x`, on the same incident.
+
+### 10.3 Fault removal and short-window recovery
+
+The operator disabled `local-paymentFailure` at
+`2026-07-24 11:55:59 +07`. Checkout 5m error ratio then fell from
+approximately `66%` to `0%` while request traffic remained present. This
+supports fault impact and short-window telemetry recovery. The rolling-24h
+burn rate is not expected to recover immediately.
+
+![Burn-rate fault disabled](./18i-burn-rate-fault-disabled.png)
+
+![Checkout error-ratio impact and recovery](./18k-burn-rate-supporting-error-ratio-impact-recovery.png)
+
+| Requirement | Status | Evidence |
 | --- | --- | --- |
-| Impact-based user-visible alerting | `PASS` | Checkout success dropped to `63.9%` against SLO `>=99.0%` |
-| Dedup/no duplicate incident | `PASS` | Stable incident `inc-b3d92ea50475`, occurrence `4 -> 9 -> 12` |
-| Notification no-spam | `PASS` | Notification intent is associated with the deduplicated incident |
-| Live burn-rate proof on isolated run | `PENDING` | Retest after obtaining a clean/isolated evaluation window |
-
-The future supplemental burn-rate evidence must capture:
-
-1. The live Prometheus burn-rate value and query window.
-2. `AIOPS_DETECT threshold_fire` for the burn-rate detector.
-3. The created incident ID and notification intent.
-4. A second cycle using the same incident ID with a higher
-   `occurrence_count`.
-5. Proof that notification was not enqueued again during cooldown.
-
-Until that evidence is attached, burn-rate must remain marked `PENDING` and is
-not claimed as complete.
-
-Jira wording until the supplemental test is completed:
-
-```text
-The rolling-24h burn-rate detector was excluded from the clean labeled run because previous tests remained inside the 24h Prometheus window. The labeled run uses 5m checkout error-rate for first-fire/lead-time and the SLO dashboard for impact. Burn-rate is tracked as a supplemental impact-based signal and should be retested on a clean Prometheus window or with a shorter demo window.
-```
+| Below-threshold no-fire | `PASS` | `0.790x < 1.0x`, zero candidates/incidents |
+| Live burn-rate detector | `PASS` | `1.1469x > 1.0x`, incident `inc-ca09d8e8a247` |
+| Dedup | `PASS` | Same incident, occurrence `1 -> 2 -> 3` |
+| Notification no-spam | `PASS` | One initial enqueue; no later enqueue during cooldown |
+| Short-window recovery | `PASS` | 5m checkout error ratio returned to `0%` |
 
 ## 11. RCA and Incident Lifecycle Caveats
 
@@ -282,7 +331,7 @@ Post-recovery API also showed incidents still in `state=open`. Therefore, teleme
 | --- | --- | --- |
 | RCA unexpected service | `recommendation` root cause | record as caveat; do not count as TP |
 | Incident lifecycle | checkout incident still `open` after telemetry recovery | record as caveat; recovery claim is telemetry-only |
-| Burn-rate 24h | previous test data polluted rolling window | supplemental only for this clean run |
+| Burn-rate recovery | rolling-24h value remains elevated after fault removal | claim short-window telemetry recovery, not immediate 24h recovery |
 
 ![Post-recovery incident API caveat](./14e-post-recovery-incident-api-open-caveat.png)
 
@@ -302,16 +351,17 @@ impact, and recovery evidence.
 | --- | --- |
 | Supplemental fault | `local-cartFailure` |
 | Fault start timestamp | `2026-07-24 01:38:51.933 +07` |
-| First detector fire timestamp | `Pending exact timestamp extraction from runtime evidence` |
-| Lead-time | `Pending first-fire timestamp` |
+| First breached telemetry sample | `2026-07-24 01:41:47.314 +07` |
+| Incident creation / alert time | `2026-07-24 01:41:59.880 +07` |
+| Lead-time | `187.947s` (`~3m08s`) |
 | Detector | `auto_cart_latency_p99` |
 | Signal | `cart_p99_latency_5m` |
 | Observed value | `3.0866666666666718s` |
 | Threshold | `1s` |
 | Service | `cart` |
 | Severity | `SEV1` |
-| Incident | `inc-c7f94b1816a6` |
-| Incident occurrence count | `2` |
+| Incident | `inc-c7f94b1810a6` |
+| Incident occurrence count | `11` in the retained supplemental state store |
 
 The Webstore SLO dashboard also showed `Cart Success Rate = 97.2%`, below its `>=99.5%` SLO. After disabling the flag, cart success returned to `100%`. This demonstrates a second live service path (`cart`) with detector fire, incident creation, and telemetry recovery.
 
@@ -377,17 +427,18 @@ Metric summary:
 | Incident recall | `100%` | `2 / 2` |
 | Alert-incident precision | `100%` | `2 correct deduplicated alert incidents / 2 total alert incidents` |
 | Checkout lead-time | `205.417s` | checkout first fire - checkout fault start |
-| Cart lead-time | `Pending` | exact detector timestamp must be extracted before final submission |
-| Mean/median lead-time | `Pending` | calculate after cart lead-time is available |
+| Cart lead-time | `187.947s` | cart incident creation - cart fault start |
+| Mean lead-time | `196.682s` | `(205.417 + 187.947) / 2` |
+| Median lead-time | `196.682s` | median of the two labeled lead-times |
 | Checkout recovery time | `~376.827s` | recovery dashboard capture - fault disabled |
 | RCA checkout root-cause hit | `False` | RCA did not identify `payment`; reported separately from detection precision |
 
 Because `K=2`, these metrics remain preliminary and are not statistically
 broad. They demonstrate two working live service paths for #7b but should not
 be presented as production-quality model evaluation. The `100%` precision
-assumes the isolated labeled windows contain only the two documented alert
-incident IDs; this must be rechecked against the final incident snapshots
-before submission.
+uses the two expected deduplicated labeled incidents as the counting unit.
+State-store inspection confirmed the corrected cart incident ID
+`inc-c7f94b1810a6`; RCA candidates remain excluded from detector precision.
 
 ## 14. Evidence Index
 
@@ -419,6 +470,17 @@ before submission.
 | `17i-expanded-cart-flag-disabled.png` | Supplemental cart flag disabled |
 | `17j-expanded-cart-recovery-slo-dashboard.png` | Supplemental cart recovery SLO dashboard |
 | `17k-expanded-cart-recovery-observability.png` | Supplemental cart recovery observability |
+| `18a-burn-rate-baseline-runtime-no-fire.png` | Runtime baseline with zero candidates/incidents |
+| `18b-burn-rate-baseline-below-1x.png` | Grafana baseline below `1x` |
+| `18c-burn-rate-fault-enabled-50-percent.png` | Payment fault enabled at 50% |
+| `18d-burn-rate-fault-escalated-75-percent.png` | Fault escalated to 75% |
+| `18e-burn-rate-fault-escalated-100-percent.png` | Fault escalated to 100% |
+| `18f-burn-rate-crossed-1x-grafana.png` | Rolling-24h burn rate crossed `1x` |
+| `18g-burn-rate-detector-fired-incident-notification.png` | Detector fire, incident, and notification |
+| `18h-burn-rate-dedup-same-incident-occurrence2.png` | Dedup to occurrence 2 |
+| `18i-burn-rate-fault-disabled.png` | Supplemental fault disabled |
+| `18j-burn-rate-final-incident-api-occurrence3.png` | Final incident snapshot at occurrence 3 |
+| `18k-burn-rate-supporting-error-ratio-impact-recovery.png` | Error-ratio impact and recovery |
 
 ## 15. Reproduce
 
@@ -432,6 +494,11 @@ if (-not (Test-Path .env)) {
 }
 powershell -File scripts\port_forward.ps1
 ```
+
+Before starting a scenario, verify that each detector being tested has
+`enabled: true` in the selected runtime configuration. A signal may still be
+collected when its detector is disabled, but it will not produce a detector
+fire.
 
 Terminal 2 - run AIOps API runtime:
 
@@ -477,7 +544,7 @@ because the operator timestamp was captured manually.
 | ADR | [`ADR-DETECT-001`](../../../src/aio/docs/mandates/7a/ADR-DETECT-001.md) |
 | ADR sign-off | `Pending reviewer sign-off` |
 | Policy mode | `dry-run` |
-| Burn-rate supplemental evidence | `Pending retest` |
+| Burn-rate supplemental evidence | `PASS` - evidence `18a` through `18k` |
 
 Before submission, replace all `TODO`/`Pending` traceability values with the
 final reviewed links or explicit final status.
@@ -507,11 +574,12 @@ AI MANDATE #7b - API runtime live proof
 - Alert-incident precision: 100% (2 correct deduplicated alert incidents / 2 total alert incidents)
 - Counting unit: one stable deduplicated incident ID is one alert; occurrence_count increments are not new alerts
 - Checkout lead-time: 205.417s
-- Cart lead-time: PENDING exact first-fire timestamp extraction
-- Expanded service: local-cartFailure produced auto_cart_latency_p99 on cart_p99_latency_5m, value 3.0867s > 1s, incident inc-c7f94b1816a6; cart SLO recovered to 100%
+- Cart lead-time: 187.947s; mean/median labeled lead-time: 196.682s
+- Expanded service: local-cartFailure produced auto_cart_latency_p99 on cart_p99_latency_5m, value 3.0867s > 1s, incident inc-c7f94b1810a6; cart SLO recovered to 100%
 - RCA quality is reported separately: payment root-cause hit=false; RCA output is not counted as a detection false positive
-- Burn-rate: PENDING isolated supplemental retest; do not claim complete until evidence is attached
-- Caveats: incident state remains open after telemetry recovery; rolling-24h burn-rate was excluded from the clean labeled runs because previous tests polluted the 24h window
+- Burn-rate supplemental proof: PASS; baseline 0.790x with no fire, verified fire at 1.1469x, incident inc-ca09d8e8a247, occurrence_count 1 -> 3
+- Burn-rate no-spam: one initial notification enqueue; subsequent deduplicated cycles did not enqueue again during cooldown
+- Caveats: incidents remain open after short-window telemetry recovery; rolling-24h burn rate is not expected to recover immediately
 - Evidence: docs/aiops/evidence/MANDATE-07b-api-runtime-draft.md and linked screenshots in docs/aiops/evidence
 ```
 
@@ -522,7 +590,7 @@ checkout and cart faults from Prometheus telemetry, created stable incidents,
 deduped repeated detections, recorded notification intent for the primary
 checkout case, and showed user-visible SLO degradation followed by telemetry
 recovery. Detection recall and alert-incident precision are both `100%` on the
-preliminary `K=2` labeled set, subject to final verification that no additional
-alert incident IDs occurred inside the labeled windows. RCA quality, automatic
-incident resolution, the exact cart lead-time, and isolated live burn-rate
-proof remain explicit follow-up items.
+preliminary `K=2` labeled set. The supplemental burn-rate run additionally
+proves official error-budget impact detection, stable incident deduplication,
+and notification cooldown behavior. RCA quality and automatic incident
+resolution remain explicit caveats rather than completed claims.
