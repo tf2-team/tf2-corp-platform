@@ -73,7 +73,7 @@ class PrometheusQueryTemplate(AiopsModel):
     modes: set[Literal["instant", "range"]] = Field(default_factory=lambda: {"instant", "range"})
     required_labels: list[str] = Field(default_factory=list)
     result: PrometheusResultContract | None = None
-    required_for_monitoring: bool = True
+    required_for_monitoring: bool = False
 
 
 class PrometheusServiceGroup(AiopsModel):

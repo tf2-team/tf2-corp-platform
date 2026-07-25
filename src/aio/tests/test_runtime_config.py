@@ -73,6 +73,10 @@ class RuntimeConfigTest(unittest.TestCase):
         self.assertEqual({detector.signal_id for detector in latency_detectors}, signal_ids)
         self.assertEqual({detector.service for detector in latency_detectors}, {signal.service for signal in config.signals if signal.id in signal_ids})
         self.assertEqual(len(latency_detectors), len(signal_ids))
+        self.assertEqual(
+            {detector.runbook_id for detector in latency_detectors if detector.service == "checkout"},
+            {"RB-CHECKOUT-LATENCY"},
+        )
         thresholds = {detector.service: detector.threshold for detector in latency_detectors}
         self.assertEqual(thresholds["shopping-copilot"], hyperparameters["detectors"]["default_latency_slo"])
         self.assertEqual(thresholds["cart"], 1)
@@ -102,18 +106,24 @@ class RuntimeConfigTest(unittest.TestCase):
         self.assertIn("payment.workload_ready_pods", config.prometheus_queries)
         self.assertIn('service_name="payment"', config.prometheus_queries["payment.error_rate_5m"])
         self.assertIn('service_name="payment"', config.prometheus_queries["payment.p95_latency_5m"])
-        self.assertIn("rpc_server_duration_milliseconds_bucket", config.prometheus_queries["payment.p95_latency_5m"])
-        self.assertIn("rpc_server_duration_milliseconds_count", config.prometheus_queries["payment.p95_latency_5m"])
-        self.assertIn("or on() vector(0)", config.prometheus_queries["payment.p95_latency_5m"])
-        self.assertIn("or on() vector(0)", config.prometheus_queries["checkout.p95_latency_5m"])
-        self.assertTrue(all("or on() vector(0)" in query for query in config.prometheus_queries.values()))
-        self.assertNotIn("traces_span_metrics_calls_total", config.prometheus_queries["payment.p95_latency_5m"])
+        self.assertIn("traces_span_metrics_duration_milliseconds_bucket", config.prometheus_queries["payment.p95_latency_5m"])
+        self.assertIn("traces_span_metrics_duration_milliseconds_count", config.prometheus_queries["payment.p95_latency_5m"])
+        self.assertNotIn("vector(0)", config.prometheus_queries["payment.p95_latency_5m"])
+        self.assertNotIn("vector(0)", config.prometheus_queries["checkout.p95_latency_5m"])
+        self.assertTrue(all("vector(0)" not in query for query in config.prometheus_queries.values()))
+        self.assertIn("traces_span_metrics_calls_total", config.prometheus_queries["payment.request_rate_5m"])
         self.assertIn('container="payment"', config.prometheus_queries["payment.memory_usage_bytes"])
         self.assertNotIn("target_info", config.prometheus_queries["payment.memory_usage_bytes"])
         self.assertNotIn("system_memory_usage_bytes", config.prometheus_queries["payment.memory_usage_bytes"])
-        self.assertIn("http_server_request_duration_seconds_count", config.prometheus_queries["cart.error_rate_5m"])
-        self.assertIn("rpc_client_duration_milliseconds_count", config.prometheus_queries["checkout.payment_error_rate.5m"])
+        self.assertIn("http_server_request_duration_seconds_count", config.prometheus_queries["cart.request_rate_5m"])
+        self.assertIn("traces_span_metrics_calls_total", config.prometheus_queries["cart.error_rate_5m"])
+        self.assertIn("traces_span_metrics_calls_total", config.prometheus_queries["checkout.payment_error_rate.5m"])
+        self.assertIn('span_name=~".*PaymentService/Charge"', config.prometheus_queries["checkout.payment_error_rate.5m"])
         self.assertIn("0.000000001", config.prometheus_queries["checkout.payment_error_rate.5m"])
+        self.assertEqual(config.prometheus_queries["kafka.consumer_lag"], "sum(kafka_consumer_records_lag)")
+        self.assertIn("db_client_connection_count", config.prometheus_queries["postgresql.active_connections"])
+        self.assertIn("db_client_connection_count", config.prometheus_queries["product_catalog.db_pool_utilization"])
+        self.assertIn("db_client_connection_max", config.prometheus_queries["product_catalog.db_pool_utilization"])
         self.assertTrue(
             {
                 "payment_p95_latency_5m",
@@ -143,6 +153,18 @@ class RuntimeConfigTest(unittest.TestCase):
         }
 
         self.assertEqual(no_data_signal_ids, prometheus_signal_ids)
+        self.assertFalse(
+            {
+                signal.id
+                for signal in config.signals
+                if signal.source == "prometheus"
+                and (
+                    signal.feature_role in {"official_slo", "dependency_signal"}
+                    or signal.id.endswith(("_p95_latency_5m", "_p99_latency_5m", "_error_rate_5m", "_request_rate_5m"))
+                )
+            }
+            & no_data_signal_ids
+        )
 
     def test_registry_owns_one_second_collection_contract(self):
         registry = load_prometheus_query_registry(Path("config/prometheus_queries.json"))
@@ -153,19 +175,19 @@ class RuntimeConfigTest(unittest.TestCase):
         self.assertEqual(profile.detector_bucket_seconds, 30)
         self.assertEqual(profile.lookback_seconds, 3600)
         self.assertEqual(profile.lookback_seconds // profile.detector_bucket_seconds, 120)
-        self.assertEqual(registry.result_defaults.on_empty, "zero")
+        self.assertEqual(registry.result_defaults.on_empty, "missing")
 
     def test_template_can_override_default_empty_result_policy(self):
         raw = json.loads(Path("config/prometheus_queries.json").read_text(encoding="utf-8"))
-        raw["templates"]["red.grpc.p95_latency"]["result"] = {"on_empty": "missing"}
+        raw["templates"]["red.grpc.p95_latency"]["result"] = {"on_empty": "zero"}
 
         with tempfile.TemporaryDirectory() as tmp:
             registry_path = Path(tmp) / "prometheus_queries.json"
             registry_path.write_text(json.dumps(raw), encoding="utf-8")
             config = load_runtime_config(Path("config/runtime.json"), registry_path)
 
-        self.assertNotIn("vector(0)", config.prometheus_queries["checkout.p95_latency_5m"])
-        self.assertIn("vector(0)", config.prometheus_queries["checkout.error_rate_5m"])
+        self.assertIn("vector(0)", config.prometheus_queries["checkout.p95_latency_5m"])
+        self.assertNotIn("vector(0)", config.prometheus_queries["checkout.error_rate_5m"])
 
     def test_enabled_detector_runbooks_have_canonical_files(self):
         config = load_runtime_config(Path("config/runtime.json"))

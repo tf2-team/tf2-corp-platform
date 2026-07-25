@@ -2,7 +2,8 @@
   "schema_version": "1.0",
   "default_runbooks": [
     "RB-SERVICE-ERROR-RATE",
-    "RB-SERVICE-LATENCY"
+    "RB-SERVICE-LATENCY",
+    "RB-SERVICE-RESOURCE"
   ],
   "runbooks": {
     "RB-AIOPS-RUNTIME": {
@@ -94,6 +95,11 @@
       "owner": "platform-oncall",
       "title": "Service Latency",
       "checks": ["p95/p99 latency", "request rate", "CPU/memory", "dependency path"]
+    },
+    "RB-SERVICE-RESOURCE": {
+      "owner": "platform-oncall",
+      "title": "Service Resource Anomaly",
+      "checks": ["metric freshness", "request-rate correlation", "pod/node pressure", "recent deploys"]
     },
     "RB-SHIPPING-QUOTE-DEPENDENCY": {
       "owner": "checkout-oncall",

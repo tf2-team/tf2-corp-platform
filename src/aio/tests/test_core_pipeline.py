@@ -191,13 +191,13 @@ class DetectorEngineTest(unittest.TestCase):
 
     def test_no_data_detector_opens_monitoring_loss_candidate(self):
         features = FeatureBuilder().build(
-            [Observation(signal_id="checkout_bad_ratio_24h", value=None, unit="ratio", window="24h", quality=SignalQuality.STALE)]
+            [Observation(signal_id="checkout_cpu_millicores", value=None, unit="millicores", window="5m", quality=SignalQuality.STALE)]
         )
         candidates = DetectorEngine([no_data_detector()]).evaluate(features)
 
         self.assertEqual(candidates[0].detector_id, "ops02_monitoring_loss")
-        self.assertEqual(candidates[0].unit, "ratio")
-        self.assertEqual(candidates[0].window, "24h")
+        self.assertEqual(candidates[0].unit, "millicores")
+        self.assertEqual(candidates[0].window, "5m")
         self.assertEqual(candidates[0].flow, "monitoring")
 
     def test_correlator_ranks_dependency_with_transparent_components(self):

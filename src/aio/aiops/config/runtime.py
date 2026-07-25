@@ -204,7 +204,7 @@ def _expand_detector_signal_groups(raw: dict) -> None:
             "flow": spec["flow"],
             "service": spec["service"],
             "severity": "SEV1",
-            "runbook_id": "RB-SERVICE-LATENCY",
+            "runbook_id": "RB-CHECKOUT-LATENCY" if spec["service"] == "checkout" else "RB-SERVICE-LATENCY",
         }
         for spec in raw.get("prometheus_query_specs", {}).values()
         if spec.get("metric") in {"p95_latency_5m", "p99_latency_5m"} and spec.get("signal_id") not in existing_signal_ids

@@ -47,7 +47,7 @@ def temp_workspace() -> TemporaryDirectory:
 def observation(signal_id: str, value: float | None, quality: SignalQuality = SignalQuality.VERIFIED) -> Observation:
     labels = {"service": "checkout", "dependency": "payment"} if signal_id == "checkout_payment_error_rate_5m" else {}
     window = "24h" if signal_id == "checkout_bad_ratio_24h" else "5m"
-    unit = "seconds" if "latency" in signal_id else "ratio"
+    unit = "millicores" if signal_id.endswith("_cpu_millicores") else ("seconds" if "latency" in signal_id else "ratio")
     return Observation(signal_id=signal_id, value=value, unit=unit, window=window, quality=quality, labels=labels)
 
 
@@ -265,7 +265,7 @@ class E2EPipelineRegressionTest(unittest.TestCase):
         self.assertEqual(result.candidates[0].detector_id, "auto_checkout_latency_p95")
         self.assertEqual(result.candidates[0].reason, "threshold_breached")
         self.assertEqual(result.incidents[0].service, "checkout")
-        self.assertEqual(result.notifications[0].runbook_id, "RB-SERVICE-LATENCY")
+        self.assertEqual(result.notifications[0].runbook_id, "RB-CHECKOUT-LATENCY")
         self.assertEqual(result.policy_decisions, [])
 
     def test_dependency_breach_prefers_payment_dependency_incident(self):
@@ -293,7 +293,7 @@ class E2EPipelineRegressionTest(unittest.TestCase):
             root = Path(tmp)
             write_actions(root / "actions.json")
             write_history(root / "history.json")
-            result = run_pipeline(root, [observation("checkout_bad_ratio_24h", None, SignalQuality.STALE)])
+            result = run_pipeline(root, [observation("checkout_cpu_millicores", None, SignalQuality.STALE)])
 
         self.assertEqual(len(result.incidents), 1)
         self.assertEqual(result.candidates[0].detector_id, "ops02_monitoring_loss")
@@ -306,11 +306,11 @@ class E2EPipelineRegressionTest(unittest.TestCase):
             root = Path(tmp)
             write_actions(root / "actions.json")
             write_history(root / "history.json")
-            result = run_pipeline(root, [observation("payment_error_rate_5m", None, SignalQuality.MISSING)])
+            result = run_pipeline(root, [observation("payment_cpu_millicores", None, SignalQuality.MISSING)])
 
         self.assertEqual(len(result.incidents), 1)
         self.assertEqual(result.candidates[0].detector_id, "ops02_monitoring_loss")
-        self.assertEqual(result.candidates[0].signal_id, "payment_error_rate_5m")
+        self.assertEqual(result.candidates[0].signal_id, "payment_cpu_millicores")
         self.assertEqual(result.candidates[0].reason, "signal_missing")
         self.assertEqual(result.incidents[0].flow, "monitoring")
         self.assertEqual(result.policy_decisions, [])

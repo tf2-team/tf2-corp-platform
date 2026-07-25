@@ -12,7 +12,7 @@
   },
   "result_defaults": {
     "max_series": 1,
-    "on_empty": "zero",
+    "on_empty": "missing",
     "finite_only": true
   },
   "templates": {
@@ -167,7 +167,8 @@
       "unit": "millicores",
       "window": "5m",
       "metric": "cpu_millicores",
-      "feature_role": "anomaly_input"
+      "feature_role": "anomaly_input",
+      "required_for_monitoring": true
     },
     "resource.memory_usage_bytes": {
       "query_id_template": "$service.memory_usage_bytes",
@@ -176,7 +177,8 @@
       "unit": "bytes",
       "window": "instant",
       "metric": "memory_usage_bytes",
-      "feature_role": "anomaly_input"
+      "feature_role": "anomaly_input",
+      "required_for_monitoring": true
     },
     "resource.disk_io_bytes_per_second": {
       "query_id_template": "$service.disk_io_bytes_per_second",
@@ -205,7 +207,8 @@
       "unit": "count",
       "window": "instant",
       "metric": "workload_ready_pods",
-      "feature_role": "anomaly_input"
+      "feature_role": "anomaly_input",
+      "required_for_monitoring": true
     },
     "resource.workload_ready_ratio": {
       "query_id_template": "$service.workload_ready_ratio",
@@ -214,7 +217,8 @@
       "unit": "ratio",
       "window": "instant",
       "metric": "workload_ready_ratio",
-      "feature_role": "anomaly_input"
+      "feature_role": "anomaly_input",
+      "required_for_monitoring": true
     },
     "slo.grpc.method_bad_ratio": {
       "query_id_template": "$service.bad_ratio.24h",
@@ -239,7 +243,7 @@
     "dependency.grpc_client.error_ratio": {
       "query_id_template": "$service.$dependency.error_rate.5m",
       "signal_id_template": "${service_id}_${dependency_id}_error_rate_5m",
-      "promql": "(((sum(rate(rpc_client_duration_milliseconds_count{service_name=\"$service\",server_address=~\"$dependency.*\",rpc_grpc_status_code!=\"0\"}[5m])) or 0 * sum(rate(rpc_client_duration_milliseconds_count{service_name=\"$service\",server_address=~\"$dependency.*\"}[5m]))) / clamp_min(sum(rate(rpc_client_duration_milliseconds_count{service_name=\"$service\",server_address=~\"$dependency.*\"}[5m])), 0.000000001)) and on() (sum(rate(rpc_client_duration_milliseconds_count{service_name=\"$service\",server_address=~\"$dependency.*\"}[5m])) > 0))",
+      "promql": "(((sum(rate(traces_span_metrics_calls_total{service_name=\"$service\",span_kind=\"SPAN_KIND_CLIENT\",span_name=~\"$dependency_span\",status_code=\"STATUS_CODE_ERROR\"}[5m])) or 0 * sum(rate(traces_span_metrics_calls_total{service_name=\"$service\",span_kind=\"SPAN_KIND_CLIENT\",span_name=~\"$dependency_span\"}[5m]))) / clamp_min(sum(rate(traces_span_metrics_calls_total{service_name=\"$service\",span_kind=\"SPAN_KIND_CLIENT\",span_name=~\"$dependency_span\"}[5m])), 0.000000001)) and on() (sum(rate(traces_span_metrics_calls_total{service_name=\"$service\",span_kind=\"SPAN_KIND_CLIENT\",span_name=~\"$dependency_span\"}[5m])) > 0))",
       "unit": "ratio",
       "window": "5m",
       "metric": "${dependency_id}_error_rate_5m",
@@ -250,16 +254,17 @@
     "postgres.active_connections": {
       "query_id_template": "postgresql.active_connections",
       "signal_id_template": "postgresql_active_connections",
-      "promql": "sum(postgresql_backends)",
+      "promql": "sum(db_client_connection_count{db_client_connection_state=\"used\"})",
       "unit": "count",
       "window": "instant",
       "metric": "active_connections",
-      "feature_role": "anomaly_input"
+      "feature_role": "anomaly_input",
+      "required_for_monitoring": true
     },
     "postgres.client_pool_utilization": {
       "query_id_template": "$service.db_pool_utilization",
       "signal_id_template": "${service_id}_db_pool_utilization",
-      "promql": "(sum(db_client_connections_usage{service_name=\"$service\"}) / clamp_min(sum(db_client_connections_max{service_name=\"$service\"}), 1)) and on() (sum(db_client_connections_max{service_name=\"$service\"}) > 0)",
+      "promql": "(sum(db_client_connection_count{service_name=\"$service\",db_client_connection_state=\"used\"}) / clamp_min(sum(db_client_connection_max{service_name=\"$service\"}), 1)) and on() (sum(db_client_connection_max{service_name=\"$service\"}) > 0)",
       "unit": "ratio",
       "window": "instant",
       "metric": "db_pool_utilization",
@@ -269,11 +274,12 @@
     "kafka.consumer_lag": {
       "query_id_template": "kafka.consumer_lag",
       "signal_id_template": "kafka_consumer_lag",
-      "promql": "sum(kafka_consumer_group_lag)",
+      "promql": "sum(kafka_consumer_records_lag)",
       "unit": "count",
       "window": "instant",
       "metric": "consumer_lag",
-      "feature_role": "anomaly_input"
+      "feature_role": "anomaly_input",
+      "required_for_monitoring": true
     },
     "otel.exporter_queue_saturation": {
       "query_id_template": "otel_collector.exporter_queue_saturation",
@@ -282,7 +288,8 @@
       "unit": "ratio",
       "window": "instant",
       "metric": "exporter_queue_saturation",
-      "feature_role": "anomaly_input"
+      "feature_role": "anomaly_input",
+      "required_for_monitoring": true
     },
     "redis.memory_used_bytes": {
       "query_id_template": "valkey_cart.memory_used_bytes",
@@ -297,15 +304,15 @@
   },
   "service_groups": [
     {
-      "services": ["frontend", "quote"],
-      "template_ids": ["red.http.p95_latency", "red.http.p99_latency", "red.http.error_ratio", "red.http.request_rate"]
+      "services": ["cart"],
+      "template_ids": ["red.http.p95_latency", "red.http.p99_latency", "red.http.request_rate", "red.spans.server.error_ratio"]
     },
     {
-      "services": ["frontend-proxy"],
+      "services": ["frontend-proxy", "frontend", "payment", "product-reviews", "recommendation", "currency", "shipping", "email", "quote", "shopping-copilot"],
       "template_ids": ["red.spans.server.p95_latency", "red.spans.server.p99_latency", "red.spans.server.error_ratio", "red.spans.server.request_rate"]
     },
     {
-      "services": ["checkout", "payment", "product-catalog", "product-reviews", "recommendation", "ad", "currency", "shipping", "email", "cart", "shopping-copilot"],
+      "services": ["checkout", "product-catalog", "ad"],
       "template_ids": ["red.grpc.p95_latency", "red.grpc.p99_latency", "red.grpc.error_ratio", "red.grpc.request_rate"]
     },
     {
@@ -338,7 +345,11 @@
       "signal_id": "checkout_payment_error_rate_5m",
       "template_id": "dependency.grpc_client.error_ratio",
       "service": "checkout",
-      "parameters": {"dependency": "payment", "dependency_id": "payment"},
+      "parameters": {
+        "dependency": "payment",
+        "dependency_id": "payment",
+        "dependency_span": ".*PaymentService/Charge"
+      },
       "labels": {"dependency": "payment"}
     },
     {

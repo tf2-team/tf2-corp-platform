@@ -5,7 +5,7 @@
 Thiết kế này giải quyết ba vấn đề chính:
 
 1. PromQL chỉ có một nguồn chuẩn, không còn chia giữa `runtime.json` và mã Python.
-2. Mỗi dòng metric range cách nhau đúng 1 giây; query không có series trả về `0` theo policy thống nhất của registry.
+2. Mỗi dòng metric range cách nhau đúng 1 giây; query không có series được giữ là `MISSING`, không bị biến thành số `0` giả.
 3. Có thể thêm hoặc áp dụng lại query bằng JSON mà không sửa pipeline Python.
 
 Các file có trách nhiệm riêng:
@@ -23,9 +23,9 @@ Không nên dùng một metric chung cho mọi protocol. Metric và label đư�
 
 | Nhóm | Latency | Error ratio và traffic | Lý do |
 |---|---|---|---|
-| HTTP application (`frontend`, `cart`, `quote`) | `http_server_request_duration_seconds_bucket` | `http_server_request_duration_seconds_count`, HTTP 5xx | Metric server HTTP có đơn vị giây và status code chuẩn. |
-| gRPC application | `rpc_server_duration_milliseconds_bucket` | `rpc_server_duration_milliseconds_count`, gRPC code khác `0` | Checkout và các dependency chính là gRPC; latency được đổi từ milliseconds sang seconds. |
-| `frontend-proxy` | `traces_span_metrics_duration_milliseconds_bucket`, `span_kind=SERVER` | `traces_span_metrics_calls_total` | Proxy Envoy không được giả định có metric HTTP SDK giống application. Filter `SERVER` tránh trộn client/internal spans. |
+| Cart latency/traffic | `http_server_request_duration_seconds_bucket` | HTTP request count; lỗi lấy từ server spanmetrics | Cart phục vụ gRPC nhưng .NET `AddAspNetCoreInstrumentation()` xuất metric HTTP server; span status bắt lỗi gRPC tốt hơn HTTP 5xx. |
+| Native RPC metrics (`checkout`, `product-catalog`, `ad`) | `rpc_server_duration_milliseconds_bucket` | `rpc_server_duration_milliseconds_count`, gRPC code khác `0` | Đây là các service thực sự xuất RPC server metrics trong Prometheus. |
+| Server spanmetrics (`frontend-proxy`, `frontend`, `payment`, `product-reviews`, `recommendation`, `currency`, `shipping`, `email`, `quote`, `shopping-copilot`) | `traces_span_metrics_duration_milliseconds_bucket`, `span_kind=SERVER` | `traces_span_metrics_calls_total` | Các service này có server spans nhưng không có native HTTP/RPC metric family nhất quán. Filter `SERVER` tránh trộn client/internal spans. |
 | Kafka consumer (`fraud-detection`, `accounting`) | spanmetrics, `span_kind=CONSUMER` | spanmetrics calls/error | Đo đúng thời gian xử lý message và lỗi consumer, không trộn request server. |
 
 Mỗi nhóm RED có p95, p99, error ratio và request/message rate. p99 được giữ riêng vì tail latency có thể tăng mạnh trong khi p95 vẫn bình thường.
@@ -36,9 +36,9 @@ Các tín hiệu saturation/resource bổ sung gồm CPU millicores, memory, dis
 
 ### Phân biệt zero và no-data
 
-Registry khai báo policy mặc định trong `result_defaults.on_empty`. Giá trị `zero` làm compiler bọc PromQL bằng `or on() vector(0)`, vì vậy query hợp lệ nhưng không có series vẫn trả về đúng một series giá trị `0`. Template đặc thù có thể đặt `result.on_empty: "missing"` để ghi đè khi no-data phải được giữ lại.
+Registry khai báo policy mặc định `result_defaults.on_empty: "missing"`. Vì vậy query rỗng được giữ là no-data. Chỉ template đặc thù có ngữ nghĩa chắc chắn mới được phép đặt `result.on_empty: "zero"`.
 
-Policy zero chỉ áp dụng cho kết quả PromQL rỗng. Timeout, lỗi HTTP, response sai định dạng, quá cardinality và NaN/Inf vẫn không được đổi thành zero; collector tiếp tục trả `MISSING` hoặc `INVALID` tương ứng.
+Timeout, lỗi HTTP, response sai định dạng, quá cardinality và NaN/Inf không được đổi thành zero; collector trả `MISSING` hoặc `INVALID` tương ứng.
 
 Với error ratio, numerator được viết theo mẫu:
 
@@ -55,7 +55,7 @@ and on() (total > 0)
 Vì vậy:
 
 - Có traffic và không có error series: kết quả là `0` hợp lệ.
-- Không có traffic hoặc expression không tìm thấy series: fallback mặc định trả `0`.
+- Không có traffic hoặc expression không tìm thấy series: collector trả `MISSING`.
 - Prometheus không truy cập được hoặc từ chối query: collector đánh dấu `MISSING`, không fallback.
 
 Mẫu ratio dùng epsilon `0.000000001`, không dùng `clamp_min(..., 1)` cho rate/increase. Ép denominator thành 1 làm giảm sai error ratio của service có lưu lượng dưới 1 request/giây hoặc counter bị Prometheus extrapolate.
@@ -124,13 +124,16 @@ Query dependency, database hoặc SLO nên dùng `instances`:
   "service": "checkout",
   "parameters": {
     "dependency": "payment",
-    "dependency_id": "payment"
+    "dependency_id": "payment",
+    "dependency_span": ".*PaymentService/Charge"
   },
   "labels": {"dependency": "payment"}
 }
 ```
 
-Dependency checkout-to-payment dùng `rpc_client_duration_milliseconds_count`, không dùng HTTP server metric. Điều này đo lỗi tại đúng cạnh gọi từ checkout sang payment thay vì lỗi tổng của một service khác.
+Dependency checkout-to-payment dùng client span metrics với span
+`PaymentService/Charge`, không dùng HTTP server metric. Điều này đo lỗi tại đúng
+cạnh gọi từ checkout sang payment thay vì lỗi tổng của một service khác.
 
 ## Checklist trước khi merge template mới
 

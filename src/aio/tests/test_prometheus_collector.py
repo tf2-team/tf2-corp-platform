@@ -140,18 +140,18 @@ class PrometheusCollectorTest(unittest.TestCase):
         self.assertTrue(all(item.value is None for item in observations))
         self.assertTrue(all(item.quality == SignalQuality.MISSING for item in observations))
 
-    def test_registry_zero_fallback_returns_numeric_zero(self):
+    def test_registry_does_not_turn_empty_results_into_numeric_zero(self):
         config = load_runtime_config(Path("config/runtime.json"))
         collector = PrometheusCollector(ZeroFallbackPrometheus(), config)
         observations = collector.collect()
         series = collector.collect_metric_series()
 
         self.assertTrue(observations)
-        self.assertTrue(all(item.value == 0 for item in observations))
-        self.assertTrue(all(item.quality == SignalQuality.UNQUALIFIED for item in observations))
+        self.assertTrue(all(item.value is None for item in observations))
+        self.assertTrue(all(item.quality == SignalQuality.MISSING for item in observations))
         self.assertTrue(series)
-        self.assertTrue(all(point.value == 0 for item in series for point in item.points))
-        self.assertTrue(all(item.quality == SignalQuality.VERIFIED for item in series))
+        self.assertTrue(all(item.points == [] for item in series))
+        self.assertTrue(all(item.quality == SignalQuality.MISSING for item in series))
 
     def test_unexpected_cardinality_is_invalid(self):
         config = load_runtime_config(Path("config/runtime.json"))

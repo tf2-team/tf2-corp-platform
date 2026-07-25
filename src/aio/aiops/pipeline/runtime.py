@@ -144,7 +144,7 @@ class AiopsPipeline:
 
     def run_once(self, metric_series: list[MetricSeries] | None = None) -> PipelineResult:
         run_number = next(_RUN_COUNTER)
-        logger.info("---------- AIOPS_RUN_START run=%s ----------", run_number)
+        logger.info("AIOPS_RUN_START run=%s", run_number)
         logger.debug("AIOPS_BLOCK start metric_series=%s", len(metric_series or []))
         collected = self.collector.collect()
         logger.debug("AIOPS_BLOCK collect observations=%s", len(collected))
@@ -178,20 +178,21 @@ class AiopsPipeline:
         )
 
         rca_result = self._run_v001_rca(metric_series or [], analysis_incidents)
-        logger.info(
-            "AIOPS_DEDUP_RESULT input_candidates=%s incidents=%s ids=%s services=%s occurrences=%s",
-            len(enriched),
-            len(deduped_incidents),
-            [incident.incident_id for incident in deduped_incidents],
-            [incident.service for incident in deduped_incidents],
-            [incident.occurrence_count for incident in deduped_incidents],
-        )
         root_incidents = self._upsert_rca_root_incidents(rca_result, analysis_incidents)
         if root_incidents:
             incidents.extend(root_incidents)
             analysis_incidents = incidents
             regular_incidents = [incident for incident in incidents if not is_slo_notification(incident.events[-1])]
             deduped_incidents = _unique_incidents(incidents)
+        logger.info(
+            "AIOPS_DEDUP_RESULT input_candidates=%s rca_incidents=%s incidents=%s ids=%s services=%s occurrences=%s",
+            len(enriched),
+            len(root_incidents),
+            len(deduped_incidents),
+            [incident.incident_id for incident in deduped_incidents],
+            [incident.service for incident in deduped_incidents],
+            [incident.occurrence_count for incident in deduped_incidents],
+        )
         verification_results = self.verification.verify(analysis_incidents, features)
         logger.debug("AIOPS_BLOCK verify results=%s statuses=%s", len(verification_results), [result.status for result in verification_results])
         logger.info(
@@ -231,7 +232,7 @@ class AiopsPipeline:
             rca_result=rca_result,
         )
         logger.info(
-            "---------- AIOPS_RUN_END run=%s candidates=%s incidents=%s root_causes=%s ----------",
+            "AIOPS_RUN_END run=%s candidates=%s incidents=%s root_causes=%s",
             run_number,
             len(enriched),
             len(deduped_incidents),
@@ -297,9 +298,9 @@ class AiopsPipeline:
                         unit="score",
                         window="rca",
                         threshold=threshold,
-                        quality=SignalQuality.VERIFIED,
+                        quality=SignalQuality.FALLBACK_ONLY,
                         reason="rca_root_cause",
-                        runbook_id="RB-SERVICE-ERROR-RATE",
+                        runbook_id=_rca_runbook_id(root),
                         likely_dependency="unknown",
                         confidence=root.score,
                         contributing_signals=tuple(root.root_cause_metrics),
@@ -590,6 +591,17 @@ def _combined_rca_hyperparameters(config: dict) -> dict:
 
 def _score(value: float | None) -> str:
     return "NA" if value is None else f"{value:.3f}"
+
+
+def _rca_runbook_id(root: RootCauseCandidate) -> str:
+    metrics = " ".join(root.root_cause_metrics).lower()
+    if "error" in metrics:
+        return "RB-CART-ERROR-RATE" if root.service == "cart" else "RB-SERVICE-ERROR-RATE"
+    if "latency" in metrics or "duration" in metrics:
+        return "RB-CHECKOUT-LATENCY" if root.service == "checkout" else "RB-SERVICE-LATENCY"
+    if root.service == "product-catalog" and "cpu" in metrics:
+        return "RB-PRODUCT-CATALOG-CPU"
+    return "RB-SERVICE-RESOURCE"
 
 
 def _log_excerpts(summary: str, max_events: int = 100) -> list[str]:

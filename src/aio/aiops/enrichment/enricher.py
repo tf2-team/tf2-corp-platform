@@ -117,7 +117,7 @@ class Enricher:
                     (int(span.get("startTime", end * 1_000_000)) // 1_000_000, trace, span)
                     for trace in traces
                     for span in trace.get("spans", [])
-                    if _span_has_failure(span)
+                    if _span_is_corroborating_failure(span, window_seconds)
                 ]
                 if failures:
                     timestamp, trace, span = min(failures, key=lambda item: item[0])
@@ -248,6 +248,17 @@ def _span_has_failure(span: dict) -> bool:
         http_error = False
     text = f"{span.get('operationName', '')} {tags}".lower()
     return _span_has_error(span) or status == "ERROR" or http_error or "timeout" in text or "timed out" in text
+
+
+def _span_is_corroborating_failure(span: dict, window_seconds: int) -> bool:
+    if not _span_has_failure(span):
+        return False
+    operation = str(span.get("operationName", "")).lower()
+    if any(marker in operation for marker in ("eventstream", "event_stream", "subscribe", "watch")):
+        return False
+    duration_seconds = float(span.get("duration", 0) or 0) / 1_000_000
+    max_request_seconds = min(float(window_seconds), 300.0)
+    return duration_seconds <= max_request_seconds
 
 
 def _span_failure_status(span: dict) -> str:

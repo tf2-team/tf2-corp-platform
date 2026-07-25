@@ -27,7 +27,7 @@ class FakeNotificationSender:
 def observation(signal_id: str, value: float | None, quality: SignalQuality = SignalQuality.VERIFIED) -> Observation:
     labels = {"service": "checkout", "dependency": "payment"} if signal_id == "checkout_payment_error_rate_5m" else {}
     window = "24h" if signal_id == "checkout_bad_ratio_24h" else "5m"
-    unit = "seconds" if "latency" in signal_id else "ratio"
+    unit = "millicores" if signal_id.endswith("_cpu_millicores") else ("seconds" if "latency" in signal_id else "ratio")
     return Observation(signal_id=signal_id, value=value, unit=unit, window=window, quality=quality, labels=labels)
 
 
@@ -85,7 +85,7 @@ class ProdSimulationTest(unittest.TestCase):
                 pipeline.run_once()
                 pipeline.store.close()
 
-                self.assertEqual([message.runbook_id for message in sender.sent], ["RB-SERVICE-LATENCY"])
+                self.assertEqual([message.runbook_id for message in sender.sent], ["RB-CHECKOUT-LATENCY"])
 
     def test_service_error_rate_slo_breach_sends_notification(self):
         with TemporaryDirectory() as tmp:
@@ -106,7 +106,7 @@ class ProdSimulationTest(unittest.TestCase):
             pipeline.store.close()
 
         self.assertEqual([incident.service for incident in result.incidents], ["checkout"])
-        self.assertEqual([message.runbook_id for message in sender.sent], ["RB-SERVICE-LATENCY"])
+        self.assertEqual([message.runbook_id for message in sender.sent], ["RB-CHECKOUT-LATENCY"])
 
     def test_checkout_payment_dependency_breach_pages_dependency_runbook(self):
         with TemporaryDirectory() as tmp:
@@ -122,7 +122,7 @@ class ProdSimulationTest(unittest.TestCase):
     def test_prometheus_no_data_pages_monitoring(self):
         with TemporaryDirectory() as tmp:
             sender = FakeNotificationSender()
-            pipeline = prod_pipeline(Path(tmp), sender, observations=[observation("checkout_bad_ratio_24h", None, SignalQuality.STALE)])
+            pipeline = prod_pipeline(Path(tmp), sender, observations=[observation("checkout_cpu_millicores", None, SignalQuality.STALE)])
 
             result = pipeline.run_once()
             pipeline.store.close()

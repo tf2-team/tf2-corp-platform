@@ -537,9 +537,11 @@ class RuntimePipelineTest(unittest.TestCase):
         self.assertEqual(result.notifications[0].flow, "web")
         self.assertEqual(result.notifications[0].title, "RCA root cause: frontend")
         self.assertEqual(result.notifications[0].likely_dependency, "unknown")
+        self.assertEqual(result.incidents[0].events[-1].quality, SignalQuality.FALLBACK_ONLY)
+        self.assertEqual(result.incidents[0].events[-1].runbook_id, "RB-SERVICE-LATENCY")
         self.assertEqual(result.rca_result.root_causes[0].service, "frontend")
         text = "\n".join(logs.output)
-        self.assertIn("AIOPS_DEDUP_RESULT input_candidates=0 incidents=0", text)
+        self.assertIn("AIOPS_DEDUP_RESULT input_candidates=0 rca_incidents=1 incidents=1", text)
 
     def test_pipeline_dedups_repeated_rca_root_notification(self):
         settings = Settings()
@@ -565,6 +567,7 @@ class RuntimePipelineTest(unittest.TestCase):
         self.assertEqual([message.service for message in sender.sent], ["payment"])
         self.assertEqual(first.incidents[0].incident_id, second.incidents[0].incident_id)
         self.assertEqual(second.incidents[0].occurrence_count, 2)
+        self.assertEqual(first.incidents[0].events[-1].runbook_id, "RB-SERVICE-RESOURCE")
 
     def test_pipeline_dedups_rca_roots_by_topology_before_notification(self):
         settings = Settings()
@@ -592,6 +595,7 @@ class RuntimePipelineTest(unittest.TestCase):
 
         self.assertEqual([incident.service for incident in incidents], ["checkout", "ad"])
         self.assertEqual([message.service for message in notifications], ["checkout", "ad"])
+        self.assertEqual([message.runbook_id for message in notifications], ["RB-CHECKOUT-LATENCY", "RB-SERVICE-ERROR-RATE"])
         text = "\n".join(logs.output)
         self.assertIn("service=payment kept_service=checkout", text)
 
@@ -752,13 +756,13 @@ class RuntimePipelineTest(unittest.TestCase):
             store.close()
 
         text = "\n".join(logs.output)
-        self.assertRegex(text, r"-+ AIOPS_RUN_START run=\d+ -+")
+        self.assertRegex(text, r"AIOPS_RUN_START run=\d+")
         self.assertIn("AIOPS_DEDUP_RESULT", text)
-        self.assertIn("input_candidates=1 incidents=1", text)
+        self.assertIn("input_candidates=1 rca_incidents=0 incidents=1", text)
         self.assertIn("AIOPS_CONCLUSION source=incident failed_service=checkout", text)
         self.assertIn("AIOPS_NOTIFY_READY", text)
         self.assertIn("status=pending", text)
-        self.assertRegex(text, r"-+ AIOPS_RUN_END run=\d+ candidates=1 incidents=1 root_causes=0 -+")
+        self.assertRegex(text, r"AIOPS_RUN_END run=\d+ candidates=1 incidents=1 root_causes=0")
 
     def test_pipeline_marks_notification_failure_for_retry(self):
         settings = Settings()
@@ -893,10 +897,10 @@ class RuntimePipelineTest(unittest.TestCase):
                 collector=StaticCollector(
                     [
                         Observation(
-                            signal_id="checkout_bad_ratio_24h",
+                            signal_id="checkout_cpu_millicores",
                             value=None,
-                            unit="ratio",
-                            window="24h",
+                            unit="millicores",
+                            window="5m",
                             quality=SignalQuality.STALE,
                         )
                     ]
@@ -920,10 +924,10 @@ class RuntimePipelineTest(unittest.TestCase):
                 collector=StaticCollector(
                     [
                         Observation(
-                            signal_id="checkout_bad_ratio_24h",
+                            signal_id="checkout_cpu_millicores",
                             value=0.02,
-                            unit="ratio",
-                            window="24h",
+                            unit="millicores",
+                            window="5m",
                             quality=SignalQuality.UNQUALIFIED,
                         )
                     ]

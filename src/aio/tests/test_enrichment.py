@@ -224,6 +224,32 @@ class EnricherTest(unittest.TestCase):
         self.assertFalse(result.trace_failure)
         self.assertIsNone(result.trace_root_service)
 
+    def test_long_lived_control_stream_is_not_failure_corroboration(self):
+        jaeger = FakeJaeger()
+        jaeger.search_traces = lambda service, limit=20, start=None, end=None: {
+            "data": [
+                {
+                    "traceID": "flag-stream",
+                    "processes": {"p1": {"serviceName": service}},
+                    "spans": [
+                        {
+                            "processID": "p1",
+                            "operationName": "flagd.evaluation.v1.Service/EventStream",
+                            "startTime": 400_000_000,
+                            "duration": 600_000_000,
+                            "tags": [{"key": "otel.status_code", "value": "ERROR"}],
+                        }
+                    ],
+                }
+            ]
+        }
+
+        result = Enricher(jaeger=jaeger).corroborate([self.finding()], window_seconds=900)["checkout"]
+
+        self.assertEqual(result.available_sources, {"trace"})
+        self.assertFalse(result.trace_failure)
+        self.assertIsNone(result.trace_id)
+
     def test_failed_corroboration_source_is_unavailable(self):
         result = Enricher(jaeger=FailingClient()).corroborate([self.finding()], window_seconds=900)["checkout"]
 
