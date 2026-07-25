@@ -118,4 +118,33 @@ class TestConfirmCartAction:
         cart_stub.AddItem.side_effect = Exception("gRPC error")
         ok, reason = cart_tool.confirm_cart_action(token, "user_1", cart_stub, vk)
         assert ok is False
-        assert "cart service error" in reason.lower()
+        assert reason == "Cart service is temporarily unavailable."
+
+    @pytest.mark.parametrize(
+        "payload",
+        [
+            "not-json",
+            json.dumps({"user_id": "user_1", "product_id": "", "quantity": 1}),
+            json.dumps({"user_id": "user_1", "product_id": "P1", "quantity": "many"}),
+            json.dumps({"user_id": "user_1", "product_id": "P1", "quantity": 100}),
+            json.dumps(
+                {
+                    "user_id": "user_1",
+                    "product_id": "P1",
+                    "quantity": 1,
+                    "unexpected": "unsafe",
+                }
+            ),
+        ],
+    )
+    def test_malformed_payload_is_rejected_without_cart_write(self, payload):
+        vk = FakeValkey()
+        token = "malformed-token"
+        vk._store[f"copilot:pending:{token}"] = payload
+        cart_stub = MagicMock()
+
+        ok, reason = cart_tool.confirm_cart_action(token, "user_1", cart_stub, vk)
+
+        assert ok is False
+        assert reason == "Invalid token payload."
+        cart_stub.AddItem.assert_not_called()

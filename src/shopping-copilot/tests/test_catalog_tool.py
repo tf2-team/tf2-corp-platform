@@ -69,10 +69,10 @@ class TestSecondaryFilters:
 
     def test_category_filter_removes_wrong_category(self):
         products = [
-            _make_proto_product("A", "Sony WH", 50, 0, ["headphones"]),
+            _make_proto_product("A", "Sony WH", 50, 0, ["accessories"]),
             _make_proto_product("B", "Nike Shirt", 30, 0, ["clothing"]),
         ]
-        intent = ShoppingIntent(query="headphones", category="headphones")
+        intent = ShoppingIntent(query="headphones", category="accessories")
         stub = _make_stub(products)
         results = catalog_tool.search_catalog(intent, stub)
         assert len(results) == 1

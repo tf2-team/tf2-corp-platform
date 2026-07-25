@@ -14,7 +14,7 @@ response is serialised back to proto.
 from enum import Enum
 from typing import Literal, Optional
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, StrictBool
 
 AllowedCategory = Literal[
     "telescopes",
@@ -55,16 +55,16 @@ class ShoppingIntent(CopilotContractModel):
     validates it and uses each field as a hard filter — not a hint — when
     calling ProductCatalogService.SearchProducts.
     """
-    is_greeting: bool = Field(
+    is_greeting: StrictBool = Field(
         default=False,
         description="True if the user message is a simple greeting or chit-chat start (e.g. 'hi', 'hello', 'hey', 'good morning').",
     )
-    is_shopping_related: bool = Field(
+    is_shopping_related: StrictBool = Field(
         default=True,
         description="True if the user request is related to shopping, products, reviews, cart actions, or a greeting. False if completely unrelated (e.g. math problems, coding tasks, weather).",
     )
     query: str = Field(description="Keyword(s) to search in product name/description.")
-    category: Optional[str] = Field(
+    category: Optional[AllowedCategory] = Field(
         default=None,
         description="Exact product category to filter by. Must be one of: 'telescopes', 'accessories', 'travel', 'binoculars', 'flashlights', 'assembly', 'books'. Set to null if not mentioned or matching another category.",
     )
@@ -77,11 +77,11 @@ class ShoppingIntent(CopilotContractModel):
         default_factory=list,
         description="Desired features mentioned by the user (informational, for Q&A).",
     )
-    wants_description: bool = Field(
+    wants_description: StrictBool = Field(
         default=False,
         description="True if the user explicitly asked for a description, summary, or details of a product.",
     )
-    needs_review_qa: bool = Field(
+    needs_review_qa: StrictBool = Field(
         default=False,
         description="True if the user wants review-grounded Q&A, quality feedback, pros/cons, or ratings after search.",
     )
@@ -89,7 +89,7 @@ class ShoppingIntent(CopilotContractModel):
         default=None,
         description="The specific question to answer from reviews, if needs_review_qa is True.",
     )
-    wants_add_to_cart: bool = Field(
+    wants_add_to_cart: StrictBool = Field(
         default=False,
         description="True if the user explicitly asked to add a product to their cart.",
     )
@@ -127,7 +127,7 @@ class PendingCartAction(CopilotContractModel):
     token: str = Field(min_length=1)
     user_id: str = Field(min_length=1)
     product_id: str = Field(min_length=1)
-    quantity: int = Field(default=1, ge=1, le=10)
+    quantity: int = Field(default=1, ge=1, le=10, strict=True)
 
 
 __all__ = [

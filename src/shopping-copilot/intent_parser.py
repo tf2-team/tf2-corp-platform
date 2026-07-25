@@ -67,7 +67,7 @@ User: Show me lens cleaning kits under $30
 JSON: {"is_greeting":false,"is_shopping_related":true,"query":"lens cleaning kit","category":null,"max_price":30,"features":[],"needs_review_qa":false,"follow_up_question":null,"wants_add_to_cart":false,"cart_product_hint":null}
 
 User: Is the Red Flashlight good for night observation?
-JSON: {"is_greeting":false,"is_shopping_related":true,"query":"red flashlight","category":"flashlight","max_price":null,"features":[],"needs_review_qa":true,"follow_up_question":"Is the Red Flashlight good for night observation?","wants_add_to_cart":false,"cart_product_hint":null}
+JSON: {"is_greeting":false,"is_shopping_related":true,"query":"red flashlight","category":"flashlights","max_price":null,"features":[],"needs_review_qa":true,"follow_up_question":"Is the Red Flashlight good for night observation?","wants_add_to_cart":false,"cart_product_hint":null}
 
 User: Add the Lens Cleaning Kit to my cart
 JSON: {"is_greeting":false,"is_shopping_related":true,"query":"lens cleaning kit","category":null,"max_price":null,"features":[],"needs_review_qa":false,"follow_up_question":null,"wants_add_to_cart":true,"cart_product_hint":"Lens Cleaning Kit"}

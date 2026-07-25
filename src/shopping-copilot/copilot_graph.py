@@ -18,13 +18,16 @@ Flow:
 Each node is wrapped in try/except; any unhandled exception routes to
 fallback_node which sets status=FALLBACK and stops the graph.
 
-Bounds (enforced by LangGraph config):
+Bounds:
     recursion_limit = 5
-    timeout        = 15 seconds (asyncio.wait_for in copilot_server.py)
+    timeout        = COPILOT_GRAPH_TIMEOUT_SECONDS
 """
 
-import asyncio
+from concurrent.futures import ThreadPoolExecutor, TimeoutError as FutureTimeoutError
 import logging
+import os
+import threading
+import time
 from typing import Optional, TypedDict
 
 from langgraph.graph import StateGraph, START, END
@@ -40,12 +43,28 @@ from copilot_contracts import (
     PendingCartAction,
 )
 import intent_parser
+from bedrock_runtime import BedrockUnavailableError, InvalidModelOutputError
 from catalog_tool import search_catalog
 from review_tool import answer_with_reviews
 from cart_tool import create_pending_token
 
 
 logger = logging.getLogger("copilot_graph")
+FALLBACK_REASON = "Shopping assistance is temporarily unavailable. Please try again shortly."
+
+
+class _ExecutionGuard:
+    """Stops downstream tools after the synchronous graph deadline expires."""
+
+    def __init__(self, timeout_seconds: float):
+        self._cancelled = threading.Event()
+        self.deadline = time.monotonic() + timeout_seconds
+
+    def cancel(self) -> None:
+        self._cancelled.set()
+
+    def expired(self) -> bool:
+        return self._cancelled.is_set() or time.monotonic() >= self.deadline
 
 # ---------------------------------------------------------------------------
 # State
@@ -68,6 +87,7 @@ class CopilotState(TypedDict):
     reason: str
     # Populated by build_response_node; everything else is intermediate.
     error: Optional[str]
+    execution_guard: Optional[_ExecutionGuard]
 
 
 # ---------------------------------------------------------------------------
@@ -94,6 +114,17 @@ class CopilotDeps:
 # ---------------------------------------------------------------------------
 
 def make_nodes(deps: CopilotDeps):
+
+    def stop_if_expired(state: CopilotState) -> Optional[CopilotState]:
+        guard = state.get("execution_guard")
+        if guard and guard.expired():
+            return {
+                **state,
+                "status": CopilotStatus.FALLBACK,
+                "reason": FALLBACK_REASON,
+                "error": "DeadlineExceeded",
+            }
+        return None
 
     def input_guardrail_node(state: CopilotState) -> CopilotState:
         """Block prompt injection, PII, and enforce rate limits in the user message."""
@@ -130,10 +161,13 @@ def make_nodes(deps: CopilotDeps):
 
     def intent_parse_node(state: CopilotState) -> CopilotState:
         """Parse safe_message into a ShoppingIntent."""
+        expired_state = stop_if_expired(state)
+        if expired_state:
+            return expired_state
         try:
             intent = intent_parser.parse_intent(state["safe_message"])
             if intent.is_greeting:
-                logger.info("Greeting request received: %r", state["safe_message"])
+                logger.info("Greeting request received")
                 return {
                     **state,
                     "intent": intent,
@@ -141,7 +175,7 @@ def make_nodes(deps: CopilotDeps):
                     "reason": "Hello! How can I help you today?",
                 }
             if not intent.is_shopping_related:
-                logger.info("Out-of-scope request blocked: %r", state["safe_message"])
+                logger.info("Out-of-scope request blocked")
                 return {
                     **state,
                     "intent": intent,
@@ -161,18 +195,22 @@ def make_nodes(deps: CopilotDeps):
                 "interpreted_criteria": ", ".join(criteria_parts),
             }
         except Exception as exc:
-            logger.error("Intent parse failed: %s", exc)
+            error_category = type(exc).__name__
+            logger.error("Intent parse failed", extra={"error_category": error_category})
             return {
                 **state,
                 "status": CopilotStatus.FALLBACK,
-                "reason": "Could not understand your request. Please try again.",
-                "error": str(exc),
+                "reason": FALLBACK_REASON,
+                "error": error_category,
             }
 
     def catalog_search_node(state: CopilotState) -> CopilotState:
         """Call ProductCatalogService.SearchProducts."""
         if state.get("status") in (CopilotStatus.BLOCKED, CopilotStatus.FALLBACK):
             return state
+        expired_state = stop_if_expired(state)
+        if expired_state:
+            return expired_state
         try:
             results = search_catalog(state["intent"], deps.catalog_stub)
             if not results:
@@ -190,18 +228,22 @@ def make_nodes(deps: CopilotDeps):
                 "allowed_product_ids": [r.product_id for r in results],
             }
         except Exception as exc:
-            logger.error("Catalog search failed: %s", exc)
+            error_category = type(exc).__name__
+            logger.error("Catalog search failed", extra={"error_category": error_category})
             return {
                 **state,
                 "status": CopilotStatus.FALLBACK,
                 "reason": "Product search is temporarily unavailable.",
-                "error": str(exc),
+                "error": error_category,
             }
 
     def qa_node(state: CopilotState) -> CopilotState:
         """Ground-answer a review question for the matched catalog result."""
         if state.get("status") in (CopilotStatus.BLOCKED, CopilotStatus.FALLBACK, CopilotStatus.NO_RESULTS):
             return state
+        expired_state = stop_if_expired(state)
+        if expired_state:
+            return expired_state
         intent = state["intent"]
         if not intent or not intent.needs_review_qa or not intent.follow_up_question:
             return state
@@ -234,8 +276,20 @@ def make_nodes(deps: CopilotDeps):
                 product_reviews_stub=deps.reviews_stub,
             )
             return {**state, "qa_result": grounded, "safe_reviews": safe_revs}
+        except (BedrockUnavailableError, InvalidModelOutputError) as exc:
+            error_category = type(exc).__name__
+            logger.error("Review Q&A model call failed", extra={"error_category": error_category})
+            return {
+                **state,
+                "status": CopilotStatus.FALLBACK,
+                "reason": FALLBACK_REASON,
+                "error": error_category,
+                "qa_result": None,
+                "safe_reviews": None,
+            }
         except Exception as exc:
-            logger.error("Review Q&A failed: %s", exc)
+            error_category = type(exc).__name__
+            logger.error("Review Q&A failed", extra={"error_category": error_category})
             # Non-fatal: fall through with no qa_result rather than FALLBACK.
             return {**state, "qa_result": None, "safe_reviews": None}
 
@@ -243,6 +297,9 @@ def make_nodes(deps: CopilotDeps):
         """Prepare a pending add-to-cart token (does NOT write to cart)."""
         if state.get("status") in (CopilotStatus.BLOCKED, CopilotStatus.FALLBACK, CopilotStatus.NO_RESULTS):
             return state
+        expired_state = stop_if_expired(state)
+        if expired_state:
+            return expired_state
         intent = state["intent"]
         if not intent or not intent.wants_add_to_cart:
             return state
@@ -388,7 +445,9 @@ def build_graph(deps: CopilotDeps) -> StateGraph:
 # Entry point used by copilot_server.py
 # ---------------------------------------------------------------------------
 
-GRAPH_TIMEOUT_SECONDS = 15
+GRAPH_TIMEOUT_SECONDS = float(os.environ.get("COPILOT_GRAPH_TIMEOUT_SECONDS", "15"))
+if GRAPH_TIMEOUT_SECONDS <= 0:
+    raise ValueError("COPILOT_GRAPH_TIMEOUT_SECONDS must be > 0")
 GRAPH_RECURSION_LIMIT = 10
 
 
@@ -396,7 +455,7 @@ GRAPH_RECURSION_LIMIT = 10
 def run_copilot(user_message: str, deps: CopilotDeps, user_id: str = "anonymous") -> CopilotState:
     """Run the Shopping Copilot graph synchronously with timeout.
 
-    Wraps asyncio execution and applies a hard deadline. Any exception
+    Runs graph execution in a worker and applies a hard deadline. Any exception
     from the graph — including timeout — produces a FALLBACK state.
     """
     graph = build_graph(deps)
@@ -413,36 +472,39 @@ def run_copilot(user_message: str, deps: CopilotDeps, user_id: str = "anonymous"
         "interpreted_criteria": "",
         "reason": "",
         "error": None,
+        "execution_guard": _ExecutionGuard(GRAPH_TIMEOUT_SECONDS),
     }
     config = {"recursion_limit": GRAPH_RECURSION_LIMIT}
 
-    async def _async_invoke():
-        return graph.invoke(initial_state, config=config)
-
+    executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="copilot-graph")
+    future = executor.submit(graph.invoke, initial_state, config)
     try:
-        loop = asyncio.new_event_loop()
-        result = loop.run_until_complete(
-            asyncio.wait_for(
-                _async_invoke(),
-                timeout=GRAPH_TIMEOUT_SECONDS,
-            )
-        )
-        loop.close()
+        result = future.result(timeout=GRAPH_TIMEOUT_SECONDS)
+        executor.shutdown(wait=True)
         return result
 
-    except asyncio.TimeoutError:
+    except FutureTimeoutError:
+        initial_state["execution_guard"].cancel()
+        future.cancel()
+        executor.shutdown(wait=False, cancel_futures=True)
         logger.error("Copilot graph timed out after %ds", GRAPH_TIMEOUT_SECONDS)
         return {
             **initial_state,
             "status": CopilotStatus.FALLBACK,
-            "reason": "Request timed out. Please try again.",
-            "error": "timeout",
+            "reason": FALLBACK_REASON,
+            "error": "DeadlineExceeded",
         }
     except Exception as exc:
-        logger.error("Copilot graph raised unexpected exception: %s", exc)
+        initial_state["execution_guard"].cancel()
+        executor.shutdown(wait=False, cancel_futures=True)
+        error_category = type(exc).__name__
+        logger.error(
+            "Copilot graph raised unexpected exception",
+            extra={"error_category": error_category},
+        )
         return {
             **initial_state,
             "status": CopilotStatus.FALLBACK,
-            "reason": "An unexpected error occurred.",
-            "error": str(exc),
+            "reason": FALLBACK_REASON,
+            "error": error_category,
         }

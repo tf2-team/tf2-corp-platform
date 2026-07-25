@@ -64,3 +64,4 @@ contract
 /dist/ai-model/
 .agents
 skills-lock.json
+.claude

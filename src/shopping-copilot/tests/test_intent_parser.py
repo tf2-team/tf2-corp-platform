@@ -32,7 +32,7 @@ class TestShoppingIntentSchema:
     def test_full_intent(self):
         intent = ShoppingIntent(
             query="wireless headphones",
-            category="headphones",
+            category="accessories",
             max_price=100.0,
             features=["noise cancelling", "waterproof"],
             needs_review_qa=True,
@@ -61,7 +61,7 @@ class TestParseIntentMocked:
 
         fixed_intent = ShoppingIntent(
             query="headphones",
-            category="headphones",
+            category="accessories",
             max_price=80.0,
             features=["noise cancelling"],
             needs_review_qa=False,
@@ -80,7 +80,22 @@ class TestParseIntentMocked:
         result = intent_parser.parse_intent("I want noise cancelling headphones under $80")
         assert result.query == "headphones"
         assert result.max_price == 80.0
-        assert result.category == "headphones"
+        assert result.category == "accessories"
+
+    @pytest.mark.parametrize("bad_value", ["true", 1, 0, [], {}])
+    def test_wants_add_to_cart_rejects_non_boolean_values(self, bad_value):
+        with pytest.raises(Exception):
+            ShoppingIntent(query="headphones", wants_add_to_cart=bad_value)
+
+    def test_extra_field_is_rejected(self):
+        with pytest.raises(Exception):
+            ShoppingIntent.model_validate(
+                {"query": "headphones", "unexpected_tool_arg": "unsafe"}
+            )
+
+    def test_unknown_category_is_rejected(self):
+        with pytest.raises(Exception):
+            ShoppingIntent(query="headphones", category="admin")
 
     def test_parse_injection_question_structure(self):
         """Ensure ShoppingIntent cannot carry injection payloads via field types."""

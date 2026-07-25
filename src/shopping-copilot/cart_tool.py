@@ -21,6 +21,7 @@ import logging
 import os
 import secrets
 import valkey as valkeylib
+from pydantic import ValidationError
 from techx_ai_common.proto import demo_pb2, demo_pb2_grpc
 from copilot_contracts import PendingCartAction
 
@@ -107,18 +108,15 @@ def confirm_cart_action(
 
     try:
         payload = json.loads(payload_raw)
-    except json.JSONDecodeError:
+        action = PendingCartAction.model_validate({"token": token, **payload})
+    except (json.JSONDecodeError, TypeError, ValidationError):
         logger.error("Pending cart action payload is invalid")
         return False, "Invalid token payload."
 
-    stored_user_id = payload.get("user_id", "")
-    product_id = payload.get("product_id", "")
-    quantity = int(payload.get("quantity", 1))
-
-    if stored_user_id != user_id:
+    if action.user_id != user_id:
         logger.info(
             "Confirm cart: user_id mismatch. expected=%r got=%r",
-            stored_user_id, user_id,
+            action.user_id, user_id,
         )
         return False, "Token does not belong to this user."
 
@@ -126,16 +124,19 @@ def confirm_cart_action(
     try:
         cart_stub.AddItem(demo_pb2.AddItemRequest(
             user_id=user_id,
-            item=demo_pb2.CartItem(product_id=product_id, quantity=quantity),
+            item=demo_pb2.CartItem(
+                product_id=action.product_id,
+                quantity=action.quantity,
+            ),
         ))
         logger.info(
             "Cart write confirmed: user_id=%r product_id=%r quantity=%d",
-            user_id, product_id, quantity,
+            user_id, action.product_id, action.quantity,
         )
         return True, ""
     except Exception as exc:  # noqa: BLE001
-        logger.error("Cart write failed: %s", exc)
-        return False, f"Cart service error: {exc}"
+        logger.error("Cart write failed", extra={"error_category": type(exc).__name__})
+        return False, "Cart service is temporarily unavailable."
 
 
 def make_cart_stub() -> demo_pb2_grpc.CartServiceStub:

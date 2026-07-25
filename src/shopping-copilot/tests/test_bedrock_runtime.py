@@ -6,7 +6,10 @@
 """Regression tests for the Bedrock-only Shopping Copilot path."""
 
 import sys
+import time
 from types import SimpleNamespace
+
+import pytest
 
 from copilot_contracts import ShoppingIntent
 
@@ -48,3 +51,87 @@ def test_parse_intent_uses_bedrock_without_openai_key(monkeypatch):
     monkeypatch.setattr(intent_parser, "_get_instructor_client", lambda: (_ for _ in ()).throw(AssertionError()))
 
     assert intent_parser.parse_intent("Find headphones") == expected
+
+
+def test_external_schema_mismatch_fault_is_rejected(monkeypatch):
+    import bedrock_runtime
+    from techx_ai_common import bedrock
+
+    old_config = bedrock._get_config()
+    try:
+        monkeypatch.setenv("BEDROCK_FAULT_MODE", "schema_mismatch")
+        monkeypatch.setenv("BEDROCK_MAX_ATTEMPTS", "1")
+        monkeypatch.setenv("BEDROCK_SCHEMA_MAX_ATTEMPTS", "2")
+        monkeypatch.setenv("BEDROCK_TOTAL_DEADLINE_SECONDS", "1")
+        bedrock.reload_config()
+        bedrock.reset_breaker_state()
+
+        with pytest.raises(bedrock_runtime.InvalidModelOutputError):
+            bedrock_runtime.converse_json(
+                ShoppingIntent,
+                "system",
+                "find headphones",
+            )
+    finally:
+        bedrock._config = old_config
+        bedrock.reset_breaker_state()
+
+
+def test_external_sustained_fault_opens_breaker_and_recovers(monkeypatch):
+    import bedrock_runtime
+    from techx_ai_common import bedrock
+
+    old_config = bedrock._get_config()
+    try:
+        monkeypatch.setenv("BEDROCK_FAULT_MODE", "server_error")
+        monkeypatch.setenv("BEDROCK_MAX_ATTEMPTS", "1")
+        monkeypatch.setenv("BEDROCK_SCHEMA_MAX_ATTEMPTS", "1")
+        monkeypatch.setenv("BEDROCK_BREAKER_FAILURE_THRESHOLD", "3")
+        monkeypatch.setenv("BEDROCK_BREAKER_RECOVERY_SECONDS", "0.01")
+        monkeypatch.setenv("BEDROCK_TOTAL_DEADLINE_SECONDS", "1")
+        monkeypatch.setenv("BEDROCK_MODEL_ID", "test-model")
+        bedrock.reload_config()
+        bedrock.reset_breaker_state()
+
+        for _ in range(3):
+            with pytest.raises(bedrock_runtime.BedrockUnavailableError):
+                bedrock_runtime.converse_json(
+                    ShoppingIntent,
+                    "system",
+                    "find headphones",
+                )
+
+        assert bedrock_runtime.get_breaker_state() == "OPEN"
+        with pytest.raises(bedrock_runtime.CircuitBreakerOpenError):
+            bedrock_runtime.converse_json(
+                ShoppingIntent,
+                "system",
+                "find headphones",
+            )
+
+        monkeypatch.setenv("BEDROCK_FAULT_MODE", "none")
+
+        class HealthyClient:
+            def converse(self, **_kwargs):
+                return {
+                    "output": {
+                        "message": {
+                            "content": [{"text": '{"query":"headphones"}'}]
+                        }
+                    }
+                }
+
+        monkeypatch.setattr(bedrock, "_client_factory", lambda: HealthyClient())
+        time.sleep(0.02)
+
+        result = bedrock_runtime.converse_json(
+            ShoppingIntent,
+            "system",
+            "find headphones",
+        )
+
+        assert result.query == "headphones"
+        assert bedrock_runtime.get_breaker_state() == "CLOSED"
+    finally:
+        bedrock._config = old_config
+        bedrock.reset_breaker_state()

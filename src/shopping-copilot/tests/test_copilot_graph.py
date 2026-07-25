@@ -16,6 +16,7 @@ Tests verify:
 
 import sys
 import os
+import time
 import pytest
 from unittest.mock import MagicMock, patch
 
@@ -182,6 +183,79 @@ class TestFallbackOnLLMFailure:
         deps = _make_deps()
         state = run_copilot("Find me a laptop", deps)
         assert state["status"] == CopilotStatus.FALLBACK
+        assert state["reason"] == (
+            "Shopping assistance is temporarily unavailable. Please try again shortly."
+        )
+        deps.catalog_stub.SearchProducts.assert_not_called()
+        deps.reviews_stub.GetProductReviews.assert_not_called()
+        deps.cart_stub.AddItem.assert_not_called()
+
+    def test_malformed_output_blocks_all_downstream_tools(self, monkeypatch):
+        import copilot_graph
+        from techx_ai_common import bedrock
+
+        create_pending = MagicMock()
+        monkeypatch.setattr(copilot_graph, "create_pending_token", create_pending)
+        monkeypatch.setenv("LLM_PROVIDER", "bedrock")
+        monkeypatch.setenv("BEDROCK_FAULT_MODE", "schema_mismatch")
+        monkeypatch.setenv("BEDROCK_MAX_ATTEMPTS", "1")
+        monkeypatch.setenv("BEDROCK_SCHEMA_MAX_ATTEMPTS", "2")
+        monkeypatch.setenv("BEDROCK_TOTAL_DEADLINE_SECONDS", "1")
+        old_config = bedrock._get_config()
+        try:
+            bedrock.reload_config()
+            bedrock.reset_breaker_state()
+            deps = _make_deps()
+
+            state = run_copilot(
+                "Add a telescope to my cart",
+                deps,
+                "shopper-1",
+            )
+        finally:
+            bedrock._config = old_config
+            bedrock.reset_breaker_state()
+
+        assert state["status"] == CopilotStatus.FALLBACK
+        assert state["error"] == "InvalidModelOutputError"
+        assert "unexpected_field" not in state["reason"]
+        deps.catalog_stub.SearchProducts.assert_not_called()
+        deps.reviews_stub.GetProductReviews.assert_not_called()
+        create_pending.assert_not_called()
+        deps.cart_stub.AddItem.assert_not_called()
+
+    def test_blocking_model_timeout_returns_and_never_starts_tools(self, monkeypatch):
+        import copilot_graph
+        import intent_parser
+
+        create_pending = MagicMock()
+        monkeypatch.setattr(copilot_graph, "GRAPH_TIMEOUT_SECONDS", 0.02)
+        monkeypatch.setattr(copilot_graph, "create_pending_token", create_pending)
+
+        def slow_parse(_message):
+            time.sleep(0.08)
+            return ShoppingIntent(
+                query="telescope",
+                wants_add_to_cart=True,
+                cart_product_hint="telescope",
+            )
+
+        monkeypatch.setattr(intent_parser, "parse_intent", slow_parse)
+        deps = _make_deps(
+            catalog_results=[_make_proto_product("P1", "Telescope")]
+        )
+
+        started = time.monotonic()
+        state = run_copilot("Add a telescope", deps, "shopper-1")
+        elapsed = time.monotonic() - started
+        time.sleep(0.1)
+
+        assert elapsed < 0.07
+        assert state["status"] == CopilotStatus.FALLBACK
+        assert state["error"] == "DeadlineExceeded"
+        deps.catalog_stub.SearchProducts.assert_not_called()
+        deps.reviews_stub.GetProductReviews.assert_not_called()
+        create_pending.assert_not_called()
         deps.cart_stub.AddItem.assert_not_called()
 
 

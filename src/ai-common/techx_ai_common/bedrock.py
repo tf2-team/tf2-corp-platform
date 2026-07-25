@@ -16,6 +16,8 @@ Public interface (converse_text, converse_json, get_breaker_state, and the
 three exception classes) is stable for Task 2 / product_reviews_server.py.
 """
 
+from __future__ import annotations
+
 import logging
 import os
 import random
@@ -97,6 +99,14 @@ class BedrockDeadlineExceededError(BedrockUnavailableError):
 
 class InvalidModelOutputError(RuntimeError):
     """Model output failed schema validation after all repair attempts."""
+
+
+class _InjectedRetryableError(RuntimeError):
+    """Test-only provider failure injected through explicit configuration."""
+
+    def __init__(self, fault_mode: str):
+        super().__init__(f"Injected Bedrock fault: {fault_mode}")
+        self.fault_mode = fault_mode
 
 
 # ---------------------------------------------------------------------------
@@ -336,6 +346,20 @@ def _response_text(response: dict) -> str:
 
 
 def _invoke_once(system_prompt: str, user_prompt: str) -> str:
+    fault_mode = os.environ.get("BEDROCK_FAULT_MODE", "none").strip().lower()
+    if fault_mode != "none":
+        _logger.warning("bedrock_fault_injected", extra={"fault_mode": fault_mode})
+        if fault_mode in {"timeout", "throttling", "server_error"}:
+            raise _InjectedRetryableError(fault_mode)
+        if fault_mode == "malformed_json":
+            return "{malformed"
+        if fault_mode == "schema_mismatch":
+            return '{"unexpected_field":true}'
+        raise ValueError(
+            "BEDROCK_FAULT_MODE must be one of: none, timeout, throttling, "
+            "server_error, malformed_json, schema_mismatch"
+        )
+
     cfg = _get_config()
     response = _client_factory().converse(
         modelId=os.environ["BEDROCK_MODEL_ID"],
@@ -368,7 +392,16 @@ def _is_retryable(exc: Exception) -> bool:
         ReadTimeoutError,
     )
 
-    if isinstance(exc, (ConnectTimeoutError, ReadTimeoutError, EndpointConnectionError, ConnectionClosedError)):
+    if isinstance(
+        exc,
+        (
+            _InjectedRetryableError,
+            ConnectTimeoutError,
+            ReadTimeoutError,
+            EndpointConnectionError,
+            ConnectionClosedError,
+        ),
+    ):
         return True
     if isinstance(exc, ClientError):
         error = exc.response.get("Error", {})
