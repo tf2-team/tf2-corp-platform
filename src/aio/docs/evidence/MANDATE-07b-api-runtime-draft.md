@@ -97,7 +97,7 @@ implementation.
 
 Per-service statistical baseline and anomaly scoring are implemented and
 documented in Mandate #7a and
-[`ADR-DETECT-001`](../../../src/aio/docs/mandates/7a/ADR-DETECT-001.md).
+[`ADR-DETECT-001`](../mandates/7a/ADR-DETECT-001.md).
 In this #7b run:
 
 - the normal windows establish that checkout and cart remain quiet under
@@ -197,6 +197,13 @@ Dedup result: `PASS`. The detector fired across multiple cycles while the fault 
 ![Incident API occurrence count 4](./08b-incident-api-checkout-error-rate-occurrence4.png)
 
 ![Dedup repeat occurrence count 9](./11b-dedup-repeat-checkout-occurrence9-with-rca-caveat.png)
+
+The `localhost:8500` command visible in the later dedup screenshot is the
+legacy local API port used when that persisted incident snapshot was queried.
+The canonical reproduction port for this submission is `8540`, as documented
+in Sections 3 and 15. The matching incident ID
+`inc-b3d92ea50475` and detector events tie the snapshot to the checkout
+scenario above.
 
 ## 8. User-Visible Impact
 
@@ -323,13 +330,13 @@ burn rate is not expected to recover immediately.
 
 ## 11. RCA and Incident Lifecycle Caveats
 
-RCA produced an unexpected `recommendation` root-cause candidate after the checkout incident. This is not counted as the true positive for the injected `local-paymentFailure` case.
+RCA produced an unexpected `recommendation` root-cause candidate after the checkout incident. It is not counted as a true positive for the injected `local-paymentFailure` case and is conservatively counted as one false-positive API incident.
 
 Post-recovery API also showed incidents still in `state=open`. Therefore, telemetry recovery is proven, but automatic incident resolution is not claimed.
 
 | Caveat | Evidence | Submission treatment |
 | --- | --- | --- |
-| RCA unexpected service | `recommendation` root cause | record as caveat; do not count as TP |
+| RCA unexpected service | `recommendation` root cause | count as one false positive in conservative API-incident precision |
 | Incident lifecycle | checkout incident still `open` after telemetry recovery | record as caveat; recovery claim is telemetry-only |
 | Burn-rate recovery | rolling-24h value remains elevated after fault removal | claim short-window telemetry recovery, not immediate 24h recovery |
 
@@ -361,7 +368,7 @@ impact, and recovery evidence.
 | Service | `cart` |
 | Severity | `SEV1` |
 | Incident | `inc-c7f94b1810a6` |
-| Incident occurrence count | `11` in the retained supplemental state store |
+| Incident occurrence count | `2` in the captured API evidence |
 
 The Webstore SLO dashboard also showed `Cart Success Rate = 97.2%`, below its `>=99.5%` SLO. After disabling the flag, cart success returned to `100%`. This demonstrates a second live service path (`cart`) with detector fire, incident creation, and telemetry recovery.
 
@@ -403,8 +410,18 @@ Counting rule for precision:
 One "fire" is one deduplicated alert incident, identified by its stable
 incident ID. Repeated detector evaluation cycles that only increase
 occurrence_count on the same incident are not counted as new alerts.
-RCA candidates are evaluated separately and are not counted as detector fires.
 ```
+
+Two precision views are reported to avoid hiding the unexpected RCA incident:
+
+- Conservative API-incident precision counts every distinct incident exposed
+  by the runtime API, including the unexpected `recommendation` RCA incident.
+- Impact-alert precision counts only the two deduplicated detector incidents
+  that entered the labeled impact-alert evaluation.
+
+The conservative API-incident precision is the primary submission value.
+These figures do not claim a separate precision/recall measurement for the
+#7a statistical-baseline algorithms.
 
 Labeled cases across the two isolated clean runs:
 
@@ -424,21 +441,25 @@ Metric summary:
 | Injected incidents `K` | `2` | payment failure + cart failure |
 | Caught incidents | `2` | both labeled incidents detected |
 | False negatives | `0` | `K - caught` |
+| False positives | `1` | unexpected `recommendation` RCA incident exposed by the API |
 | Incident recall | `100%` | `2 / 2` |
-| Alert-incident precision | `100%` | `2 correct deduplicated alert incidents / 2 total alert incidents` |
+| Conservative API-incident precision | `66.7%` | `2 correct incidents / 3 total API incidents` |
+| Impact-alert precision | `100%` | `2 correct deduplicated detector incidents / 2 impact-alert incidents` |
 | Checkout lead-time | `205.417s` | checkout first fire - checkout fault start |
 | Cart lead-time | `187.947s` | cart incident creation - cart fault start |
 | Mean lead-time | `196.682s` | `(205.417 + 187.947) / 2` |
 | Median lead-time | `196.682s` | median of the two labeled lead-times |
 | Checkout recovery time | `~376.827s` | recovery dashboard capture - fault disabled |
-| RCA checkout root-cause hit | `False` | RCA did not identify `payment`; reported separately from detection precision |
+| RCA checkout root-cause hit | `False` | RCA did not identify `payment`; counted in conservative API precision and reported separately from impact-alert precision |
 
 Because `K=2`, these metrics remain preliminary and are not statistically
 broad. They demonstrate two working live service paths for #7b but should not
-be presented as production-quality model evaluation. The `100%` precision
-uses the two expected deduplicated labeled incidents as the counting unit.
+be presented as production-quality model evaluation. The primary conservative
+precision is `66.7%` because it includes the unexpected RCA-derived API
+incident as a false positive. The secondary `100%` impact-alert precision uses
+only the two expected deduplicated detector incidents as the counting unit.
 State-store inspection confirmed the corrected cart incident ID
-`inc-c7f94b1810a6`; RCA candidates remain excluded from detector precision.
+`inc-c7f94b1810a6`.
 
 ## 14. Evidence Index
 
@@ -541,7 +562,7 @@ because the operator timestamp was captured manually.
 | Evidence commit | `c11e4bd` (`docs(aiops): refresh mandate 7b live evidence`) |
 | Repository HEAD when this document was reviewed | `1206411` |
 | Runtime implementation PR/commit | `TODO: add final runtime implementation PR or commit link` |
-| ADR | [`ADR-DETECT-001`](../../../src/aio/docs/mandates/7a/ADR-DETECT-001.md) |
+| ADR | [`ADR-DETECT-001`](../mandates/7a/ADR-DETECT-001.md) |
 | ADR sign-off | `Pending reviewer sign-off` |
 | Policy mode | `dry-run` |
 | Burn-rate supplemental evidence | `PASS` - evidence `18a` through `18k` |
@@ -565,22 +586,23 @@ AI MANDATE #7b - API runtime live proof
 - Detector: auto_checkout_error_rate on checkout_error_rate_5m, value 0.078577 > threshold 0.05, SEV2
 - Incident: inc-b3d92ea50475, service checkout, runbook RB-SERVICE-ERROR-RATE
 - Notification intent: AIOPS_NOTIFY_ENQUEUED_READY for inc-b3d92ea50475, status pending
-- Dedup/no duplicate ID: same incident inc-b3d92ea50475, occurrence_count 4 -> 9 -> 12
+- Dedup/no duplicate ID: same incident inc-b3d92ea50475, occurrence_count 4 -> 9
 - Impact: checkout success dropped to 63.9% against SLO >=99.0%
 - Fault disabled: 2026-07-24 01:10:46.173 +07
 - Recovery: checkout success 100%, p95 350ms, p99 775ms (<1s), captured around 01:17 +07
 - Labeled set: K=2 injected incidents - local-paymentFailure and local-cartFailure
 - Recall: 100% (2 caught / 2 injected incidents)
-- Alert-incident precision: 100% (2 correct deduplicated alert incidents / 2 total alert incidents)
+- Conservative API-incident precision: 66.7% (2 correct incidents / 3 total API incidents)
+- Impact-alert precision: 100% (2 correct deduplicated detector incidents / 2 impact-alert incidents)
 - Counting unit: one stable deduplicated incident ID is one alert; occurrence_count increments are not new alerts
 - Checkout lead-time: 205.417s
 - Cart lead-time: 187.947s; mean/median labeled lead-time: 196.682s
 - Expanded service: local-cartFailure produced auto_cart_latency_p99 on cart_p99_latency_5m, value 3.0867s > 1s, incident inc-c7f94b1810a6; cart SLO recovered to 100%
-- RCA quality is reported separately: payment root-cause hit=false; RCA output is not counted as a detection false positive
+- RCA quality: payment root-cause hit=false; the unexpected recommendation RCA incident is counted as one false positive in conservative precision
 - Burn-rate supplemental proof: PASS; baseline 0.790x with no fire, verified fire at 1.1469x, incident inc-ca09d8e8a247, occurrence_count 1 -> 3
 - Burn-rate no-spam: one initial notification enqueue; subsequent deduplicated cycles did not enqueue again during cooldown
 - Caveats: incidents remain open after short-window telemetry recovery; rolling-24h burn rate is not expected to recover immediately
-- Evidence: docs/aiops/evidence/MANDATE-07b-api-runtime-draft.md and linked screenshots in docs/aiops/evidence
+- Evidence: src/aio/docs/evidence/MANDATE-07b-api-runtime-draft.md and linked screenshots in src/aio/docs/evidence
 ```
 
 ## 18. Conclusion
@@ -590,7 +612,9 @@ checkout and cart faults from Prometheus telemetry, created stable incidents,
 deduped repeated detections, recorded notification intent for the primary
 checkout case, and showed user-visible SLO degradation followed by telemetry
 recovery. Detection recall and alert-incident precision are both `100%` on the
-preliminary `K=2` labeled set. The supplemental burn-rate run additionally
+preliminary `K=2` labeled set, while conservative precision across all
+runtime API incidents is `66.7%` because the unexpected RCA-derived incident
+is counted as a false positive. The supplemental burn-rate run additionally
 proves official error-budget impact detection, stable incident deduplication,
 and notification cooldown behavior. RCA quality and automatic incident
 resolution remain explicit caveats rather than completed claims.
