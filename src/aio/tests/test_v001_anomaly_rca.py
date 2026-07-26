@@ -656,6 +656,38 @@ class V001AnomalyRcaTest(unittest.TestCase):
     def test_growth_gate_uses_median_three_smoothing(self):
         self.assertEqual(median3([10, 100, 10]), [10, 10, 10])
         engine = anomaly_engine()
+        with self.assertLogs("aiops.anomaly.v001", level="INFO") as logs:
+            engine._filter_normal_traffic_growth(
+                [
+                    minute_metric("checkout", "request_rate_5m", [10] * 45),
+                    minute_metric("payment", "request_rate_5m", [10] * 45),
+                ]
+            )
+        self.assertEqual(len(logs.records), 1)
+        self.assertIn("service=checkout", logs.output[0])
+        self.assertIn("service=payment", logs.output[0])
+        self.assertIn("reason=missing_metrics", logs.output[0])
+
+    def test_growth_gate_is_not_applicable_to_infrastructure_only_signals(self):
+        engine = anomaly_engine()
+        series = [
+            minute_metric("postgresql", "active_connections", [1] * 45),
+            minute_metric("kafka", "consumer_lag", [0] * 45),
+            minute_metric("otel-collector", "exporter_queue_saturation", [0] * 45),
+            minute_metric("valkey-cart", "memory_used_bytes", [500_000_000] * 45),
+        ]
+
+        with self.assertLogs("aiops.anomaly.v001", level="INFO") as logs:
+            filtered = engine._filter_normal_traffic_growth(series)
+
+        self.assertEqual(filtered, series)
+        self.assertEqual(len(logs.records), 1)
+        for service in ("postgresql", "kafka", "otel-collector", "valkey-cart"):
+            self.assertIn(f"service={service} result=not_applicable breakout=false reason=not_applicable", logs.output[0])
+        self.assertNotIn("reason=missing_metrics", logs.output[0])
+
+    def test_growth_gate_logs_zero_score_metrics_without_notification_state(self):
+        engine = anomaly_engine()
         series = [
             minute_metric("checkout", "request_rate_5m", [10] * 45),
             minute_metric("payment", "request_rate_5m", [10] * 45),

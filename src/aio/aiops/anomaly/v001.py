@@ -19,6 +19,8 @@ from aiops.shared.tail import cusum_tail_change, evaluate_tail_change, fixed_bas
 
 logger = logging.getLogger(__name__)
 CUSUM_TAIL_GROUPS = {"cpu", "memory", "latency", "socket_io"}
+NORMAL_GROWTH_INPUT_GROUPS = {"request_rate", "cpu", "socket_io"}
+NORMAL_GROWTH_NOT_APPLICABLE = "reason=not_applicable"
 NORMAL_GROWTH_BREAKOUT_REASONS = (
     "reason=oom_increased",
     "reason=memory_oom_pattern",
@@ -423,13 +425,27 @@ class V001AnomalyEngine:
         by_service: dict[str, list[MetricSeries]] = defaultdict(list)
         for metric in series:
             by_service[metric.service].append(metric)
-        decisions = {service: self._normal_traffic_growth_decision(service_series) for service, service_series in by_service.items()}
+        decisions = {
+            service: (
+                self._normal_traffic_growth_decision(service_series)
+                if any(metric_group(metric.metric) in NORMAL_GROWTH_INPUT_GROUPS for metric in service_series)
+                else (False, NORMAL_GROWTH_NOT_APPLICABLE)
+            )
+            for service, service_series in by_service.items()
+        }
         normal_services = {service for service, (normal, _) in decisions.items() if normal}
         self.last_normal_growth_breakout_metrics = {
             service: _breakout_metrics_for_reason(detail, by_service[service])
             for service, (normal, detail) in decisions.items()
             if not normal and detail.startswith(NORMAL_GROWTH_BREAKOUT_REASONS)
         }
+        (logger.warning if any("zero_metrics=" in detail for _, detail in decisions.values()) else logger.info)(
+            "AIOPS_NORMAL_GROWTH_GATE %s",
+            " | ".join(
+                f"service={service} result={'not_applicable' if detail == NORMAL_GROWTH_NOT_APPLICABLE else ('skip' if normal else 'detect')} breakout={str(not normal and detail.startswith(NORMAL_GROWTH_BREAKOUT_REASONS)).lower()} {detail}"
+                for service, (normal, detail) in decisions.items()
+            )
+        )
         return [
             metric
             for metric in series
