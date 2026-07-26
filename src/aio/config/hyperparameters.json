@@ -177,7 +177,16 @@
         "default": 1.0
       },
       "traffic_shape_min_spearman": 0.6,
-      "traffic_shape_max_lag_buckets": 1
+      "traffic_shape_max_lag_buckets": 1,
+      "traffic_explanation": {
+        "threshold": 0.65,
+        "min_primary_shape": 0.55,
+        "weights": {
+          "cpu": 0.45,
+          "socket_io": 0.35,
+          "memory": 0.2
+        }
+      }
     },
     "graph": {
       "damping": 0.85,

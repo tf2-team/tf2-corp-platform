@@ -131,6 +131,7 @@ def normal_traffic_growth_decision(
     min_absolute_change: dict[str, float],
     traffic_shape_min_spearman: float = 0.7,
     traffic_shape_max_lag_buckets: int = 0,
+    traffic_explanation: dict | None = None,
     memory_oom_detector: Callable[[MetricSeries], bool] | None = None,
 ) -> tuple[bool, str]:
     required_infra_groups = ("cpu", "socket_io")
@@ -139,11 +140,13 @@ def normal_traffic_growth_decision(
     missing = [group for group in ("request_rate", *required_infra_groups) if not by_group[group]]
     if missing:
         return False, f"reason=missing_metrics metrics={','.join(missing)}"
-    request_increased = any(
-        (change := _smoothed_tail_change(metric, detection_window_seconds, start, min_tail_anomaly_buckets, min_relative_change_ratio, min_absolute_change)).significant
-        and any(change.values[index] > change.baseline for index in change.indexes)
+    request_changes = [
+        _smoothed_tail_change(metric, detection_window_seconds, start, min_tail_anomaly_buckets, min_relative_change_ratio, min_absolute_change)
         for metric in by_group["request_rate"]
-    )
+    ]
+    request_increased = any(change.significant and any(change.values[index] > change.baseline for index in change.indexes) for change in request_changes)
+    request_decreased = any(change.significant and any(change.values[index] < change.baseline for index in change.indexes) for change in request_changes)
+    request_direction = 1 if request_increased else -1 if request_decreased else 0
     for metric in series:
         if "oom_events_total" in metric.metric:
             values = [point.value for point in metric.points]
@@ -153,11 +156,16 @@ def normal_traffic_growth_decision(
         if not request_increased and memory_oom_detector is not None and metric_group(metric.metric) == "memory" and memory_oom_detector(metric):
             return False, "reason=memory_oom_pattern"
     memory_shape_metrics = []
+    primary_direction_mismatch = False
     for metric in series:
         change = _smoothed_tail_change(metric, detection_window_seconds, start, min_tail_anomaly_buckets, min_relative_change_ratio, min_absolute_change)
-        if metric_group(metric.metric) == "memory" and change.significant and not request_increased and any(change.values[index] > change.baseline for index in change.indexes):
+        group = metric_group(metric.metric)
+        if request_direction and group in required_infra_groups and change.significant and change.indexes:
+            tail_median = median(change.values[index] for index in change.indexes)
+            primary_direction_mismatch = primary_direction_mismatch or (tail_median - change.baseline) * request_direction < 0
+        if group == "memory" and change.significant and not request_increased and any(change.values[index] > change.baseline for index in change.indexes):
             return False, "reason=memory_increased_without_traffic"
-        if metric_group(metric.metric) == "memory" and change.significant and change.indexes:
+        if group == "memory" and change.significant and change.indexes:
             if request_increased and memory_oom_detector is not None and memory_oom_detector(metric):
                 continue
             tail_median = median(change.values[index] for index in change.indexes)
@@ -190,11 +198,54 @@ def normal_traffic_growth_decision(
         if group != "memory" or memory_shape_metrics
     }
     memory_detail = f" memory={scores['memory']:.3f}" if "memory" in scores else ""
-    if all(score >= traffic_shape_min_spearman for score in scores.values()):
-        return True, f"reason=traffic_shape cpu={scores['cpu']:.3f} socket_io={scores['socket_io']:.3f}{memory_detail}"
+    if primary_direction_mismatch:
+        return False, f"reason=shape_mismatch direction=primary cpu={scores['cpu']:.3f} socket_io={scores['socket_io']:.3f}{memory_detail}"
+    config = traffic_explanation or {}
+    weights = config.get("weights", {"cpu": 0.5, "socket_io": 0.5, "memory": 0.0})
+    threshold = float(config.get("threshold", traffic_shape_min_spearman))
+    min_primary = float(config.get("min_primary_shape", traffic_shape_min_spearman))
+    positive = {group: score for group, score in scores.items() if score > 0}
+    weight_sum = sum(float(weights.get(group, 0.0)) for group in positive)
+    traffic_score = sum(score * float(weights.get(group, 0.0)) for group, score in positive.items()) / weight_sum if weight_sum else 0.0
+    primary_score = max(scores["cpu"], scores["socket_io"])
+    if traffic_score >= threshold and primary_score >= min_primary:
+        return True, f"reason=traffic_explained score={traffic_score:.3f} primary={primary_score:.3f} cpu={scores['cpu']:.3f} socket_io={scores['socket_io']:.3f}{memory_detail}"
     zero_metrics = [metric.metric for metrics in by_group.values() for metric in metrics if metric.points and all(point.value == 0 for point in metric.points)]
     zero_detail = f" zero_metrics={','.join(zero_metrics)}" if zero_metrics else ""
-    return False, f"reason=shape_mismatch cpu={scores['cpu']:.3f} socket_io={scores['socket_io']:.3f}{memory_detail} threshold={traffic_shape_min_spearman:.3f}{zero_detail}"
+    return False, f"reason=shape_mismatch score={traffic_score:.3f} primary={primary_score:.3f} cpu={scores['cpu']:.3f} socket_io={scores['socket_io']:.3f}{memory_detail} threshold={threshold:.3f}{zero_detail}"
+
+
+def traffic_explained_metrics(
+    series: list[MetricSeries],
+    detection_window_seconds: int | None,
+    start: int,
+    traffic_shape_max_lag_buckets: int = 0,
+    traffic_explanation: dict | None = None,
+) -> set[str]:
+    request = [metric for metric in series if metric_group(metric.metric) == "request_rate"]
+    if not request:
+        return set()
+    threshold = float((traffic_explanation or {}).get("threshold", 0.7))
+    return {
+        metric.metric
+        for metric in series
+        if metric_group(metric.metric) != "request_rate"
+        and max(
+            (
+                tail_aligned_dtw_similarity(
+                    rate,
+                    metric,
+                    detection_window_seconds,
+                    start,
+                    max_warp_buckets=traffic_shape_max_lag_buckets,
+                    enforce_onset=metric_group(metric.metric) in {"cpu", "socket_io"},
+                )
+                for rate in request
+            ),
+            default=0.0,
+        )
+        >= threshold
+    }
 
 
 def tail_aligned_dtw_similarity(left: MetricSeries, right: MetricSeries, detection_window_seconds: int | None, start: int, max_warp_buckets: int = 0, *, enforce_onset: bool = False) -> float:
@@ -215,8 +266,8 @@ def aligned_dtw_similarity(left: MetricSeries, right: MetricSeries, max_warp_buc
     from scipy.spatial import distance
 
     pairs = _aligned_pairs(left, right)
-    # if len(pairs) < 3:
-    #     return 0.0
+    if not pairs:
+        return 0.0
     left_values = _normalize([left for left, _ in pairs])
     right_values = _normalize([right for _, right in pairs])
     if not any(left_values) or not any(right_values):
@@ -258,8 +309,8 @@ def aligned_spearman(left: MetricSeries, right: MetricSeries, right_lag_buckets:
     from scipy.stats import ConstantInputWarning, spearmanr
 
     pairs = _aligned_pairs(left, right, right_lag_buckets)
-    # if len(pairs) < 3:
-    #     return 0.0
+    if not pairs:
+        return 0.0
     with warnings.catch_warnings():
         warnings.simplefilter("ignore", ConstantInputWarning)
         coefficient = spearmanr(*zip(*pairs)).statistic

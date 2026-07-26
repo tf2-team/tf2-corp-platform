@@ -15,7 +15,7 @@ import warnings
 from aiops.anomaly.stats import mean, median, rolling_robust_scores, stdev
 from aiops.schemas import AnomalyFinding, MetricSeries
 from aiops.shared.metrics import is_error_metric, is_memory_metric, is_oom_metric
-from aiops.shared.tail import cusum_tail_change, evaluate_tail_change, fixed_baseline_and_tail, metric_group, normal_traffic_growth_decision
+from aiops.shared.tail import cusum_tail_change, evaluate_tail_change, fixed_baseline_and_tail, metric_group, normal_traffic_growth_decision, traffic_explained_metrics
 
 logger = logging.getLogger(__name__)
 CUSUM_TAIL_GROUPS = {"cpu", "memory", "latency", "socket_io"}
@@ -291,6 +291,7 @@ class V001AnomalyEngine:
         min_absolute_change: dict[str, float],
         traffic_shape_min_spearman: float,
         traffic_shape_max_lag_buckets: int,
+        traffic_explanation: dict | None,
         memory_oom: dict[str, float | int] | None,
         detection_window_seconds: int | None,
         normal_growth_detection_window_seconds: int | None,
@@ -305,6 +306,7 @@ class V001AnomalyEngine:
         self.min_absolute_change = min_absolute_change
         self.traffic_shape_min_spearman = traffic_shape_min_spearman
         self.traffic_shape_max_lag_buckets = traffic_shape_max_lag_buckets
+        self.traffic_explanation = traffic_explanation
         memory_oom = memory_oom or {}
         self.memory_oom_pre_tail_growth_ratio = float(memory_oom["pre_tail_growth_ratio"])
         self.memory_oom_tail_drop_ratio = float(memory_oom["tail_drop_ratio"])
@@ -337,6 +339,8 @@ class V001AnomalyEngine:
             log_min_nonzero_buckets,
         )
         self.last_normal_growth_breakout_metrics: dict[str, set[str]] = {}
+        self.last_normal_growth_metrics: dict[str, set[str]] = {}
+        self.last_normal_growth_services: set[str] = set()
         self.last_normal_growth_zero_score_metrics: dict[str, set[str]] = {}
         self.last_algorithm_findings: list[AnomalyFinding] = []
 
@@ -426,10 +430,25 @@ class V001AnomalyEngine:
             by_service[metric.service].append(metric)
         decisions = {service: self._normal_traffic_growth_decision(service_series) for service, service_series in by_service.items()}
         normal_services = {service for service, (normal, _) in decisions.items() if normal}
+        self.last_normal_growth_services = normal_services
         self.last_normal_growth_breakout_metrics = {
             service: _breakout_metrics_for_reason(detail, by_service[service])
             for service, (normal, detail) in decisions.items()
             if not normal and detail.startswith(NORMAL_GROWTH_BREAKOUT_REASONS)
+        }
+        self.last_normal_growth_metrics = {
+            service: metrics
+            for service, service_series in by_service.items()
+            if service not in self.last_normal_growth_breakout_metrics
+            if (
+                metrics := traffic_explained_metrics(
+                    service_series,
+                    self.normal_growth_detection_window_seconds,
+                    self.min_points - 1,
+                    self.traffic_shape_max_lag_buckets,
+                    self.traffic_explanation,
+                )
+            )
         }
         # Only literal all-zero series (`zero_metrics=...`) count as monitoring-loss.
         # A DTW shape score of `cpu=0.000` / `socket_io=0.000` means "no shape match",
@@ -444,14 +463,11 @@ class V001AnomalyEngine:
             "growth_gate_event %s",
             " | ".join(
                 f"service={service} result={'skip' if normal else 'detect'} breakout={str(not normal and detail.startswith(NORMAL_GROWTH_BREAKOUT_REASONS)).lower()} {detail}"
+                f"{' explained_metrics=' + ','.join(sorted(self.last_normal_growth_metrics[service])) if service in self.last_normal_growth_metrics else ''}"
                 for service, (normal, detail) in decisions.items()
             ),
         )
-        return [
-            metric
-            for metric in series
-            if metric.service not in normal_services or is_error_metric(metric.metric)
-        ]
+        return series
 
     def _normal_traffic_growth_decision(self, series: list[MetricSeries]) -> tuple[bool, str]:
         return normal_traffic_growth_decision(
@@ -463,6 +479,7 @@ class V001AnomalyEngine:
             self.min_absolute_change,
             self.traffic_shape_min_spearman,
             self.traffic_shape_max_lag_buckets,
+            self.traffic_explanation,
             memory_oom_detector=self._memory_oom_detected,
         )
 
@@ -552,6 +569,7 @@ def build_v001_anomaly_engine(config: dict, **overrides) -> V001AnomalyEngine:
         min_absolute_change={key: float(value) for key, value in anomaly["min_absolute_change"].items()},
         traffic_shape_min_spearman=float(anomaly["traffic_shape_min_spearman"]),
         traffic_shape_max_lag_buckets=int(anomaly["traffic_shape_max_lag_buckets"]),
+        traffic_explanation=anomaly.get("traffic_explanation"),
         memory_oom=anomaly["memory_oom"],
         detection_window_seconds=int(anomaly["detection_window_seconds"]) or None,
         normal_growth_detection_window_seconds=int(anomaly["normal_growth_detection_window_seconds"]) or None,

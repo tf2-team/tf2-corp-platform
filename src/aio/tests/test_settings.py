@@ -88,7 +88,15 @@ class SettingsTest(unittest.TestCase):
         self.assertEqual(config["rca"]["anomaly"]["no_evidence_multiplier"], 0.5)
         self.assertEqual(config["rca"]["anomaly"]["single_evidence_bonus"], 0.15)
         self.assertEqual(config["rca"]["anomaly"]["dual_evidence_bonus"], 0.3)
-        self.assertEqual(config["rca"]["anomaly"]["traffic_shape_max_lag_buckets"], 2)
+        self.assertEqual(config["rca"]["anomaly"]["traffic_shape_max_lag_buckets"], 1)
+        self.assertEqual(
+            config["rca"]["anomaly"]["traffic_explanation"],
+            {
+                "threshold": 0.65,
+                "min_primary_shape": 0.55,
+                "weights": {"cpu": 0.45, "socket_io": 0.35, "memory": 0.2},
+            },
+        )
         self.assertEqual(config["rca"]["anomaly"]["memory_oom"]["pre_tail_growth_ratio"], 1.2)
         self.assertEqual(config["rca"]["anomaly"]["memory_oom"]["tail_drop_ratio"], 0.7)
         self.assertEqual(config["rca"]["anomaly"]["memory_oom"]["min_period"], 2)

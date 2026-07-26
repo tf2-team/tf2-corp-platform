@@ -478,10 +478,8 @@ class V001AnomalyRcaTest(unittest.TestCase):
             minute_metric("checkout", "error_rate_5m", [0] * 45),
         ]
 
-        self.assertEqual(
-            [item.metric for item in engine._filter_normal_traffic_growth(series)],
-            ["error_rate_5m"],
-        )
+        self.assertEqual(engine._filter_normal_traffic_growth(series), series)
+        self.assertEqual(engine.last_normal_growth_services, {"checkout"})
         series[-1] = minute_metric("checkout", "error_rate_5m", [0] * 44 + [0.01])
         self.assertEqual(engine._filter_normal_traffic_growth(series), series)
         self.assertEqual(engine.last_normal_growth_breakout_metrics, {"checkout": {"error_rate_5m"}})
@@ -495,7 +493,8 @@ class V001AnomalyRcaTest(unittest.TestCase):
             minute_metric("checkout", "oom_events_total", [0] * 44 + [1]),
         ]
 
-        self.assertEqual(engine._filter_normal_traffic_growth(series), [])
+        self.assertEqual(engine._filter_normal_traffic_growth(series), series)
+        self.assertEqual(engine.last_normal_growth_services, {"checkout"})
 
     def test_memory_oom_pattern_does_not_break_normal_growth_when_request_increases(self):
         engine = anomaly_engine()
@@ -508,7 +507,8 @@ class V001AnomalyRcaTest(unittest.TestCase):
         ]
 
         self.assertTrue(engine._memory_oom_detected(memory))
-        self.assertEqual(engine._filter_normal_traffic_growth(series), [])
+        self.assertEqual(engine._filter_normal_traffic_growth(series), series)
+        self.assertEqual(engine.last_normal_growth_services, {"checkout"})
 
     def test_memory_oom_pattern_requires_configured_anomaly_bucket_count(self):
         engine = anomaly_engine()
@@ -522,7 +522,8 @@ class V001AnomalyRcaTest(unittest.TestCase):
         ]
 
         self.assertLess(engine._memory_ewma_stl_tail_anomaly_count(memory), engine.min_tail_anomaly_buckets["memory"])
-        self.assertEqual([item.metric for item in engine._filter_normal_traffic_growth(series)], ["error_rate_5m"])
+        self.assertEqual(engine._filter_normal_traffic_growth(series), series)
+        self.assertEqual(engine.last_normal_growth_services, {"checkout"})
 
     def test_memory_oom_gate_uses_separate_ewma_stl_hyperparameters(self):
         config = rca_hyperparameters()
@@ -585,12 +586,13 @@ class V001AnomalyRcaTest(unittest.TestCase):
             minute_metric("checkout", "error_rate_5m", [0] * 45),
         ]
 
-        self.assertEqual([item.metric for item in engine._filter_normal_traffic_growth(series)], ["error_rate_5m"])
+        self.assertEqual(engine._filter_normal_traffic_growth(series), series)
+        self.assertEqual(engine.last_normal_growth_services, {"checkout"})
         series[-1] = minute_metric("checkout", "error_rate_5m", [0] * 45)
         series[-2] = minute_metric("checkout", "workload_ready_pods", [2] * 30 + [1] * 15)
         self.assertEqual(engine._filter_normal_traffic_growth(series), series)
 
-    def test_coordinated_load_decline_is_filtered_before_anomaly_detection(self):
+    def test_coordinated_load_decline_is_listed_as_normal_growth(self):
         engine = anomaly_engine()
         series = [
             minute_metric("checkout", "request_rate_5m", [30] * 30 + [10] * 15),
@@ -601,9 +603,8 @@ class V001AnomalyRcaTest(unittest.TestCase):
             minute_metric("checkout", "error_rate_5m", [0] * 45),
         ]
 
-        filtered = engine._filter_normal_traffic_growth(series)
-
-        self.assertEqual([item.metric for item in filtered], ["error_rate_5m"])
+        self.assertEqual(engine._filter_normal_traffic_growth(series), series)
+        self.assertEqual(engine.last_normal_growth_services, {"checkout"})
 
     def test_mixed_growth_and_decline_is_not_filtered(self):
         engine = anomaly_engine()
@@ -634,7 +635,8 @@ class V001AnomalyRcaTest(unittest.TestCase):
             skewed("error_rate_5m", 0, 0, 0),
         ]
 
-        self.assertEqual([item.metric for item in engine._filter_normal_traffic_growth(series)], ["error_rate_5m"])
+        self.assertEqual(engine._filter_normal_traffic_growth(series), series)
+        self.assertEqual(engine.last_normal_growth_services, {"checkout"})
 
     def test_normal_growth_allows_configured_memory_lag(self):
         engine = anomaly_engine()
@@ -651,7 +653,8 @@ class V001AnomalyRcaTest(unittest.TestCase):
             shifted("error_rate_5m", 0, 0),
         ]
 
-        self.assertEqual([item.metric for item in engine._filter_normal_traffic_growth(series)], ["error_rate_5m"])
+        self.assertEqual(engine._filter_normal_traffic_growth(series), series)
+        self.assertEqual(engine.last_normal_growth_services, {"checkout"})
 
     def test_growth_gate_uses_median_three_smoothing(self):
         self.assertEqual(median3([10, 100, 10]), [10, 10, 10])

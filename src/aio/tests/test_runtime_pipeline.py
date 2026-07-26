@@ -27,7 +27,7 @@ from aiops.schemas import (
 )
 from aiops.pipeline import AiopsPipeline
 from aiops.notifications import is_slo_notification
-from aiops.pipeline.runtime import _algorithm_service_scores, _apply_corroboration, _slo_impact_findings
+from aiops.pipeline.runtime import _algorithm_service_scores, _apply_corroboration, _filter_normal_growth_root_metrics, _slo_impact_findings
 from aiops.remediation import (
     ActionCatalog,
     HistoryRetriever,
@@ -719,6 +719,56 @@ class RuntimePipelineTest(unittest.TestCase):
             store.close()
 
         self.assertEqual(incidents, [])
+
+    def test_v001_rca_filters_busy_normal_root_causes_after_anomaly_detection(self):
+        settings = Settings()
+        hyperparameters = load_hyperparameters(settings.hyperparameters_path)["rca"]
+
+        def series(name: str, baseline: float, tail: float) -> MetricSeries:
+            return MetricSeries(
+                service="checkout",
+                metric=name,
+                signal_id=f"checkout_{name}",
+                points=[MetricPoint(timestamp=index * 60, value=value) for index, value in enumerate([baseline] * 30 + [tail] * 15)],
+            )
+
+        with TemporaryDirectory() as tmp:
+            store = SQLiteIncidentStore(Path(tmp) / "aiops.sqlite3", environment=settings.environment)
+            pipeline = AiopsPipeline(
+                collector=StaticCollector([]),
+                detectors=[],
+                store=store,
+                policy=policy(settings),
+                rca_hyperparameters=hyperparameters,
+                **runtime_kwargs(settings),
+            )
+
+            result = pipeline._run_v001_rca(
+                [
+                    series("request_rate_5m", 10, 30),
+                    series("cpu_millicores", 100, 300),
+                    series("socket_io_bytes_per_second", 1_000_000, 3_000_000),
+                ],
+                [],
+            )
+            store.close()
+
+        self.assertIn(("checkout", "cpu_millicores"), {(item.service, item.metric) for item in result.anomalies})
+        self.assertEqual(result.root_causes, [])
+
+    def test_growth_gate_suppression_drops_only_explained_rca_metrics(self):
+        roots = _filter_normal_growth_root_metrics(
+            [
+                RootCauseCandidate(service="checkout", score=1.0, root_cause_metrics=["cpu_millicores", "memory_usage_bytes"]),
+                RootCauseCandidate(service="payment", score=0.9, root_cause_metrics=["cpu_millicores"]),
+            ],
+            {"checkout": {"cpu_millicores"}},
+            top_k=5,
+        )
+
+        self.assertEqual(roots[0].service, "checkout")
+        self.assertEqual(roots[0].root_cause_metrics, ["memory_usage_bytes"])
+        self.assertEqual(roots[1].service, "payment")
 
     def test_pipeline_filters_rca_memory_root_by_tail_threshold(self):
         settings = Settings()

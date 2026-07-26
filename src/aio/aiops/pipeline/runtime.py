@@ -371,13 +371,17 @@ class AiopsPipeline:
             topology_graph=self.topology_graph,
         )
         breakout_metrics = getattr(anomaly_engine, "last_normal_growth_breakout_metrics", {})
+        normal_growth_metrics = getattr(anomaly_engine, "last_normal_growth_metrics", {})
+        top_k = int(config["top_k"])
         result = rca_engine.rank(
             findings,
             detector_series,
-            top_k=int(config["top_k"]),
+            top_k=top_k + len(normal_growth_metrics),
             corroboration=corroboration,
             **({"breakout_metrics": breakout_metrics} if breakout_metrics else {}),
         )
+        if normal_growth_metrics:
+            result = result.model_copy(update={"root_causes": _filter_normal_growth_root_metrics(result.root_causes, normal_growth_metrics, top_k)})
         algorithm_findings = list(getattr(anomaly_engine, "last_algorithm_findings", []) or [])
         _log_final_root_cause_algorithm_scores(result, algorithm_findings)
         return result.model_copy(update={"algorithm_findings": algorithm_findings})
@@ -590,6 +594,24 @@ def _log_final_root_cause_algorithm_scores(result: RcaResult, findings: list[Ano
         _score(scores.get("ewma_stl")),
         _score(scores.get("isolation_forest")),
     )
+
+
+def _filter_normal_growth_root_metrics(root_causes: list[RootCauseCandidate], normal_growth_metrics: dict[str, set[str]], top_k: int) -> list[RootCauseCandidate]:
+    kept: list[RootCauseCandidate] = []
+    suppressed: dict[str, list[str]] = {}
+    for root in root_causes:
+        explained = normal_growth_metrics.get(root.service, set())
+        metrics = [metric for metric in root.root_cause_metrics if metric not in explained]
+        removed = [metric for metric in root.root_cause_metrics if metric in explained]
+        if removed:
+            suppressed[root.service] = removed
+        if metrics:
+            kept.append(root.model_copy(update={"root_cause_metrics": metrics}))
+        if len(kept) >= top_k:
+            break
+    if suppressed:
+        logger.info("AIOPS_RCA_BUSY_SUPPRESSED metrics=%s", {service: sorted(metrics) for service, metrics in suppressed.items()})
+    return kept
 
 
 def _combined_rca_hyperparameters(config: dict) -> dict:
