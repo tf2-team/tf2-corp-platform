@@ -31,7 +31,7 @@ dependencies = [
   "rank-bm25>=0.2.2",
   "sentence-transformers>=2.7.0",
   "spacy==3.8.13",
-  "regex==2024.11.6",
+  "regex==2026.7.19",
   "structlog>=24",
   "tiktoken>=0.9,<1.0",
   # Trivy HIGH/CRITICAL floors (product-reviews / shopping-copilot images)
