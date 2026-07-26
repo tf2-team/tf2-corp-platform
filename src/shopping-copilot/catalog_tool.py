@@ -110,6 +110,28 @@ def search_catalog(
     return results
 
 
+def get_product(
+    product_id: str,
+    product_catalog_stub: demo_pb2_grpc.ProductCatalogServiceStub,
+) -> CopilotProductResult | None:
+    """Rehydrate one previously referenced product from the source Catalog."""
+    if not product_id:
+        return None
+    product = product_catalog_stub.GetProduct(
+        demo_pb2.GetProductRequest(id=product_id)
+    )
+    if not getattr(product, "id", ""):
+        return None
+    return CopilotProductResult(
+        product_id=product.id,
+        name=product.name,
+        description=getattr(product, "description", "") or "",
+        price_units=product.price_usd.units,
+        price_nanos=product.price_usd.nanos,
+        currency_code=product.price_usd.currency_code or "USD",
+    )
+
+
 def make_catalog_stub() -> demo_pb2_grpc.ProductCatalogServiceStub:
     """Build a gRPC stub from the PRODUCT_CATALOG_ADDR env var."""
     addr = os.environ["PRODUCT_CATALOG_ADDR"]

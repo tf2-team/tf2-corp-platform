@@ -52,6 +52,7 @@ COPY --chown=appuser:appgroup ./src/shopping-copilot/intent_parser.py intent_par
 COPY --chown=appuser:appgroup ./src/shopping-copilot/catalog_tool.py catalog_tool.py
 COPY --chown=appuser:appgroup ./src/shopping-copilot/review_tool.py review_tool.py
 COPY --chown=appuser:appgroup ./src/shopping-copilot/cart_tool.py cart_tool.py
+COPY --chown=appuser:appgroup ./src/shopping-copilot/conversation_store.py conversation_store.py
 COPY --chown=appuser:appgroup ./src/shopping-copilot/copilot_graph.py copilot_graph.py
 COPY --chown=appuser:appgroup ./src/shopping-copilot/copilot_server.py copilot_server.py
 

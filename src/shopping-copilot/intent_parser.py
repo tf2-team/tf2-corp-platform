@@ -38,6 +38,7 @@ Always include every key below, even when its value is null, false, or []:
   "category": string | null,
   "max_price": number | null,
   "features": string[],
+  "wants_description": boolean,
   "needs_review_qa": boolean,
   "follow_up_question": string | null,
   "wants_add_to_cart": boolean,
@@ -61,19 +62,22 @@ Rules:
 Examples:
 
 User: hi
-JSON: {"is_greeting":true,"is_shopping_related":true,"query":"","category":null,"max_price":null,"features":[],"needs_review_qa":false,"follow_up_question":null,"wants_add_to_cart":false,"cart_product_hint":null}
+JSON: {"is_greeting":true,"is_shopping_related":true,"query":"","category":null,"max_price":null,"features":[],"wants_description":false,"needs_review_qa":false,"follow_up_question":null,"wants_add_to_cart":false,"cart_product_hint":null}
 
 User: Show me lens cleaning kits under $30
-JSON: {"is_greeting":false,"is_shopping_related":true,"query":"lens cleaning kit","category":null,"max_price":30,"features":[],"needs_review_qa":false,"follow_up_question":null,"wants_add_to_cart":false,"cart_product_hint":null}
+JSON: {"is_greeting":false,"is_shopping_related":true,"query":"lens cleaning kit","category":null,"max_price":30,"features":[],"wants_description":false,"needs_review_qa":false,"follow_up_question":null,"wants_add_to_cart":false,"cart_product_hint":null}
+
+User: Show me the product in detail
+JSON: {"is_greeting":false,"is_shopping_related":true,"query":"","category":null,"max_price":null,"features":[],"wants_description":true,"needs_review_qa":false,"follow_up_question":null,"wants_add_to_cart":false,"cart_product_hint":null}
 
 User: Is the Red Flashlight good for night observation?
-JSON: {"is_greeting":false,"is_shopping_related":true,"query":"red flashlight","category":"flashlight","max_price":null,"features":[],"needs_review_qa":true,"follow_up_question":"Is the Red Flashlight good for night observation?","wants_add_to_cart":false,"cart_product_hint":null}
+JSON: {"is_greeting":false,"is_shopping_related":true,"query":"red flashlight","category":"flashlight","max_price":null,"features":[],"wants_description":false,"needs_review_qa":true,"follow_up_question":"Is the Red Flashlight good for night observation?","wants_add_to_cart":false,"cart_product_hint":null}
 
 User: Add the Lens Cleaning Kit to my cart
-JSON: {"is_greeting":false,"is_shopping_related":true,"query":"lens cleaning kit","category":null,"max_price":null,"features":[],"needs_review_qa":false,"follow_up_question":null,"wants_add_to_cart":true,"cart_product_hint":"Lens Cleaning Kit"}
+JSON: {"is_greeting":false,"is_shopping_related":true,"query":"lens cleaning kit","category":null,"max_price":null,"features":[],"wants_description":false,"needs_review_qa":false,"follow_up_question":null,"wants_add_to_cart":true,"cart_product_hint":"Lens Cleaning Kit"}
 
 User: Write a Python quicksort program
-JSON: {"is_greeting":false,"is_shopping_related":false,"query":"","category":null,"max_price":null,"features":[],"needs_review_qa":false,"follow_up_question":null,"wants_add_to_cart":false,"cart_product_hint":null}
+JSON: {"is_greeting":false,"is_shopping_related":false,"query":"","category":null,"max_price":null,"features":[],"wants_description":false,"needs_review_qa":false,"follow_up_question":null,"wants_add_to_cart":false,"cart_product_hint":null}
 """
 
 

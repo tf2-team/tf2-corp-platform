@@ -25,6 +25,7 @@ Bounds (enforced by LangGraph config):
 
 import asyncio
 import logging
+import uuid
 from typing import Optional, TypedDict
 
 from langgraph.graph import StateGraph, START, END
@@ -40,7 +41,8 @@ from copilot_contracts import (
     PendingCartAction,
 )
 import intent_parser
-from catalog_tool import search_catalog
+from catalog_tool import get_product, search_catalog
+import conversation_store
 from review_tool import answer_with_reviews
 from cart_tool import create_pending_token
 
@@ -54,6 +56,11 @@ logger = logging.getLogger("copilot_graph")
 class CopilotState(TypedDict):
     user_message: str
     user_id: str
+    conversation_id: str
+    turn_id: str
+    turn_sequence: int
+    state_version: int
+    resolved_product_id: str
     # Sanitized version of the message (after PII redaction).
     safe_message: str
     intent: Optional[ShoppingIntent]
@@ -128,6 +135,34 @@ def make_nodes(deps: CopilotDeps):
         )
         return {**state, "safe_message": safe_msg}
 
+    def conversation_state_node(state: CopilotState) -> CopilotState:
+        """Load isolated Valkey context and allocate this turn's sequence."""
+        if not state.get("conversation_id") or not state.get("turn_id"):
+            return state
+        try:
+            stored = conversation_store.begin_turn(
+                state["conversation_id"], state["turn_id"], deps.valkey_client
+            )
+            message = state["safe_message"].lower()
+            ids = stored.get("last_result_product_ids", [])
+            resolved = ""
+            if ids:
+                if any(token in message for token in ("second", "thứ hai", "số 2")) and len(ids) > 1:
+                    resolved = ids[1]
+                elif any(token in message for token in ("third", "thứ ba", "số 3")) and len(ids) > 2:
+                    resolved = ids[2]
+                elif any(token in message for token in ("it", "that", "đó", "kia", "nó")):
+                    resolved = stored.get("selected_product_id") or ids[0]
+            return {
+                **state,
+                "turn_sequence": stored["last_turn_sequence"],
+                "state_version": stored["state_version"],
+                "resolved_product_id": resolved,
+            }
+        except Exception as exc:
+            logger.warning("Conversation state unavailable; continuing single-turn: %s", exc)
+            return state
+
     def intent_parse_node(state: CopilotState) -> CopilotState:
         """Parse safe_message into a ShoppingIntent."""
         try:
@@ -174,7 +209,13 @@ def make_nodes(deps: CopilotDeps):
         if state.get("status") in (CopilotStatus.BLOCKED, CopilotStatus.FALLBACK):
             return state
         try:
-            results = search_catalog(state["intent"], deps.catalog_stub)
+            results = []
+            if state.get("resolved_product_id"):
+                product = get_product(state["resolved_product_id"], deps.catalog_stub)
+                if product:
+                    results = [product]
+            if not results:
+                results = search_catalog(state["intent"], deps.catalog_stub)
             if not results:
                 q_text = state["intent"].query or state["intent"].cart_product_hint or state["user_message"]
                 return {
@@ -184,11 +225,24 @@ def make_nodes(deps: CopilotDeps):
                     "status": CopilotStatus.NO_RESULTS,
                     "reason": f"No products matching '{q_text}' were found in our store catalog. Available categories include telescopes, accessories, binoculars, flashlights, travel, and books.",
                 }
-            return {
+            next_state = {
                 **state,
                 "catalog_results": results,
                 "allowed_product_ids": [r.product_id for r in results],
             }
+            if state.get("conversation_id"):
+                conversation_store.update_after_catalog(
+                    state["conversation_id"],
+                    {
+                        **conversation_store.load(state["conversation_id"], deps.valkey_client),
+                        "last_intent_query": state["intent"].query if state.get("intent") else "",
+                        "last_category": state["intent"].category if state.get("intent") else "",
+                    },
+                    [r.product_id for r in results],
+                    results[0].product_id if state.get("resolved_product_id") else "",
+                    deps.valkey_client,
+                )
+            return next_state
         except Exception as exc:
             logger.error("Catalog search failed: %s", exc)
             return {
@@ -316,6 +370,7 @@ def make_nodes(deps: CopilotDeps):
 
     return (
         input_guardrail_node,
+        conversation_state_node,
         intent_parse_node,
         catalog_search_node,
         qa_node,
@@ -344,6 +399,7 @@ def _should_skip(state: CopilotState) -> str:
 def build_graph(deps: CopilotDeps) -> StateGraph:
     (
         input_guardrail_node,
+        conversation_state_node,
         intent_parse_node,
         catalog_search_node,
         qa_node,
@@ -355,6 +411,7 @@ def build_graph(deps: CopilotDeps) -> StateGraph:
     builder = StateGraph(CopilotState)
 
     builder.add_node("input_guardrail", input_guardrail_node)
+    builder.add_node("conversation_state", conversation_state_node)
     builder.add_node("intent_parse", intent_parse_node)
     builder.add_node("catalog_search", catalog_search_node)
     builder.add_node("qa", qa_node)
@@ -365,8 +422,9 @@ def build_graph(deps: CopilotDeps) -> StateGraph:
     builder.add_conditional_edges(
         "input_guardrail",
         _should_skip,
-        {"skip": "build_response", "continue": "intent_parse"},
+        {"skip": "build_response", "continue": "conversation_state"},
     )
+    builder.add_edge("conversation_state", "intent_parse")
     builder.add_conditional_edges(
         "intent_parse",
         _should_skip,
@@ -392,17 +450,42 @@ GRAPH_TIMEOUT_SECONDS = 15
 GRAPH_RECURSION_LIMIT = 10
 
 
+def _valid_uuid4(value: str) -> bool:
+    """Accept only canonical UUID v4 values at the conversation boundary."""
+    if not value or len(value) != 36:
+        return False
+    try:
+        parsed = uuid.UUID(value)
+    except (ValueError, AttributeError):
+        return False
+    return parsed.version == 4 and str(parsed) == value.lower()
 
-def run_copilot(user_message: str, deps: CopilotDeps, user_id: str = "anonymous") -> CopilotState:
+
+def run_copilot(
+    user_message: str,
+    deps: CopilotDeps,
+    user_id: str = "anonymous",
+    conversation_id: str = "",
+    turn_id: str = "",
+) -> CopilotState:
     """Run the Shopping Copilot graph synchronously with timeout.
 
     Wraps asyncio execution and applies a hard deadline. Any exception
     from the graph — including timeout — produces a FALLBACK state.
     """
     graph = build_graph(deps)
+    # Invalid or missing IDs intentionally degrade to the existing single-turn
+    # path. They must never become Valkey/Mem0 keys.
+    safe_conversation_id = conversation_id if _valid_uuid4(conversation_id) else ""
+    safe_turn_id = turn_id if _valid_uuid4(turn_id) else ""
     initial_state: CopilotState = {
         "user_message": user_message,
         "user_id": user_id or "anonymous",
+        "conversation_id": safe_conversation_id,
+        "turn_id": safe_turn_id,
+        "turn_sequence": 0,
+        "state_version": 0,
+        "resolved_product_id": "",
         "safe_message": user_message,
         "intent": None,
         "allowed_product_ids": [],
