@@ -430,6 +430,13 @@ class V001AnomalyEngine:
             for service, (normal, detail) in decisions.items()
             if not normal and detail.startswith(NORMAL_GROWTH_BREAKOUT_REASONS)
         }
+        logger.info(
+            "growth_gate_event %s",
+            " | ".join(
+                f"service={service} result={'skip' if normal else 'detect'} breakout={str(not normal and detail.startswith(NORMAL_GROWTH_BREAKOUT_REASONS)).lower()} {detail}"
+                for service, (normal, detail) in decisions.items()
+            ),
+        )
         return [
             metric
             for metric in series

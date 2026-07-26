@@ -661,7 +661,11 @@ class V001AnomalyRcaTest(unittest.TestCase):
             minute_metric("payment", "request_rate_5m", [10] * 45),
         ]
 
-        self.assertEqual(engine._filter_normal_traffic_growth(series), series)
+        with self.assertLogs("aiops.anomaly.v001", level="INFO") as logs:
+            self.assertEqual(engine._filter_normal_traffic_growth(series), series)
+
+        self.assertIn("growth_gate_event", logs.output[0])
+        self.assertIn("service=checkout", logs.output[0])
 
     def test_staggered_load_growth_is_not_treated_as_simultaneous(self):
         engine = anomaly_engine()
