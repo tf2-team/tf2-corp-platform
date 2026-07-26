@@ -512,8 +512,8 @@ class RuntimePipelineTest(unittest.TestCase):
                     AnomalyFinding(
                         algorithm="isolation_forest",
                         service="frontend",
-                        metric="p95_latency_5m",
-                        signal_id="frontend_p95_latency_5m",
+                        metric="cpu_millicores",
+                        signal_id="frontend_cpu_millicores",
                         score=5.127,
                         timestamp=123,
                     )
@@ -522,14 +522,14 @@ class RuntimePipelineTest(unittest.TestCase):
                     RootCauseCandidate(
                         service="frontend",
                         score=0.882,
-                        root_cause_metrics=["p95_latency_5m"],
+                        root_cause_metrics=["cpu_millicores"],
                         evidence=["isolation_forest=5.127"],
                     )
                 ],
             )
 
             with self.assertLogs("aiops.pipeline.runtime", level="INFO") as logs:
-                result = pipeline.run_once(metric_series=[metric("frontend", "p95_latency_5m", [0.1] * 31)])
+                result = pipeline.run_once(metric_series=[metric("frontend", "cpu_millicores", [100.0] * 31)])
             store.close()
 
         self.assertEqual(result.candidates, [])
@@ -539,7 +539,7 @@ class RuntimePipelineTest(unittest.TestCase):
         self.assertEqual(result.notifications[0].title, "RCA root cause: frontend")
         self.assertEqual(result.notifications[0].likely_dependency, "unknown")
         self.assertEqual(result.incidents[0].events[-1].quality, SignalQuality.FALLBACK_ONLY)
-        self.assertEqual(result.incidents[0].events[-1].runbook_id, "RB-SERVICE-LATENCY")
+        self.assertEqual(result.incidents[0].events[-1].runbook_id, "RB-SERVICE-RESOURCE")
         self.assertEqual(result.rca_result.root_causes[0].service, "frontend")
         text = "\n".join(logs.output)
         self.assertIn("AIOPS_DEDUP_RESULT input_candidates=0 rca_incidents=1 incidents=1", text)
@@ -570,6 +570,30 @@ class RuntimePipelineTest(unittest.TestCase):
         self.assertEqual(second.incidents[0].occurrence_count, 2)
         self.assertEqual(first.incidents[0].events[-1].runbook_id, "RB-SERVICE-RESOURCE")
 
+    def test_pipeline_does_not_notify_rca_root_for_error_or_latency_only_metrics(self):
+        settings = Settings()
+        with TemporaryDirectory() as tmp:
+            store = SQLiteIncidentStore(Path(tmp) / "aiops.sqlite3", environment=settings.environment)
+            pipeline = AiopsPipeline(
+                collector=StaticCollector([]),
+                detectors=[],
+                store=store,
+                policy=policy(settings),
+                **runtime_kwargs(settings),
+            )
+            pipeline._run_v001_rca = lambda metric_series, incidents: RcaResult(
+                root_causes=[
+                    RootCauseCandidate(service="payment", score=1.0, root_cause_metrics=["error"]),
+                    RootCauseCandidate(service="checkout", score=1.0, root_cause_metrics=["p95_latency_5m"]),
+                ]
+            )
+
+            result = pipeline.run_once()
+            store.close()
+
+        self.assertEqual(result.notifications, [])
+        self.assertEqual(result.incidents, [])
+
     def test_pipeline_dedups_rca_roots_by_topology_before_notification(self):
         settings = Settings()
         with TemporaryDirectory() as tmp:
@@ -583,9 +607,9 @@ class RuntimePipelineTest(unittest.TestCase):
             )
             rca_result = RcaResult(
                 root_causes=[
-                    RootCauseCandidate(service="checkout", score=1.0, root_cause_metrics=["p99_latency_5m"]),
-                    RootCauseCandidate(service="payment", score=0.9, root_cause_metrics=["error_rate_5m"]),
-                    RootCauseCandidate(service="ad", score=0.8, root_cause_metrics=["error_rate_5m"]),
+                    RootCauseCandidate(service="checkout", score=1.0, root_cause_metrics=["cpu_millicores"]),
+                    RootCauseCandidate(service="payment", score=0.9, root_cause_metrics=["cpu_millicores"]),
+                    RootCauseCandidate(service="ad", score=0.8, root_cause_metrics=["cpu_millicores"]),
                 ]
             )
 
@@ -596,7 +620,7 @@ class RuntimePipelineTest(unittest.TestCase):
 
         self.assertEqual([incident.service for incident in incidents], ["checkout", "ad"])
         self.assertEqual([message.service for message in notifications], ["checkout", "ad"])
-        self.assertEqual([message.runbook_id for message in notifications], ["RB-CHECKOUT-LATENCY", "RB-SERVICE-ERROR-RATE"])
+        self.assertEqual([message.runbook_id for message in notifications], ["RB-SERVICE-RESOURCE", "RB-SERVICE-RESOURCE"])
         text = "\n".join(logs.output)
         self.assertIn("service=payment kept_service=checkout", text)
 
@@ -1078,7 +1102,7 @@ class RuntimePipelineTest(unittest.TestCase):
                     RootCauseCandidate(
                         service="checkout",
                         score=1.7,
-                        root_cause_metrics=["error_rate_5m"],
+                        root_cause_metrics=["cpu_millicores"],
                         evidence=["test"],
                     )
                 ],
@@ -1088,6 +1112,7 @@ class RuntimePipelineTest(unittest.TestCase):
                 metric_series=[
                     metric("checkout", "error_rate_5m", [0.0] * 40 + [0.4] * 20),
                     metric("checkout", "p95_latency_5m", [0.1] * 40 + [1.5] * 20),
+                    metric("checkout", "cpu_millicores", [100.0] * 60),
                 ]
             )
             store.close()
@@ -1115,7 +1140,7 @@ class RuntimePipelineTest(unittest.TestCase):
                 **runtime_kwargs(settings),
             )
             pipeline._run_v001_rca = lambda metric_series, incidents: RcaResult(
-                root_causes=[RootCauseCandidate(service="valkey-cart", score=1.0, root_cause_metrics=["error_rate_5m"])]
+                root_causes=[RootCauseCandidate(service="valkey-cart", score=1.0, root_cause_metrics=["cpu_millicores"])]
             )
 
             result = pipeline.run_once()

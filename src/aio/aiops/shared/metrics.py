@@ -5,7 +5,7 @@ from __future__ import annotations
 
 
 def is_error_metric(metric: str) -> bool:
-    return "error_rate" in metric or "error_ratio" in metric or "bad_ratio" in metric
+    return metric == "error" or "error_rate" in metric or "error_ratio" in metric or "bad_ratio" in metric
 
 
 def is_oom_metric(metric: str) -> bool:

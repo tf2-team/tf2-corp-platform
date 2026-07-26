@@ -741,6 +741,7 @@ class V001AnomalyRcaTest(unittest.TestCase):
             metric("checkout", "latency", [1.0, 1.1, 1.0, 1.1, 1.0, 1.1, 1.0, 2.0, 2.1, 2.0]),
             metric("payment", "latency", [1.0, 1.1, 1.0, 1.1, 1.0, 1.1, 1.0, 20.0, 21.0, 22.0]),
             metric("payment", "error", [0.0, 0.1, 0.0, 0.1, 0.0, 0.1, 0.0, 9.0, 10.0, 11.0]),
+            metric("payment", "cpu_millicores", [100, 110, 100, 110, 100, 110, 100, 900, 950, 1000]),
         ]
         runtime_config = load_runtime_config(Path("config/runtime.json"))
         findings = anomaly_engine(ewma_z_threshold=0.5).evaluate(series)
@@ -750,7 +751,7 @@ class V001AnomalyRcaTest(unittest.TestCase):
         result_anomalies = [(finding.algorithm, finding.service, finding.metric) for finding in result.anomalies]
         self.assertTrue(all((finding.algorithm, finding.service, finding.metric) in result_anomalies for finding in findings))
         self.assertEqual(result.root_causes[0].service, "payment")
-        self.assertEqual(result.root_causes[0].root_cause_metrics, ["error"])
+        self.assertEqual(result.root_causes[0].root_cause_metrics, ["cpu_millicores"])
         self.assertFalse(any("robust_score=" in item for item in result.root_causes[0].evidence))
         self.assertTrue(any("weighted_rrf_score=" in item for item in result.root_causes[0].evidence))
 
@@ -1181,6 +1182,7 @@ class V001AnomalyRcaTest(unittest.TestCase):
             metric("checkout", "latency", [1] * 350 + [2] * 10),
             metric("payment", "latency", [1] * 350 + [20] * 10),
             metric("payment", "error", [0] * 350 + [20] * 10),
+            metric("payment", "cpu_millicores", [100] * 350 + [1000] * 10),
         ]
         with TemporaryDirectory() as tmp:
             settings = Settings().model_copy(update={"state_store_path": Path(tmp) / "aiops.sqlite3"})

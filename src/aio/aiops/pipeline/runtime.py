@@ -252,7 +252,12 @@ class AiopsPipeline:
             return []
         severity = min((incident.severity for incident in incidents), default="SEV2")
         threshold = float(self.correlation_hyperparameters["rca_notification_min_score"])
-        valid_roots = [root for root in rca_result.root_causes if root.score >= threshold and root.root_cause_metrics]
+        valid_roots = [
+            root.model_copy(update={"root_cause_metrics": [metric for metric in root.root_cause_metrics if is_root_cause_metric(metric)]})
+            for root in rca_result.root_causes
+            if root.score >= threshold
+        ]
+        valid_roots = [root for root in valid_roots if root.root_cause_metrics]
         rows = []
         for root in self._dedup_rca_root_causes(valid_roots):
             metric = root.root_cause_metrics[0]
