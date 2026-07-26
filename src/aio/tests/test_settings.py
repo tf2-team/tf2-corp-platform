@@ -88,7 +88,7 @@ class SettingsTest(unittest.TestCase):
         self.assertEqual(config["rca"]["anomaly"]["no_evidence_multiplier"], 0.5)
         self.assertEqual(config["rca"]["anomaly"]["single_evidence_bonus"], 0.15)
         self.assertEqual(config["rca"]["anomaly"]["dual_evidence_bonus"], 0.3)
-        self.assertEqual(config["rca"]["anomaly"]["traffic_shape_max_lag_buckets"], 1)
+        self.assertEqual(config["rca"]["anomaly"]["traffic_shape_max_lag_buckets"], 5)
         self.assertEqual(
             config["rca"]["anomaly"]["traffic_explanation"],
             {
@@ -125,7 +125,7 @@ class SettingsTest(unittest.TestCase):
         self.assertEqual(config["incident"]["count_reset_seconds"], 300)
         self.assertEqual(config["incident"]["notification_cooldown_seconds"], 300)
         self.assertEqual(config["incident"]["rca_dedup_seconds"], 300)
-        self.assertEqual(config["incident"]["slo_dedup_seconds"], 300)
+        self.assertEqual(config["incident"]["slo_dedup_seconds"], 900)
         self.assertEqual(config["incident"]["notification_retry_base_seconds"], 60)
         self.assertEqual(config["incident"]["notification_retry_max_seconds"], 3600)
         self.assertEqual(config["incident"]["notification_error_max_chars"], 512)
@@ -159,7 +159,7 @@ class SettingsTest(unittest.TestCase):
         )
         self.assertEqual(config["correlation"]["suppress_min_root_score"], 0.8)
         self.assertEqual(config["correlation"]["rca_notification_min_score"], 0.8)
-        self.assertEqual(config["correlation"]["topology_max_hops"], 1)
+        self.assertEqual(config["correlation"]["topology_max_hops"], 2)
         self.assertEqual(
             config["rca"]["combined"],
             {
@@ -169,7 +169,7 @@ class SettingsTest(unittest.TestCase):
                 "detection_window_seconds": 900,
                 "canonical_service_suffixes": [],
                 "metric_aliases": {},
-                "ranker_weights": {"graph": 0.3, "earliest_drift": 0.5, "correlation": 0.1},
+                "ranker_weights": {"graph": 0.3, "earliest_drift": 0.5, "correlation": 0.05},
             },
         )
         self.assertEqual(config["remediation"]["similarity_weights"]["service"], 0.35)

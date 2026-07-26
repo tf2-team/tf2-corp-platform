@@ -1018,6 +1018,36 @@ class V001AnomalyRcaTest(unittest.TestCase):
         self.assertEqual(result.root_causes[0].service, "checkout")
         self.assertNotIn("trace_failure", result.root_causes[0].root_cause_metrics)
 
+    def test_trace_with_hard_log_nominates_dependency_root(self):
+        runtime_config = load_runtime_config(Path("config/runtime.json"))
+        findings = [AnomalyFinding(algorithm="weighted_sum", service="checkout", metric="cpu_millicores", signal_id="checkout_cpu_millicores", score=0.8, timestamp=1000)]
+        corroboration = {
+            "checkout": TelemetryCorroboration(
+                service="checkout",
+                available_sources={"trace", "log"},
+                trace_failure=True,
+                trace_root_service="payment",
+                trace_failure_timestamp=900,
+                trace_reference="https://jaeger/trace/1",
+                trace_id="trace-1",
+                trace_operation="charge",
+                trace_status="ERROR",
+                log_failure=True,
+                log_classification="hard_failure",
+                log_failure_count=1,
+                log_failure_timestamp=901,
+                log_reference="otel-logs-2026.07.23/log-1",
+                log_excerpt="connection refused trace-1",
+            )
+        }
+
+        result = rca_engine(runtime_config).rank(findings, [], top_k=5, corroboration=corroboration)
+
+        self.assertEqual(result.root_causes[0].service, "payment")
+        self.assertEqual(result.root_causes[0].root_cause_metrics, ["trace_log_failure"])
+        self.assertTrue(any("trace_id=trace-1" in item for item in result.root_causes[0].evidence))
+        self.assertTrue(any("log_classification=hard_failure" in item for item in result.root_causes[0].evidence))
+
     def test_hard_log_failure_is_rca_evidence_not_root_cause_metric(self):
         runtime_config = load_runtime_config(Path("config/runtime.json"))
         findings = [AnomalyFinding(algorithm="weighted_sum", service="payment", metric="cpu_millicores", signal_id="payment_cpu_millicores", score=0.8, timestamp=1000)]
@@ -1061,6 +1091,17 @@ class V001AnomalyRcaTest(unittest.TestCase):
         result = rca_engine(runtime_config).rank(findings, [], top_k=5, corroboration=corroboration)
 
         self.assertEqual(result.root_causes[0].service, "checkout")
+
+    def test_rca_suppresses_downstream_symptom_when_dependency_is_stronger_and_earlier(self):
+        runtime_config = load_runtime_config(Path("config/runtime.json"))
+        findings = [
+            AnomalyFinding(algorithm="weighted_sum", service="payment", metric="cpu_millicores", signal_id="payment_cpu_millicores", score=1.0, timestamp=900),
+            AnomalyFinding(algorithm="weighted_sum", service="checkout", metric="cpu_millicores", signal_id="checkout_cpu_millicores", score=0.8, timestamp=1000),
+        ]
+
+        result = rca_engine(runtime_config).rank(findings, [], top_k=5)
+
+        self.assertEqual([root.service for root in result.root_causes], ["payment"])
 
     def test_rca_drops_tiny_disk_drift(self):
         runtime_config = load_runtime_config(Path("config/runtime.json"))

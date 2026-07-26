@@ -70,6 +70,7 @@ class V001RcaEngine:
             if (finding.service == "global" or not self._excluded_root_cause(finding.service))
             and (is_root_cause_metric(finding.metric) or self._is_breakout_metric(self._canonical_service(finding.service), finding.metric, breakout_metrics))
         ]
+        root_findings.extend(self._trace_log_root_findings(root_findings, corroboration or {}))
         rca_series = [metric for metric in series if is_root_cause_metric(metric.metric)]
         drift_metrics = self._drift_metrics(rca_series)
         if not root_findings and any(finding.algorithm == "slo_threshold" for finding in findings):
@@ -114,23 +115,7 @@ class V001RcaEngine:
                 metrics_by_service[service].append((metric, score, "drift"))
 
         candidates: list[RootCauseCandidate] = []
-        trace_details = {
-            self._canonical_service(evidence.trace_root_service): [
-                f"trace_id={evidence.trace_id or 'unknown'} operation={evidence.trace_operation or 'unknown'} status={evidence.trace_status or 'unknown'} "
-                f"upstream={source} downstream={evidence.trace_root_service} duration_ms={(evidence.trace_duration_ms or 0.0):.3f} reference={evidence.trace_reference or 'unknown'}"
-            ]
-            for source, evidence in (corroboration or {}).items()
-            if evidence.trace_failure and evidence.trace_root_service
-        }
-        log_details = {
-            self._canonical_service(service): [
-                f"log_classification={evidence.log_classification or 'unknown'} count={evidence.log_failure_count} "
-                f"timestamp={evidence.log_failure_timestamp or 0} reference={evidence.log_reference or 'unknown'} "
-                f"excerpt={evidence.log_excerpt or 'unknown'}"
-            ]
-            for service, evidence in (corroboration or {}).items()
-            if evidence.log_failure
-        }
+        trace_details, log_details = self._corroboration_details(corroboration or {})
         for service, rank_score in sorted(
             service_scores.items(),
             key=lambda item: item[1] * evidence_strength.get(item[0], 0.0),
@@ -166,7 +151,72 @@ class V001RcaEngine:
             )
             if len(candidates) >= top_k:
                 break
-        return RcaResult(anomalies=findings, root_causes=candidates)
+        return RcaResult(anomalies=findings, root_causes=self._suppress_downstream_symptoms(candidates, root_findings))
+
+    def _trace_log_root_findings(self, root_findings: list[AnomalyFinding], corroboration: dict[str, TelemetryCorroboration]) -> list[AnomalyFinding]:
+        existing = {(finding.service, finding.metric) for finding in root_findings}
+        rows = []
+        for source, evidence in corroboration.items():
+            root = self._canonical_service(evidence.trace_root_service or "")
+            if not (root and evidence.trace_failure and evidence.log_failure and evidence.log_classification == "hard_failure"):
+                continue
+            if not self._trace_root_allowed(source, root):
+                continue
+            key = (root, "trace_log_failure")
+            if key not in existing:
+                rows.append(
+                    AnomalyFinding(
+                        algorithm="trace_log_root",
+                        service=root,
+                        metric="trace_log_failure",
+                        signal_id=evidence.trace_id or f"{root}_trace_log_failure",
+                        score=1.0,
+                        timestamp=evidence.trace_failure_timestamp or evidence.log_failure_timestamp or 0,
+                    )
+                )
+        return rows
+
+    def _trace_root_allowed(self, source: str, root: str) -> bool:
+        source = self._canonical_service(source)
+        return source == root or self.topology_graph.has_dependency_path(source, root)
+
+    def _corroboration_details(self, corroboration: dict[str, TelemetryCorroboration]) -> tuple[dict[str, list[str]], dict[str, list[str]]]:
+        trace_details: dict[str, list[str]] = defaultdict(list)
+        log_details: dict[str, list[str]] = defaultdict(list)
+        for source, evidence in corroboration.items():
+            trace_root = self._canonical_service(evidence.trace_root_service or "")
+            if evidence.trace_failure and trace_root:
+                trace_details[trace_root].append(
+                    f"trace_id={evidence.trace_id or 'unknown'} operation={evidence.trace_operation or 'unknown'} status={evidence.trace_status or 'unknown'} "
+                    f"upstream={source} downstream={trace_root} duration_ms={(evidence.trace_duration_ms or 0.0):.3f} reference={evidence.trace_reference or 'unknown'}"
+                )
+            if evidence.log_failure:
+                detail = (
+                    f"log_classification={evidence.log_classification or 'unknown'} count={evidence.log_failure_count} "
+                    f"timestamp={evidence.log_failure_timestamp or 0} reference={evidence.log_reference or 'unknown'} "
+                    f"excerpt={evidence.log_excerpt or 'unknown'}"
+                )
+                log_details[self._canonical_service(source)].append(detail)
+                if trace_root:
+                    log_details[trace_root].append(detail)
+        return trace_details, log_details
+
+    def _suppress_downstream_symptoms(self, candidates: list[RootCauseCandidate], findings: list[AnomalyFinding]) -> list[RootCauseCandidate]:
+        first_seen: dict[str, int] = {}
+        for finding in findings:
+            if finding.service != "global":
+                first_seen[finding.service] = min(first_seen.get(finding.service, finding.timestamp), finding.timestamp)
+        kept: list[RootCauseCandidate] = []
+        for candidate in candidates:
+            if any(
+                self.topology_graph.has_dependency_path(candidate.service, root.service)
+                and first_seen.get(root.service, 0) < first_seen.get(candidate.service, 0)
+                and root.score >= candidate.score
+                for root in kept
+            ):
+                continue
+            kept.append(candidate)
+        return kept
 
     def _earliest_drift_scores(self, series: list[MetricSeries]) -> dict[str, float]:
         drift_indexes: dict[str, int] = {}

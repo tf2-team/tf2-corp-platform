@@ -142,9 +142,42 @@ class Enricher:
                         trace_status=_span_failure_status(span),
                         trace_duration_ms=float(span.get("duration", 0)) / 1000,
                     )
+                    if self.opensearch is not None:
+                        update.update(self._trace_log_failure(trace_id, timestamp, window_seconds))
             except Exception:
                 pass
         return TelemetryCorroboration(**update)
+
+    def _trace_log_failure(self, trace_id: str, timestamp: int, window_seconds: int) -> dict[str, Any]:
+        data = self.opensearch.search(
+            self.opensearch_index,
+            {
+                "size": self.corroboration_log_hits,
+                "query": {
+                    "bool": {
+                        "must": [
+                            {"multi_match": {"query": trace_id, "fields": ["trace_id", "traceid", "trace.id", "span_id", "spanid", "message", "body", "log"]}},
+                            {"simple_query_string": {"query": "exception | timeout | failed | failure | connection refused | oom | retry exhausted", "fields": ["message", "body", "log"]}},
+                        ],
+                        "filter": [{"range": {"@timestamp": {"gte": _iso_utc(timestamp - window_seconds), "lte": _iso_utc(timestamp + window_seconds)}}}],
+                    }
+                },
+            },
+        )
+        hits = data.get("hits", {})
+        total = hits.get("total", 0)
+        count = int(total.get("value", 0) if isinstance(total, dict) else total)
+        hit = next(iter(hits.get("hits", [])), {})
+        excerpt = _redact(_hit_text(hit, self.log_excerpt_max_chars)) if hit else None
+        classification = _classify_log(excerpt or "") if count else None
+        return {
+            "log_failure": classification == "hard_failure",
+            "log_classification": classification,
+            "log_failure_count": count,
+            "log_failure_timestamp": _log_timestamp(hit, timestamp) if hit else None,
+            "log_reference": f"{hit.get('_index', self.opensearch_index)}/{hit.get('_id', 'unknown')}" if hit else None,
+            "log_excerpt": excerpt,
+        }
 
     def _external_evidence(self, candidate: CandidateEvent) -> list[EvidenceItem]:
         items: list[EvidenceItem] = []

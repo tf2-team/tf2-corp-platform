@@ -177,7 +177,7 @@
         "default": 1.0
       },
       "traffic_shape_min_spearman": 0.6,
-      "traffic_shape_max_lag_buckets": 1,
+      "traffic_shape_max_lag_buckets": 5,
       "traffic_explanation": {
         "threshold": 0.65,
         "min_primary_shape": 0.55,
@@ -203,7 +203,7 @@
       "ranker_weights": {
         "graph": 0.3,
         "earliest_drift": 0.5,
-        "correlation": 0.1
+        "correlation": 0.05
       }
     }
   }
