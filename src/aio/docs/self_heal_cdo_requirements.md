@@ -37,6 +37,125 @@ Vì vậy dữ liệu CDO cung cấp phải ưu tiên đúng schema và đúng s
 
    Chỉ cần stdout từ `--check`: số record, số action hợp lệ, số scenario theo nhóm lỗi, và danh sách lỗi nếu có.
 
+5. Runbook action scripts
+
+   Script thực thi auto-heal cho từng `action_type`. Đây là phần chữa hệ thống thật, tách khỏi `incident_history`. CDO cần cung cấp script theo contract ở phần dưới.
+
+## Runbook action scripts
+
+Repo hiện đã có `aio/runbooks/*.md` cho runbook tài liệu/notification. Script auto-heal nên đặt riêng dưới:
+
+```text
+aio/runbooks/actions/
+```
+
+Ngôn ngữ bắt buộc: Python 3.
+
+Không dùng shell script làm interface chính. Nếu cần gọi `kubectl`/tool hệ thống thì gọi bên trong Python và phải có timeout, exit code rõ, log rõ. Lý do đơn giản: AIO engine đang là Python, schema/config là Python/Pydantic, viết cùng ngôn ngữ sẽ tránh lệch kiểu dữ liệu, lệch JSON, và lỗi quoting/env khi chạy production.
+
+Các script tối thiểu CDO nên cung cấp trước:
+
+```text
+aio/runbooks/actions/restart_deployment.py
+aio/runbooks/actions/rollback_deployment.py
+aio/runbooks/actions/page_oncall.py
+aio/runbooks/actions/verify_service_recovered.py
+```
+
+Chưa nên auto-heal DB/Kafka/Cache/Disk bằng script mutating nếu chưa có guardrail riêng. Với các nhóm đó, action mặc định nên là `page_oncall` hoặc `page_data_oncall`.
+
+### Interface bắt buộc
+
+Mỗi action script phải expose một function:
+
+```python
+def run(context: dict) -> dict:
+    ...
+```
+
+Input `context` tối thiểu:
+
+```json
+{
+  "incident_id": "inc-123",
+  "action_id": "restart_cart",
+  "action_type": "restart",
+  "target": "cart",
+  "target_kind": "Deployment",
+  "namespace": "default",
+  "dry_run": true,
+  "approved": false,
+  "reason": "container_oom_detected",
+  "root_cause_metrics": ["cart_memory_usage_bytes", "cart_oom_events_total"]
+}
+```
+
+Output bắt buộc:
+
+```json
+{
+  "ok": true,
+  "executed": false,
+  "action_id": "restart_cart",
+  "target": "cart",
+  "message": "dry-run restart deployment/cart",
+  "verification": {
+    "defined": true,
+    "passed": null
+  },
+  "rollback": {
+    "defined": true
+  }
+}
+```
+
+Quy ước output:
+
+- `ok=true`: script chạy thành công về mặt kỹ thuật.
+- `executed=true`: script đã thực sự mutate hệ thống.
+- `executed=false`: dry-run/no-op/page-only.
+- `verification.defined` phải true với action mutating.
+- `rollback.defined` phải true với action mutating.
+- Không raise exception cho lỗi nghiệp vụ có thể dự đoán; trả `ok=false` kèm `message`.
+- Exception chỉ dành cho lỗi lập trình hoặc môi trường hỏng.
+
+### Guardrail bắt buộc trong script
+
+Script phải tự kiểm tra lại guardrail, không chỉ tin engine.
+
+- Nếu `dry_run=true`: không mutate hệ thống.
+- Nếu `approved=false`: không mutate hệ thống.
+- Nếu `target_kind` là StatefulSet/Stateful workload: không restart/rollback tự động.
+- Nếu target nằm trong protected list do context/config truyền vào: không mutate.
+- Nếu action thiếu verification hoặc rollback: không mutate.
+- Timeout cho mọi lệnh ngoài process.
+- Log không chứa secret, token, kubeconfig, raw customer data.
+- Idempotent: chạy lại cùng context không gây scale/restart lặp vô hạn ngoài ý muốn.
+
+### Mapping action_id sang script
+
+CDO không cần tạo một script cho từng service. Dùng một script theo `action_type` là đủ:
+
+| `action_type` trong `actions.json` | Script |
+| --- | --- |
+| `restart` | `restart_deployment.py` |
+| `rollback` | `rollback_deployment.py` |
+| `page` | `page_oncall.py` |
+
+Ví dụ `restart_cart`, `restart_checkout`, `restart_payment` đều đi qua `restart_deployment.py`; khác nhau bằng `target`.
+
+### Acceptance criteria cho runbook scripts
+
+- Import được bằng Python mà không side effect.
+- Có `run(context: dict) -> dict`.
+- Dry-run không mutate hệ thống.
+- Mutating action chỉ chạy khi `dry_run=false` và `approved=true`.
+- Output luôn JSON-serializable.
+- Có timeout cho lệnh gọi Kubernetes/tool ngoài.
+- Có unit smoke test cho mỗi script với context mẫu.
+- Không phụ thuộc shell state như current namespace ẩn, current kube context ẩn, hoặc env var không được document.
+- Không tự sửa `incidents_history.json` hoặc `actions.json`.
+
 ## Output schema runtime
 
 `incidents_history.json` phải là JSON array. Set trong Python được encode thành JSON array.
