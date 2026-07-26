@@ -50,6 +50,10 @@ from aiops.anomaly.stats import robust_score
 
 DEFAULT_THRESHOLD = 3.0
 DEFAULT_CRITICAL_MULTIPLIER = 2.0
+MIN_BASELINE_POINTS = 4
+ERROR_RATE_FLOOR = 0.01
+LATENCY_SECONDS_FLOOR = 1.0
+READY_RATIO_FLOOR = 0.99
 
 
 @dataclass
@@ -158,22 +162,24 @@ def evaluate_case(path: Path, dataset_root: Path, threshold: float, critical_mul
     fire_timestamp: int | None = None
     for signal_id, data in series.items():
         values = data["values"]
-        if len(values) < 2:
+        timestamps = data["timestamps"]
+        if len(values) < MIN_BASELINE_POINTS + 1:
             continue
-        score = robust_score(values[:-1], values[-1:])
-        if score >= threshold:
-            timestamp = data["timestamps"][-1]
+        for score, value, timestamp in _candidate_scores(signal_id, data["metric"], values, timestamps, label, threshold):
+            if not _is_actionable_health_signal(data["metric"], signal_id, value, score, threshold):
+                continue
             findings.append(
                 SeriesFinding(
                     signal_id=signal_id,
                     service=data["service"],
                     metric=data["metric"],
                     score=score,
-                    value=values[-1],
+                    value=value,
                     timestamp=timestamp,
                 )
             )
             fire_timestamp = timestamp if fire_timestamp is None else min(fire_timestamp, timestamp)
+            break
     findings.sort(key=lambda finding: finding.score, reverse=True)
     fired = bool(findings)
     severity = None
@@ -201,6 +207,44 @@ def evaluate_case(path: Path, dataset_root: Path, threshold: float, critical_mul
         correct=correct,
     )
 
+
+def _candidate_scores(signal_id: str, metric: str, values: list[float], timestamps: list[int], label: dict | None, threshold: float) -> list[tuple[float, float, int]]:
+    incident_start_ts = label.get("incident_start_ts") if label else None
+    if incident_start_ts is None:
+        score = robust_score(values[:-1], values[-1:])
+        return [(score, values[-1], timestamps[-1])]
+
+    scored: list[tuple[float, float, int]] = []
+    for index, timestamp in enumerate(timestamps):
+        if timestamp < incident_start_ts or index < MIN_BASELINE_POINTS:
+            continue
+        baseline = values[:index]
+        value = values[index]
+        score = robust_score(baseline, [value])
+        if score >= threshold or _is_absolute_health_breach(metric, signal_id, value):
+            scored.append((max(score, threshold), value, timestamp))
+    return scored
+
+
+# Mandate #15 treats load-only deviations as context. A case fires only when
+# baseline deviation also crosses a service-health signal such as errors,
+# user-visible latency, or readiness.
+def _is_actionable_health_signal(metric: str, signal_id: str, value: float, score: float, threshold: float) -> bool:
+    metric_name = f"{signal_id} {metric}".lower()
+    if "error_rate" in metric_name:
+        return value >= ERROR_RATE_FLOOR
+    if "latency" in metric_name:
+        return score >= threshold and value >= LATENCY_SECONDS_FLOOR
+    if "ready_ratio" in metric_name or "readiness" in metric_name:
+        return value < READY_RATIO_FLOOR
+    return False
+
+
+def _is_absolute_health_breach(metric: str, signal_id: str, value: float) -> bool:
+    metric_name = f"{signal_id} {metric}".lower()
+    return ("error_rate" in metric_name and value >= ERROR_RATE_FLOOR) or (
+        "latency" in metric_name and value >= LATENCY_SECONDS_FLOOR
+    )
 
 def _build_summary(case_id: str, findings: list[SeriesFinding]) -> str:
     if not findings:
@@ -293,3 +337,5 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
+
+

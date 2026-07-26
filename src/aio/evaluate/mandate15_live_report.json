@@ -1,0 +1,177 @@
+{
+  "threshold": 3.0,
+  "critical_multiplier": 2.0,
+  "metrics": {
+    "case_count": 4,
+    "labeled_case_count": 4,
+    "precision": 1.0,
+    "recall": 1.0,
+    "false_positive_count": 0,
+    "false_negative_count": 0,
+    "avg_lead_time_seconds": 29.5,
+    "lead_times_seconds": [
+      0.0,
+      59.0
+    ]
+  },
+  "cases": [
+    {
+      "case_id": "checkout_high_load_healthy",
+      "fired": false,
+      "severity": null,
+      "summary": "checkout_high_load_healthy: khong tin hieu nao lech khoi baseline cua chinh no -> khong co su co (no incident).",
+      "fire_timestamp": null,
+      "lead_time_seconds": null,
+      "correct": true,
+      "label": {
+        "scenario_type": "high_load_healthy",
+        "expected_incident": false,
+        "incident_start_ts": null,
+        "captured_at": "2026-07-26T18:56:23.730319+00:00",
+        "notes": "Locust ramp 200 to 400 users, ramp-up 20, no fault flag, checkout SLO healthy, current failures per second 0",
+        "source": "live_prometheus_capture",
+        "prometheus_base_url_host": "localhost:9090"
+      },
+      "findings": []
+    },
+    {
+      "case_id": "checkout_masking",
+      "fired": true,
+      "severity": "SEV1",
+      "summary": "checkout_masking: 6 tin hieu lech khoi baseline: cart_p99_latency_5m (score=525.98, value=1.59767), checkout_p99_latency_5m (score=112.69, value=1.23184), checkout_p95_latency_5m (score=54.60, value=1.85446), cart_error_rate_5m (score=3.00, value=0.0145449), payment_error_rate_5m (score=3.00, value=0.0167742)",
+      "fire_timestamp": 1785095183,
+      "lead_time_seconds": 0.0,
+      "correct": true,
+      "label": {
+        "scenario_type": "masking",
+        "expected_incident": true,
+        "incident_start_ts": 1785095183,
+        "captured_at": "2026-07-26T19:49:49.317077+00:00",
+        "notes": "masking case: local-loadGeneratorFloodHomepage noise plus local-cartFailure checkout dependency incident",
+        "source": "live_prometheus_capture",
+        "prometheus_base_url_host": "localhost:9090"
+      },
+      "findings": [
+        {
+          "signal_id": "cart_p99_latency_5m",
+          "service": "cart",
+          "metric": "p99_latency_5m",
+          "score": 525.977072727524,
+          "value": 1.5976727429503126,
+          "timestamp": 1785095232
+        },
+        {
+          "signal_id": "checkout_p99_latency_5m",
+          "service": "checkout",
+          "metric": "p99_latency_5m",
+          "score": 112.69032284887106,
+          "value": 1.2318388559272975,
+          "timestamp": 1785095185
+        },
+        {
+          "signal_id": "checkout_p95_latency_5m",
+          "service": "checkout",
+          "metric": "p95_latency_5m",
+          "score": 54.60415674154228,
+          "value": 1.8544629775049184,
+          "timestamp": 1785095218
+        },
+        {
+          "signal_id": "cart_error_rate_5m",
+          "service": "cart",
+          "metric": "error_rate_5m",
+          "score": 3.0,
+          "value": 0.014544945021035328,
+          "timestamp": 1785095183
+        },
+        {
+          "signal_id": "payment_error_rate_5m",
+          "service": "payment",
+          "metric": "error_rate_5m",
+          "score": 3.0,
+          "value": 0.016774165085629046,
+          "timestamp": 1785095183
+        },
+        {
+          "signal_id": "checkout_error_rate_5m",
+          "service": "checkout",
+          "metric": "error_rate_5m",
+          "score": 3.0,
+          "value": 0.011854980289807871,
+          "timestamp": 1785095183
+        }
+      ]
+    },
+    {
+      "case_id": "checkout_normal_baseline",
+      "fired": false,
+      "severity": null,
+      "summary": "checkout_normal_baseline: khong tin hieu nao lech khoi baseline cua chinh no -> khong co su co (no incident).",
+      "fire_timestamp": null,
+      "lead_time_seconds": null,
+      "correct": true,
+      "label": {
+        "scenario_type": "normal",
+        "expected_incident": false,
+        "incident_start_ts": null,
+        "captured_at": "2026-07-26T18:47:08.768402+00:00",
+        "notes": "checkout normal baseline, flagd all off, checkout SLO healthy",
+        "source": "live_prometheus_capture",
+        "prometheus_base_url_host": "localhost:9090"
+      },
+      "findings": []
+    },
+    {
+      "case_id": "checkout_real_incident",
+      "fired": true,
+      "severity": "SEV2",
+      "summary": "checkout_real_incident: 4 tin hieu lech khoi baseline: frontend_proxy_error_rate_5m (score=3.00, value=0.0100376), frontend_error_rate_5m (score=3.00, value=0.0100403), payment_error_rate_5m (score=3.00, value=0.0145696), checkout_error_rate_5m (score=3.00, value=0.0108774)",
+      "fire_timestamp": 1785093593,
+      "lead_time_seconds": 59.0,
+      "correct": true,
+      "label": {
+        "scenario_type": "real_incident",
+        "expected_incident": true,
+        "incident_start_ts": 1785093534,
+        "captured_at": "2026-07-26T19:22:09.849546+00:00",
+        "notes": "checkout real incident via local-paymentFailure 50 percent flag",
+        "source": "live_prometheus_capture",
+        "prometheus_base_url_host": "localhost:9090"
+      },
+      "findings": [
+        {
+          "signal_id": "frontend_proxy_error_rate_5m",
+          "service": "frontend-proxy",
+          "metric": "error_rate_5m",
+          "score": 3.0,
+          "value": 0.010037642015100257,
+          "timestamp": 1785093705
+        },
+        {
+          "signal_id": "frontend_error_rate_5m",
+          "service": "frontend",
+          "metric": "error_rate_5m",
+          "score": 3.0,
+          "value": 0.010040326281987188,
+          "timestamp": 1785093707
+        },
+        {
+          "signal_id": "payment_error_rate_5m",
+          "service": "payment",
+          "metric": "error_rate_5m",
+          "score": 3.0,
+          "value": 0.01456955305967412,
+          "timestamp": 1785093593
+        },
+        {
+          "signal_id": "checkout_error_rate_5m",
+          "service": "checkout",
+          "metric": "error_rate_5m",
+          "score": 3.0,
+          "value": 0.010877410976960144,
+          "timestamp": 1785093608
+        }
+      ]
+    }
+  ]
+}

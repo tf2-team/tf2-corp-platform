@@ -1,0 +1,9 @@
+{
+  "scenario_type": "masking",
+  "expected_incident": true,
+  "incident_start_ts": 1785095183,
+  "captured_at": "2026-07-26T19:49:49.317077+00:00",
+  "notes": "masking case: local-loadGeneratorFloodHomepage noise plus local-cartFailure checkout dependency incident",
+  "source": "live_prometheus_capture",
+  "prometheus_base_url_host": "localhost:9090"
+}

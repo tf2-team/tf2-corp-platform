@@ -5,9 +5,12 @@
 > `python -m aiops.cli replay --dataset <path>` instead of this offline harness. It reuses
 > the same baseline-deviation scoring described below but reports fired/no-fire, severity,
 > lead-time, and precision/recall per case. See `aiops/replay.py` and
-> `docs/mandates/15/MANDATE-15-detection-standard-analysis.md`. A small labeled demo set
-> covering the 3 required scenario types (real incident / masking / high-load-healthy)
-> is committed at `evaluate/dataset/mandate15/`.
+> `docs/mandates/15/MANDATE-15-checkout-submission.md`.
+>
+> Mandate #15 evidence must come from live Prometheus captures committed under
+> `evaluate/dataset/mandate15_live/`. Any synthetic/demo dataset such as
+> `evaluate/dataset/mandate15/`, if present locally, is only a smoke-test fixture and must
+> not be used as Jira evidence.
 
 Runner: `evaluate/e2e_pipeline.py`
 
@@ -157,3 +160,4 @@ This metric answers: did RCA include the right root cause anywhere in top-K?
 `rca_top_k.precision` can be low while `rca_top_k.recall` is high because top-K may contain the correct service plus several extra wrong services.
 
 For ranking tasks, `TN` is usually not useful unless the service universe is explicitly defined.
+
