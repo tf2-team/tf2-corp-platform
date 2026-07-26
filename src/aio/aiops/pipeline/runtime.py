@@ -32,7 +32,9 @@ from aiops.remediation import (
     RemediationFeatureExtractor,
 )
 from aiops.schemas import ActionCatalogItem, ActionProposal, CandidateEvent, Incident, RemediationDecision, VerificationResult
+from aiops.shared.metrics import is_memory_metric
 from aiops.shared.series import prepare_detector_series
+from aiops.shared.tail import evaluate_tail_change, metric_group
 from aiops.topology import TopologyGraph
 from aiops.verification import VerificationEngine
 from aiops.pipeline.analysis import (
@@ -141,7 +143,7 @@ class AiopsPipeline:
         )
 
         rca_result = self._run_v001_rca(metric_series or [], analysis_incidents)
-        root_incidents = self._upsert_rca_root_incidents(rca_result, analysis_incidents)
+        root_incidents = self._upsert_rca_root_incidents(rca_result, analysis_incidents, metric_series or [])
         growth_zero_incidents = self._upsert_growth_gate_zero_incidents(metric_series or [])
         if root_incidents:
             incidents.extend(root_incidents)
@@ -247,13 +249,21 @@ class AiopsPipeline:
                 )
         return notifications
 
-    def _upsert_rca_root_incidents(self, rca_result: RcaResult, incidents: list[Incident]) -> list[Incident]:
+    def _upsert_rca_root_incidents(self, rca_result: RcaResult, incidents: list[Incident], metric_series: list[MetricSeries] | None = None) -> list[Incident]:
         if not rca_result.root_causes:
             return []
         severity = min((incident.severity for incident in incidents), default="SEV2")
         threshold = float(self.correlation_hyperparameters["rca_notification_min_score"])
         valid_roots = [
-            root.model_copy(update={"root_cause_metrics": [metric for metric in root.root_cause_metrics if is_root_cause_metric(metric)]})
+            root.model_copy(
+                update={
+                    "root_cause_metrics": [
+                        metric
+                        for metric in root.root_cause_metrics
+                        if self._rca_root_metric_can_notify(root.service, metric, metric_series or [])
+                    ]
+                }
+            )
             for root in rca_result.root_causes
             if root.score >= threshold
         ]
@@ -284,6 +294,28 @@ class AiopsPipeline:
                 )
             )
         return rows
+
+    def _rca_root_metric_can_notify(self, service: str, metric: str, metric_series: list[MetricSeries]) -> bool:
+        if not is_root_cause_metric(metric):
+            return False
+        if not is_memory_metric(metric):
+            return True
+        config = self.rca_hyperparameters.get("anomaly", {})
+        combined = self.rca_hyperparameters.get("combined", {})
+        match = next((item for item in metric_series if item.service == service and item.metric == metric), None)
+        if match is None:
+            return False
+        if not all(key in config for key in ("min_tail_anomaly_buckets", "min_relative_change_ratio", "min_absolute_change")):
+            return False
+        group = metric_group(metric)
+        return evaluate_tail_change(
+            match,
+            int(combined.get("detection_window_seconds", 0)) or None,
+            int(self.rca_hyperparameters.get("min_points", combined.get("drift_min_points", 1))) - 1,
+            int(config["min_tail_anomaly_buckets"][group]),
+            float(config["min_relative_change_ratio"][group]),
+            float(config["min_absolute_change"][group]),
+        ).significant
 
     def _upsert_growth_gate_zero_incidents(self, metric_series: list[MetricSeries]) -> list[Incident]:
         rows = []

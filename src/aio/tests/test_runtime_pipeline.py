@@ -701,6 +701,51 @@ class RuntimePipelineTest(unittest.TestCase):
 
         self.assertEqual(incidents, [])
 
+    def test_pipeline_filters_rca_memory_root_by_tail_threshold(self):
+        settings = Settings()
+        hyperparameters = load_hyperparameters(settings.hyperparameters_path)["rca"]
+
+        def memory(values: list[float]) -> MetricSeries:
+            return MetricSeries(
+                service="frontend-proxy",
+                metric="memory_usage_bytes",
+                signal_id="frontend_proxy_memory_usage_bytes",
+                points=[MetricPoint(timestamp=index * 60, value=value) for index, value in enumerate(values)],
+            )
+
+        with TemporaryDirectory() as tmp:
+            store = SQLiteIncidentStore(Path(tmp) / "aiops.sqlite3", environment=settings.environment)
+            pipeline = AiopsPipeline(
+                collector=StaticCollector([]),
+                detectors=[],
+                store=store,
+                policy=policy(settings),
+                rca_hyperparameters=hyperparameters,
+                **runtime_kwargs(settings),
+            )
+            rca_result = RcaResult(
+                root_causes=[
+                    RootCauseCandidate(service="frontend-proxy", score=1.0, root_cause_metrics=["memory_usage_bytes"])
+                ]
+            )
+
+            skipped = pipeline._upsert_rca_root_incidents(
+                rca_result,
+                [],
+                [memory([100_000_000.0] * 30 + [105_000_000.0] * 15)],
+            )
+            notified = pipeline._upsert_rca_root_incidents(
+                rca_result,
+                [],
+                [memory([100_000_000.0] * 30 + [150_000_000.0] * 15)],
+            )
+            notifications = store.pending_notifications_for(notified)
+            store.close()
+
+        self.assertEqual(skipped, [])
+        self.assertEqual([incident.service for incident in notified], ["frontend-proxy"])
+        self.assertEqual(notifications[0].summary, "rca_root_cause on memory_usage_bytes")
+
     def test_pipeline_flushes_notification_outbox_to_sender(self):
         settings = Settings()
         sender = FakeNotificationSender()
