@@ -305,6 +305,126 @@
       "modes": ["instant"],
       "required_labels": ["service", "dependency"]
     },
+    "managed.postgresql.request_rate": {
+      "query_id_template": "postgresql.request_rate_5m",
+      "signal_id_template": "postgresql_request_rate_5m",
+      "promql": "(max(rate(postgresql_commits[5m])) or max(rate(postgresql_commits_total[5m]))) + (max(rate(postgresql_rollbacks[5m])) or max(rate(postgresql_rollbacks_total[5m])))",
+      "unit": "requests_per_second",
+      "window": "5m",
+      "metric": "request_rate_5m",
+      "feature_role": "anomaly_input",
+      "required_for_monitoring": false
+    },
+    "managed.postgresql.cpu": {
+      "query_id_template": "postgresql.cpu_percentage",
+      "signal_id_template": "postgresql_cpu_percentage",
+      "promql": "avg(aws_rds_cpuutilization_average) or avg(aws_rds_cpu_utilization_average)",
+      "unit": "percent",
+      "window": "5m",
+      "metric": "cpu_percentage",
+      "feature_role": "anomaly_input",
+      "required_for_monitoring": true
+    },
+    "managed.postgresql.socket_io": {
+      "query_id_template": "postgresql.socket_io_bytes_per_second",
+      "signal_id_template": "postgresql_socket_io_bytes_per_second",
+      "promql": "(sum(aws_rds_network_receive_throughput_average) or sum(aws_rds_networkreceivethroughput_average)) + (sum(aws_rds_network_transmit_throughput_average) or sum(aws_rds_networktransmitthroughput_average))",
+      "unit": "bytes_per_second",
+      "window": "5m",
+      "metric": "socket_io_bytes_per_second",
+      "feature_role": "anomaly_input",
+      "required_for_monitoring": true
+    },
+    "managed.kafka.request_rate": {
+      "query_id_template": "kafka.request_rate_5m",
+      "signal_id_template": "kafka_request_rate_5m",
+      "promql": "sum(max by (topic, partition) (rate(kafka_partition_current_offset[5m])))",
+      "unit": "requests_per_second",
+      "window": "5m",
+      "metric": "request_rate_5m",
+      "feature_role": "anomaly_input",
+      "required_for_monitoring": false
+    },
+    "managed.kafka.cpu": {
+      "query_id_template": "kafka.cpu_percentage",
+      "signal_id_template": "kafka_cpu_percentage",
+      "promql": "avg(aws_kafka_cpu_user_average + aws_kafka_cpu_system_average) or avg(aws_kafka_cpuuser_average + aws_kafka_cpusystem_average)",
+      "unit": "percent",
+      "window": "5m",
+      "metric": "cpu_percentage",
+      "feature_role": "anomaly_input",
+      "required_for_monitoring": true
+    },
+    "managed.kafka.socket_io": {
+      "query_id_template": "kafka.socket_io_bytes_per_second",
+      "signal_id_template": "kafka_socket_io_bytes_per_second",
+      "promql": "(sum(aws_kafka_bytes_in_per_sec_average) or sum(aws_kafka_bytesinpersec_average)) + (sum(aws_kafka_bytes_out_per_sec_average) or sum(aws_kafka_bytesoutpersec_average))",
+      "unit": "bytes_per_second",
+      "window": "5m",
+      "metric": "socket_io_bytes_per_second",
+      "feature_role": "anomaly_input",
+      "required_for_monitoring": true
+    },
+    "managed.valkey.request_rate": {
+      "query_id_template": "valkey_cart.request_rate_5m",
+      "signal_id_template": "valkey_cart_request_rate_5m",
+      "promql": "max(redis_commands_per_second)",
+      "unit": "requests_per_second",
+      "window": "5m",
+      "metric": "request_rate_5m",
+      "feature_role": "anomaly_input",
+      "required_for_monitoring": false
+    },
+    "managed.valkey.cpu": {
+      "query_id_template": "valkey_cart.cpu_percentage",
+      "signal_id_template": "valkey_cart_cpu_percentage",
+      "promql": "avg(aws_elasticache_engine_cpuutilization_average) or avg(aws_elasticache_engine_cpu_utilization_average)",
+      "unit": "percent",
+      "window": "5m",
+      "metric": "cpu_percentage",
+      "feature_role": "anomaly_input",
+      "required_for_monitoring": true
+    },
+    "managed.valkey.socket_io": {
+      "query_id_template": "valkey_cart.socket_io_bytes_per_second",
+      "signal_id_template": "valkey_cart_socket_io_bytes_per_second",
+      "promql": "max(rate(redis_net_input_bytes_total[5m])) + max(rate(redis_net_output_bytes_total[5m]))",
+      "unit": "bytes_per_second",
+      "window": "5m",
+      "metric": "socket_io_bytes_per_second",
+      "feature_role": "anomaly_input",
+      "required_for_monitoring": true
+    },
+    "otel.request_rate": {
+      "query_id_template": "otel_collector.request_rate_5m",
+      "signal_id_template": "otel_collector_request_rate_5m",
+      "promql": "sum(rate({__name__=~\"otelcol_receiver_accepted_(spans|metric_points|log_records)(_total)?\"}[5m]))",
+      "unit": "requests_per_second",
+      "window": "5m",
+      "metric": "request_rate_5m",
+      "feature_role": "anomaly_input",
+      "required_for_monitoring": false
+    },
+    "otel.cpu": {
+      "query_id_template": "otel_collector.cpu_millicores",
+      "signal_id_template": "otel_collector_cpu_millicores",
+      "promql": "(sum(rate(container_cpu_usage_seconds_total{namespace=\"techx-corp-prod\",pod=~\"otel-collector-.*\",container=\"opentelemetry-collector\"}[5m])) * 1000) or (sum(rate(container_cpu_usage_seconds_total{pod=~\"otel-collector-.*\",container=\"opentelemetry-collector\"}[5m])) * 1000)",
+      "unit": "millicores",
+      "window": "5m",
+      "metric": "cpu_millicores",
+      "feature_role": "anomaly_input",
+      "required_for_monitoring": true
+    },
+    "otel.socket_io": {
+      "query_id_template": "otel_collector.socket_io_bytes_per_second",
+      "signal_id_template": "otel_collector_socket_io_bytes_per_second",
+      "promql": "(sum(rate(container_network_receive_bytes_total{namespace=\"techx-corp-prod\",pod=~\"otel-collector-.*\"}[5m])) + sum(rate(container_network_transmit_bytes_total{namespace=\"techx-corp-prod\",pod=~\"otel-collector-.*\"}[5m]))) or (sum(rate(container_network_receive_bytes_total{pod=~\"otel-collector-.*\"}[5m])) + sum(rate(container_network_transmit_bytes_total{pod=~\"otel-collector-.*\"}[5m])))",
+      "unit": "bytes_per_second",
+      "window": "5m",
+      "metric": "socket_io_bytes_per_second",
+      "feature_role": "anomaly_input",
+      "required_for_monitoring": true
+    },
     "postgres.active_connections": {
       "query_id_template": "postgresql.active_connections",
       "signal_id_template": "postgresql_active_connections",
@@ -421,6 +541,24 @@
       "service": "postgresql"
     },
     {
+      "query_id": "postgresql.request_rate_5m",
+      "signal_id": "postgresql_request_rate_5m",
+      "template_id": "managed.postgresql.request_rate",
+      "service": "postgresql"
+    },
+    {
+      "query_id": "postgresql.cpu_percentage",
+      "signal_id": "postgresql_cpu_percentage",
+      "template_id": "managed.postgresql.cpu",
+      "service": "postgresql"
+    },
+    {
+      "query_id": "postgresql.socket_io_bytes_per_second",
+      "signal_id": "postgresql_socket_io_bytes_per_second",
+      "template_id": "managed.postgresql.socket_io",
+      "service": "postgresql"
+    },
+    {
       "query_id": "product_catalog.db_pool_utilization",
       "signal_id": "product_catalog_db_pool_utilization",
       "template_id": "postgres.client_pool_utilization",
@@ -433,15 +571,69 @@
       "service": "kafka"
     },
     {
+      "query_id": "kafka.request_rate_5m",
+      "signal_id": "kafka_request_rate_5m",
+      "template_id": "managed.kafka.request_rate",
+      "service": "kafka"
+    },
+    {
+      "query_id": "kafka.cpu_percentage",
+      "signal_id": "kafka_cpu_percentage",
+      "template_id": "managed.kafka.cpu",
+      "service": "kafka"
+    },
+    {
+      "query_id": "kafka.socket_io_bytes_per_second",
+      "signal_id": "kafka_socket_io_bytes_per_second",
+      "template_id": "managed.kafka.socket_io",
+      "service": "kafka"
+    },
+    {
       "query_id": "otel_collector.exporter_queue_saturation",
       "signal_id": "otel_collector_exporter_queue_saturation",
       "template_id": "otel.exporter_queue_saturation",
       "service": "otel-collector"
     },
     {
+      "query_id": "otel_collector.request_rate_5m",
+      "signal_id": "otel_collector_request_rate_5m",
+      "template_id": "otel.request_rate",
+      "service": "otel-collector"
+    },
+    {
+      "query_id": "otel_collector.cpu_millicores",
+      "signal_id": "otel_collector_cpu_millicores",
+      "template_id": "otel.cpu",
+      "service": "otel-collector"
+    },
+    {
+      "query_id": "otel_collector.socket_io_bytes_per_second",
+      "signal_id": "otel_collector_socket_io_bytes_per_second",
+      "template_id": "otel.socket_io",
+      "service": "otel-collector"
+    },
+    {
       "query_id": "valkey_cart.memory_used_bytes",
       "signal_id": "valkey_cart_memory_used_bytes",
       "template_id": "redis.memory_used_bytes",
+      "service": "valkey-cart"
+    },
+    {
+      "query_id": "valkey_cart.request_rate_5m",
+      "signal_id": "valkey_cart_request_rate_5m",
+      "template_id": "managed.valkey.request_rate",
+      "service": "valkey-cart"
+    },
+    {
+      "query_id": "valkey_cart.cpu_percentage",
+      "signal_id": "valkey_cart_cpu_percentage",
+      "template_id": "managed.valkey.cpu",
+      "service": "valkey-cart"
+    },
+    {
+      "query_id": "valkey_cart.socket_io_bytes_per_second",
+      "signal_id": "valkey_cart_socket_io_bytes_per_second",
+      "template_id": "managed.valkey.socket_io",
       "service": "valkey-cart"
     }
   ]
