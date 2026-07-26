@@ -73,6 +73,7 @@
       "auto_frontend_error_rate": 0.05,
       "auto_product_catalog_error_rate": 0.05,
       "auto_product_reviews_error_rate": 0.05,
+      "auto_shopping_copilot_error_rate": 0.05,
       "auto_recommendation_error_rate": 0.05,
       "auto_cart_error_rate": 0.005,
       "auto_ad_error_rate": 0.05,

@@ -129,6 +129,30 @@ def test_normal_request_grounded_response_english(mocker, mock_fetch_reviews, mo
     data = _payload(resp)
     assert data["status"] == "GROUNDED"
     assert data["answer"] == "Draft summary in English."
+
+
+def test_bedrock_review_path_does_not_construct_openai_client(mocker, mock_fetch_reviews, mock_span, monkeypatch):
+    from ai_contracts import GroundedClaim, GroundedResponse
+
+    monkeypatch.setenv("LLM_PROVIDER", "bedrock")
+    mocker.patch("product_reviews_server.OpenAI", side_effect=AssertionError("Bedrock must not use OpenAI"))
+    mocker.patch(
+        "product_reviews_server.generate_grounded_summary",
+        return_value=object(),
+    )
+    mocker.patch(
+        "product_reviews_server.validate_grounded_summary",
+        return_value=GroundedResponse(
+            status=ResponseStatus.GROUNDED,
+            answer="Draft summary in English.",
+            claims=[GroundedClaim(text="draft", sources=["1"])],
+        ),
+    )
+
+    data = _payload(get_ai_assistant_response("P001", "What are the reviews saying?"))
+
+    assert data["status"] == "GROUNDED"
+    assert data["answer"] == "Draft summary in English."
     
 # 2. test_request_with_pii_sends_sanitized_text
 def test_request_with_pii_sends_sanitized_text(mocker, mock_fetch_reviews, mock_feature_flag, mock_span):

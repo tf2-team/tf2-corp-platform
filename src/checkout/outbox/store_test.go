@@ -19,6 +19,7 @@ type fakeDynamo struct {
 	queryErr    error
 	deleteCount int
 	updateCount int
+	updateInputs []*dynamodb.UpdateItemInput
 }
 
 func (f *fakeDynamo) PutItem(_ context.Context, input *dynamodb.PutItemInput, _ ...func(*dynamodb.Options)) (*dynamodb.PutItemOutput, error) {
@@ -35,8 +36,9 @@ func (f *fakeDynamo) DeleteItem(_ context.Context, _ *dynamodb.DeleteItemInput, 
 	return &dynamodb.DeleteItemOutput{}, nil
 }
 
-func (f *fakeDynamo) UpdateItem(_ context.Context, _ *dynamodb.UpdateItemInput, _ ...func(*dynamodb.Options)) (*dynamodb.UpdateItemOutput, error) {
+func (f *fakeDynamo) UpdateItem(_ context.Context, input *dynamodb.UpdateItemInput, _ ...func(*dynamodb.Options)) (*dynamodb.UpdateItemOutput, error) {
 	f.updateCount++
+	f.updateInputs = append(f.updateInputs, input)
 	return &dynamodb.UpdateItemOutput{}, nil
 }
 
@@ -64,7 +66,7 @@ func TestEnqueueUsesOrderIDAsIdempotencyKey(t *testing.T) {
 	}
 }
 
-func TestPublishBatchDeletesOnlyAfterKafkaSuccess(t *testing.T) {
+func TestPublishBatchWaitsForPersistenceAckBeforeDelete(t *testing.T) {
 	item := map[string]types.AttributeValue{
 		"event_id": &types.AttributeValueMemberS{Value: "order-123"},
 		"payload":  &types.AttributeValueMemberB{Value: []byte("payload")},
@@ -85,7 +87,18 @@ func TestPublishBatchDeletesOnlyAfterKafkaSuccess(t *testing.T) {
 	if err := store.publishBatch(context.Background(), func(context.Context, Event) error { return nil }); err != nil {
 		t.Fatalf("publishBatch() recovery error = %v", err)
 	}
+	if fake.deleteCount != 0 {
+		t.Fatalf("deleteCount = %d, event must remain until RDS persistence ACK", fake.deleteCount)
+	}
+	lastUpdate := fake.updateInputs[len(fake.updateInputs)-1]
+	if lastUpdate.UpdateExpression == nil || *lastUpdate.UpdateExpression != "SET #status = :published, published_at = :published_at REMOVE lease_owner, lease_until" {
+		t.Fatal("expected successful publish to mark event as published")
+	}
+
+	if err := store.Acknowledge(context.Background(), "order-123"); err != nil {
+		t.Fatalf("Acknowledge() error = %v", err)
+	}
 	if fake.deleteCount != 1 {
-		t.Fatalf("deleteCount = %d, want 1 after Kafka ACK", fake.deleteCount)
+		t.Fatalf("deleteCount = %d, want 1 after RDS persistence ACK", fake.deleteCount)
 	}
 }

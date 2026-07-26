@@ -1,0 +1,865 @@
+#0 building with "desktop-linux" instance using docker driver
+
+#1 [internal] load local bake definitions
+#1 reading docker-compose.yml 31.23kB / 31.23kB done
+#1 reading docker-bake.hcl 6.69kB / 6.69kB done
+#1 DONE 0.0s
+
+#2 [internal] load build definition from Dockerfile
+#2 transferring dockerfile: 1.93kB 0.0s done
+#2 DONE 0.0s
+
+#3 [internal] load metadata for gcr.io/distroless/cc-debian13:nonroot@sha256:d97bc0a941b8d4be647dc0ee75b264ddbb772f1ac5ba690a4309c00723b23775
+#3 ...
+
+#4 [auth] library/rust:pull token for registry-1.docker.io
+#4 DONE 0.0s
+
+#5 [internal] load metadata for docker.io/library/rust:1.91@sha256:867f1d1162913c401378a8504fb17fe2032c760dc316448766f150a130204aad
+#5 ...
+
+#3 [internal] load metadata for gcr.io/distroless/cc-debian13:nonroot@sha256:d97bc0a941b8d4be647dc0ee75b264ddbb772f1ac5ba690a4309c00723b23775
+#3 DONE 3.3s
+
+#5 [internal] load metadata for docker.io/library/rust:1.91@sha256:867f1d1162913c401378a8504fb17fe2032c760dc316448766f150a130204aad
+#5 DONE 4.6s
+
+#6 [internal] load .dockerignore
+#6 transferring context: 464B 0.0s done
+#6 DONE 0.1s
+
+#7 [internal] load build context
+#7 DONE 0.0s
+
+#8 [builder 1/6] FROM docker.io/library/rust:1.91@sha256:867f1d1162913c401378a8504fb17fe2032c760dc316448766f150a130204aad
+#8 resolve docker.io/library/rust:1.91@sha256:867f1d1162913c401378a8504fb17fe2032c760dc316448766f150a130204aad 0.1s done
+#8 DONE 0.1s
+
+#9 [stage-1 1/3] FROM gcr.io/distroless/cc-debian13:nonroot@sha256:d97bc0a941b8d4be647dc0ee75b264ddbb772f1ac5ba690a4309c00723b23775
+#9 resolve gcr.io/distroless/cc-debian13:nonroot@sha256:d97bc0a941b8d4be647dc0ee75b264ddbb772f1ac5ba690a4309c00723b23775
+#9 resolve gcr.io/distroless/cc-debian13:nonroot@sha256:d97bc0a941b8d4be647dc0ee75b264ddbb772f1ac5ba690a4309c00723b23775 0.1s done
+#9 ...
+
+#7 [internal] load build context
+#7 transferring context: 75.21kB 0.1s done
+#7 DONE 0.2s
+
+#8 [builder 1/6] FROM docker.io/library/rust:1.91@sha256:867f1d1162913c401378a8504fb17fe2032c760dc316448766f150a130204aad
+#8 DONE 0.6s
+
+#9 [stage-1 1/3] FROM gcr.io/distroless/cc-debian13:nonroot@sha256:d97bc0a941b8d4be647dc0ee75b264ddbb772f1ac5ba690a4309c00723b23775
+#9 sha256:1a4be5562d92d659f95e0b44b245ea5208bf5317481b9a351b07fad7fe5265ec 0B / 51.53kB 0.2s
+#9 sha256:8224d91da70b7992430d3b04040ea38ecdef4a7b719bee38397c89aaa886e198 0B / 84.21kB 0.2s
+#9 sha256:7cc70dfd88cf2327bb827123c9156f7cb95de95b2f98f3a7a931296aacec5786 0B / 901.29kB 0.2s
+#9 sha256:dd0d9bfd3bee080ad25a464362ec4f37ec5ca625695a4d7179fe69d207dc068d 0B / 158.45kB 0.2s
+#9 sha256:1a4be5562d92d659f95e0b44b245ea5208bf5317481b9a351b07fad7fe5265ec 51.53kB / 51.53kB 1.3s done
+#9 sha256:1eed391ea893e6015bf4ce4ed366909975d2acdbe907670919236a8d18ea6b07 0B / 85.86kB 0.2s
+#9 sha256:8224d91da70b7992430d3b04040ea38ecdef4a7b719bee38397c89aaa886e198 84.21kB / 84.21kB 1.7s done
+#9 sha256:2d4d7adf627254a81515173c3ba0fee593d821176ce30ea7d5eb2d956bdf8379 0B / 5.08MB 0.2s
+#9 sha256:1eed391ea893e6015bf4ce4ed366909975d2acdbe907670919236a8d18ea6b07 85.86kB / 85.86kB 2.2s done
+#9 sha256:dd0d9bfd3bee080ad25a464362ec4f37ec5ca625695a4d7179fe69d207dc068d 158.45kB / 158.45kB 3.4s done
+#9 extracting sha256:1eed391ea893e6015bf4ce4ed366909975d2acdbe907670919236a8d18ea6b07
+#9 sha256:cac2ae0193cb073e7492050b05fc342a888651b4bbc966908c8793f889c299ba 0B / 96.15kB 0.2s
+#9 extracting sha256:1eed391ea893e6015bf4ce4ed366909975d2acdbe907670919236a8d18ea6b07 0.1s done
+#9 sha256:bd8962e292918c50c90edebd9684c053bc386b9c5503acd8fec75d0c6f93a0b7 0B / 372.77kB 0.2s
+#9 sha256:7cc70dfd88cf2327bb827123c9156f7cb95de95b2f98f3a7a931296aacec5786 0B / 901.29kB 5.3s
+#9 sha256:cac2ae0193cb073e7492050b05fc342a888651b4bbc966908c8793f889c299ba 96.15kB / 96.15kB 2.1s done
+#9 sha256:cf397222899a3b6b98c35941fd44d79f8ff61303349b3bece21b49dacc1ac106 0B / 3.07MB 0.2s
+#9 sha256:bd8962e292918c50c90edebd9684c053bc386b9c5503acd8fec75d0c6f93a0b7 372.77kB / 372.77kB 2.9s done
+#9 sha256:99515e7b4d35e0652d3b0fde571b6ec269222ecacc506f026e1758d6261e9109 0B / 288.54kB 0.2s
+#9 sha256:2d4d7adf627254a81515173c3ba0fee593d821176ce30ea7d5eb2d956bdf8379 0B / 5.08MB 5.3s
+#9 ...
+
+#8 [builder 1/6] FROM docker.io/library/rust:1.91@sha256:867f1d1162913c401378a8504fb17fe2032c760dc316448766f150a130204aad
+#8 sha256:338b1467c232de7db79ba8e799af5a36c274964a10f95d8ec1d6008753879f92 77.59MB / 213.34MB 9.2s
+#8 sha256:dd420cee8193b72cf70974a80e88896c8e58d925edd1cdc515b203ff7aa65550 9.44MB / 235.97MB 9.2s
+#8 sha256:58f2d358b447d091790c5ef0943550bbcf57bac46c4b8bfcfc3e6dacf4cb7969 11.53MB / 67.78MB 9.2s
+#8 sha256:b22766554d6bfa95c7325b00ee002f2705a7b8605908c3eb43dbe729c412422c 9.44MB / 25.61MB 9.2s
+#8 ...
+
+#9 [stage-1 1/3] FROM gcr.io/distroless/cc-debian13:nonroot@sha256:d97bc0a941b8d4be647dc0ee75b264ddbb772f1ac5ba690a4309c00723b23775
+#9 sha256:99515e7b4d35e0652d3b0fde571b6ec269222ecacc506f026e1758d6261e9109 288.54kB / 288.54kB 1.9s done
+#9 sha256:99ba982a9142213c751a1709dcf088e63d8601f03b3f211bae037be698fef270 0B / 254.45kB 0.2s
+#9 sha256:cf397222899a3b6b98c35941fd44d79f8ff61303349b3bece21b49dacc1ac106 1.05MB / 3.07MB 3.9s
+#9 sha256:99ba982a9142213c751a1709dcf088e63d8601f03b3f211bae037be698fef270 254.45kB / 254.45kB 1.5s done
+#9 sha256:d6b1b89eccacc15c2420b2776d72c1dae334a00805ed9af54bf2f71e4d536f28 0B / 32.09kB 0.2s
+#9 sha256:7cc70dfd88cf2327bb827123c9156f7cb95de95b2f98f3a7a931296aacec5786 0B / 901.29kB 10.4s
+#9 sha256:7cc70dfd88cf2327bb827123c9156f7cb95de95b2f98f3a7a931296aacec5786 901.29kB / 901.29kB 10.5s done
+#9 sha256:cf397222899a3b6b98c35941fd44d79f8ff61303349b3bece21b49dacc1ac106 2.10MB / 3.07MB 5.0s
+#9 sha256:2d4d7adf627254a81515173c3ba0fee593d821176ce30ea7d5eb2d956bdf8379 1.05MB / 5.08MB 8.9s
+#9 sha256:bdfd7f7e5bf6fc27e70b59101db21c3d8284d283884419dd5fe7020583bb79ca 0B / 136.99kB 0.2s
+#9 sha256:cf397222899a3b6b98c35941fd44d79f8ff61303349b3bece21b49dacc1ac106 3.07MB / 3.07MB 5.2s done
+#9 sha256:d6b1b89eccacc15c2420b2776d72c1dae334a00805ed9af54bf2f71e4d536f28 32.09kB / 32.09kB 0.9s done
+#9 sha256:ebddc55facdc6b1f7e0f30816a5fc7cc62f38abdf76c0a8b0a0ce52085754795 0B / 311B 0.2s
+#9 sha256:c172f21841dff4c8cf45cde46589c1c2616cefe7e819965e92e6d3475c428aa0 0B / 12.68kB 0.2s
+#9 sha256:ebddc55facdc6b1f7e0f30816a5fc7cc62f38abdf76c0a8b0a0ce52085754795 311B / 311B 0.4s done
+#9 sha256:c172f21841dff4c8cf45cde46589c1c2616cefe7e819965e92e6d3475c428aa0 12.68kB / 12.68kB 0.8s done
+#9 extracting sha256:c172f21841dff4c8cf45cde46589c1c2616cefe7e819965e92e6d3475c428aa0 0.0s done
+#9 extracting sha256:99515e7b4d35e0652d3b0fde571b6ec269222ecacc506f026e1758d6261e9109
+#9 extracting sha256:99515e7b4d35e0652d3b0fde571b6ec269222ecacc506f026e1758d6261e9109 0.1s done
+#9 extracting sha256:99ba982a9142213c751a1709dcf088e63d8601f03b3f211bae037be698fef270
+#9 extracting sha256:99ba982a9142213c751a1709dcf088e63d8601f03b3f211bae037be698fef270 0.2s done
+#9 sha256:bdfd7f7e5bf6fc27e70b59101db21c3d8284d283884419dd5fe7020583bb79ca 136.99kB / 136.99kB 1.6s done
+#9 extracting sha256:d6b1b89eccacc15c2420b2776d72c1dae334a00805ed9af54bf2f71e4d536f28 0.1s done
+#9 extracting sha256:2780920e5dbfbe103d03a583ed75345306e572ec5a48cb10361f046767d9f29a 0.0s done
+#9 extracting sha256:7c12895b777bcaa8ccae0605b4de635b68fc32d60fa08f421dc3818bf55ee212
+#9 extracting sha256:7c12895b777bcaa8ccae0605b4de635b68fc32d60fa08f421dc3818bf55ee212 0.1s done
+#9 extracting sha256:3214acf345c0cc6bbdb56b698a41ccdefc624a09d6beb0d38b5de0b2303ecaf4 0.0s done
+#9 extracting sha256:52630fc75a18675c530ed9eba5f55eca09b03e91bd5bc15307918bbc1a7e7296 0.0s done
+#9 extracting sha256:dd64bf2dd177757451a98fcdc999a339c35dee5d9872d8f4dc69c8f3c4dd0112
+#9 extracting sha256:dd64bf2dd177757451a98fcdc999a339c35dee5d9872d8f4dc69c8f3c4dd0112 0.1s done
+#9 extracting sha256:b839dfae01f66e15c6a8b63520557ed315bdfe036342fa7a0c537259f10d7a9a 0.1s done
+#9 extracting sha256:ebddc55facdc6b1f7e0f30816a5fc7cc62f38abdf76c0a8b0a0ce52085754795
+#9 extracting sha256:ebddc55facdc6b1f7e0f30816a5fc7cc62f38abdf76c0a8b0a0ce52085754795 0.1s done
+#9 extracting sha256:bdfd7f7e5bf6fc27e70b59101db21c3d8284d283884419dd5fe7020583bb79ca 0.1s done
+#9 sha256:2d4d7adf627254a81515173c3ba0fee593d821176ce30ea7d5eb2d956bdf8379 1.05MB / 5.08MB 14.5s
+#9 ...
+
+#8 [builder 1/6] FROM docker.io/library/rust:1.91@sha256:867f1d1162913c401378a8504fb17fe2032c760dc316448766f150a130204aad
+#8 sha256:338b1467c232de7db79ba8e799af5a36c274964a10f95d8ec1d6008753879f92 146.80MB / 213.34MB 19.3s
+#8 sha256:dd420cee8193b72cf70974a80e88896c8e58d925edd1cdc515b203ff7aa65550 22.02MB / 235.97MB 19.2s
+#8 sha256:58f2d358b447d091790c5ef0943550bbcf57bac46c4b8bfcfc3e6dacf4cb7969 26.21MB / 67.78MB 19.2s
+#8 sha256:b22766554d6bfa95c7325b00ee002f2705a7b8605908c3eb43dbe729c412422c 22.02MB / 25.61MB 19.2s
+#8 sha256:b22766554d6bfa95c7325b00ee002f2705a7b8605908c3eb43dbe729c412422c 24.12MB / 25.61MB 20.7s
+#8 sha256:338b1467c232de7db79ba8e799af5a36c274964a10f95d8ec1d6008753879f92 158.33MB / 213.34MB 21.0s
+#8 sha256:b22766554d6bfa95c7325b00ee002f2705a7b8605908c3eb43dbe729c412422c 25.61MB / 25.61MB 21.7s
+#8 sha256:b22766554d6bfa95c7325b00ee002f2705a7b8605908c3eb43dbe729c412422c 25.61MB / 25.61MB 21.7s done
+#8 sha256:58f2d358b447d091790c5ef0943550bbcf57bac46c4b8bfcfc3e6dacf4cb7969 30.41MB / 67.78MB 21.9s
+#8 sha256:2981f7e8980b9f4b6605026e1c5f99b4971ebba15f626e46904554de09f324f4 0B / 49.29MB 0.2s
+#8 sha256:338b1467c232de7db79ba8e799af5a36c274964a10f95d8ec1d6008753879f92 170.92MB / 213.34MB 22.3s
+#8 sha256:58f2d358b447d091790c5ef0943550bbcf57bac46c4b8bfcfc3e6dacf4cb7969 34.42MB / 67.78MB 23.2s
+#8 sha256:338b1467c232de7db79ba8e799af5a36c274964a10f95d8ec1d6008753879f92 182.45MB / 213.34MB 24.1s
+#8 sha256:dd420cee8193b72cf70974a80e88896c8e58d925edd1cdc515b203ff7aa65550 31.46MB / 235.97MB 24.3s
+#8 sha256:2981f7e8980b9f4b6605026e1c5f99b4971ebba15f626e46904554de09f324f4 3.15MB / 49.29MB 3.2s
+#8 sha256:338b1467c232de7db79ba8e799af5a36c274964a10f95d8ec1d6008753879f92 193.99MB / 213.34MB 25.5s
+#8 sha256:58f2d358b447d091790c5ef0943550bbcf57bac46c4b8bfcfc3e6dacf4cb7969 38.80MB / 67.78MB 25.3s
+#8 sha256:2981f7e8980b9f4b6605026e1c5f99b4971ebba15f626e46904554de09f324f4 6.14MB / 49.29MB 5.7s
+#8 sha256:338b1467c232de7db79ba8e799af5a36c274964a10f95d8ec1d6008753879f92 204.78MB / 213.34MB 27.7s
+#8 sha256:58f2d358b447d091790c5ef0943550bbcf57bac46c4b8bfcfc3e6dacf4cb7969 44.04MB / 67.78MB 27.6s
+#8 ...
+
+#9 [stage-1 1/3] FROM gcr.io/distroless/cc-debian13:nonroot@sha256:d97bc0a941b8d4be647dc0ee75b264ddbb772f1ac5ba690a4309c00723b23775
+#9 sha256:2d4d7adf627254a81515173c3ba0fee593d821176ce30ea7d5eb2d956bdf8379 3.15MB / 5.08MB 25.5s
+#9 ...
+
+#8 [builder 1/6] FROM docker.io/library/rust:1.91@sha256:867f1d1162913c401378a8504fb17fe2032c760dc316448766f150a130204aad
+#8 sha256:dd420cee8193b72cf70974a80e88896c8e58d925edd1cdc515b203ff7aa65550 41.03MB / 235.97MB 30.0s
+#8 sha256:58f2d358b447d091790c5ef0943550bbcf57bac46c4b8bfcfc3e6dacf4cb7969 48.25MB / 67.78MB 30.0s
+#8 sha256:338b1467c232de7db79ba8e799af5a36c274964a10f95d8ec1d6008753879f92 213.34MB / 213.34MB 30.2s done
+#8 sha256:2981f7e8980b9f4b6605026e1c5f99b4971ebba15f626e46904554de09f324f4 10.41MB / 49.29MB 8.6s
+#8 sha256:58f2d358b447d091790c5ef0943550bbcf57bac46c4b8bfcfc3e6dacf4cb7969 53.48MB / 67.78MB 30.7s
+#8 sha256:2981f7e8980b9f4b6605026e1c5f99b4971ebba15f626e46904554de09f324f4 13.63MB / 49.29MB 9.0s
+#8 sha256:58f2d358b447d091790c5ef0943550bbcf57bac46c4b8bfcfc3e6dacf4cb7969 57.67MB / 67.78MB 31.0s
+#8 ...
+
+#9 [stage-1 1/3] FROM gcr.io/distroless/cc-debian13:nonroot@sha256:d97bc0a941b8d4be647dc0ee75b264ddbb772f1ac5ba690a4309c00723b23775
+#9 sha256:2d4d7adf627254a81515173c3ba0fee593d821176ce30ea7d5eb2d956bdf8379 5.08MB / 5.08MB 28.4s done
+#9 extracting sha256:2d4d7adf627254a81515173c3ba0fee593d821176ce30ea7d5eb2d956bdf8379 0.3s done
+#9 DONE 32.4s
+
+#8 [builder 1/6] FROM docker.io/library/rust:1.91@sha256:867f1d1162913c401378a8504fb17fe2032c760dc316448766f150a130204aad
+#8 sha256:dd420cee8193b72cf70974a80e88896c8e58d925edd1cdc515b203ff7aa65550 53.48MB / 235.97MB 31.9s
+#8 ...
+
+#9 [stage-1 1/3] FROM gcr.io/distroless/cc-debian13:nonroot@sha256:d97bc0a941b8d4be647dc0ee75b264ddbb772f1ac5ba690a4309c00723b23775
+#9 extracting sha256:cf397222899a3b6b98c35941fd44d79f8ff61303349b3bece21b49dacc1ac106 0.2s done
+#9 extracting sha256:bd8962e292918c50c90edebd9684c053bc386b9c5503acd8fec75d0c6f93a0b7 0.1s done
+#9 DONE 32.7s
+
+#8 [builder 1/6] FROM docker.io/library/rust:1.91@sha256:867f1d1162913c401378a8504fb17fe2032c760dc316448766f150a130204aad
+#8 sha256:58f2d358b447d091790c5ef0943550bbcf57bac46c4b8bfcfc3e6dacf4cb7969 61.87MB / 67.78MB 31.9s
+#8 sha256:2981f7e8980b9f4b6605026e1c5f99b4971ebba15f626e46904554de09f324f4 16.78MB / 49.29MB 10.2s
+#8 ...
+
+#9 [stage-1 1/3] FROM gcr.io/distroless/cc-debian13:nonroot@sha256:d97bc0a941b8d4be647dc0ee75b264ddbb772f1ac5ba690a4309c00723b23775
+#9 extracting sha256:cac2ae0193cb073e7492050b05fc342a888651b4bbc966908c8793f889c299ba 0.0s done
+#9 extracting sha256:dd0d9bfd3bee080ad25a464362ec4f37ec5ca625695a4d7179fe69d207dc068d 0.1s done
+#9 DONE 32.8s
+
+#8 [builder 1/6] FROM docker.io/library/rust:1.91@sha256:867f1d1162913c401378a8504fb17fe2032c760dc316448766f150a130204aad
+#8 ...
+
+#9 [stage-1 1/3] FROM gcr.io/distroless/cc-debian13:nonroot@sha256:d97bc0a941b8d4be647dc0ee75b264ddbb772f1ac5ba690a4309c00723b23775
+#9 extracting sha256:7cc70dfd88cf2327bb827123c9156f7cb95de95b2f98f3a7a931296aacec5786 0.1s done
+#9 extracting sha256:8224d91da70b7992430d3b04040ea38ecdef4a7b719bee38397c89aaa886e198 0.0s done
+#9 extracting sha256:1a4be5562d92d659f95e0b44b245ea5208bf5317481b9a351b07fad7fe5265ec 0.1s done
+#9 DONE 33.0s
+
+#8 [builder 1/6] FROM docker.io/library/rust:1.91@sha256:867f1d1162913c401378a8504fb17fe2032c760dc316448766f150a130204aad
+#8 ...
+
+#10 [stage-1 2/3] WORKDIR /app
+#10 DONE 0.7s
+
+#8 [builder 1/6] FROM docker.io/library/rust:1.91@sha256:867f1d1162913c401378a8504fb17fe2032c760dc316448766f150a130204aad
+#8 sha256:2981f7e8980b9f4b6605026e1c5f99b4971ebba15f626e46904554de09f324f4 19.92MB / 49.29MB 11.4s
+#8 sha256:58f2d358b447d091790c5ef0943550bbcf57bac46c4b8bfcfc3e6dacf4cb7969 67.78MB / 67.78MB 33.3s done
+#8 sha256:2981f7e8980b9f4b6605026e1c5f99b4971ebba15f626e46904554de09f324f4 23.07MB / 49.29MB 12.2s
+#8 sha256:dd420cee8193b72cf70974a80e88896c8e58d925edd1cdc515b203ff7aa65550 66.06MB / 235.97MB 34.3s
+#8 sha256:2981f7e8980b9f4b6605026e1c5f99b4971ebba15f626e46904554de09f324f4 26.21MB / 49.29MB 12.9s
+#8 sha256:2981f7e8980b9f4b6605026e1c5f99b4971ebba15f626e46904554de09f324f4 29.36MB / 49.29MB 13.8s
+#8 sha256:2981f7e8980b9f4b6605026e1c5f99b4971ebba15f626e46904554de09f324f4 32.51MB / 49.29MB 14.4s
+#8 sha256:dd420cee8193b72cf70974a80e88896c8e58d925edd1cdc515b203ff7aa65550 78.64MB / 235.97MB 36.4s
+#8 sha256:2981f7e8980b9f4b6605026e1c5f99b4971ebba15f626e46904554de09f324f4 35.06MB / 49.29MB 15.0s
+#8 sha256:2981f7e8980b9f4b6605026e1c5f99b4971ebba15f626e46904554de09f324f4 37.75MB / 49.29MB 15.5s
+#8 sha256:2981f7e8980b9f4b6605026e1c5f99b4971ebba15f626e46904554de09f324f4 40.89MB / 49.29MB 16.1s
+#8 sha256:dd420cee8193b72cf70974a80e88896c8e58d925edd1cdc515b203ff7aa65550 91.23MB / 235.97MB 38.5s
+#8 sha256:2981f7e8980b9f4b6605026e1c5f99b4971ebba15f626e46904554de09f324f4 44.04MB / 49.29MB 16.7s
+#8 sha256:2981f7e8980b9f4b6605026e1c5f99b4971ebba15f626e46904554de09f324f4 47.19MB / 49.29MB 17.3s
+#8 sha256:2981f7e8980b9f4b6605026e1c5f99b4971ebba15f626e46904554de09f324f4 49.29MB / 49.29MB 17.6s done
+#8 extracting sha256:2981f7e8980b9f4b6605026e1c5f99b4971ebba15f626e46904554de09f324f4
+#8 sha256:dd420cee8193b72cf70974a80e88896c8e58d925edd1cdc515b203ff7aa65550 103.21MB / 235.97MB 39.9s
+#8 sha256:dd420cee8193b72cf70974a80e88896c8e58d925edd1cdc515b203ff7aa65550 116.39MB / 235.97MB 41.1s
+#8 extracting sha256:2981f7e8980b9f4b6605026e1c5f99b4971ebba15f626e46904554de09f324f4 2.7s done
+#8 sha256:dd420cee8193b72cf70974a80e88896c8e58d925edd1cdc515b203ff7aa65550 128.97MB / 235.97MB 42.1s
+#8 extracting sha256:b22766554d6bfa95c7325b00ee002f2705a7b8605908c3eb43dbe729c412422c
+#8 sha256:dd420cee8193b72cf70974a80e88896c8e58d925edd1cdc515b203ff7aa65550 141.56MB / 235.97MB 43.0s
+#8 extracting sha256:b22766554d6bfa95c7325b00ee002f2705a7b8605908c3eb43dbe729c412422c 1.3s done
+#8 extracting sha256:58f2d358b447d091790c5ef0943550bbcf57bac46c4b8bfcfc3e6dacf4cb7969
+#8 sha256:dd420cee8193b72cf70974a80e88896c8e58d925edd1cdc515b203ff7aa65550 154.30MB / 235.97MB 43.9s
+#8 sha256:dd420cee8193b72cf70974a80e88896c8e58d925edd1cdc515b203ff7aa65550 166.72MB / 235.97MB 44.7s
+#8 sha256:dd420cee8193b72cf70974a80e88896c8e58d925edd1cdc515b203ff7aa65550 180.36MB / 235.97MB 45.6s
+#8 sha256:dd420cee8193b72cf70974a80e88896c8e58d925edd1cdc515b203ff7aa65550 195.04MB / 235.97MB 46.5s
+#8 sha256:dd420cee8193b72cf70974a80e88896c8e58d925edd1cdc515b203ff7aa65550 208.46MB / 235.97MB 47.4s
+#8 extracting sha256:58f2d358b447d091790c5ef0943550bbcf57bac46c4b8bfcfc3e6dacf4cb7969 4.0s done
+#8 sha256:dd420cee8193b72cf70974a80e88896c8e58d925edd1cdc515b203ff7aa65550 222.30MB / 235.97MB 48.3s
+#8 sha256:dd420cee8193b72cf70974a80e88896c8e58d925edd1cdc515b203ff7aa65550 235.97MB / 235.97MB 51.6s
+#8 sha256:dd420cee8193b72cf70974a80e88896c8e58d925edd1cdc515b203ff7aa65550 235.97MB / 235.97MB 52.8s done
+#8 extracting sha256:dd420cee8193b72cf70974a80e88896c8e58d925edd1cdc515b203ff7aa65550
+#8 extracting sha256:dd420cee8193b72cf70974a80e88896c8e58d925edd1cdc515b203ff7aa65550 23.5s done
+#8 DONE 77.0s
+
+#8 [builder 1/6] FROM docker.io/library/rust:1.91@sha256:867f1d1162913c401378a8504fb17fe2032c760dc316448766f150a130204aad
+#8 extracting sha256:338b1467c232de7db79ba8e799af5a36c274964a10f95d8ec1d6008753879f92
+#8 extracting sha256:338b1467c232de7db79ba8e799af5a36c274964a10f95d8ec1d6008753879f92 20.3s done
+#8 DONE 97.3s
+
+#11 [builder 2/6] RUN echo Building on linux/amd64 for linux/amd64
+#11 1.118 Building on linux/amd64 for linux/amd64
+#11 DONE 5.1s
+
+#12 [builder 3/6] RUN apt-get update &&     if [ "linux/amd64" = "linux/arm64" ] && [ "linux/amd64" != "linux/arm64" ] ; then         apt-get install --no-install-recommends -y g++-aarch64-linux-gnu libc6-dev-arm64-cross libprotobuf-dev protobuf-compiler ca-certificates &&         rustup target add aarch64-unknown-linux-gnu;     else         apt-get install --no-install-recommends -y g++ libc6-dev libprotobuf-dev protobuf-compiler ca-certificates;     fi
+#12 3.093 Get:1 http://deb.debian.org/debian trixie InRelease [140 kB]
+#12 3.775 Get:2 http://deb.debian.org/debian trixie-updates InRelease [47.3 kB]
+#12 4.033 Get:3 http://deb.debian.org/debian-security trixie-security InRelease [43.4 kB]
+#12 4.308 Get:4 http://deb.debian.org/debian trixie/main amd64 Packages [9673 kB]
+#12 5.930 Get:5 http://deb.debian.org/debian trixie-updates/main amd64 Packages [4412 B]
+#12 6.177 Get:6 http://deb.debian.org/debian-security trixie-security/main amd64 Packages [226 kB]
+#12 7.494 Fetched 10.1 MB in 5s (1861 kB/s)
+#12 7.494 Reading package lists...
+#12 9.459 Reading package lists...
+#12 13.31 Building dependency tree...
+#12 13.49 Reading state information...
+#12 13.98 g++ is already the newest version (4:14.2.0-1).
+#12 13.98 ca-certificates is already the newest version (20250419).
+#12 13.98 The following additional packages will be installed:
+#12 13.98   dpkg dpkg-dev libc-bin libc-dev-bin libc6 libdpkg-perl libprotobuf-lite32t64
+#12 13.98   libprotobuf32t64 libprotoc32t64
+#12 13.98 Suggested packages:
+#12 13.98   protobuf-mode-el
+#12 14.08 The following NEW packages will be installed:
+#12 14.08   libprotobuf-dev libprotobuf-lite32t64 libprotobuf32t64 libprotoc32t64
+#12 14.08   protobuf-compiler
+#12 14.08 The following packages will be upgraded:
+#12 14.08   dpkg dpkg-dev libc-bin libc-dev-bin libc6 libc6-dev libdpkg-perl
+#12 14.65 7 upgraded, 5 newly installed, 0 to remove and 122 not upgraded.
+#12 14.65 Need to get 12.7 MB of archives.
+#12 14.65 After this operation, 20.5 MB of additional disk space will be used.
+#12 14.65 Get:1 http://deb.debian.org/debian trixie/main amd64 dpkg amd64 1.22.22 [1537 kB]
+#12 16.29 Get:2 http://deb.debian.org/debian trixie/main amd64 dpkg-dev all 1.22.22 [1337 kB]
+#12 16.41 Get:3 http://deb.debian.org/debian trixie/main amd64 libdpkg-perl all 1.22.22 [651 kB]
+#12 16.59 Get:4 http://deb.debian.org/debian trixie/main amd64 libc6-dev amd64 2.41-12+deb13u3 [1992 kB]
+#12 16.81 Get:5 http://deb.debian.org/debian trixie/main amd64 libc-dev-bin amd64 2.41-12+deb13u3 [59.8 kB]
+#12 16.82 Get:6 http://deb.debian.org/debian trixie/main amd64 libc6 amd64 2.41-12+deb13u3 [2850 kB]
+#12 16.96 Get:7 http://deb.debian.org/debian trixie/main amd64 libc-bin amd64 2.41-12+deb13u3 [638 kB]
+#12 17.00 Get:8 http://deb.debian.org/debian trixie/main amd64 libprotobuf32t64 amd64 3.21.12-11+deb13u1 [981 kB]
+#12 17.08 Get:9 http://deb.debian.org/debian trixie/main amd64 libprotobuf-lite32t64 amd64 3.21.12-11+deb13u1 [275 kB]
+#12 17.10 Get:10 http://deb.debian.org/debian trixie/main amd64 libprotobuf-dev amd64 3.21.12-11+deb13u1 [1329 kB]
+#12 17.15 Get:11 http://deb.debian.org/debian trixie/main amd64 libprotoc32t64 amd64 3.21.12-11+deb13u1 [922 kB]
+#12 17.23 Get:12 http://deb.debian.org/debian trixie/main amd64 protobuf-compiler amd64 3.21.12-11+deb13u1 [85.0 kB]
+#12 18.41 debconf: unable to initialize frontend: Dialog
+#12 18.41 debconf: (TERM is not set, so the dialog frontend is not usable.)
+#12 18.41 debconf: falling back to frontend: Readline
+#12 18.42 debconf: unable to initialize frontend: Readline
+#12 18.42 debconf: (This frontend requires a controlling tty.)
+#12 18.42 debconf: falling back to frontend: Teletype
+#12 18.43 debconf: unable to initialize frontend: Teletype
+#12 18.43 debconf: (This frontend requires a controlling tty.)
+#12 18.43 debconf: falling back to frontend: Noninteractive
+#12 22.16 Preconfiguring packages ...
+#12 22.35 Fetched 12.7 MB in 3s (4033 kB/s)
+#12 22.45 (Reading database ... 
+(Reading database ... 5%
+(Reading database ... 10%
+(Reading database ... 15%
+(Reading database ... 20%
+(Reading database ... 25%
+(Reading database ... 30%
+(Reading database ... 35%
+(Reading database ... 40%
+(Reading database ... 45%
+(Reading database ... 50%
+(Reading database ... 55%
+(Reading database ... 60%
+(Reading database ... 65%
+(Reading database ... 70%
+(Reading database ... 75%
+(Reading database ... 80%
+(Reading database ... 85%
+(Reading database ... 90%
+(Reading database ... 95%
+(Reading database ... 100%
+(Reading database ... 26065 files and directories currently installed.)
+#12 22.49 Preparing to unpack .../dpkg_1.22.22_amd64.deb ...
+#12 22.55 Unpacking dpkg (1.22.22) over (1.22.21) ...
+#12 25.23 Setting up dpkg (1.22.22) ...
+#12 25.73 (Reading database ... 
+(Reading database ... 5%
+(Reading database ... 10%
+(Reading database ... 15%
+(Reading database ... 20%
+(Reading database ... 25%
+(Reading database ... 30%
+(Reading database ... 35%
+(Reading database ... 40%
+(Reading database ... 45%
+(Reading database ... 50%
+(Reading database ... 55%
+(Reading database ... 60%
+(Reading database ... 65%
+(Reading database ... 70%
+(Reading database ... 75%
+(Reading database ... 80%
+(Reading database ... 85%
+(Reading database ... 90%
+(Reading database ... 95%
+(Reading database ... 100%
+(Reading database ... 26065 files and directories currently installed.)
+#12 25.74 Preparing to unpack .../dpkg-dev_1.22.22_all.deb ...
+#12 25.81 Unpacking dpkg-dev (1.22.22) over (1.22.21) ...
+#12 29.59 Preparing to unpack .../libdpkg-perl_1.22.22_all.deb ...
+#12 29.63 Unpacking libdpkg-perl (1.22.22) over (1.22.21) ...
+#12 32.12 Preparing to unpack .../libc6-dev_2.41-12+deb13u3_amd64.deb ...
+#12 32.19 Unpacking libc6-dev:amd64 (2.41-12+deb13u3) over (2.41-12) ...
+#12 39.40 Preparing to unpack .../libc-dev-bin_2.41-12+deb13u3_amd64.deb ...
+#12 39.46 Unpacking libc-dev-bin (2.41-12+deb13u3) over (2.41-12) ...
+#12 39.74 Preparing to unpack .../libc6_2.41-12+deb13u3_amd64.deb ...
+#12 40.23 debconf: unable to initialize frontend: Dialog
+#12 40.23 debconf: (TERM is not set, so the dialog frontend is not usable.)
+#12 40.23 debconf: falling back to frontend: Readline
+#12 40.24 debconf: unable to initialize frontend: Readline
+#12 40.24 debconf: (This frontend requires a controlling tty.)
+#12 40.24 debconf: falling back to frontend: Teletype
+#12 40.25 debconf: unable to initialize frontend: Teletype
+#12 40.25 debconf: (This frontend requires a controlling tty.)
+#12 40.25 debconf: falling back to frontend: Noninteractive
+#12 40.35 Unpacking libc6:amd64 (2.41-12+deb13u3) over (2.41-12) ...
+#12 46.32 Setting up libc6:amd64 (2.41-12+deb13u3) ...
+#12 46.59 debconf: unable to initialize frontend: Dialog
+#12 46.59 debconf: (TERM is not set, so the dialog frontend is not usable.)
+#12 46.59 debconf: falling back to frontend: Readline
+#12 46.60 debconf: unable to initialize frontend: Readline
+#12 46.60 debconf: (This frontend requires a controlling tty.)
+#12 46.60 debconf: falling back to frontend: Teletype
+#12 46.61 debconf: unable to initialize frontend: Teletype
+#12 46.61 debconf: (This frontend requires a controlling tty.)
+#12 46.61 debconf: falling back to frontend: Noninteractive
+#12 46.86 (Reading database ... 
+(Reading database ... 5%
+(Reading database ... 10%
+(Reading database ... 15%
+(Reading database ... 20%
+(Reading database ... 25%
+(Reading database ... 30%
+(Reading database ... 35%
+(Reading database ... 40%
+(Reading database ... 45%
+(Reading database ... 50%
+(Reading database ... 55%
+(Reading database ... 60%
+(Reading database ... 65%
+(Reading database ... 70%
+(Reading database ... 75%
+(Reading database ... 80%
+(Reading database ... 85%
+(Reading database ... 90%
+(Reading database ... 95%
+(Reading database ... 100%
+(Reading database ... 26065 files and directories currently installed.)
+#12 46.88 Preparing to unpack .../libc-bin_2.41-12+deb13u3_amd64.deb ...
+#12 46.95 Unpacking libc-bin (2.41-12+deb13u3) over (2.41-12) ...
+#12 47.70 Setting up libc-bin (2.41-12+deb13u3) ...
+#12 48.07 Selecting previously unselected package libprotobuf32t64:amd64.
+#12 48.07 (Reading database ... 
+(Reading database ... 5%
+(Reading database ... 10%
+(Reading database ... 15%
+(Reading database ... 20%
+(Reading database ... 25%
+(Reading database ... 30%
+(Reading database ... 35%
+(Reading database ... 40%
+(Reading database ... 45%
+(Reading database ... 50%
+(Reading database ... 55%
+(Reading database ... 60%
+(Reading database ... 65%
+(Reading database ... 70%
+(Reading database ... 75%
+(Reading database ... 80%
+(Reading database ... 85%
+(Reading database ... 90%
+(Reading database ... 95%
+(Reading database ... 100%
+(Reading database ... 26065 files and directories currently installed.)
+#12 48.09 Preparing to unpack .../libprotobuf32t64_3.21.12-11+deb13u1_amd64.deb ...
+#12 48.14 Unpacking libprotobuf32t64:amd64 (3.21.12-11+deb13u1) ...
+#12 48.44 Selecting previously unselected package libprotobuf-lite32t64:amd64.
+#12 48.45 Preparing to unpack .../libprotobuf-lite32t64_3.21.12-11+deb13u1_amd64.deb ...
+#12 48.46 Unpacking libprotobuf-lite32t64:amd64 (3.21.12-11+deb13u1) ...
+#12 48.60 Selecting previously unselected package libprotobuf-dev:amd64.
+#12 48.60 Preparing to unpack .../libprotobuf-dev_3.21.12-11+deb13u1_amd64.deb ...
+#12 48.63 Unpacking libprotobuf-dev:amd64 (3.21.12-11+deb13u1) ...
+#12 48.95 Selecting previously unselected package libprotoc32t64:amd64.
+#12 48.95 Preparing to unpack .../libprotoc32t64_3.21.12-11+deb13u1_amd64.deb ...
+#12 48.96 Unpacking libprotoc32t64:amd64 (3.21.12-11+deb13u1) ...
+#12 49.14 Selecting previously unselected package protobuf-compiler.
+#12 49.14 Preparing to unpack .../protobuf-compiler_3.21.12-11+deb13u1_amd64.deb ...
+#12 49.17 Unpacking protobuf-compiler (3.21.12-11+deb13u1) ...
+#12 49.32 Setting up libprotobuf-lite32t64:amd64 (3.21.12-11+deb13u1) ...
+#12 49.38 Setting up libprotobuf32t64:amd64 (3.21.12-11+deb13u1) ...
+#12 49.42 Setting up libprotobuf-dev:amd64 (3.21.12-11+deb13u1) ...
+#12 49.48 Setting up libdpkg-perl (1.22.22) ...
+#12 49.53 Setting up libprotoc32t64:amd64 (3.21.12-11+deb13u1) ...
+#12 49.58 Setting up libc-dev-bin (2.41-12+deb13u3) ...
+#12 49.64 Setting up protobuf-compiler (3.21.12-11+deb13u1) ...
+#12 49.70 Setting up dpkg-dev (1.22.22) ...
+#12 49.83 Setting up libc6-dev:amd64 (2.41-12+deb13u3) ...
+#12 49.90 Processing triggers for libc-bin (2.41-12+deb13u3) ...
+#12 DONE 50.3s
+
+#13 [builder 4/6] WORKDIR /app/
+#13 DONE 0.2s
+
+#14 [builder 5/6] COPY /src/shipping/ /app/
+#14 DONE 0.2s
+
+#15 [builder 6/6] RUN if [ "linux/amd64" = "linux/arm64" ] && [ "linux/amd64" != "linux/arm64" ] ; then         env CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER=aarch64-linux-gnu-gcc             CC_aarch64_unknown_linux_gnu=aarch64-linux-gnu-gcc             CXX_aarch64_unknown_linux_gnu=aarch64-linux-gnu-g++         cargo build -r --target aarch64-unknown-linux-gnu &&         cp /app/target/aarch64-unknown-linux-gnu/release/shipping /app/target/release/shipping;     else         cargo build -r;     fi
+#15 0.524     Updating crates.io index
+#15 8.802  Downloading crates ...
+#15 9.992   Downloaded alloc-stdlib v0.2.2
+#15 10.18   Downloaded bytestring v1.5.0
+#15 10.32   Downloaded actix-codec v0.5.2
+#15 10.49   Downloaded alloc-no-stdlib v2.0.4
+#15 10.67   Downloaded cpufeatures v0.2.17
+#15 10.82   Downloaded opentelemetry-resource-detectors v0.10.0
+#15 10.82   Downloaded num-conv v0.1.0
+#15 10.89   Downloaded atomic-waker v1.1.2
+#15 11.04   Downloaded local-channel v0.1.5
+#15 11.17   Downloaded potential_utf v0.1.4
+#15 11.37   Downloaded nu-ansi-term v0.50.3
+#15 11.48   Downloaded scopeguard v1.2.0
+#15 11.48   Downloaded litemap v0.8.1
+#15 12.29   Downloaded zerofrom-derive v0.1.6
+#15 12.30   Downloaded sha1 v0.10.6
+#15 12.33   Downloaded yoke-derive v0.8.1
+#15 13.91   Downloaded zstd-safe v7.2.4
+#15 14.01   Downloaded unicode-ident v1.0.22
+#15 14.13   Downloaded typenum v1.19.0
+#15 14.15   Downloaded zerotrie v0.2.3
+#15 14.17   Downloaded tonic v0.14.2
+#15 14.22   Downloaded zerovec v0.11.5
+#15 14.25   Downloaded tokio-util v0.7.17
+#15 14.28   Downloaded time v0.3.44
+#15 14.41   Downloaded serde_json v1.0.145
+#15 14.44   Downloaded reqwest v0.12.24
+#15 14.46   Downloaded tracing-subscriber v0.3.22
+#15 14.47   Downloaded zerocopy v0.8.27
+#15 14.61   Downloaded opentelemetry_sdk v0.31.0
+#15 14.77   Downloaded actix-web v4.12.1
+#15 14.97   Downloaded regex v1.12.2
+#15 15.12   Downloaded syn v2.0.110
+#15 15.24   Downloaded opentelemetry-instrumentation-actix-web v0.23.0
+#15 15.26   Downloaded tower-http v0.6.6
+#15 15.32   Downloaded regex-syntax v0.8.8
+#15 15.37   Downloaded tower v0.5.2
+#15 15.42   Downloaded rand v0.9.2
+#15 15.44   Downloaded brotli-decompressor v5.0.0
+#15 15.50   Downloaded axum v0.8.7
+#15 15.54   Downloaded actix-http v3.11.2
+#15 15.58   Downloaded tracing v0.1.44
+#15 15.70   Downloaded regex-lite v0.1.8
+#15 15.71   Downloaded opentelemetry-semantic-conventions v0.31.0
+#15 15.73   Downloaded h2 v0.4.12
+#15 15.76   Downloaded h2 v0.3.27
+#15 15.78   Downloaded aho-corasick v1.1.4
+#15 15.82   Downloaded brotli v8.0.2
+#15 15.90   Downloaded uuid v1.19.0
+#15 15.91   Downloaded url v2.5.7
+#15 15.92   Downloaded regex-automata v0.4.13
+#15 15.98   Downloaded serde v1.0.228
+#15 15.99   Downloaded opentelemetry-proto v0.31.0
+#15 16.00   Downloaded opentelemetry-otlp v0.31.0
+#15 16.01   Downloaded itertools v0.14.0
+#15 16.03   Downloaded libc v0.2.177
+#15 16.12   Downloaded idna v1.1.0
+#15 16.14   Downloaded icu_properties_data v2.1.1
+#15 16.16   Downloaded zstd-sys v2.0.16+zstd.1.5.7
+#15 16.22   Downloaded hyper v1.8.1
+#15 16.23   Downloaded hashbrown v0.16.0
+#15 16.25   Downloaded tokio v1.48.0
+#15 16.56   Downloaded futures-util v0.3.31
+#15 16.61   Downloaded tracing-core v0.1.36
+#15 16.62   Downloaded socket2 v0.6.1
+#15 16.63   Downloaded socket2 v0.5.10
+#15 16.64   Downloaded sharded-slab v0.1.7
+#15 16.65   Downloaded serde_derive v1.0.228
+#15 16.66   Downloaded serde_core v1.0.228
+#15 16.67   Downloaded ryu v1.0.20
+#15 16.68   Downloaded proc-macro2 v1.0.103
+#15 16.69   Downloaded pin-project v1.1.10
+#15 16.72   Downloaded iri-string v0.7.9
+#15 16.75   Downloaded tracing-attributes v0.1.31
+#15 16.76   Downloaded tokio-stream v0.1.17
+#15 16.78   Downloaded tinystr v0.8.2
+#15 16.79   Downloaded smallvec v1.15.1
+#15 16.79   Downloaded quote v1.0.42
+#15 16.80   Downloaded ppv-lite86 v0.2.21
+#15 16.80   Downloaded pin-project-lite v0.2.16
+#15 16.82   Downloaded parking_lot_core v0.9.12
+#15 16.82   Downloaded parking_lot v0.12.5
+#15 16.83   Downloaded http v1.3.1
+#15 16.85   Downloaded http v0.2.12
+#15 16.86   Downloaded zstd v0.13.3
+#15 16.87   Downloaded zerovec-derive v0.11.2
+#15 16.87   Downloaded yoke v0.8.1
+#15 16.88   Downloaded writeable v0.6.2
+#15 16.89   Downloaded utf8_iter v1.0.4
+#15 16.89   Downloaded encoding_rs v0.8.35
+#15 16.99   Downloaded tokio-macros v2.6.0
+#15 17.00   Downloaded time-macros v0.2.24
+#15 17.01   Downloaded thread_local v1.1.9
+#15 17.01   Downloaded thiserror-impl v2.0.17
+#15 17.02   Downloaded rand_chacha v0.9.0
+#15 17.02   Downloaded prost-derive v0.14.1
+#15 17.02   Downloaded prost v0.14.1
+#15 17.03   Downloaded pkg-config v0.3.32
+#15 17.03   Downloaded pin-project-internal v1.1.10
+#15 17.04   Downloaded mio v1.1.0
+#15 17.06   Downloaded indexmap v2.12.0
+#15 17.07   Downloaded icu_collections v2.1.1
+#15 17.09   Downloaded hyper-util v0.1.18
+#15 17.11   Downloaded tracing-log v0.2.0
+#15 17.11   Downloaded tower-service v0.3.3
+#15 17.12   Downloaded thiserror v2.0.17
+#15 17.13   Downloaded synstructure v0.13.2
+#15 17.14   Downloaded slab v0.4.11
+#15 17.14   Downloaded simd-adler32 v0.3.7
+#15 17.15   Downloaded signal-hook-registry v1.4.6
+#15 17.16   Downloaded shlex v1.3.0
+#15 17.16   Downloaded rand_core v0.9.3
+#15 17.17   Downloaded opentelemetry v0.31.0
+#15 17.18   Downloaded miniz_oxide v0.8.9
+#15 17.18   Downloaded memchr v2.7.6
+#15 17.20   Downloaded flate2 v1.1.5
+#15 17.21   Downloaded cc v1.2.46
+#15 17.22   Downloaded bytes v1.11.0
+#15 17.23   Downloaded base64 v0.22.1
+#15 17.24   Downloaded awc v3.8.1
+#15 17.26   Downloaded serde_urlencoded v0.7.1
+#15 17.27   Downloaded pin-utils v0.1.0
+#15 17.27   Downloaded icu_provider v2.1.1
+#15 17.28   Downloaded icu_normalizer_data v2.1.1
+#15 17.29   Downloaded icu_normalizer v2.1.1
+#15 17.30   Downloaded icu_locale_core v2.1.1
+#15 17.32   Downloaded derive_more v2.0.1
+#15 17.35   Downloaded anyhow v1.0.100
+#15 17.37   Downloaded actix-tls v3.5.0
+#15 17.38   Downloaded zerofrom v0.1.6
+#15 17.39   Downloaded want v0.3.1
+#15 17.39   Downloaded version_check v0.9.5
+#15 17.40   Downloaded uuid-macro-internal v1.19.0
+#15 17.41   Downloaded unicode-xid v0.2.6
+#15 17.41   Downloaded try-lock v0.2.5
+#15 17.42   Downloaded tower-layer v0.3.3
+#15 17.42   Downloaded tonic-prost v0.14.2
+#15 17.42   Downloaded time-core v0.1.6
+#15 17.43   Downloaded sync_wrapper v1.0.2
+#15 17.43   Downloaded stable_deref_trait v1.2.1
+#15 17.43   Downloaded powerfmt v0.2.0
+#15 17.44   Downloaded opentelemetry-appender-tracing v0.31.1
+#15 17.44   Downloaded once_cell v1.21.3
+#15 17.45   Downloaded log v0.4.28
+#15 17.46   Downloaded language-tags v0.3.2
+#15 17.47   Downloaded icu_properties v2.1.1
+#15 17.48   Downloaded httparse v1.10.1
+#15 17.49   Downloaded getrandom v0.3.4
+#15 17.51   Downloaded derive_more-impl v2.0.1
+#15 17.53   Downloaded displaydoc v0.2.5
+#15 17.54   Downloaded crc32fast v1.5.0
+#15 17.54   Downloaded cookie v0.16.2
+#15 17.55   Downloaded bitflags v2.10.0
+#15 17.56   Downloaded actix-server v2.6.0
+#15 17.57   Downloaded actix-router v0.5.3
+#15 17.57   Downloaded percent-encoding v2.3.2
+#15 17.57   Downloaded matchit v0.8.4
+#15 17.58   Downloaded lock_api v0.4.14
+#15 17.58   Downloaded lazy_static v1.5.0
+#15 17.59   Downloaded jobserver v0.1.34
+#15 17.60   Downloaded hyper-timeout v0.5.2
+#15 17.60   Downloaded http-body-util v0.1.3
+#15 17.61   Downloaded futures-task v0.3.31
+#15 17.62   Downloaded futures-executor v0.3.31
+#15 17.62   Downloaded futures-channel v0.3.31
+#15 17.63   Downloaded foldhash v0.1.5
+#15 17.63   Downloaded find-msvc-tools v0.1.5
+#15 17.63   Downloaded equivalent v1.0.2
+#15 17.64   Downloaded either v1.15.0
+#15 17.64   Downloaded digest v0.10.7
+#15 17.64   Downloaded deranged v0.5.5
+#15 17.65   Downloaded axum-core v0.5.5
+#15 17.65   Downloaded async-trait v0.1.89
+#15 17.66   Downloaded actix-web-codegen v4.3.0
+#15 17.67   Downloaded actix-service v2.0.3
+#15 17.68   Downloaded actix-rt v2.11.0
+#15 17.68   Downloaded mime v0.3.17
+#15 17.69   Downloaded ipnet v2.11.0
+#15 17.69   Downloaded httpdate v1.0.3
+#15 17.69   Downloaded futures-core v0.3.31
+#15 17.70   Downloaded form_urlencoded v1.2.2
+#15 17.70   Downloaded fnv v1.0.7
+#15 17.70   Downloaded crypto-common v0.1.7
+#15 17.71   Downloaded opentelemetry-http v0.31.0
+#15 17.71   Downloaded matchers v0.2.0
+#15 17.71   Downloaded local-waker v0.1.4
+#15 17.72   Downloaded itoa v1.0.15
+#15 17.72   Downloaded impl-more v0.1.9
+#15 17.73   Downloaded idna_adapter v1.2.1
+#15 17.73   Downloaded http-body v1.0.1
+#15 17.73   Downloaded futures-macro v0.3.31
+#15 17.74   Downloaded futures-io v0.3.31
+#15 17.74   Downloaded generic-array v0.14.7
+#15 17.74   Downloaded futures-sink v0.3.31
+#15 17.74   Downloaded adler2 v2.0.1
+#15 17.75   Downloaded actix-utils v3.0.1
+#15 17.75   Downloaded cfg-if v1.0.4
+#15 17.75   Downloaded block-buffer v0.10.4
+#15 17.76   Downloaded actix-macros v0.2.4
+#15 18.28    Compiling proc-macro2 v1.0.103
+#15 18.28    Compiling unicode-ident v1.0.22
+#15 18.28    Compiling quote v1.0.42
+#15 18.28    Compiling libc v0.2.177
+#15 18.28    Compiling cfg-if v1.0.4
+#15 18.28    Compiling pin-project-lite v0.2.16
+#15 18.28    Compiling futures-core v0.3.31
+#15 18.29    Compiling log v0.4.28
+#15 18.29    Compiling bytes v1.11.0
+#15 18.30    Compiling smallvec v1.15.1
+#15 18.31    Compiling futures-sink v0.3.31
+#15 18.32    Compiling once_cell v1.21.3
+#15 18.56    Compiling memchr v2.7.6
+#15 18.56    Compiling parking_lot_core v0.9.12
+#15 18.60    Compiling itoa v1.0.15
+#15 18.62    Compiling scopeguard v1.2.0
+#15 18.66    Compiling fnv v1.0.7
+#15 18.89    Compiling lock_api v0.4.14
+#15 18.89    Compiling slab v0.4.11
+#15 18.91    Compiling tracing-core v0.1.36
+#15 18.96    Compiling pin-utils v0.1.0
+#15 18.97    Compiling futures-task v0.3.31
+#15 19.00    Compiling futures-io v0.3.31
+#15 19.02    Compiling percent-encoding v2.3.2
+#15 19.03    Compiling equivalent v1.0.2
+#15 19.04    Compiling hashbrown v0.16.0
+#15 19.09    Compiling stable_deref_trait v1.2.1
+#15 19.17    Compiling serde_core v1.0.228
+#15 19.28    Compiling httparse v1.10.1
+#15 19.28    Compiling version_check v0.9.5
+#15 19.28    Compiling getrandom v0.3.4
+#15 19.29    Compiling zerocopy v0.8.27
+#15 20.50    Compiling httpdate v1.0.3
+#15 21.95    Compiling http v1.3.1
+#15 24.87    Compiling indexmap v2.12.0
+#15 25.00    Compiling tower-service v0.3.3
+#15 26.97    Compiling base64 v0.22.1
+#15 27.08    Compiling writeable v0.6.2
+#15 27.38    Compiling litemap v0.8.1
+#15 27.61    Compiling syn v2.0.110
+#15 27.65    Compiling futures-channel v0.3.31
+#15 27.66    Compiling http-body v1.0.1
+#15 27.68    Compiling shlex v1.3.0
+#15 27.72    Compiling typenum v1.19.0
+#15 27.83    Compiling icu_normalizer_data v2.1.1
+#15 27.90    Compiling socket2 v0.6.1
+#15 27.93    Compiling mio v1.1.0
+#15 28.02    Compiling signal-hook-registry v1.4.6
+#15 28.09    Compiling serde v1.0.228
+#15 28.21    Compiling jobserver v0.1.34
+#15 28.25    Compiling find-msvc-tools v0.1.5
+#15 28.41    Compiling parking_lot v0.12.5
+#15 28.51    Compiling rand_core v0.9.3
+#15 28.54    Compiling icu_properties_data v2.1.1
+#15 28.59    Compiling cc v1.2.46
+#15 28.70    Compiling generic-array v0.14.7
+#15 28.75    Compiling sync_wrapper v1.0.2
+#15 29.02    Compiling thiserror v2.0.17
+#15 29.07    Compiling try-lock v0.2.5
+#15 29.25    Compiling atomic-waker v1.1.2
+#15 29.39    Compiling mime v0.3.17
+#15 29.58    Compiling tower-layer v0.3.3
+#15 29.68    Compiling pkg-config v0.3.32
+#15 29.70    Compiling want v0.3.1
+#15 29.95    Compiling bitflags v2.10.0
+#15 30.00    Compiling anyhow v1.0.100
+#15 30.02    Compiling http-body-util v0.1.3
+#15 30.29    Compiling ppv-lite86 v0.2.21
+#15 30.33    Compiling aho-corasick v1.1.4
+#15 30.42    Compiling form_urlencoded v1.2.2
+#15 30.51    Compiling local-waker v0.1.4
+#15 30.56    Compiling regex-syntax v0.8.8
+#15 30.66    Compiling ryu v1.0.20
+#15 30.96    Compiling ipnet v2.11.0
+#15 31.10    Compiling http v0.2.12
+#15 31.12    Compiling crc32fast v1.5.0
+#15 31.13    Compiling alloc-no-stdlib v2.0.4
+#15 31.17    Compiling rand_chacha v0.9.0
+#15 31.25    Compiling zstd-safe v7.2.4
+#15 31.28    Compiling utf8_iter v1.0.4
+#15 31.43    Compiling alloc-stdlib v0.2.2
+#15 31.56    Compiling rand v0.9.2
+#15 31.64    Compiling block-buffer v0.10.4
+#15 31.79    Compiling crypto-common v0.1.7
+#15 31.92    Compiling actix-utils v3.0.1
+#15 32.03    Compiling actix-service v2.0.3
+#15 32.04    Compiling simd-adler32 v0.3.7
+#15 32.12    Compiling either v1.15.0
+#15 32.18    Compiling adler2 v2.0.1
+#15 32.36    Compiling unicode-xid v0.2.6
+#15 32.37    Compiling itertools v0.14.0
+#15 32.89    Compiling zstd-sys v2.0.16+zstd.1.5.7
+#15 32.93    Compiling miniz_oxide v0.8.9
+#15 32.98    Compiling digest v0.10.7
+#15 33.38    Compiling brotli-decompressor v5.0.0
+#15 33.71    Compiling axum-core v0.5.5
+#15 33.90    Compiling bytestring v1.5.0
+#15 34.42    Compiling cpufeatures v0.2.17
+#15 34.58    Compiling regex-automata v0.4.13
+#15 39.96    Compiling num-conv v0.1.0
+#15 40.17    Compiling matchit v0.8.4
+#15 40.76    Compiling time-core v0.1.6
+#15 40.85    Compiling powerfmt v0.2.0
+#15 41.14    Compiling synstructure v0.13.2
+#15 41.41    Compiling serde_json v1.0.145
+#15 42.04    Compiling tracing v0.1.44
+#15 42.07    Compiling time-macros v0.2.24
+#15 42.11    Compiling deranged v0.5.5
+#15 42.76    Compiling brotli v8.0.2
+#15 42.85    Compiling sha1 v0.10.6
+#15 43.54    Compiling flate2 v1.1.5
+#15 43.88    Compiling local-channel v0.1.5
+#15 43.90    Compiling cookie v0.16.2
+#15 43.91    Compiling tracing-attributes v0.1.31
+#15 44.04    Compiling tokio-macros v2.6.0
+#15 44.04    Compiling futures-macro v0.3.31
+#15 44.21    Compiling zerofrom-derive v0.1.6
+#15 44.55    Compiling yoke-derive v0.8.1
+#15 44.91    Compiling tokio v1.48.0
+#15 45.09    Compiling futures-util v0.3.31
+#15 45.20    Compiling zerovec-derive v0.11.2
+#15 46.04    Compiling zerofrom v0.1.6
+#15 46.11    Compiling displaydoc v0.2.5
+#15 46.20    Compiling yoke v0.8.1
+#15 46.42    Compiling serde_derive v1.0.228
+#15 46.76    Compiling thiserror-impl v2.0.17
+#15 46.87    Compiling zerovec v0.11.5
+#15 47.50    Compiling zerotrie v0.2.3
+#15 48.27    Compiling async-trait v0.1.89
+#15 48.81    Compiling opentelemetry v0.31.0
+#15 49.04    Compiling derive_more-impl v2.0.1
+#15 49.32    Compiling tinystr v0.8.2
+#15 49.35    Compiling potential_utf v0.1.4
+#15 49.51    Compiling icu_collections v2.1.1
+#15 49.90    Compiling icu_locale_core v2.1.1
+#15 50.31    Compiling pin-project-internal v1.1.10
+#15 50.95    Compiling futures-executor v0.3.31
+#15 51.05    Compiling prost-derive v0.14.1
+#15 51.18    Compiling encoding_rs v0.8.35
+#15 51.85    Compiling tokio-util v0.7.17
+#15 51.97    Compiling icu_provider v2.1.1
+#15 52.22    Compiling serde_urlencoded v0.7.1
+#15 52.56    Compiling actix-rt v2.11.0
+#15 52.80    Compiling icu_normalizer v2.1.1
+#15 53.00    Compiling icu_properties v2.1.1
+#15 53.14    Compiling derive_more v2.0.1
+#15 53.26    Compiling pin-project v1.1.10
+#15 53.37    Compiling h2 v0.4.12
+#15 54.33    Compiling tower v0.5.2
+#15 54.35    Compiling actix-codec v0.5.2
+#15 54.48    Compiling h2 v0.3.27
+#15 54.79    Compiling idna_adapter v1.2.1
+#15 54.90    Compiling idna v1.1.0
+#15 55.37    Compiling tokio-stream v0.1.17
+#15 55.54    Compiling url v2.5.7
+#15 55.77    Compiling foldhash v0.1.5
+#15 55.97    Compiling regex-lite v0.1.8
+#15 56.04    Compiling impl-more v0.1.9
+#15 56.34    Compiling language-tags v0.3.2
+#15 59.19    Compiling axum v0.8.7
+#15 59.44    Compiling iri-string v0.7.9
+#15 60.65    Compiling actix-router v0.5.3
+#15 60.78    Compiling time v0.3.44
+#15 61.02    Compiling prost v0.14.1
+#15 61.14    Compiling opentelemetry_sdk v0.31.0
+#15 61.55    Compiling regex v1.12.2
+#15 62.36    Compiling tower-http v0.6.6
+#15 64.21    Compiling socket2 v0.5.10
+#15 64.45    Compiling lazy_static v1.5.0
+#15 64.52    Compiling sharded-slab v0.1.7
+#15 65.56    Compiling actix-server v2.6.0
+#15 66.70    Compiling actix-web-codegen v4.3.0
+#15 67.50    Compiling actix-tls v3.5.0
+#15 67.53    Compiling matchers v0.2.0
+#15 67.71    Compiling actix-macros v0.2.4
+#15 67.92    Compiling tracing-log v0.2.0
+#15 68.24    Compiling hyper v1.8.1
+#15 68.45    Compiling thread_local v1.1.9
+#15 68.51    Compiling opentelemetry-semantic-conventions v0.31.0
+#15 68.76    Compiling opentelemetry-resource-detectors v0.10.0
+#15 68.94    Compiling nu-ansi-term v0.50.3
+#15 69.06    Compiling uuid-macro-internal v1.19.0
+#15 69.68    Compiling tracing-subscriber v0.3.22
+#15 69.69    Compiling uuid v1.19.0
+#15 71.04    Compiling hyper-util v0.1.18
+#15 72.65    Compiling opentelemetry-appender-tracing v0.31.1
+#15 76.52    Compiling hyper-timeout v0.5.2
+#15 76.78    Compiling tonic v0.14.2
+#15 77.65    Compiling reqwest v0.12.24
+#15 81.77    Compiling tonic-prost v0.14.2
+#15 82.04    Compiling opentelemetry-proto v0.31.0
+#15 82.82    Compiling opentelemetry-http v0.31.0
+#15 85.50    Compiling opentelemetry-otlp v0.31.0
+#15 92.30    Compiling zstd v0.13.3
+#15 92.75    Compiling actix-http v3.11.2
+#15 97.31    Compiling actix-web v4.12.1
+#15 97.31    Compiling awc v3.8.1
+#15 101.8    Compiling opentelemetry-instrumentation-actix-web v0.23.0
+#15 103.6    Compiling shipping v0.0.0 (/app)
+#15 111.1     Finished `release` profile [optimized] target(s) in 1m 44s
+#15 DONE 111.7s
+
+#16 [stage-1 3/3] COPY --from=builder /app/target/release/shipping shipping
+#16 DONE 0.2s
+
+#17 exporting to image
+#17 exporting layers
+#17 exporting layers 1.3s done
+#17 exporting manifest sha256:68a25d510645c6f7f807cebbcbe232ca855cb2106d26ad6122bf2dd1b0ba7136 0.0s done
+#17 exporting config sha256:606cf5c6b7b21fe195ddae7d4535d9d0bb21fc619cd615c493197770568eb471 0.0s done
+#17 exporting attestation manifest sha256:f9104b8d3da19138f0c459e35baf82be3fe786b828a2454a7f57b2218f22136b
+#17 exporting attestation manifest sha256:f9104b8d3da19138f0c459e35baf82be3fe786b828a2454a7f57b2218f22136b 0.1s done
+#17 exporting manifest list sha256:fb5cc0df351dd692c335ae0512830c3155dd0f9d3b75eb7324880b32bdef8348
+#17 exporting manifest list sha256:fb5cc0df351dd692c335ae0512830c3155dd0f9d3b75eb7324880b32bdef8348 0.1s done
+#17 naming to docker.io/local/shipping:trivy-test done
+#17 unpacking to docker.io/local/shipping:trivy-test
+#17 unpacking to docker.io/local/shipping:trivy-test 0.2s done
+#17 DONE 1.9s

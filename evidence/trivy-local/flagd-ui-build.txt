@@ -1,0 +1,2496 @@
+#0 building with "desktop-linux" instance using docker driver
+
+#1 [internal] load local bake definitions
+#1 reading docker-compose.yml 31.23kB / 31.23kB done
+#1 reading docker-bake.hcl 6.69kB / 6.69kB done
+#1 DONE 0.0s
+
+#2 [internal] load build definition from Dockerfile
+#2 transferring dockerfile: 3.41kB 0.0s done
+#2 DONE 0.0s
+
+#3 [internal] load metadata for docker.io/library/debian:bookworm-20251117-slim@sha256:b4aa902587c2e61ce789849cb54c332b0400fe27b1ee33af4669e1f7e7c3e22f
+#3 ...
+
+#4 [auth] hexpm/elixir:pull token for registry-1.docker.io
+#4 DONE 0.0s
+
+#5 [auth] library/debian:pull token for registry-1.docker.io
+#5 DONE 0.0s
+
+#6 [internal] load metadata for docker.io/hexpm/elixir:1.19.3-erlang-27.2.4-debian-bookworm-20251117-slim@sha256:f829829ed6e2774ed9418ea2f93273a87b2aecf5cd9ef033981bf0ed772f629d
+#6 ...
+
+#3 [internal] load metadata for docker.io/library/debian:bookworm-20251117-slim@sha256:b4aa902587c2e61ce789849cb54c332b0400fe27b1ee33af4669e1f7e7c3e22f
+#3 DONE 2.8s
+
+#6 [internal] load metadata for docker.io/hexpm/elixir:1.19.3-erlang-27.2.4-debian-bookworm-20251117-slim@sha256:f829829ed6e2774ed9418ea2f93273a87b2aecf5cd9ef033981bf0ed772f629d
+#6 DONE 3.8s
+
+#7 [internal] load .dockerignore
+#7 transferring context: 464B 0.0s done
+#7 DONE 0.0s
+
+#8 [internal] load build context
+#8 DONE 0.0s
+
+#9 [builder  1/16] FROM docker.io/hexpm/elixir:1.19.3-erlang-27.2.4-debian-bookworm-20251117-slim@sha256:f829829ed6e2774ed9418ea2f93273a87b2aecf5cd9ef033981bf0ed772f629d
+#9 resolve docker.io/hexpm/elixir:1.19.3-erlang-27.2.4-debian-bookworm-20251117-slim@sha256:f829829ed6e2774ed9418ea2f93273a87b2aecf5cd9ef033981bf0ed772f629d 0.0s done
+#9 DONE 0.1s
+
+#8 [internal] load build context
+#8 transferring context: 475.92kB 0.0s done
+#8 DONE 0.1s
+
+#10 [final 1/6] FROM docker.io/library/debian:bookworm-20251117-slim@sha256:b4aa902587c2e61ce789849cb54c332b0400fe27b1ee33af4669e1f7e7c3e22f
+#10 resolve docker.io/library/debian:bookworm-20251117-slim@sha256:b4aa902587c2e61ce789849cb54c332b0400fe27b1ee33af4669e1f7e7c3e22f 0.0s done
+#10 sha256:8e44f01296e3a6fdc31a671bee1c2259c5d5ee8b49f29aec42b5d2af15600296 0B / 28.23MB 0.2s
+#10 sha256:8e44f01296e3a6fdc31a671bee1c2259c5d5ee8b49f29aec42b5d2af15600296 2.10MB / 28.23MB 2.9s
+#10 sha256:8e44f01296e3a6fdc31a671bee1c2259c5d5ee8b49f29aec42b5d2af15600296 5.24MB / 28.23MB 3.3s
+#10 sha256:8e44f01296e3a6fdc31a671bee1c2259c5d5ee8b49f29aec42b5d2af15600296 7.34MB / 28.23MB 3.6s
+#10 sha256:8e44f01296e3a6fdc31a671bee1c2259c5d5ee8b49f29aec42b5d2af15600296 9.44MB / 28.23MB 3.8s
+#10 sha256:8e44f01296e3a6fdc31a671bee1c2259c5d5ee8b49f29aec42b5d2af15600296 12.58MB / 28.23MB 4.1s
+#10 sha256:8e44f01296e3a6fdc31a671bee1c2259c5d5ee8b49f29aec42b5d2af15600296 14.68MB / 28.23MB 4.2s
+#10 sha256:8e44f01296e3a6fdc31a671bee1c2259c5d5ee8b49f29aec42b5d2af15600296 16.78MB / 28.23MB 4.4s
+#10 sha256:8e44f01296e3a6fdc31a671bee1c2259c5d5ee8b49f29aec42b5d2af15600296 18.87MB / 28.23MB 5.0s
+#10 sha256:8e44f01296e3a6fdc31a671bee1c2259c5d5ee8b49f29aec42b5d2af15600296 22.02MB / 28.23MB 5.1s
+#10 sha256:8e44f01296e3a6fdc31a671bee1c2259c5d5ee8b49f29aec42b5d2af15600296 24.12MB / 28.23MB 5.3s
+#10 sha256:8e44f01296e3a6fdc31a671bee1c2259c5d5ee8b49f29aec42b5d2af15600296 28.23MB / 28.23MB 5.9s done
+#10 extracting sha256:8e44f01296e3a6fdc31a671bee1c2259c5d5ee8b49f29aec42b5d2af15600296
+#10 extracting sha256:8e44f01296e3a6fdc31a671bee1c2259c5d5ee8b49f29aec42b5d2af15600296 0.8s done
+#10 DONE 6.8s
+
+#11 [final 2/6] RUN apt-get update   && apt-get upgrade -y --no-install-recommends   && apt-get install -y --no-install-recommends libstdc++6 openssl libncurses6 locales ca-certificates   && rm -rf /var/lib/apt/lists/*
+#11 1.249 Get:1 http://deb.debian.org/debian bookworm InRelease [151 kB]
+#11 ...
+
+#9 [builder  1/16] FROM docker.io/hexpm/elixir:1.19.3-erlang-27.2.4-debian-bookworm-20251117-slim@sha256:f829829ed6e2774ed9418ea2f93273a87b2aecf5cd9ef033981bf0ed772f629d
+#9 sha256:b306adada8ebbf4c44a5185672d650124e139c6ef527044eb2f920ce4c4c23ce 6.62MB / 6.62MB 3.1s done
+#9 sha256:b7d72cadf6c1f89a646b1c38dc3803848d9bc790b8dca6f1e0cdb15766ad26eb 44.45MB / 44.45MB 7.6s done
+#9 sha256:cea597b9f33d30cc91127805ab3a7e2d0e6d54d9d79bd428b4001432032ef6f3 3.75MB / 3.75MB 5.6s done
+#9 extracting sha256:cea597b9f33d30cc91127805ab3a7e2d0e6d54d9d79bd428b4001432032ef6f3 0.2s done
+#9 extracting sha256:b7d72cadf6c1f89a646b1c38dc3803848d9bc790b8dca6f1e0cdb15766ad26eb 0.5s done
+#9 DONE 8.3s
+
+#9 [builder  1/16] FROM docker.io/hexpm/elixir:1.19.3-erlang-27.2.4-debian-bookworm-20251117-slim@sha256:f829829ed6e2774ed9418ea2f93273a87b2aecf5cd9ef033981bf0ed772f629d
+#9 extracting sha256:b306adada8ebbf4c44a5185672d650124e139c6ef527044eb2f920ce4c4c23ce 0.1s done
+#9 DONE 8.4s
+
+#11 [final 2/6] RUN apt-get update   && apt-get upgrade -y --no-install-recommends   && apt-get install -y --no-install-recommends libstdc++6 openssl libncurses6 locales ca-certificates   && rm -rf /var/lib/apt/lists/*
+#11 1.963 Get:2 http://deb.debian.org/debian bookworm-updates InRelease [55.4 kB]
+#11 2.255 Get:3 http://deb.debian.org/debian-security bookworm-security InRelease [34.8 kB]
+#11 2.983 Get:4 http://deb.debian.org/debian bookworm/main amd64 Packages [8790 kB]
+#11 6.075 Get:5 http://deb.debian.org/debian bookworm-updates/main amd64 Packages [6924 B]
+#11 6.326 Get:6 http://deb.debian.org/debian-security bookworm-security/main amd64 Packages [318 kB]
+#11 7.214 Fetched 9356 kB in 5s (1822 kB/s)
+#11 7.214 Reading package lists...
+#11 7.927 Reading package lists...
+#11 8.585 Building dependency tree...
+#11 8.793 Reading state information...
+#11 8.832 Calculating upgrade...
+#11 9.282 The following packages will be upgraded:
+#11 9.282   base-files bash dpkg gpgv libc-bin libc6 libcap2 libgcrypt20 libgnutls30
+#11 9.283   liblzma5 libpam-modules libpam-modules-bin libpam-runtime libpam0g
+#11 9.283   libsystemd0 libudev1 login passwd sed tzdata
+#11 9.826 20 upgraded, 0 newly installed, 0 to remove and 0 not upgraded.
+#11 9.826 Need to get 12.8 MB of archives.
+#11 9.826 After this operation, 28.7 kB of additional disk space will be used.
+#11 9.826 Get:1 http://deb.debian.org/debian bookworm/main amd64 base-files amd64 12.4+deb12u15 [70.9 kB]
+#11 10.32 Get:2 http://deb.debian.org/debian bookworm/main amd64 bash amd64 5.2.15-2+b13 [1491 kB]
+#11 11.16 Get:3 http://deb.debian.org/debian bookworm/main amd64 dpkg amd64 1.21.23 [1568 kB]
+#11 11.41 Get:4 http://deb.debian.org/debian bookworm/main amd64 login amd64 1:4.13+dfsg1-1+deb12u2 [616 kB]
+#11 11.45 Get:5 http://deb.debian.org/debian bookworm/main amd64 sed amd64 4.9-1+deb12u1 [329 kB]
+#11 11.49 Get:6 http://deb.debian.org/debian bookworm/main amd64 libc6 amd64 2.36-9+deb12u14 [2759 kB]
+#11 12.03 Get:7 http://deb.debian.org/debian bookworm/main amd64 libc-bin amd64 2.36-9+deb12u14 [609 kB]
+#11 12.06 Get:8 http://deb.debian.org/debian bookworm/main amd64 libpam0g amd64 1.5.2-6+deb12u2 [92.1 kB]
+#11 12.06 Get:9 http://deb.debian.org/debian bookworm/main amd64 libpam-modules-bin amd64 1.5.2-6+deb12u2 [75.7 kB]
+#11 12.07 Get:10 http://deb.debian.org/debian bookworm/main amd64 libpam-modules amd64 1.5.2-6+deb12u2 [291 kB]
+#11 12.08 Get:11 http://deb.debian.org/debian bookworm/main amd64 libpam-runtime all 1.5.2-6+deb12u2 [161 kB]
+#11 12.08 Get:12 http://deb.debian.org/debian bookworm/main amd64 passwd amd64 1:4.13+dfsg1-1+deb12u2 [972 kB]
+#11 12.13 Get:13 http://deb.debian.org/debian bookworm/main amd64 libgcrypt20 amd64 1.10.1-3+deb12u1 [696 kB]
+#11 12.21 Get:14 http://deb.debian.org/debian bookworm/main amd64 gpgv amd64 2.2.40-1.1+deb12u2 [649 kB]
+#11 12.27 Get:15 http://deb.debian.org/debian bookworm/main amd64 libcap2 amd64 1:2.66-4+deb12u3+b1 [27.7 kB]
+#11 12.27 Get:16 http://deb.debian.org/debian bookworm/main amd64 libgnutls30 amd64 3.7.9-2+deb12u7 [1409 kB]
+#11 12.34 Get:17 http://deb.debian.org/debian bookworm/main amd64 liblzma5 amd64 5.4.1-1+deb12u1 [206 kB]
+#11 12.36 Get:18 http://deb.debian.org/debian bookworm/main amd64 libsystemd0 amd64 252.39-1~deb12u2 [332 kB]
+#11 12.37 Get:19 http://deb.debian.org/debian bookworm/main amd64 libudev1 amd64 252.39-1~deb12u2 [109 kB]
+#11 12.38 Get:20 http://deb.debian.org/debian bookworm/main amd64 tzdata all 2026b-0+deb12u1 [304 kB]
+#11 12.49 debconf: delaying package configuration, since apt-utils is not installed
+#11 12.51 Fetched 12.8 MB in 3s (4114 kB/s)
+#11 12.53 (Reading database ... 
+(Reading database ... 5%
+(Reading database ... 10%
+(Reading database ... 15%
+(Reading database ... 20%
+(Reading database ... 25%
+(Reading database ... 30%
+(Reading database ... 35%
+(Reading database ... 40%
+(Reading database ... 45%
+(Reading database ... 50%
+(Reading database ... 55%
+(Reading database ... 60%
+(Reading database ... 65%
+(Reading database ... 70%
+(Reading database ... 75%
+(Reading database ... 80%
+(Reading database ... 85%
+(Reading database ... 90%
+(Reading database ... 95%
+(Reading database ... 100%
+(Reading database ... 6095 files and directories currently installed.)
+#11 12.53 Preparing to unpack .../base-files_12.4+deb12u15_amd64.deb ...
+#11 12.55 Unpacking base-files (12.4+deb12u15) over (12.4+deb12u12) ...
+#11 12.63 Setting up base-files (12.4+deb12u15) ...
+#11 12.64 Installing new version of config file /etc/debian_version ...
+#11 12.70 (Reading database ... 
+(Reading database ... 5%
+(Reading database ... 10%
+(Reading database ... 15%
+(Reading database ... 20%
+(Reading database ... 25%
+(Reading database ... 30%
+(Reading database ... 35%
+(Reading database ... 40%
+(Reading database ... 45%
+(Reading database ... 50%
+(Reading database ... 55%
+(Reading database ... 60%
+(Reading database ... 65%
+(Reading database ... 70%
+(Reading database ... 75%
+(Reading database ... 80%
+(Reading database ... 85%
+(Reading database ... 90%
+(Reading database ... 95%
+(Reading database ... 100%
+(Reading database ... 6095 files and directories currently installed.)
+#11 12.71 Preparing to unpack .../bash_5.2.15-2+b13_amd64.deb ...
+#11 12.72 update-alternatives: warning: alternative /usr/share/man/man7/bash-builtins.7.gz (part of link group builtins.7.gz) doesn't exist; removing from list of alternatives
+#11 12.72 update-alternatives: warning: /etc/alternatives/builtins.7.gz is dangling; it will be updated with best choice
+#11 12.72 Unpacking bash (5.2.15-2+b13) over (5.2.15-2+b9) ...
+#11 12.85 Setting up bash (5.2.15-2+b13) ...
+#11 12.87 update-alternatives: error: alternative path /usr/share/man/man7/bash-builtins.7.gz doesn't exist
+#11 12.90 (Reading database ... 
+(Reading database ... 5%
+(Reading database ... 10%
+(Reading database ... 15%
+(Reading database ... 20%
+(Reading database ... 25%
+(Reading database ... 30%
+(Reading database ... 35%
+(Reading database ... 40%
+(Reading database ... 45%
+(Reading database ... 50%
+(Reading database ... 55%
+(Reading database ... 60%
+(Reading database ... 65%
+(Reading database ... 70%
+(Reading database ... 75%
+(Reading database ... 80%
+(Reading database ... 85%
+(Reading database ... 90%
+(Reading database ... 95%
+(Reading database ... 100%
+(Reading database ... 6095 files and directories currently installed.)
+#11 12.91 Preparing to unpack .../dpkg_1.21.23_amd64.deb ...
+#11 12.92 Unpacking dpkg (1.21.23) over (1.21.22) ...
+#11 13.05 Setting up dpkg (1.21.23) ...
+#11 ...
+
+#12 [builder  2/16] RUN apt-get update   && apt-get upgrade -y --no-install-recommends   && apt-get install -y --no-install-recommends build-essential git   && rm -rf /var/lib/apt/lists/*
+#12 1.523 Get:1 http://deb.debian.org/debian bookworm InRelease [151 kB]
+#12 3.638 Get:2 http://deb.debian.org/debian bookworm-updates InRelease [55.4 kB]
+#12 3.924 Get:3 http://deb.debian.org/debian-security bookworm-security InRelease [34.8 kB]
+#12 4.375 Get:4 http://deb.debian.org/debian bookworm/main amd64 Packages [8790 kB]
+#12 9.659 Get:5 http://deb.debian.org/debian bookworm-updates/main amd64 Packages [6924 B]
+#12 9.897 Get:6 http://deb.debian.org/debian-security bookworm-security/main amd64 Packages [318 kB]
+#12 10.79 Fetched 9356 kB in 9s (1084 kB/s)
+#12 10.79 Reading package lists...
+#12 11.28 Reading package lists...
+#12 ...
+
+#11 [final 2/6] RUN apt-get update   && apt-get upgrade -y --no-install-recommends   && apt-get install -y --no-install-recommends libstdc++6 openssl libncurses6 locales ca-certificates   && rm -rf /var/lib/apt/lists/*
+#11 13.19 (Reading database ... 
+(Reading database ... 5%
+(Reading database ... 10%
+(Reading database ... 15%
+(Reading database ... 20%
+(Reading database ... 25%
+(Reading database ... 30%
+(Reading database ... 35%
+(Reading database ... 40%
+(Reading database ... 45%
+(Reading database ... 50%
+(Reading database ... 55%
+(Reading database ... 60%
+(Reading database ... 65%
+(Reading database ... 70%
+(Reading database ... 75%
+(Reading database ... 80%
+(Reading database ... 85%
+(Reading database ... 90%
+(Reading database ... 95%
+(Reading database ... 100%
+(Reading database ... 6095 files and directories currently installed.)
+#11 13.20 Preparing to unpack .../login_1%3a4.13+dfsg1-1+deb12u2_amd64.deb ...
+#11 13.23 Unpacking login (1:4.13+dfsg1-1+deb12u2) over (1:4.13+dfsg1-1+deb12u1) ...
+#11 13.29 Setting up login (1:4.13+dfsg1-1+deb12u2) ...
+#11 13.33 (Reading database ... 
+(Reading database ... 5%
+(Reading database ... 10%
+(Reading database ... 15%
+(Reading database ... 20%
+(Reading database ... 25%
+(Reading database ... 30%
+(Reading database ... 35%
+(Reading database ... 40%
+(Reading database ... 45%
+(Reading database ... 50%
+(Reading database ... 55%
+(Reading database ... 60%
+(Reading database ... 65%
+(Reading database ... 70%
+(Reading database ... 75%
+(Reading database ... 80%
+(Reading database ... 85%
+(Reading database ... 90%
+(Reading database ... 95%
+(Reading database ... 100%
+(Reading database ... 6095 files and directories currently installed.)
+#11 13.34 Preparing to unpack .../sed_4.9-1+deb12u1_amd64.deb ...
+#11 13.35 Unpacking sed (4.9-1+deb12u1) over (4.9-1) ...
+#11 13.40 Setting up sed (4.9-1+deb12u1) ...
+#11 13.45 (Reading database ... 
+(Reading database ... 5%
+(Reading database ... 10%
+(Reading database ... 15%
+(Reading database ... 20%
+(Reading database ... 25%
+(Reading database ... 30%
+(Reading database ... 35%
+(Reading database ... 40%
+(Reading database ... 45%
+(Reading database ... 50%
+(Reading database ... 55%
+(Reading database ... 60%
+(Reading database ... 65%
+(Reading database ... 70%
+(Reading database ... 75%
+(Reading database ... 80%
+(Reading database ... 85%
+(Reading database ... 90%
+(Reading database ... 95%
+(Reading database ... 100%
+(Reading database ... 6095 files and directories currently installed.)
+#11 13.45 Preparing to unpack .../libc6_2.36-9+deb12u14_amd64.deb ...
+#11 13.54 debconf: unable to initialize frontend: Dialog
+#11 13.54 debconf: (TERM is not set, so the dialog frontend is not usable.)
+#11 13.54 debconf: falling back to frontend: Readline
+#11 13.54 debconf: unable to initialize frontend: Readline
+#11 13.54 debconf: (Can't locate Term/ReadLine.pm in @INC (you may need to install the Term::ReadLine module) (@INC contains: /etc/perl /usr/local/lib/x86_64-linux-gnu/perl/5.36.0 /usr/local/share/perl/5.36.0 /usr/lib/x86_64-linux-gnu/perl5/5.36 /usr/share/perl5 /usr/lib/x86_64-linux-gnu/perl-base /usr/lib/x86_64-linux-gnu/perl/5.36 /usr/share/perl/5.36 /usr/local/lib/site_perl) at /usr/share/perl5/Debconf/FrontEnd/Readline.pm line 7.)
+#11 13.54 debconf: falling back to frontend: Teletype
+#11 13.58 Unpacking libc6:amd64 (2.36-9+deb12u14) over (2.36-9+deb12u13) ...
+#11 14.73 Setting up libc6:amd64 (2.36-9+deb12u14) ...
+#11 14.81 debconf: unable to initialize frontend: Dialog
+#11 14.81 debconf: (TERM is not set, so the dialog frontend is not usable.)
+#11 14.81 debconf: falling back to frontend: Readline
+#11 14.81 debconf: unable to initialize frontend: Readline
+#11 14.81 debconf: (Can't locate Term/ReadLine.pm in @INC (you may need to install the Term::ReadLine module) (@INC contains: /etc/perl /usr/local/lib/x86_64-linux-gnu/perl/5.36.0 /usr/local/share/perl/5.36.0 /usr/lib/x86_64-linux-gnu/perl5/5.36 /usr/share/perl5 /usr/lib/x86_64-linux-gnu/perl-base /usr/lib/x86_64-linux-gnu/perl/5.36 /usr/share/perl/5.36 /usr/local/lib/site_perl) at /usr/share/perl5/Debconf/FrontEnd/Readline.pm line 7.)
+#11 14.81 debconf: falling back to frontend: Teletype
+#11 15.95 (Reading database ... 
+(Reading database ... 5%
+(Reading database ... 10%
+(Reading database ... 15%
+(Reading database ... 20%
+(Reading database ... 25%
+(Reading database ... 30%
+(Reading database ... 35%
+(Reading database ... 40%
+(Reading database ... 45%
+(Reading database ... 50%
+(Reading database ... 55%
+(Reading database ... 60%
+(Reading database ... 65%
+(Reading database ... 70%
+(Reading database ... 75%
+(Reading database ... 80%
+(Reading database ... 85%
+(Reading database ... 90%
+(Reading database ... 95%
+(Reading database ... 100%
+(Reading database ... 6095 files and directories currently installed.)
+#11 15.96 Preparing to unpack .../libc-bin_2.36-9+deb12u14_amd64.deb ...
+#11 15.97 Unpacking libc-bin (2.36-9+deb12u14) over (2.36-9+deb12u13) ...
+#11 16.14 Setting up libc-bin (2.36-9+deb12u14) ...
+#11 16.25 (Reading database ... 
+(Reading database ... 5%
+(Reading database ... 10%
+(Reading database ... 15%
+(Reading database ... 20%
+(Reading database ... 25%
+(Reading database ... 30%
+(Reading database ... 35%
+(Reading database ... 40%
+(Reading database ... 45%
+(Reading database ... 50%
+(Reading database ... 55%
+(Reading database ... 60%
+(Reading database ... 65%
+(Reading database ... 70%
+(Reading database ... 75%
+(Reading database ... 80%
+(Reading database ... 85%
+(Reading database ... 90%
+(Reading database ... 95%
+(Reading database ... 100%
+(Reading database ... 6095 files and directories currently installed.)
+#11 16.25 Preparing to unpack .../libpam0g_1.5.2-6+deb12u2_amd64.deb ...
+#11 16.27 Unpacking libpam0g:amd64 (1.5.2-6+deb12u2) over (1.5.2-6+deb12u1) ...
+#11 16.33 Setting up libpam0g:amd64 (1.5.2-6+deb12u2) ...
+#11 16.42 debconf: unable to initialize frontend: Dialog
+#11 16.42 debconf: (TERM is not set, so the dialog frontend is not usable.)
+#11 16.42 debconf: falling back to frontend: Readline
+#11 16.42 debconf: unable to initialize frontend: Readline
+#11 16.42 debconf: (Can't locate Term/ReadLine.pm in @INC (you may need to install the Term::ReadLine module) (@INC contains: /etc/perl /usr/local/lib/x86_64-linux-gnu/perl/5.36.0 /usr/local/share/perl/5.36.0 /usr/lib/x86_64-linux-gnu/perl5/5.36 /usr/share/perl5 /usr/lib/x86_64-linux-gnu/perl-base /usr/lib/x86_64-linux-gnu/perl/5.36 /usr/share/perl/5.36 /usr/local/lib/site_perl) at /usr/share/perl5/Debconf/FrontEnd/Readline.pm line 7.)
+#11 16.42 debconf: falling back to frontend: Teletype
+#11 16.48 (Reading database ... 
+(Reading database ... 5%
+(Reading database ... 10%
+(Reading database ... 15%
+(Reading database ... 20%
+(Reading database ... 25%
+(Reading database ... 30%
+(Reading database ... 35%
+(Reading database ... 40%
+(Reading database ... 45%
+(Reading database ... 50%
+(Reading database ... 55%
+(Reading database ... 60%
+(Reading database ... 65%
+(Reading database ... 70%
+(Reading database ... 75%
+(Reading database ... 80%
+(Reading database ... 85%
+(Reading database ... 90%
+(Reading database ... 95%
+(Reading database ... 100%
+(Reading database ... 6095 files and directories currently installed.)
+#11 16.48 Preparing to unpack .../libpam-modules-bin_1.5.2-6+deb12u2_amd64.deb ...
+#11 16.49 Unpacking libpam-modules-bin (1.5.2-6+deb12u2) over (1.5.2-6+deb12u1) ...
+#11 16.56 Setting up libpam-modules-bin (1.5.2-6+deb12u2) ...
+#11 16.64 (Reading database ... 
+(Reading database ... 5%
+(Reading database ... 10%
+(Reading database ... 15%
+(Reading database ... 20%
+(Reading database ... 25%
+(Reading database ... 30%
+(Reading database ... 35%
+(Reading database ... 40%
+(Reading database ... 45%
+(Reading database ... 50%
+(Reading database ... 55%
+(Reading database ... 60%
+(Reading database ... 65%
+(Reading database ... 70%
+(Reading database ... 75%
+(Reading database ... 80%
+(Reading database ... 85%
+(Reading database ... 90%
+(Reading database ... 95%
+(Reading database ... 100%
+(Reading database ... 6095 files and directories currently installed.)
+#11 16.68 Preparing to unpack .../libpam-modules_1.5.2-6+deb12u2_amd64.deb ...
+#11 16.78 debconf: unable to initialize frontend: Dialog
+#11 16.78 debconf: (TERM is not set, so the dialog frontend is not usable.)
+#11 16.78 debconf: falling back to frontend: Readline
+#11 16.78 debconf: unable to initialize frontend: Readline
+#11 16.78 debconf: (Can't locate Term/ReadLine.pm in @INC (you may need to install the Term::ReadLine module) (@INC contains: /etc/perl /usr/local/lib/x86_64-linux-gnu/perl/5.36.0 /usr/local/share/perl/5.36.0 /usr/lib/x86_64-linux-gnu/perl5/5.36 /usr/share/perl5 /usr/lib/x86_64-linux-gnu/perl-base /usr/lib/x86_64-linux-gnu/perl/5.36 /usr/share/perl/5.36 /usr/local/lib/site_perl) at /usr/share/perl5/Debconf/FrontEnd/Readline.pm line 7.)
+#11 16.78 debconf: falling back to frontend: Teletype
+#11 16.80 Unpacking libpam-modules:amd64 (1.5.2-6+deb12u2) over (1.5.2-6+deb12u1) ...
+#11 17.02 Setting up libpam-modules:amd64 (1.5.2-6+deb12u2) ...
+#11 17.12 (Reading database ... 
+(Reading database ... 5%
+(Reading database ... 10%
+(Reading database ... 15%
+(Reading database ... 20%
+(Reading database ... 25%
+(Reading database ... 30%
+(Reading database ... 35%
+(Reading database ... 40%
+(Reading database ... 45%
+(Reading database ... 50%
+(Reading database ... 55%
+(Reading database ... 60%
+(Reading database ... 65%
+(Reading database ... 70%
+(Reading database ... 75%
+(Reading database ... 80%
+(Reading database ... 85%
+(Reading database ... 90%
+(Reading database ... 95%
+(Reading database ... 100%
+(Reading database ... 6095 files and directories currently installed.)
+#11 17.13 Preparing to unpack .../libpam-runtime_1.5.2-6+deb12u2_all.deb ...
+#11 17.14 Unpacking libpam-runtime (1.5.2-6+deb12u2) over (1.5.2-6+deb12u1) ...
+#11 17.21 Setting up libpam-runtime (1.5.2-6+deb12u2) ...
+#11 17.29 debconf: unable to initialize frontend: Dialog
+#11 17.29 debconf: (TERM is not set, so the dialog frontend is not usable.)
+#11 17.29 debconf: falling back to frontend: Readline
+#11 17.29 debconf: unable to initialize frontend: Readline
+#11 17.29 debconf: (Can't locate Term/ReadLine.pm in @INC (you may need to install the Term::ReadLine module) (@INC contains: /etc/perl /usr/local/lib/x86_64-linux-gnu/perl/5.36.0 /usr/local/share/perl/5.36.0 /usr/lib/x86_64-linux-gnu/perl5/5.36 /usr/share/perl5 /usr/lib/x86_64-linux-gnu/perl-base /usr/lib/x86_64-linux-gnu/perl/5.36 /usr/share/perl/5.36 /usr/local/lib/site_perl) at /usr/share/perl5/Debconf/FrontEnd/Readline.pm line 7.)
+#11 17.29 debconf: falling back to frontend: Teletype
+#11 17.41 (Reading database ... 
+(Reading database ... 5%
+(Reading database ... 10%
+(Reading database ... 15%
+(Reading database ... 20%
+(Reading database ... 25%
+(Reading database ... 30%
+(Reading database ... 35%
+(Reading database ... 40%
+(Reading database ... 45%
+(Reading database ... 50%
+(Reading database ... 55%
+(Reading database ... 60%
+(Reading database ... 65%
+(Reading database ... 70%
+(Reading database ... 75%
+(Reading database ... 80%
+(Reading database ... 85%
+(Reading database ... 90%
+(Reading database ... 95%
+(Reading database ... 100%
+(Reading database ... 6095 files and directories currently installed.)
+#11 17.43 Preparing to unpack .../passwd_1%3a4.13+dfsg1-1+deb12u2_amd64.deb ...
+#11 17.47 Unpacking passwd (1:4.13+dfsg1-1+deb12u2) over (1:4.13+dfsg1-1+deb12u1) ...
+#11 17.63 Setting up passwd (1:4.13+dfsg1-1+deb12u2) ...
+#11 17.76 (Reading database ... 
+(Reading database ... 5%
+(Reading database ... 10%
+(Reading database ... 15%
+(Reading database ... 20%
+(Reading database ... 25%
+(Reading database ... 30%
+(Reading database ... 35%
+(Reading database ... 40%
+(Reading database ... 45%
+(Reading database ... 50%
+(Reading database ... 55%
+(Reading database ... 60%
+(Reading database ... 65%
+(Reading database ... 70%
+(Reading database ... 75%
+(Reading database ... 80%
+(Reading database ... 85%
+(Reading database ... 90%
+(Reading database ... 95%
+(Reading database ... 100%
+(Reading database ... 6095 files and directories currently installed.)
+#11 17.77 Preparing to unpack .../libgcrypt20_1.10.1-3+deb12u1_amd64.deb ...
+#11 17.79 Unpacking libgcrypt20:amd64 (1.10.1-3+deb12u1) over (1.10.1-3) ...
+#11 17.87 Setting up libgcrypt20:amd64 (1.10.1-3+deb12u1) ...
+#11 17.93 (Reading database ... 
+(Reading database ... 5%
+(Reading database ... 10%
+(Reading database ... 15%
+(Reading database ... 20%
+(Reading database ... 25%
+(Reading database ... 30%
+(Reading database ... 35%
+(Reading database ... 40%
+(Reading database ... 45%
+(Reading database ... 50%
+(Reading database ... 55%
+(Reading database ... 60%
+(Reading database ... 65%
+(Reading database ... 70%
+(Reading database ... 75%
+(Reading database ... 80%
+(Reading database ... 85%
+(Reading database ... 90%
+(Reading database ... 95%
+(Reading database ... 100%
+(Reading database ... 6095 files and directories currently installed.)
+#11 17.96 Preparing to unpack .../gpgv_2.2.40-1.1+deb12u2_amd64.deb ...
+#11 17.98 Unpacking gpgv (2.2.40-1.1+deb12u2) over (2.2.40-1.1+deb12u1) ...
+#11 18.06 Setting up gpgv (2.2.40-1.1+deb12u2) ...
+#11 18.11 (Reading database ... 
+(Reading database ... 5%
+(Reading database ... 10%
+(Reading database ... 15%
+(Reading database ... 20%
+(Reading database ... 25%
+(Reading database ... 30%
+(Reading database ... 35%
+(Reading database ... 40%
+(Reading database ... 45%
+(Reading database ... 50%
+(Reading database ... 55%
+(Reading database ... 60%
+(Reading database ... 65%
+(Reading database ... 70%
+(Reading database ... 75%
+(Reading database ... 80%
+(Reading database ... 85%
+(Reading database ... 90%
+(Reading database ... 95%
+(Reading database ... 100%
+(Reading database ... 6095 files and directories currently installed.)
+#11 18.11 Preparing to unpack .../libcap2_1%3a2.66-4+deb12u3+b1_amd64.deb ...
+#11 18.13 Unpacking libcap2:amd64 (1:2.66-4+deb12u3+b1) over (1:2.66-4+deb12u2) ...
+#11 18.21 Setting up libcap2:amd64 (1:2.66-4+deb12u3+b1) ...
+#11 18.27 (Reading database ... 
+(Reading database ... 5%
+(Reading database ... 10%
+(Reading database ... 15%
+(Reading database ... 20%
+(Reading database ... 25%
+(Reading database ... 30%
+(Reading database ... 35%
+(Reading database ... 40%
+(Reading database ... 45%
+(Reading database ... 50%
+(Reading database ... 55%
+(Reading database ... 60%
+(Reading database ... 65%
+(Reading database ... 70%
+(Reading database ... 75%
+(Reading database ... 80%
+(Reading database ... 85%
+(Reading database ... 90%
+(Reading database ... 95%
+(Reading database ... 100%
+(Reading database ... 6096 files and directories currently installed.)
+#11 18.28 Preparing to unpack .../libgnutls30_3.7.9-2+deb12u7_amd64.deb ...
+#11 18.29 Unpacking libgnutls30:amd64 (3.7.9-2+deb12u7) over (3.7.9-2+deb12u5) ...
+#11 18.42 Setting up libgnutls30:amd64 (3.7.9-2+deb12u7) ...
+#11 18.48 (Reading database ... 
+(Reading database ... 5%
+(Reading database ... 10%
+(Reading database ... 15%
+(Reading database ... 20%
+(Reading database ... 25%
+(Reading database ... 30%
+(Reading database ... 35%
+(Reading database ... 40%
+(Reading database ... 45%
+(Reading database ... 50%
+(Reading database ... 55%
+(Reading database ... 60%
+(Reading database ... 65%
+(Reading database ... 70%
+(Reading database ... 75%
+(Reading database ... 80%
+(Reading database ... 85%
+(Reading database ... 90%
+(Reading database ... 95%
+(Reading database ... 100%
+(Reading database ... 6096 files and directories currently installed.)
+#11 18.48 Preparing to unpack .../liblzma5_5.4.1-1+deb12u1_amd64.deb ...
+#11 18.49 Unpacking liblzma5:amd64 (5.4.1-1+deb12u1) over (5.4.1-1) ...
+#11 18.57 Setting up liblzma5:amd64 (5.4.1-1+deb12u1) ...
+#11 18.64 (Reading database ... 
+(Reading database ... 5%
+(Reading database ... 10%
+(Reading database ... 15%
+(Reading database ... 20%
+(Reading database ... 25%
+(Reading database ... 30%
+(Reading database ... 35%
+(Reading database ... 40%
+(Reading database ... 45%
+(Reading database ... 50%
+(Reading database ... 55%
+(Reading database ... 60%
+(Reading database ... 65%
+(Reading database ... 70%
+(Reading database ... 75%
+(Reading database ... 80%
+(Reading database ... 85%
+(Reading database ... 90%
+(Reading database ... 95%
+(Reading database ... 100%
+(Reading database ... 6096 files and directories currently installed.)
+#11 18.67 Preparing to unpack .../libsystemd0_252.39-1~deb12u2_amd64.deb ...
+#11 18.69 Unpacking libsystemd0:amd64 (252.39-1~deb12u2) over (252.39-1~deb12u1) ...
+#11 18.76 Setting up libsystemd0:amd64 (252.39-1~deb12u2) ...
+#11 18.82 (Reading database ... 
+(Reading database ... 5%
+(Reading database ... 10%
+(Reading database ... 15%
+(Reading database ... 20%
+(Reading database ... 25%
+(Reading database ... 30%
+(Reading database ... 35%
+(Reading database ... 40%
+(Reading database ... 45%
+(Reading database ... 50%
+(Reading database ... 55%
+(Reading database ... 60%
+(Reading database ... 65%
+(Reading database ... 70%
+(Reading database ... 75%
+(Reading database ... 80%
+(Reading database ... 85%
+(Reading database ... 90%
+(Reading database ... 95%
+(Reading database ... 100%
+(Reading database ... 6096 files and directories currently installed.)
+#11 18.82 Preparing to unpack .../libudev1_252.39-1~deb12u2_amd64.deb ...
+#11 18.84 Unpacking libudev1:amd64 (252.39-1~deb12u2) over (252.39-1~deb12u1) ...
+#11 18.94 Setting up libudev1:amd64 (252.39-1~deb12u2) ...
+#11 18.99 (Reading database ... 
+(Reading database ... 5%
+(Reading database ... 10%
+(Reading database ... 15%
+(Reading database ... 20%
+(Reading database ... 25%
+(Reading database ... 30%
+(Reading database ... 35%
+(Reading database ... 40%
+(Reading database ... 45%
+(Reading database ... 50%
+(Reading database ... 55%
+(Reading database ... 60%
+(Reading database ... 65%
+(Reading database ... 70%
+(Reading database ... 75%
+(Reading database ... 80%
+(Reading database ... 85%
+(Reading database ... 90%
+(Reading database ... 95%
+(Reading database ... 100%
+(Reading database ... 6096 files and directories currently installed.)
+#11 19.00 Preparing to unpack .../tzdata_2026b-0+deb12u1_all.deb ...
+#11 19.12 Unpacking tzdata (2026b-0+deb12u1) over (2025b-0+deb12u2) ...
+#11 ...
+
+#12 [builder  2/16] RUN apt-get update   && apt-get upgrade -y --no-install-recommends   && apt-get install -y --no-install-recommends build-essential git   && rm -rf /var/lib/apt/lists/*
+#12 11.28 Reading package lists...
+#12 11.76 Building dependency tree...
+#12 11.90 Reading state information...
+#12 11.93 Calculating upgrade...
+#12 12.23 The following packages will be upgraded:
+#12 12.23   base-files bash dpkg gpgv libc-bin libc6 libcap2 libgcrypt20 libgnutls30
+#12 12.23   liblzma5 libpam-modules libpam-modules-bin libpam-runtime libpam0g libssl3
+#12 12.24   libsystemd0 libudev1 login openssl passwd sed tzdata
+#12 12.71 22 upgraded, 0 newly installed, 0 to remove and 0 not upgraded.
+#12 12.71 Need to get 16.2 MB of archives.
+#12 12.71 After this operation, 45.1 kB of additional disk space will be used.
+#12 12.71 Get:1 http://deb.debian.org/debian bookworm/main amd64 base-files amd64 12.4+deb12u15 [70.9 kB]
+#12 13.22 Get:2 http://deb.debian.org/debian bookworm/main amd64 bash amd64 5.2.15-2+b13 [1491 kB]
+#12 14.12 Get:3 http://deb.debian.org/debian bookworm/main amd64 dpkg amd64 1.21.23 [1568 kB]
+#12 14.40 Get:4 http://deb.debian.org/debian bookworm/main amd64 login amd64 1:4.13+dfsg1-1+deb12u2 [616 kB]
+#12 14.47 Get:5 http://deb.debian.org/debian bookworm/main amd64 sed amd64 4.9-1+deb12u1 [329 kB]
+#12 14.49 Get:6 http://deb.debian.org/debian bookworm/main amd64 libc6 amd64 2.36-9+deb12u14 [2759 kB]
+#12 14.81 Get:7 http://deb.debian.org/debian bookworm/main amd64 libc-bin amd64 2.36-9+deb12u14 [609 kB]
+#12 14.85 Get:8 http://deb.debian.org/debian bookworm/main amd64 libpam0g amd64 1.5.2-6+deb12u2 [92.1 kB]
+#12 14.86 Get:9 http://deb.debian.org/debian bookworm/main amd64 libpam-modules-bin amd64 1.5.2-6+deb12u2 [75.7 kB]
+#12 14.86 Get:10 http://deb.debian.org/debian bookworm/main amd64 libpam-modules amd64 1.5.2-6+deb12u2 [291 kB]
+#12 15.16 Get:11 http://deb.debian.org/debian bookworm/main amd64 libpam-runtime all 1.5.2-6+deb12u2 [161 kB]
+#12 15.16 Get:12 http://deb.debian.org/debian bookworm/main amd64 passwd amd64 1:4.13+dfsg1-1+deb12u2 [972 kB]
+#12 15.20 Get:13 http://deb.debian.org/debian bookworm/main amd64 libgcrypt20 amd64 1.10.1-3+deb12u1 [696 kB]
+#12 15.22 Get:14 http://deb.debian.org/debian bookworm/main amd64 gpgv amd64 2.2.40-1.1+deb12u2 [649 kB]
+#12 15.24 Get:15 http://deb.debian.org/debian bookworm/main amd64 libcap2 amd64 1:2.66-4+deb12u3+b1 [27.7 kB]
+#12 15.24 Get:16 http://deb.debian.org/debian bookworm/main amd64 libgnutls30 amd64 3.7.9-2+deb12u7 [1409 kB]
+#12 15.28 Get:17 http://deb.debian.org/debian bookworm/main amd64 liblzma5 amd64 5.4.1-1+deb12u1 [206 kB]
+#12 15.41 Get:18 http://deb.debian.org/debian bookworm/main amd64 libsystemd0 amd64 252.39-1~deb12u2 [332 kB]
+#12 15.45 Get:19 http://deb.debian.org/debian bookworm/main amd64 libudev1 amd64 252.39-1~deb12u2 [109 kB]
+#12 15.46 Get:20 http://deb.debian.org/debian bookworm/main amd64 tzdata all 2026b-0+deb12u1 [304 kB]
+#12 15.47 Get:21 http://deb.debian.org/debian bookworm/main amd64 libssl3 amd64 3.0.20-1~deb12u2 [2036 kB]
+#12 15.53 Get:22 http://deb.debian.org/debian bookworm/main amd64 openssl amd64 3.0.20-1~deb12u2 [1439 kB]
+#12 15.69 debconf: delaying package configuration, since apt-utils is not installed
+#12 15.71 Fetched 16.2 MB in 3s (4857 kB/s)
+#12 15.73 (Reading database ... 
+(Reading database ... 5%
+(Reading database ... 10%
+(Reading database ... 15%
+(Reading database ... 20%
+(Reading database ... 25%
+(Reading database ... 30%
+(Reading database ... 35%
+(Reading database ... 40%
+(Reading database ... 45%
+(Reading database ... 50%
+(Reading database ... 55%
+(Reading database ... 60%
+(Reading database ... 65%
+(Reading database ... 70%
+(Reading database ... 75%
+(Reading database ... 80%
+(Reading database ... 85%
+(Reading database ... 90%
+(Reading database ... 95%
+(Reading database ... 100%
+(Reading database ... 6620 files and directories currently installed.)
+#12 15.75 Preparing to unpack .../base-files_12.4+deb12u15_amd64.deb ...
+#12 15.77 Unpacking base-files (12.4+deb12u15) over (12.4+deb12u12) ...
+#12 15.93 Setting up base-files (12.4+deb12u15) ...
+#12 15.94 Installing new version of config file /etc/debian_version ...
+#12 16.04 (Reading database ... 
+(Reading database ... 5%
+(Reading database ... 10%
+(Reading database ... 15%
+(Reading database ... 20%
+(Reading database ... 25%
+(Reading database ... 30%
+(Reading database ... 35%
+(Reading database ... 40%
+(Reading database ... 45%
+(Reading database ... 50%
+(Reading database ... 55%
+(Reading database ... 60%
+(Reading database ... 65%
+(Reading database ... 70%
+(Reading database ... 75%
+(Reading database ... 80%
+(Reading database ... 85%
+(Reading database ... 90%
+(Reading database ... 95%
+(Reading database ... 100%
+(Reading database ... 6620 files and directories currently installed.)
+#12 16.07 Preparing to unpack .../bash_5.2.15-2+b13_amd64.deb ...
+#12 16.09 update-alternatives: warning: alternative /usr/share/man/man7/bash-builtins.7.gz (part of link group builtins.7.gz) doesn't exist; removing from list of alternatives
+#12 16.09 update-alternatives: warning: /etc/alternatives/builtins.7.gz is dangling; it will be updated with best choice
+#12 16.10 Unpacking bash (5.2.15-2+b13) over (5.2.15-2+b9) ...
+#12 16.26 Setting up bash (5.2.15-2+b13) ...
+#12 16.31 update-alternatives: error: alternative path /usr/share/man/man7/bash-builtins.7.gz doesn't exist
+#12 16.39 (Reading database ... 
+(Reading database ... 5%
+(Reading database ... 10%
+(Reading database ... 15%
+(Reading database ... 20%
+(Reading database ... 25%
+(Reading database ... 30%
+(Reading database ... 35%
+(Reading database ... 40%
+(Reading database ... 45%
+(Reading database ... 50%
+(Reading database ... 55%
+(Reading database ... 60%
+(Reading database ... 65%
+(Reading database ... 70%
+(Reading database ... 75%
+(Reading database ... 80%
+(Reading database ... 85%
+(Reading database ... 90%
+(Reading database ... 95%
+(Reading database ... 100%
+(Reading database ... 6620 files and directories currently installed.)
+#12 16.42 Preparing to unpack .../dpkg_1.21.23_amd64.deb ...
+#12 16.44 Unpacking dpkg (1.21.23) over (1.21.22) ...
+#12 16.58 Setting up dpkg (1.21.23) ...
+#12 16.80 (Reading database ... 
+(Reading database ... 5%
+(Reading database ... 10%
+(Reading database ... 15%
+(Reading database ... 20%
+(Reading database ... 25%
+(Reading database ... 30%
+(Reading database ... 35%
+(Reading database ... 40%
+(Reading database ... 45%
+(Reading database ... 50%
+(Reading database ... 55%
+(Reading database ... 60%
+(Reading database ... 65%
+(Reading database ... 70%
+(Reading database ... 75%
+(Reading database ... 80%
+(Reading database ... 85%
+(Reading database ... 90%
+(Reading database ... 95%
+(Reading database ... 100%
+(Reading database ... 6620 files and directories currently installed.)
+#12 16.83 Preparing to unpack .../login_1%3a4.13+dfsg1-1+deb12u2_amd64.deb ...
+#12 16.86 Unpacking login (1:4.13+dfsg1-1+deb12u2) over (1:4.13+dfsg1-1+deb12u1) ...
+#12 16.96 Setting up login (1:4.13+dfsg1-1+deb12u2) ...
+#12 17.07 (Reading database ... 
+(Reading database ... 5%
+(Reading database ... 10%
+(Reading database ... 15%
+(Reading database ... 20%
+(Reading database ... 25%
+(Reading database ... 30%
+(Reading database ... 35%
+(Reading database ... 40%
+(Reading database ... 45%
+(Reading database ... 50%
+(Reading database ... 55%
+(Reading database ... 60%
+(Reading database ... 65%
+(Reading database ... 70%
+(Reading database ... 75%
+(Reading database ... 80%
+(Reading database ... 85%
+(Reading database ... 90%
+(Reading database ... 95%
+(Reading database ... 100%
+(Reading database ... 6620 files and directories currently installed.)
+#12 17.09 Preparing to unpack .../sed_4.9-1+deb12u1_amd64.deb ...
+#12 17.12 Unpacking sed (4.9-1+deb12u1) over (4.9-1) ...
+#12 17.19 Setting up sed (4.9-1+deb12u1) ...
+#12 17.27 (Reading database ... 
+(Reading database ... 5%
+(Reading database ... 10%
+(Reading database ... 15%
+(Reading database ... 20%
+(Reading database ... 25%
+(Reading database ... 30%
+(Reading database ... 35%
+(Reading database ... 40%
+(Reading database ... 45%
+(Reading database ... 50%
+(Reading database ... 55%
+(Reading database ... 60%
+(Reading database ... 65%
+(Reading database ... 70%
+(Reading database ... 75%
+(Reading database ... 80%
+(Reading database ... 85%
+(Reading database ... 90%
+(Reading database ... 95%
+(Reading database ... 100%
+(Reading database ... 6620 files and directories currently installed.)
+#12 17.29 Preparing to unpack .../libc6_2.36-9+deb12u14_amd64.deb ...
+#12 17.39 debconf: unable to initialize frontend: Dialog
+#12 17.39 debconf: (TERM is not set, so the dialog frontend is not usable.)
+#12 17.39 debconf: falling back to frontend: Readline
+#12 17.39 debconf: unable to initialize frontend: Readline
+#12 17.39 debconf: (Can't locate Term/ReadLine.pm in @INC (you may need to install the Term::ReadLine module) (@INC contains: /etc/perl /usr/local/lib/x86_64-linux-gnu/perl/5.36.0 /usr/local/share/perl/5.36.0 /usr/lib/x86_64-linux-gnu/perl5/5.36 /usr/share/perl5 /usr/lib/x86_64-linux-gnu/perl-base /usr/lib/x86_64-linux-gnu/perl/5.36 /usr/share/perl/5.36 /usr/local/lib/site_perl) at /usr/share/perl5/Debconf/FrontEnd/Readline.pm line 7.)
+#12 17.40 debconf: falling back to frontend: Teletype
+#12 17.44 Unpacking libc6:amd64 (2.36-9+deb12u14) over (2.36-9+deb12u13) ...
+#12 18.75 Setting up libc6:amd64 (2.36-9+deb12u14) ...
+#12 18.83 debconf: unable to initialize frontend: Dialog
+#12 18.83 debconf: (TERM is not set, so the dialog frontend is not usable.)
+#12 18.83 debconf: falling back to frontend: Readline
+#12 18.83 debconf: unable to initialize frontend: Readline
+#12 18.83 debconf: (Can't locate Term/ReadLine.pm in @INC (you may need to install the Term::ReadLine module) (@INC contains: /etc/perl /usr/local/lib/x86_64-linux-gnu/perl/5.36.0 /usr/local/share/perl/5.36.0 /usr/lib/x86_64-linux-gnu/perl5/5.36 /usr/share/perl5 /usr/lib/x86_64-linux-gnu/perl-base /usr/lib/x86_64-linux-gnu/perl/5.36 /usr/share/perl/5.36 /usr/local/lib/site_perl) at /usr/share/perl5/Debconf/FrontEnd/Readline.pm line 7.)
+#12 18.83 debconf: falling back to frontend: Teletype
+#12 19.94 (Reading database ... 
+(Reading database ... 5%
+(Reading database ... 10%
+(Reading database ... 15%
+(Reading database ... 20%
+(Reading database ... 25%
+(Reading database ... 30%
+(Reading database ... 35%
+(Reading database ... 40%
+(Reading database ... 45%
+(Reading database ... 50%
+(Reading database ... 55%
+(Reading database ... 60%
+(Reading database ... 65%
+(Reading database ... 70%
+(Reading database ... 75%
+(Reading database ... 80%
+(Reading database ... 85%
+(Reading database ... 90%
+(Reading database ... 95%
+(Reading database ... 100%
+(Reading database ... 6620 files and directories currently installed.)
+#12 19.97 Preparing to unpack .../libc-bin_2.36-9+deb12u14_amd64.deb ...
+#12 20.00 Unpacking libc-bin (2.36-9+deb12u14) over (2.36-9+deb12u13) ...
+#12 20.24 Setting up libc-bin (2.36-9+deb12u14) ...
+#12 20.41 (Reading database ... 
+(Reading database ... 5%
+(Reading database ... 10%
+(Reading database ... 15%
+(Reading database ... 20%
+(Reading database ... 25%
+(Reading database ... 30%
+(Reading database ... 35%
+(Reading database ... 40%
+(Reading database ... 45%
+(Reading database ... 50%
+(Reading database ... 55%
+(Reading database ... 60%
+(Reading database ... 65%
+(Reading database ... 70%
+(Reading database ... 75%
+(Reading database ... 80%
+(Reading database ... 85%
+(Reading database ... 90%
+(Reading database ... 95%
+(Reading database ... 100%
+(Reading database ... 6620 files and directories currently installed.)
+#12 20.44 Preparing to unpack .../libpam0g_1.5.2-6+deb12u2_amd64.deb ...
+#12 20.49 Unpacking libpam0g:amd64 (1.5.2-6+deb12u2) over (1.5.2-6+deb12u1) ...
+#12 20.63 Setting up libpam0g:amd64 (1.5.2-6+deb12u2) ...
+#12 20.74 debconf: unable to initialize frontend: Dialog
+#12 20.74 debconf: (TERM is not set, so the dialog frontend is not usable.)
+#12 20.74 debconf: falling back to frontend: Readline
+#12 20.74 debconf: unable to initialize frontend: Readline
+#12 20.74 debconf: (Can't locate Term/ReadLine.pm in @INC (you may need to install the Term::ReadLine module) (@INC contains: /etc/perl /usr/local/lib/x86_64-linux-gnu/perl/5.36.0 /usr/local/share/perl/5.36.0 /usr/lib/x86_64-linux-gnu/perl5/5.36 /usr/share/perl5 /usr/lib/x86_64-linux-gnu/perl-base /usr/lib/x86_64-linux-gnu/perl/5.36 /usr/share/perl/5.36 /usr/local/lib/site_perl) at /usr/share/perl5/Debconf/FrontEnd/Readline.pm line 7.)
+#12 20.74 debconf: falling back to frontend: Teletype
+#12 20.81 (Reading database ... 
+(Reading database ... 5%
+(Reading database ... 10%
+(Reading database ... 15%
+(Reading database ... 20%
+(Reading database ... 25%
+(Reading database ... 30%
+(Reading database ... 35%
+(Reading database ... 40%
+(Reading database ... 45%
+(Reading database ... 50%
+(Reading database ... 55%
+(Reading database ... 60%
+(Reading database ... 65%
+(Reading database ... 70%
+(Reading database ... 75%
+(Reading database ... 80%
+(Reading database ... 85%
+(Reading database ... 90%
+(Reading database ... 95%
+(Reading database ... 100%
+(Reading database ... 6620 files and directories currently installed.)
+#12 20.84 Preparing to unpack .../libpam-modules-bin_1.5.2-6+deb12u2_amd64.deb ...
+#12 20.87 Unpacking libpam-modules-bin (1.5.2-6+deb12u2) over (1.5.2-6+deb12u1) ...
+#12 21.01 Setting up libpam-modules-bin (1.5.2-6+deb12u2) ...
+#12 21.14 (Reading database ... 
+(Reading database ... 5%
+(Reading database ... 10%
+(Reading database ... 15%
+(Reading database ... 20%
+(Reading database ... 25%
+(Reading database ... 30%
+(Reading database ... 35%
+(Reading database ... 40%
+(Reading database ... 45%
+(Reading database ... 50%
+(Reading database ... 55%
+(Reading database ... 60%
+(Reading database ... 65%
+(Reading database ... 70%
+(Reading database ... 75%
+(Reading database ... 80%
+(Reading database ... 85%
+(Reading database ... 90%
+(Reading database ... 95%
+(Reading database ... 100%
+(Reading database ... 6620 files and directories currently installed.)
+#12 21.17 Preparing to unpack .../libpam-modules_1.5.2-6+deb12u2_amd64.deb ...
+#12 21.28 debconf: unable to initialize frontend: Dialog
+#12 21.28 debconf: (TERM is not set, so the dialog frontend is not usable.)
+#12 21.28 debconf: falling back to frontend: Readline
+#12 21.28 debconf: unable to initialize frontend: Readline
+#12 21.28 debconf: (Can't locate Term/ReadLine.pm in @INC (you may need to install the Term::ReadLine module) (@INC contains: /etc/perl /usr/local/lib/x86_64-linux-gnu/perl/5.36.0 /usr/local/share/perl/5.36.0 /usr/lib/x86_64-linux-gnu/perl5/5.36 /usr/share/perl5 /usr/lib/x86_64-linux-gnu/perl-base /usr/lib/x86_64-linux-gnu/perl/5.36 /usr/share/perl/5.36 /usr/local/lib/site_perl) at /usr/share/perl5/Debconf/FrontEnd/Readline.pm line 7.)
+#12 21.28 debconf: falling back to frontend: Teletype
+#12 21.30 Unpacking libpam-modules:amd64 (1.5.2-6+deb12u2) over (1.5.2-6+deb12u1) ...
+#12 21.48 Setting up libpam-modules:amd64 (1.5.2-6+deb12u2) ...
+#12 21.61 (Reading database ... 
+(Reading database ... 5%
+(Reading database ... 10%
+(Reading database ... 15%
+(Reading database ... 20%
+(Reading database ... 25%
+(Reading database ... 30%
+(Reading database ... 35%
+(Reading database ... 40%
+(Reading database ... 45%
+(Reading database ... 50%
+(Reading database ... 55%
+(Reading database ... 60%
+(Reading database ... 65%
+(Reading database ... 70%
+(Reading database ... 75%
+(Reading database ... 80%
+(Reading database ... 85%
+(Reading database ... 90%
+(Reading database ... 95%
+(Reading database ... 100%
+(Reading database ... 6620 files and directories currently installed.)
+#12 21.62 Preparing to unpack .../libpam-runtime_1.5.2-6+deb12u2_all.deb ...
+#12 21.64 Unpacking libpam-runtime (1.5.2-6+deb12u2) over (1.5.2-6+deb12u1) ...
+#12 ...
+
+#11 [final 2/6] RUN apt-get update   && apt-get upgrade -y --no-install-recommends   && apt-get install -y --no-install-recommends libstdc++6 openssl libncurses6 locales ca-certificates   && rm -rf /var/lib/apt/lists/*
+#11 23.11 Setting up tzdata (2026b-0+deb12u1) ...
+#11 23.22 debconf: unable to initialize frontend: Dialog
+#11 23.22 debconf: (TERM is not set, so the dialog frontend is not usable.)
+#11 23.22 debconf: falling back to frontend: Readline
+#11 23.22 debconf: unable to initialize frontend: Readline
+#11 23.22 debconf: (Can't locate Term/ReadLine.pm in @INC (you may need to install the Term::ReadLine module) (@INC contains: /etc/perl /usr/local/lib/x86_64-linux-gnu/perl/5.36.0 /usr/local/share/perl/5.36.0 /usr/lib/x86_64-linux-gnu/perl5/5.36 /usr/share/perl5 /usr/lib/x86_64-linux-gnu/perl-base /usr/lib/x86_64-linux-gnu/perl/5.36 /usr/share/perl/5.36 /usr/local/lib/site_perl) at /usr/share/perl5/Debconf/FrontEnd/Readline.pm line 7.)
+#11 23.22 debconf: falling back to frontend: Teletype
+#11 23.26 
+#11 23.26 Current default time zone: 'Etc/UTC'
+#11 23.26 Local time is now:      Mon Jul 20 11:23:51 UTC 2026.
+#11 23.27 Universal Time is now:  Mon Jul 20 11:23:51 UTC 2026.
+#11 23.27 Run 'dpkg-reconfigure tzdata' if you wish to change it.
+#11 23.27 
+#11 23.35 Processing triggers for libc-bin (2.36-9+deb12u14) ...
+#11 23.37 Processing triggers for debianutils (5.7-0.5~deb12u1) ...
+#11 23.45 Reading package lists...
+#11 23.99 Building dependency tree...
+#11 24.17 Reading state information...
+#11 24.41 libstdc++6 is already the newest version (12.2.0-14+deb12u1).
+#11 24.41 libstdc++6 set to manually installed.
+#11 24.41 The following additional packages will be installed:
+#11 24.41   libc-l10n libssl3
+#11 24.41 Recommended packages:
+#11 24.41   libgpm2
+#11 24.46 The following NEW packages will be installed:
+#11 24.46   ca-certificates libc-l10n libncurses6 libssl3 locales openssl
+#11 25.43 0 upgraded, 6 newly installed, 0 to remove and 0 not upgraded.
+#11 25.43 Need to get 8316 kB of archives.
+#11 25.43 After this operation, 30.0 MB of additional disk space will be used.
+#11 25.43 Get:1 http://deb.debian.org/debian bookworm/main amd64 libssl3 amd64 3.0.20-1~deb12u2 [2036 kB]
+#11 26.98 Get:2 http://deb.debian.org/debian bookworm/main amd64 openssl amd64 3.0.20-1~deb12u2 [1439 kB]
+#11 27.08 Get:3 http://deb.debian.org/debian bookworm/main amd64 ca-certificates all 20230311+deb12u1 [155 kB]
+#11 27.48 Get:4 http://deb.debian.org/debian bookworm/main amd64 libc-l10n all 2.36-9+deb12u14 [676 kB]
+#11 27.52 Get:5 http://deb.debian.org/debian bookworm/main amd64 locales all 2.36-9+deb12u14 [3906 kB]
+#11 27.91 Get:6 http://deb.debian.org/debian bookworm/main amd64 libncurses6 amd64 6.4-4 [103 kB]
+#11 28.03 debconf: delaying package configuration, since apt-utils is not installed
+#11 28.05 Fetched 8316 kB in 3s (2397 kB/s)
+#11 28.08 Selecting previously unselected package libssl3:amd64.
+#11 28.08 (Reading database ... 
+(Reading database ... 5%
+(Reading database ... 10%
+(Reading database ... 15%
+(Reading database ... 20%
+(Reading database ... 25%
+(Reading database ... 30%
+(Reading database ... 35%
+(Reading database ... 40%
+(Reading database ... 45%
+(Reading database ... 50%
+(Reading database ... 55%
+(Reading database ... 60%
+(Reading database ... 65%
+(Reading database ... 70%
+(Reading database ... 75%
+(Reading database ... 80%
+(Reading database ... 85%
+(Reading database ... 90%
+(Reading database ... 95%
+(Reading database ... 100%
+(Reading database ... 6096 files and directories currently installed.)
+#11 28.10 Preparing to unpack .../0-libssl3_3.0.20-1~deb12u2_amd64.deb ...
+#11 28.11 Unpacking libssl3:amd64 (3.0.20-1~deb12u2) ...
+#11 28.29 Selecting previously unselected package openssl.
+#11 28.30 Preparing to unpack .../1-openssl_3.0.20-1~deb12u2_amd64.deb ...
+#11 28.32 Unpacking openssl (3.0.20-1~deb12u2) ...
+#11 28.47 Selecting previously unselected package ca-certificates.
+#11 28.48 Preparing to unpack .../2-ca-certificates_20230311+deb12u1_all.deb ...
+#11 28.49 Unpacking ca-certificates (20230311+deb12u1) ...
+#11 28.56 Selecting previously unselected package libc-l10n.
+#11 28.56 Preparing to unpack .../3-libc-l10n_2.36-9+deb12u14_all.deb ...
+#11 28.57 Unpacking libc-l10n (2.36-9+deb12u14) ...
+#11 28.65 Selecting previously unselected package locales.
+#11 28.65 Preparing to unpack .../4-locales_2.36-9+deb12u14_all.deb ...
+#11 28.66 Unpacking locales (2.36-9+deb12u14) ...
+#11 29.01 Selecting previously unselected package libncurses6:amd64.
+#11 29.01 Preparing to unpack .../5-libncurses6_6.4-4_amd64.deb ...
+#11 29.01 Unpacking libncurses6:amd64 (6.4-4) ...
+#11 29.05 Setting up libc-l10n (2.36-9+deb12u14) ...
+#11 29.07 Setting up libssl3:amd64 (3.0.20-1~deb12u2) ...
+#11 29.09 Setting up locales (2.36-9+deb12u14) ...
+#11 29.16 debconf: unable to initialize frontend: Dialog
+#11 29.16 debconf: (TERM is not set, so the dialog frontend is not usable.)
+#11 29.16 debconf: falling back to frontend: Readline
+#11 29.16 debconf: unable to initialize frontend: Readline
+#11 29.16 debconf: (Can't locate Term/ReadLine.pm in @INC (you may need to install the Term::ReadLine module) (@INC contains: /etc/perl /usr/local/lib/x86_64-linux-gnu/perl/5.36.0 /usr/local/share/perl/5.36.0 /usr/lib/x86_64-linux-gnu/perl5/5.36 /usr/share/perl5 /usr/lib/x86_64-linux-gnu/perl-base /usr/lib/x86_64-linux-gnu/perl/5.36 /usr/share/perl/5.36 /usr/local/lib/site_perl) at /usr/share/perl5/Debconf/FrontEnd/Readline.pm line 7.)
+#11 29.16 debconf: falling back to frontend: Teletype
+#11 29.67 Generating locales (this might take a while)...
+#11 29.67 Generation complete.
+#11 29.70 Setting up libncurses6:amd64 (6.4-4) ...
+#11 29.72 Setting up openssl (3.0.20-1~deb12u2) ...
+#11 29.75 Setting up ca-certificates (20230311+deb12u1) ...
+#11 29.85 debconf: unable to initialize frontend: Dialog
+#11 29.85 debconf: (TERM is not set, so the dialog frontend is not usable.)
+#11 29.85 debconf: falling back to frontend: Readline
+#11 29.85 debconf: unable to initialize frontend: Readline
+#11 29.85 debconf: (Can't locate Term/ReadLine.pm in @INC (you may need to install the Term::ReadLine module) (@INC contains: /etc/perl /usr/local/lib/x86_64-linux-gnu/perl/5.36.0 /usr/local/share/perl/5.36.0 /usr/lib/x86_64-linux-gnu/perl5/5.36 /usr/share/perl5 /usr/lib/x86_64-linux-gnu/perl-base /usr/lib/x86_64-linux-gnu/perl/5.36 /usr/share/perl/5.36 /usr/local/lib/site_perl) at /usr/share/perl5/Debconf/FrontEnd/Readline.pm line 7.)
+#11 29.85 debconf: falling back to frontend: Teletype
+#11 ...
+
+#12 [builder  2/16] RUN apt-get update   && apt-get upgrade -y --no-install-recommends   && apt-get install -y --no-install-recommends build-essential git   && rm -rf /var/lib/apt/lists/*
+#12 21.76 Setting up libpam-runtime (1.5.2-6+deb12u2) ...
+#12 21.85 debconf: unable to initialize frontend: Dialog
+#12 21.85 debconf: (TERM is not set, so the dialog frontend is not usable.)
+#12 21.85 debconf: falling back to frontend: Readline
+#12 21.85 debconf: unable to initialize frontend: Readline
+#12 21.85 debconf: (Can't locate Term/ReadLine.pm in @INC (you may need to install the Term::ReadLine module) (@INC contains: /etc/perl /usr/local/lib/x86_64-linux-gnu/perl/5.36.0 /usr/local/share/perl/5.36.0 /usr/lib/x86_64-linux-gnu/perl5/5.36 /usr/share/perl5 /usr/lib/x86_64-linux-gnu/perl-base /usr/lib/x86_64-linux-gnu/perl/5.36 /usr/share/perl/5.36 /usr/local/lib/site_perl) at /usr/share/perl5/Debconf/FrontEnd/Readline.pm line 7.)
+#12 21.85 debconf: falling back to frontend: Teletype
+#12 21.94 (Reading database ... 
+(Reading database ... 5%
+(Reading database ... 10%
+(Reading database ... 15%
+(Reading database ... 20%
+(Reading database ... 25%
+(Reading database ... 30%
+(Reading database ... 35%
+(Reading database ... 40%
+(Reading database ... 45%
+(Reading database ... 50%
+(Reading database ... 55%
+(Reading database ... 60%
+(Reading database ... 65%
+(Reading database ... 70%
+(Reading database ... 75%
+(Reading database ... 80%
+(Reading database ... 85%
+(Reading database ... 90%
+(Reading database ... 95%
+(Reading database ... 100%
+(Reading database ... 6620 files and directories currently installed.)
+#12 21.95 Preparing to unpack .../passwd_1%3a4.13+dfsg1-1+deb12u2_amd64.deb ...
+#12 21.97 Unpacking passwd (1:4.13+dfsg1-1+deb12u2) over (1:4.13+dfsg1-1+deb12u1) ...
+#12 22.10 Setting up passwd (1:4.13+dfsg1-1+deb12u2) ...
+#12 22.17 (Reading database ... 
+(Reading database ... 5%
+(Reading database ... 10%
+(Reading database ... 15%
+(Reading database ... 20%
+(Reading database ... 25%
+(Reading database ... 30%
+(Reading database ... 35%
+(Reading database ... 40%
+(Reading database ... 45%
+(Reading database ... 50%
+(Reading database ... 55%
+(Reading database ... 60%
+(Reading database ... 65%
+(Reading database ... 70%
+(Reading database ... 75%
+(Reading database ... 80%
+(Reading database ... 85%
+(Reading database ... 90%
+(Reading database ... 95%
+(Reading database ... 100%
+(Reading database ... 6620 files and directories currently installed.)
+#12 22.17 Preparing to unpack .../libgcrypt20_1.10.1-3+deb12u1_amd64.deb ...
+#12 22.18 Unpacking libgcrypt20:amd64 (1.10.1-3+deb12u1) over (1.10.1-3) ...
+#12 22.26 Setting up libgcrypt20:amd64 (1.10.1-3+deb12u1) ...
+#12 22.30 (Reading database ... 
+(Reading database ... 5%
+(Reading database ... 10%
+(Reading database ... 15%
+(Reading database ... 20%
+(Reading database ... 25%
+(Reading database ... 30%
+(Reading database ... 35%
+(Reading database ... 40%
+(Reading database ... 45%
+(Reading database ... 50%
+(Reading database ... 55%
+(Reading database ... 60%
+(Reading database ... 65%
+(Reading database ... 70%
+(Reading database ... 75%
+(Reading database ... 80%
+(Reading database ... 85%
+(Reading database ... 90%
+(Reading database ... 95%
+(Reading database ... 100%
+(Reading database ... 6620 files and directories currently installed.)
+#12 22.31 Preparing to unpack .../gpgv_2.2.40-1.1+deb12u2_amd64.deb ...
+#12 22.32 Unpacking gpgv (2.2.40-1.1+deb12u2) over (2.2.40-1.1+deb12u1) ...
+#12 22.39 Setting up gpgv (2.2.40-1.1+deb12u2) ...
+#12 22.45 (Reading database ... 
+(Reading database ... 5%
+(Reading database ... 10%
+(Reading database ... 15%
+(Reading database ... 20%
+(Reading database ... 25%
+(Reading database ... 30%
+(Reading database ... 35%
+(Reading database ... 40%
+(Reading database ... 45%
+(Reading database ... 50%
+(Reading database ... 55%
+(Reading database ... 60%
+(Reading database ... 65%
+(Reading database ... 70%
+(Reading database ... 75%
+(Reading database ... 80%
+(Reading database ... 85%
+(Reading database ... 90%
+(Reading database ... 95%
+(Reading database ... 100%
+(Reading database ... 6620 files and directories currently installed.)
+#12 22.45 Preparing to unpack .../libcap2_1%3a2.66-4+deb12u3+b1_amd64.deb ...
+#12 22.47 Unpacking libcap2:amd64 (1:2.66-4+deb12u3+b1) over (1:2.66-4+deb12u2) ...
+#12 22.52 Setting up libcap2:amd64 (1:2.66-4+deb12u3+b1) ...
+#12 22.57 (Reading database ... 
+(Reading database ... 5%
+(Reading database ... 10%
+(Reading database ... 15%
+(Reading database ... 20%
+(Reading database ... 25%
+(Reading database ... 30%
+(Reading database ... 35%
+(Reading database ... 40%
+(Reading database ... 45%
+(Reading database ... 50%
+(Reading database ... 55%
+(Reading database ... 60%
+(Reading database ... 65%
+(Reading database ... 70%
+(Reading database ... 75%
+(Reading database ... 80%
+(Reading database ... 85%
+(Reading database ... 90%
+(Reading database ... 95%
+(Reading database ... 100%
+(Reading database ... 6621 files and directories currently installed.)
+#12 22.58 Preparing to unpack .../libgnutls30_3.7.9-2+deb12u7_amd64.deb ...
+#12 22.60 Unpacking libgnutls30:amd64 (3.7.9-2+deb12u7) over (3.7.9-2+deb12u5) ...
+#12 22.74 Setting up libgnutls30:amd64 (3.7.9-2+deb12u7) ...
+#12 22.79 (Reading database ... 
+(Reading database ... 5%
+(Reading database ... 10%
+(Reading database ... 15%
+(Reading database ... 20%
+(Reading database ... 25%
+(Reading database ... 30%
+(Reading database ... 35%
+(Reading database ... 40%
+(Reading database ... 45%
+(Reading database ... 50%
+(Reading database ... 55%
+(Reading database ... 60%
+(Reading database ... 65%
+(Reading database ... 70%
+(Reading database ... 75%
+(Reading database ... 80%
+(Reading database ... 85%
+(Reading database ... 90%
+(Reading database ... 95%
+(Reading database ... 100%
+(Reading database ... 6621 files and directories currently installed.)
+#12 22.80 Preparing to unpack .../liblzma5_5.4.1-1+deb12u1_amd64.deb ...
+#12 22.82 Unpacking liblzma5:amd64 (5.4.1-1+deb12u1) over (5.4.1-1) ...
+#12 22.88 Setting up liblzma5:amd64 (5.4.1-1+deb12u1) ...
+#12 22.92 (Reading database ... 
+(Reading database ... 5%
+(Reading database ... 10%
+(Reading database ... 15%
+(Reading database ... 20%
+(Reading database ... 25%
+(Reading database ... 30%
+(Reading database ... 35%
+(Reading database ... 40%
+(Reading database ... 45%
+(Reading database ... 50%
+(Reading database ... 55%
+(Reading database ... 60%
+(Reading database ... 65%
+(Reading database ... 70%
+(Reading database ... 75%
+(Reading database ... 80%
+(Reading database ... 85%
+(Reading database ... 90%
+(Reading database ... 95%
+(Reading database ... 100%
+(Reading database ... 6621 files and directories currently installed.)
+#12 22.93 Preparing to unpack .../libsystemd0_252.39-1~deb12u2_amd64.deb ...
+#12 22.94 Unpacking libsystemd0:amd64 (252.39-1~deb12u2) over (252.39-1~deb12u1) ...
+#12 23.01 Setting up libsystemd0:amd64 (252.39-1~deb12u2) ...
+#12 23.12 (Reading database ... 
+(Reading database ... 5%
+(Reading database ... 10%
+(Reading database ... 15%
+(Reading database ... 20%
+(Reading database ... 25%
+(Reading database ... 30%
+(Reading database ... 35%
+(Reading database ... 40%
+(Reading database ... 45%
+(Reading database ... 50%
+(Reading database ... 55%
+(Reading database ... 60%
+(Reading database ... 65%
+(Reading database ... 70%
+(Reading database ... 75%
+(Reading database ... 80%
+(Reading database ... 85%
+(Reading database ... 90%
+(Reading database ... 95%
+(Reading database ... 100%
+(Reading database ... 6621 files and directories currently installed.)
+#12 23.15 Preparing to unpack .../libudev1_252.39-1~deb12u2_amd64.deb ...
+#12 23.18 Unpacking libudev1:amd64 (252.39-1~deb12u2) over (252.39-1~deb12u1) ...
+#12 23.26 Setting up libudev1:amd64 (252.39-1~deb12u2) ...
+#12 23.42 (Reading database ... 
+(Reading database ... 5%
+(Reading database ... 10%
+(Reading database ... 15%
+(Reading database ... 20%
+(Reading database ... 25%
+(Reading database ... 30%
+(Reading database ... 35%
+(Reading database ... 40%
+(Reading database ... 45%
+(Reading database ... 50%
+(Reading database ... 55%
+(Reading database ... 60%
+(Reading database ... 65%
+(Reading database ... 70%
+(Reading database ... 75%
+(Reading database ... 80%
+(Reading database ... 85%
+(Reading database ... 90%
+(Reading database ... 95%
+(Reading database ... 100%
+(Reading database ... 6621 files and directories currently installed.)
+#12 23.45 Preparing to unpack .../tzdata_2026b-0+deb12u1_all.deb ...
+#12 23.80 Unpacking tzdata (2026b-0+deb12u1) over (2025b-0+deb12u2) ...
+#12 27.15 Preparing to unpack .../libssl3_3.0.20-1~deb12u2_amd64.deb ...
+#12 27.16 Unpacking libssl3:amd64 (3.0.20-1~deb12u2) over (3.0.17-1~deb12u3) ...
+#12 27.34 Preparing to unpack .../openssl_3.0.20-1~deb12u2_amd64.deb ...
+#12 27.35 Unpacking openssl (3.0.20-1~deb12u2) over (3.0.17-1~deb12u3) ...
+#12 27.48 Setting up libssl3:amd64 (3.0.20-1~deb12u2) ...
+#12 27.49 Setting up tzdata (2026b-0+deb12u1) ...
+#12 27.56 debconf: unable to initialize frontend: Dialog
+#12 27.56 debconf: (TERM is not set, so the dialog frontend is not usable.)
+#12 27.56 debconf: falling back to frontend: Readline
+#12 27.56 debconf: unable to initialize frontend: Readline
+#12 27.56 debconf: (Can't locate Term/ReadLine.pm in @INC (you may need to install the Term::ReadLine module) (@INC contains: /etc/perl /usr/local/lib/x86_64-linux-gnu/perl/5.36.0 /usr/local/share/perl/5.36.0 /usr/lib/x86_64-linux-gnu/perl5/5.36 /usr/share/perl5 /usr/lib/x86_64-linux-gnu/perl-base /usr/lib/x86_64-linux-gnu/perl/5.36 /usr/share/perl/5.36 /usr/local/lib/site_perl) at /usr/share/perl5/Debconf/FrontEnd/Readline.pm line 7.)
+#12 27.56 debconf: falling back to frontend: Teletype
+#12 27.60 
+#12 27.60 Current default time zone: 'Etc/UTC'
+#12 27.60 Local time is now:      Mon Jul 20 11:23:57 UTC 2026.
+#12 27.60 Universal Time is now:  Mon Jul 20 11:23:57 UTC 2026.
+#12 27.60 Run 'dpkg-reconfigure tzdata' if you wish to change it.
+#12 27.60 
+#12 27.66 Setting up openssl (3.0.20-1~deb12u2) ...
+#12 27.69 Processing triggers for debianutils (5.7-0.5~deb12u1) ...
+#12 27.75 Processing triggers for libc-bin (2.36-9+deb12u14) ...
+#12 27.81 Reading package lists...
+#12 28.42 Building dependency tree...
+#12 28.58 Reading state information...
+#12 28.79 The following additional packages will be installed:
+#12 28.79   binutils binutils-common binutils-x86-64-linux-gnu bzip2 cpp cpp-12 dpkg-dev
+#12 28.79   g++ g++-12 gcc gcc-12 git-man libasan8 libatomic1 libbinutils libbrotli1
+#12 28.79   libc-dev-bin libc6-dev libcc1-0 libcrypt-dev libctf-nobfd0 libctf0
+#12 28.79   libcurl3-gnutls libdpkg-perl liberror-perl libexpat1 libgcc-12-dev
+#12 28.79   libgdbm-compat4 libgdbm6 libgomp1 libgprofng0 libgssapi-krb5-2 libisl23
+#12 28.79   libitm1 libjansson4 libk5crypto3 libkeyutils1 libkrb5-3 libkrb5support0
+#12 28.79   libldap-2.5-0 liblsan0 libmpc3 libmpfr6 libnghttp2-14 libnsl-dev libnsl2
+#12 28.79   libperl5.36 libpsl5 libquadmath0 librtmp1 libsasl2-2 libsasl2-modules-db
+#12 28.79   libssh2-1 libstdc++-12-dev libtirpc-common libtirpc-dev libtirpc3 libtsan2
+#12 28.79   libubsan1 linux-libc-dev make patch perl perl-modules-5.36 rpcsvc-proto
+#12 28.79   xz-utils
+#12 28.79 Suggested packages:
+#12 28.79   binutils-doc bzip2-doc cpp-doc gcc-12-locales cpp-12-doc debian-keyring
+#12 28.79   g++-multilib g++-12-multilib gcc-12-doc gcc-multilib manpages-dev autoconf
+#12 28.79   automake libtool flex bison gdb gcc-doc gcc-12-multilib gettext-base
+#12 28.79   git-daemon-run | git-daemon-sysvinit git-doc git-email git-gui gitk gitweb
+#12 28.79   git-cvs git-mediawiki git-svn glibc-doc gnupg | sq | sqop | pgpainless-cli
+#12 28.79   sensible-utils bzr gdbm-l10n krb5-doc krb5-user libstdc++-12-doc make-doc ed
+#12 28.79   diffutils-doc perl-doc libterm-readline-gnu-perl
+#12 28.79   | libterm-readline-perl-perl libtap-harness-archive-perl
+#12 28.79 Recommended packages:
+#12 28.79   fakeroot gnupg | sq | sqop | pgpainless-cli libalgorithm-merge-perl less
+#12 28.79   ssh-client manpages manpages-dev libc-devtools libfile-fcntllock-perl
+#12 28.79   liblocale-gettext-perl krb5-locales libldap-common publicsuffix
+#12 28.79   libsasl2-modules
+#12 29.12 The following NEW packages will be installed:
+#12 29.12   binutils binutils-common binutils-x86-64-linux-gnu build-essential bzip2 cpp
+#12 29.12   cpp-12 dpkg-dev g++ g++-12 gcc gcc-12 git git-man libasan8 libatomic1
+#12 29.12   libbinutils libbrotli1 libc-dev-bin libc6-dev libcc1-0 libcrypt-dev
+#12 29.12   libctf-nobfd0 libctf0 libcurl3-gnutls libdpkg-perl liberror-perl libexpat1
+#12 29.12   libgcc-12-dev libgdbm-compat4 libgdbm6 libgomp1 libgprofng0 libgssapi-krb5-2
+#12 29.12   libisl23 libitm1 libjansson4 libk5crypto3 libkeyutils1 libkrb5-3
+#12 29.12   libkrb5support0 libldap-2.5-0 liblsan0 libmpc3 libmpfr6 libnghttp2-14
+#12 29.12   libnsl-dev libnsl2 libperl5.36 libpsl5 libquadmath0 librtmp1 libsasl2-2
+#12 29.12   libsasl2-modules-db libssh2-1 libstdc++-12-dev libtirpc-common libtirpc-dev
+#12 29.12   libtirpc3 libtsan2 libubsan1 linux-libc-dev make patch perl
+#12 29.12   perl-modules-5.36 rpcsvc-proto xz-utils
+#12 29.90 0 upgraded, 68 newly installed, 0 to remove and 0 not upgraded.
+#12 29.90 Need to get 85.3 MB of archives.
+#12 29.90 After this operation, 369 MB of additional disk space will be used.
+#12 29.90 Get:1 http://deb.debian.org/debian bookworm/main amd64 perl-modules-5.36 all 5.36.0-7+deb12u3 [2815 kB]
+#12 ...
+
+#11 [final 2/6] RUN apt-get update   && apt-get upgrade -y --no-install-recommends   && apt-get install -y --no-install-recommends libstdc++6 openssl libncurses6 locales ca-certificates   && rm -rf /var/lib/apt/lists/*
+#11 30.44 Updating certificates in /etc/ssl/certs...
+#11 31.55 142 added, 0 removed; done.
+#11 31.59 Processing triggers for libc-bin (2.36-9+deb12u14) ...
+#11 31.61 Processing triggers for ca-certificates (20230311+deb12u1) ...
+#11 31.66 Updating certificates in /etc/ssl/certs...
+#11 32.40 0 added, 0 removed; done.
+#11 32.40 Running hooks in /etc/ca-certificates/update.d...
+#11 32.40 done.
+#11 DONE 32.6s
+
+#13 [final 3/6] RUN sed -i '/en_US.UTF-8/s/^# //g' /etc/locale.gen   && locale-gen
+#13 0.315 Generating locales (this might take a while)...
+#13 0.317   en_US.UTF-8... done
+#13 2.009 Generation complete.
+#13 DONE 2.0s
+
+#14 [final 4/6] WORKDIR /app
+#14 DONE 0.0s
+
+#12 [builder  2/16] RUN apt-get update   && apt-get upgrade -y --no-install-recommends   && apt-get install -y --no-install-recommends build-essential git   && rm -rf /var/lib/apt/lists/*
+#12 31.72 Get:2 http://deb.debian.org/debian bookworm/main amd64 libgdbm6 amd64 1.23-3 [72.2 kB]
+#12 31.73 Get:3 http://deb.debian.org/debian bookworm/main amd64 libgdbm-compat4 amd64 1.23-3 [48.2 kB]
+#12 31.73 Get:4 http://deb.debian.org/debian bookworm/main amd64 libperl5.36 amd64 5.36.0-7+deb12u3 [4196 kB]
+#12 32.15 Get:5 http://deb.debian.org/debian bookworm/main amd64 perl amd64 5.36.0-7+deb12u3 [239 kB]
+#12 32.17 Get:6 http://deb.debian.org/debian bookworm/main amd64 bzip2 amd64 1.0.8-5+b1 [49.8 kB]
+#12 32.18 Get:7 http://deb.debian.org/debian bookworm/main amd64 xz-utils amd64 5.4.1-1+deb12u1 [471 kB]
+#12 32.22 Get:8 http://deb.debian.org/debian bookworm/main amd64 binutils-common amd64 2.40-2 [2487 kB]
+#12 32.36 Get:9 http://deb.debian.org/debian bookworm/main amd64 libbinutils amd64 2.40-2 [572 kB]
+#12 32.40 Get:10 http://deb.debian.org/debian bookworm/main amd64 libctf-nobfd0 amd64 2.40-2 [153 kB]
+#12 32.40 Get:11 http://deb.debian.org/debian bookworm/main amd64 libctf0 amd64 2.40-2 [89.8 kB]
+#12 32.41 Get:12 http://deb.debian.org/debian bookworm/main amd64 libgprofng0 amd64 2.40-2 [812 kB]
+#12 32.46 Get:13 http://deb.debian.org/debian bookworm/main amd64 libjansson4 amd64 2.14-2 [40.8 kB]
+#12 32.46 Get:14 http://deb.debian.org/debian bookworm/main amd64 binutils-x86-64-linux-gnu amd64 2.40-2 [2246 kB]
+#12 32.59 Get:15 http://deb.debian.org/debian bookworm/main amd64 binutils amd64 2.40-2 [65.0 kB]
+#12 32.60 Get:16 http://deb.debian.org/debian bookworm/main amd64 libc-dev-bin amd64 2.36-9+deb12u14 [48.1 kB]
+#12 32.60 Get:17 http://deb.debian.org/debian-security bookworm-security/main amd64 linux-libc-dev amd64 6.1.177-1 [2307 kB]
+#12 32.99 Get:18 http://deb.debian.org/debian bookworm/main amd64 libcrypt-dev amd64 1:4.4.33-2 [118 kB]
+#12 32.99 Get:19 http://deb.debian.org/debian bookworm/main amd64 libkrb5support0 amd64 1.20.1-2+deb12u5 [33.2 kB]
+#12 32.99 Get:20 http://deb.debian.org/debian bookworm/main amd64 libk5crypto3 amd64 1.20.1-2+deb12u5 [79.7 kB]
+#12 33.00 Get:21 http://deb.debian.org/debian bookworm/main amd64 libkeyutils1 amd64 1.6.3-2 [8808 B]
+#12 34.57 Get:22 http://deb.debian.org/debian bookworm/main amd64 libkrb5-3 amd64 1.20.1-2+deb12u5 [332 kB]
+#12 34.61 Get:23 http://deb.debian.org/debian bookworm/main amd64 libgssapi-krb5-2 amd64 1.20.1-2+deb12u5 [135 kB]
+#12 34.61 Get:24 http://deb.debian.org/debian bookworm/main amd64 libtirpc-common all 1.3.3+ds-1 [14.0 kB]
+#12 34.61 Get:25 http://deb.debian.org/debian bookworm/main amd64 libtirpc3 amd64 1.3.3+ds-1 [85.2 kB]
+#12 34.62 Get:26 http://deb.debian.org/debian bookworm/main amd64 libnsl2 amd64 1.3.0-2 [39.5 kB]
+#12 34.63 Get:27 http://deb.debian.org/debian bookworm/main amd64 libtirpc-dev amd64 1.3.3+ds-1 [191 kB]
+#12 34.63 Get:28 http://deb.debian.org/debian bookworm/main amd64 libnsl-dev amd64 1.3.0-2 [66.4 kB]
+#12 34.64 Get:29 http://deb.debian.org/debian bookworm/main amd64 rpcsvc-proto amd64 1.4.3-1 [63.3 kB]
+#12 34.64 Get:30 http://deb.debian.org/debian bookworm/main amd64 libc6-dev amd64 2.36-9+deb12u14 [1904 kB]
+#12 34.76 Get:31 http://deb.debian.org/debian bookworm/main amd64 libisl23 amd64 0.25-1.1 [683 kB]
+#12 ...
+
+#15 [final 5/6] RUN groupadd -g 10001 appgroup &&     useradd -r -u 10001 -g appgroup appuser &&     chown -R appuser:appgroup /app
+#15 1.723 useradd warning: appuser's uid 10001 is greater than SYS_UID_MAX 999
+#15 DONE 1.8s
+
+#12 [builder  2/16] RUN apt-get update   && apt-get upgrade -y --no-install-recommends   && apt-get install -y --no-install-recommends build-essential git   && rm -rf /var/lib/apt/lists/*
+#12 34.83 Get:32 http://deb.debian.org/debian bookworm/main amd64 libmpfr6 amd64 4.2.0-1 [701 kB]
+#12 34.88 Get:33 http://deb.debian.org/debian bookworm/main amd64 libmpc3 amd64 1.3.1-1 [51.5 kB]
+#12 34.89 Get:34 http://deb.debian.org/debian bookworm/main amd64 cpp-12 amd64 12.2.0-14+deb12u1 [9768 kB]
+#12 35.41 Get:35 http://deb.debian.org/debian bookworm/main amd64 cpp amd64 4:12.2.0-3 [6836 B]
+#12 35.41 Get:36 http://deb.debian.org/debian bookworm/main amd64 libcc1-0 amd64 12.2.0-14+deb12u1 [41.7 kB]
+#12 35.41 Get:37 http://deb.debian.org/debian bookworm/main amd64 libgomp1 amd64 12.2.0-14+deb12u1 [116 kB]
+#12 35.42 Get:38 http://deb.debian.org/debian bookworm/main amd64 libitm1 amd64 12.2.0-14+deb12u1 [26.1 kB]
+#12 35.42 Get:39 http://deb.debian.org/debian bookworm/main amd64 libatomic1 amd64 12.2.0-14+deb12u1 [9376 B]
+#12 35.42 Get:40 http://deb.debian.org/debian bookworm/main amd64 libasan8 amd64 12.2.0-14+deb12u1 [2193 kB]
+#12 35.55 Get:41 http://deb.debian.org/debian bookworm/main amd64 liblsan0 amd64 12.2.0-14+deb12u1 [969 kB]
+#12 35.59 Get:42 http://deb.debian.org/debian bookworm/main amd64 libtsan2 amd64 12.2.0-14+deb12u1 [2197 kB]
+#12 35.70 Get:43 http://deb.debian.org/debian bookworm/main amd64 libubsan1 amd64 12.2.0-14+deb12u1 [883 kB]
+#12 36.14 Get:44 http://deb.debian.org/debian bookworm/main amd64 libquadmath0 amd64 12.2.0-14+deb12u1 [145 kB]
+#12 36.15 Get:45 http://deb.debian.org/debian bookworm/main amd64 libgcc-12-dev amd64 12.2.0-14+deb12u1 [2437 kB]
+#12 36.21 Get:46 http://deb.debian.org/debian bookworm/main amd64 gcc-12 amd64 12.2.0-14+deb12u1 [19.3 MB]
+#12 36.91 Get:47 http://deb.debian.org/debian bookworm/main amd64 gcc amd64 4:12.2.0-3 [5216 B]
+#12 36.91 Get:48 http://deb.debian.org/debian bookworm/main amd64 libstdc++-12-dev amd64 12.2.0-14+deb12u1 [2047 kB]
+#12 36.99 Get:49 http://deb.debian.org/debian bookworm/main amd64 g++-12 amd64 12.2.0-14+deb12u1 [10.7 MB]
+#12 37.55 Get:50 http://deb.debian.org/debian bookworm/main amd64 g++ amd64 4:12.2.0-3 [1356 B]
+#12 37.55 Get:51 http://deb.debian.org/debian bookworm/main amd64 make amd64 4.3-4.1 [396 kB]
+#12 37.57 Get:52 http://deb.debian.org/debian bookworm/main amd64 libdpkg-perl all 1.21.23 [604 kB]
+#12 37.63 Get:53 http://deb.debian.org/debian bookworm/main amd64 patch amd64 2.7.6-7 [128 kB]
+#12 37.64 Get:54 http://deb.debian.org/debian bookworm/main amd64 dpkg-dev all 1.21.23 [1354 kB]
+#12 37.71 Get:55 http://deb.debian.org/debian bookworm/main amd64 build-essential amd64 12.9 [7704 B]
+#12 37.71 Get:56 http://deb.debian.org/debian bookworm/main amd64 libbrotli1 amd64 1.0.9-2+b6 [275 kB]
+#12 37.73 Get:57 http://deb.debian.org/debian bookworm/main amd64 libsasl2-modules-db amd64 2.1.28+dfsg-10 [20.3 kB]
+#12 37.73 Get:58 http://deb.debian.org/debian bookworm/main amd64 libsasl2-2 amd64 2.1.28+dfsg-10 [59.7 kB]
+#12 37.83 Get:59 http://deb.debian.org/debian bookworm/main amd64 libldap-2.5-0 amd64 2.5.13+dfsg-5 [183 kB]
+#12 37.89 Get:60 http://deb.debian.org/debian bookworm/main amd64 libnghttp2-14 amd64 1.52.0-1+deb12u3 [72.4 kB]
+#12 37.90 Get:61 http://deb.debian.org/debian bookworm/main amd64 libpsl5 amd64 0.21.2-1 [58.7 kB]
+#12 37.91 Get:62 http://deb.debian.org/debian bookworm/main amd64 librtmp1 amd64 2.4+20151223.gitfa8646d.1-2+b2 [60.8 kB]
+#12 37.92 Get:63 http://deb.debian.org/debian bookworm/main amd64 libssh2-1 amd64 1.10.0-3+b1 [179 kB]
+#12 37.96 Get:64 http://deb.debian.org/debian bookworm/main amd64 libcurl3-gnutls amd64 7.88.1-10+deb12u15 [386 kB]
+#12 38.05 Get:65 http://deb.debian.org/debian bookworm/main amd64 libexpat1 amd64 2.5.0-1+deb12u2 [99.9 kB]
+#12 38.06 Get:66 http://deb.debian.org/debian bookworm/main amd64 liberror-perl all 0.17029-2 [29.0 kB]
+#12 38.06 Get:67 http://deb.debian.org/debian bookworm/main amd64 git-man all 1:2.39.5-0+deb12u3 [2053 kB]
+#12 38.12 Get:68 http://deb.debian.org/debian bookworm/main amd64 git amd64 1:2.39.5-0+deb12u3 [7264 kB]
+#12 38.61 debconf: delaying package configuration, since apt-utils is not installed
+#12 38.64 Fetched 85.3 MB in 8s (10.9 MB/s)
+#12 38.69 Selecting previously unselected package perl-modules-5.36.
+#12 38.69 (Reading database ... 
+(Reading database ... 5%
+(Reading database ... 10%
+(Reading database ... 15%
+(Reading database ... 20%
+(Reading database ... 25%
+(Reading database ... 30%
+(Reading database ... 35%
+(Reading database ... 40%
+(Reading database ... 45%
+(Reading database ... 50%
+(Reading database ... 55%
+(Reading database ... 60%
+(Reading database ... 65%
+(Reading database ... 70%
+(Reading database ... 75%
+(Reading database ... 80%
+(Reading database ... 85%
+(Reading database ... 90%
+(Reading database ... 95%
+(Reading database ... 100%
+(Reading database ... 6621 files and directories currently installed.)
+#12 38.72 Preparing to unpack .../00-perl-modules-5.36_5.36.0-7+deb12u3_all.deb ...
+#12 38.73 Unpacking perl-modules-5.36 (5.36.0-7+deb12u3) ...
+#12 39.06 Selecting previously unselected package libgdbm6:amd64.
+#12 39.07 Preparing to unpack .../01-libgdbm6_1.23-3_amd64.deb ...
+#12 39.08 Unpacking libgdbm6:amd64 (1.23-3) ...
+#12 39.17 Selecting previously unselected package libgdbm-compat4:amd64.
+#12 39.17 Preparing to unpack .../02-libgdbm-compat4_1.23-3_amd64.deb ...
+#12 39.19 Unpacking libgdbm-compat4:amd64 (1.23-3) ...
+#12 39.32 Selecting previously unselected package libperl5.36:amd64.
+#12 39.33 Preparing to unpack .../03-libperl5.36_5.36.0-7+deb12u3_amd64.deb ...
+#12 39.34 Unpacking libperl5.36:amd64 (5.36.0-7+deb12u3) ...
+#12 39.71 Selecting previously unselected package perl.
+#12 39.71 Preparing to unpack .../04-perl_5.36.0-7+deb12u3_amd64.deb ...
+#12 39.72 Unpacking perl (5.36.0-7+deb12u3) ...
+#12 39.77 Selecting previously unselected package bzip2.
+#12 39.77 Preparing to unpack .../05-bzip2_1.0.8-5+b1_amd64.deb ...
+#12 39.77 Unpacking bzip2 (1.0.8-5+b1) ...
+#12 39.82 Selecting previously unselected package xz-utils.
+#12 39.82 Preparing to unpack .../06-xz-utils_5.4.1-1+deb12u1_amd64.deb ...
+#12 39.83 Unpacking xz-utils (5.4.1-1+deb12u1) ...
+#12 39.89 Selecting previously unselected package binutils-common:amd64.
+#12 39.90 Preparing to unpack .../07-binutils-common_2.40-2_amd64.deb ...
+#12 39.90 Unpacking binutils-common:amd64 (2.40-2) ...
+#12 40.12 Selecting previously unselected package libbinutils:amd64.
+#12 40.12 Preparing to unpack .../08-libbinutils_2.40-2_amd64.deb ...
+#12 40.13 Unpacking libbinutils:amd64 (2.40-2) ...
+#12 40.23 Selecting previously unselected package libctf-nobfd0:amd64.
+#12 40.23 Preparing to unpack .../09-libctf-nobfd0_2.40-2_amd64.deb ...
+#12 40.24 Unpacking libctf-nobfd0:amd64 (2.40-2) ...
+#12 40.36 Selecting previously unselected package libctf0:amd64.
+#12 40.36 Preparing to unpack .../10-libctf0_2.40-2_amd64.deb ...
+#12 40.36 Unpacking libctf0:amd64 (2.40-2) ...
+#12 40.43 Selecting previously unselected package libgprofng0:amd64.
+#12 40.43 Preparing to unpack .../11-libgprofng0_2.40-2_amd64.deb ...
+#12 40.43 Unpacking libgprofng0:amd64 (2.40-2) ...
+#12 40.57 Selecting previously unselected package libjansson4:amd64.
+#12 40.57 Preparing to unpack .../12-libjansson4_2.14-2_amd64.deb ...
+#12 40.58 Unpacking libjansson4:amd64 (2.14-2) ...
+#12 40.65 Selecting previously unselected package binutils-x86-64-linux-gnu.
+#12 40.65 Preparing to unpack .../13-binutils-x86-64-linux-gnu_2.40-2_amd64.deb ...
+#12 40.66 Unpacking binutils-x86-64-linux-gnu (2.40-2) ...
+#12 40.97 Selecting previously unselected package binutils.
+#12 40.97 Preparing to unpack .../14-binutils_2.40-2_amd64.deb ...
+#12 40.98 Unpacking binutils (2.40-2) ...
+#12 41.07 Selecting previously unselected package libc-dev-bin.
+#12 41.07 Preparing to unpack .../15-libc-dev-bin_2.36-9+deb12u14_amd64.deb ...
+#12 41.09 Unpacking libc-dev-bin (2.36-9+deb12u14) ...
+#12 41.16 Selecting previously unselected package linux-libc-dev:amd64.
+#12 41.16 Preparing to unpack .../16-linux-libc-dev_6.1.177-1_amd64.deb ...
+#12 41.17 Unpacking linux-libc-dev:amd64 (6.1.177-1) ...
+#12 41.44 Selecting previously unselected package libcrypt-dev:amd64.
+#12 41.45 Preparing to unpack .../17-libcrypt-dev_1%3a4.4.33-2_amd64.deb ...
+#12 41.47 Unpacking libcrypt-dev:amd64 (1:4.4.33-2) ...
+#12 41.55 Selecting previously unselected package libkrb5support0:amd64.
+#12 41.56 Preparing to unpack .../18-libkrb5support0_1.20.1-2+deb12u5_amd64.deb ...
+#12 41.56 Unpacking libkrb5support0:amd64 (1.20.1-2+deb12u5) ...
+#12 41.61 Selecting previously unselected package libk5crypto3:amd64.
+#12 41.62 Preparing to unpack .../19-libk5crypto3_1.20.1-2+deb12u5_amd64.deb ...
+#12 41.62 Unpacking libk5crypto3:amd64 (1.20.1-2+deb12u5) ...
+#12 41.69 Selecting previously unselected package libkeyutils1:amd64.
+#12 41.69 Preparing to unpack .../20-libkeyutils1_1.6.3-2_amd64.deb ...
+#12 41.71 Unpacking libkeyutils1:amd64 (1.6.3-2) ...
+#12 41.80 Selecting previously unselected package libkrb5-3:amd64.
+#12 41.80 Preparing to unpack .../21-libkrb5-3_1.20.1-2+deb12u5_amd64.deb ...
+#12 41.82 Unpacking libkrb5-3:amd64 (1.20.1-2+deb12u5) ...
+#12 41.89 Selecting previously unselected package libgssapi-krb5-2:amd64.
+#12 41.90 Preparing to unpack .../22-libgssapi-krb5-2_1.20.1-2+deb12u5_amd64.deb ...
+#12 41.91 Unpacking libgssapi-krb5-2:amd64 (1.20.1-2+deb12u5) ...
+#12 41.96 Selecting previously unselected package libtirpc-common.
+#12 41.96 Preparing to unpack .../23-libtirpc-common_1.3.3+ds-1_all.deb ...
+#12 41.97 Unpacking libtirpc-common (1.3.3+ds-1) ...
+#12 42.03 Selecting previously unselected package libtirpc3:amd64.
+#12 42.03 Preparing to unpack .../24-libtirpc3_1.3.3+ds-1_amd64.deb ...
+#12 42.05 Unpacking libtirpc3:amd64 (1.3.3+ds-1) ...
+#12 42.14 Selecting previously unselected package libnsl2:amd64.
+#12 42.14 Preparing to unpack .../25-libnsl2_1.3.0-2_amd64.deb ...
+#12 42.16 Unpacking libnsl2:amd64 (1.3.0-2) ...
+#12 42.26 Selecting previously unselected package libtirpc-dev:amd64.
+#12 42.26 Preparing to unpack .../26-libtirpc-dev_1.3.3+ds-1_amd64.deb ...
+#12 42.27 Unpacking libtirpc-dev:amd64 (1.3.3+ds-1) ...
+#12 42.32 Selecting previously unselected package libnsl-dev:amd64.
+#12 42.32 Preparing to unpack .../27-libnsl-dev_1.3.0-2_amd64.deb ...
+#12 42.33 Unpacking libnsl-dev:amd64 (1.3.0-2) ...
+#12 42.40 Selecting previously unselected package rpcsvc-proto.
+#12 42.40 Preparing to unpack .../28-rpcsvc-proto_1.4.3-1_amd64.deb ...
+#12 42.42 Unpacking rpcsvc-proto (1.4.3-1) ...
+#12 42.50 Selecting previously unselected package libc6-dev:amd64.
+#12 42.51 Preparing to unpack .../29-libc6-dev_2.36-9+deb12u14_amd64.deb ...
+#12 42.52 Unpacking libc6-dev:amd64 (2.36-9+deb12u14) ...
+#12 42.74 Selecting previously unselected package libisl23:amd64.
+#12 42.75 Preparing to unpack .../30-libisl23_0.25-1.1_amd64.deb ...
+#12 42.76 Unpacking libisl23:amd64 (0.25-1.1) ...
+#12 42.92 Selecting previously unselected package libmpfr6:amd64.
+#12 42.92 Preparing to unpack .../31-libmpfr6_4.2.0-1_amd64.deb ...
+#12 42.93 Unpacking libmpfr6:amd64 (4.2.0-1) ...
+#12 42.99 Selecting previously unselected package libmpc3:amd64.
+#12 42.99 Preparing to unpack .../32-libmpc3_1.3.1-1_amd64.deb ...
+#12 43.00 Unpacking libmpc3:amd64 (1.3.1-1) ...
+#12 43.04 Selecting previously unselected package cpp-12.
+#12 43.04 Preparing to unpack .../33-cpp-12_12.2.0-14+deb12u1_amd64.deb ...
+#12 43.06 Unpacking cpp-12 (12.2.0-14+deb12u1) ...
+#12 43.84 Selecting previously unselected package cpp.
+#12 43.84 Preparing to unpack .../34-cpp_4%3a12.2.0-3_amd64.deb ...
+#12 43.85 Unpacking cpp (4:12.2.0-3) ...
+#12 43.91 Selecting previously unselected package libcc1-0:amd64.
+#12 43.91 Preparing to unpack .../35-libcc1-0_12.2.0-14+deb12u1_amd64.deb ...
+#12 43.92 Unpacking libcc1-0:amd64 (12.2.0-14+deb12u1) ...
+#12 43.99 Selecting previously unselected package libgomp1:amd64.
+#12 44.00 Preparing to unpack .../36-libgomp1_12.2.0-14+deb12u1_amd64.deb ...
+#12 44.01 Unpacking libgomp1:amd64 (12.2.0-14+deb12u1) ...
+#12 44.15 Selecting previously unselected package libitm1:amd64.
+#12 44.15 Preparing to unpack .../37-libitm1_12.2.0-14+deb12u1_amd64.deb ...
+#12 44.16 Unpacking libitm1:amd64 (12.2.0-14+deb12u1) ...
+#12 44.22 Selecting previously unselected package libatomic1:amd64.
+#12 44.22 Preparing to unpack .../38-libatomic1_12.2.0-14+deb12u1_amd64.deb ...
+#12 44.24 Unpacking libatomic1:amd64 (12.2.0-14+deb12u1) ...
+#12 44.32 Selecting previously unselected package libasan8:amd64.
+#12 44.32 Preparing to unpack .../39-libasan8_12.2.0-14+deb12u1_amd64.deb ...
+#12 44.33 Unpacking libasan8:amd64 (12.2.0-14+deb12u1) ...
+#12 44.58 Selecting previously unselected package liblsan0:amd64.
+#12 44.58 Preparing to unpack .../40-liblsan0_12.2.0-14+deb12u1_amd64.deb ...
+#12 44.59 Unpacking liblsan0:amd64 (12.2.0-14+deb12u1) ...
+#12 44.77 Selecting previously unselected package libtsan2:amd64.
+#12 44.77 Preparing to unpack .../41-libtsan2_12.2.0-14+deb12u1_amd64.deb ...
+#12 44.77 Unpacking libtsan2:amd64 (12.2.0-14+deb12u1) ...
+#12 44.98 Selecting previously unselected package libubsan1:amd64.
+#12 44.98 Preparing to unpack .../42-libubsan1_12.2.0-14+deb12u1_amd64.deb ...
+#12 44.99 Unpacking libubsan1:amd64 (12.2.0-14+deb12u1) ...
+#12 45.16 Selecting previously unselected package libquadmath0:amd64.
+#12 45.16 Preparing to unpack .../43-libquadmath0_12.2.0-14+deb12u1_amd64.deb ...
+#12 45.16 Unpacking libquadmath0:amd64 (12.2.0-14+deb12u1) ...
+#12 45.21 Selecting previously unselected package libgcc-12-dev:amd64.
+#12 45.21 Preparing to unpack .../44-libgcc-12-dev_12.2.0-14+deb12u1_amd64.deb ...
+#12 45.22 Unpacking libgcc-12-dev:amd64 (12.2.0-14+deb12u1) ...
+#12 45.46 Selecting previously unselected package gcc-12.
+#12 45.46 Preparing to unpack .../45-gcc-12_12.2.0-14+deb12u1_amd64.deb ...
+#12 45.46 Unpacking gcc-12 (12.2.0-14+deb12u1) ...
+#12 46.17 Selecting previously unselected package gcc.
+#12 46.17 Preparing to unpack .../46-gcc_4%3a12.2.0-3_amd64.deb ...
+#12 46.18 Unpacking gcc (4:12.2.0-3) ...
+#12 46.22 Selecting previously unselected package libstdc++-12-dev:amd64.
+#12 46.22 Preparing to unpack .../47-libstdc++-12-dev_12.2.0-14+deb12u1_amd64.deb ...
+#12 46.23 Unpacking libstdc++-12-dev:amd64 (12.2.0-14+deb12u1) ...
+#12 46.40 Selecting previously unselected package g++-12.
+#12 46.41 Preparing to unpack .../48-g++-12_12.2.0-14+deb12u1_amd64.deb ...
+#12 46.41 Unpacking g++-12 (12.2.0-14+deb12u1) ...
+#12 47.02 Selecting previously unselected package g++.
+#12 47.03 Preparing to unpack .../49-g++_4%3a12.2.0-3_amd64.deb ...
+#12 47.04 Unpacking g++ (4:12.2.0-3) ...
+#12 47.07 Selecting previously unselected package make.
+#12 47.07 Preparing to unpack .../50-make_4.3-4.1_amd64.deb ...
+#12 47.08 Unpacking make (4.3-4.1) ...
+#12 47.13 Selecting previously unselected package libdpkg-perl.
+#12 47.14 Preparing to unpack .../51-libdpkg-perl_1.21.23_all.deb ...
+#12 47.14 Unpacking libdpkg-perl (1.21.23) ...
+#12 47.23 Selecting previously unselected package patch.
+#12 47.23 Preparing to unpack .../52-patch_2.7.6-7_amd64.deb ...
+#12 47.25 Unpacking patch (2.7.6-7) ...
+#12 47.32 Selecting previously unselected package dpkg-dev.
+#12 47.32 Preparing to unpack .../53-dpkg-dev_1.21.23_all.deb ...
+#12 47.34 Unpacking dpkg-dev (1.21.23) ...
+#12 47.46 Selecting previously unselected package build-essential.
+#12 47.46 Preparing to unpack .../54-build-essential_12.9_amd64.deb ...
+#12 47.46 Unpacking build-essential (12.9) ...
+#12 47.50 Selecting previously unselected package libbrotli1:amd64.
+#12 47.50 Preparing to unpack .../55-libbrotli1_1.0.9-2+b6_amd64.deb ...
+#12 47.51 Unpacking libbrotli1:amd64 (1.0.9-2+b6) ...
+#12 47.59 Selecting previously unselected package libsasl2-modules-db:amd64.
+#12 47.60 Preparing to unpack .../56-libsasl2-modules-db_2.1.28+dfsg-10_amd64.deb ...
+#12 47.61 Unpacking libsasl2-modules-db:amd64 (2.1.28+dfsg-10) ...
+#12 47.75 Selecting previously unselected package libsasl2-2:amd64.
+#12 47.75 Preparing to unpack .../57-libsasl2-2_2.1.28+dfsg-10_amd64.deb ...
+#12 47.78 Unpacking libsasl2-2:amd64 (2.1.28+dfsg-10) ...
+#12 47.84 Selecting previously unselected package libldap-2.5-0:amd64.
+#12 47.84 Preparing to unpack .../58-libldap-2.5-0_2.5.13+dfsg-5_amd64.deb ...
+#12 47.85 Unpacking libldap-2.5-0:amd64 (2.5.13+dfsg-5) ...
+#12 47.91 Selecting previously unselected package libnghttp2-14:amd64.
+#12 47.91 Preparing to unpack .../59-libnghttp2-14_1.52.0-1+deb12u3_amd64.deb ...
+#12 47.91 Unpacking libnghttp2-14:amd64 (1.52.0-1+deb12u3) ...
+#12 47.96 Selecting previously unselected package libpsl5:amd64.
+#12 47.96 Preparing to unpack .../60-libpsl5_0.21.2-1_amd64.deb ...
+#12 47.97 Unpacking libpsl5:amd64 (0.21.2-1) ...
+#12 48.01 Selecting previously unselected package librtmp1:amd64.
+#12 48.01 Preparing to unpack .../61-librtmp1_2.4+20151223.gitfa8646d.1-2+b2_amd64.deb ...
+#12 48.02 Unpacking librtmp1:amd64 (2.4+20151223.gitfa8646d.1-2+b2) ...
+#12 48.07 Selecting previously unselected package libssh2-1:amd64.
+#12 48.07 Preparing to unpack .../62-libssh2-1_1.10.0-3+b1_amd64.deb ...
+#12 48.08 Unpacking libssh2-1:amd64 (1.10.0-3+b1) ...
+#12 48.17 Selecting previously unselected package libcurl3-gnutls:amd64.
+#12 48.18 Preparing to unpack .../63-libcurl3-gnutls_7.88.1-10+deb12u15_amd64.deb ...
+#12 48.20 Unpacking libcurl3-gnutls:amd64 (7.88.1-10+deb12u15) ...
+#12 48.31 Selecting previously unselected package libexpat1:amd64.
+#12 48.31 Preparing to unpack .../64-libexpat1_2.5.0-1+deb12u2_amd64.deb ...
+#12 48.31 Unpacking libexpat1:amd64 (2.5.0-1+deb12u2) ...
+#12 48.38 Selecting previously unselected package liberror-perl.
+#12 48.39 Preparing to unpack .../65-liberror-perl_0.17029-2_all.deb ...
+#12 48.40 Unpacking liberror-perl (0.17029-2) ...
+#12 48.53 Selecting previously unselected package git-man.
+#12 48.53 Preparing to unpack .../66-git-man_1%3a2.39.5-0+deb12u3_all.deb ...
+#12 48.55 Unpacking git-man (1:2.39.5-0+deb12u3) ...
+#12 48.69 Selecting previously unselected package git.
+#12 48.69 Preparing to unpack .../67-git_1%3a2.39.5-0+deb12u3_amd64.deb ...
+#12 48.73 Unpacking git (1:2.39.5-0+deb12u3) ...
+#12 49.15 Setting up libexpat1:amd64 (2.5.0-1+deb12u2) ...
+#12 49.16 Setting up libkeyutils1:amd64 (1.6.3-2) ...
+#12 49.18 Setting up libpsl5:amd64 (0.21.2-1) ...
+#12 49.20 Setting up libtirpc-common (1.3.3+ds-1) ...
+#12 49.21 Setting up libbrotli1:amd64 (1.0.9-2+b6) ...
+#12 49.23 Setting up binutils-common:amd64 (2.40-2) ...
+#12 49.25 Setting up libnghttp2-14:amd64 (1.52.0-1+deb12u3) ...
+#12 49.26 Setting up linux-libc-dev:amd64 (6.1.177-1) ...
+#12 49.27 Setting up libctf-nobfd0:amd64 (2.40-2) ...
+#12 49.29 Setting up libgomp1:amd64 (12.2.0-14+deb12u1) ...
+#12 49.30 Setting up bzip2 (1.0.8-5+b1) ...
+#12 49.31 Setting up libjansson4:amd64 (2.14-2) ...
+#12 49.33 Setting up libkrb5support0:amd64 (1.20.1-2+deb12u5) ...
+#12 49.34 Setting up libsasl2-modules-db:amd64 (2.1.28+dfsg-10) ...
+#12 49.38 Setting up perl-modules-5.36 (5.36.0-7+deb12u3) ...
+#12 49.40 Setting up rpcsvc-proto (1.4.3-1) ...
+#12 49.43 Setting up make (4.3-4.1) ...
+#12 49.44 Setting up libmpfr6:amd64 (4.2.0-1) ...
+#12 49.47 Setting up librtmp1:amd64 (2.4+20151223.gitfa8646d.1-2+b2) ...
+#12 49.49 Setting up xz-utils (5.4.1-1+deb12u1) ...
+#12 49.52 update-alternatives: using /usr/bin/xz to provide /usr/bin/lzma (lzma) in auto mode
+#12 49.52 update-alternatives: warning: skip creation of /usr/share/man/man1/lzma.1.gz because associated file /usr/share/man/man1/xz.1.gz (of link group lzma) doesn't exist
+#12 49.52 update-alternatives: warning: skip creation of /usr/share/man/man1/unlzma.1.gz because associated file /usr/share/man/man1/unxz.1.gz (of link group lzma) doesn't exist
+#12 49.53 update-alternatives: warning: skip creation of /usr/share/man/man1/lzcat.1.gz because associated file /usr/share/man/man1/xzcat.1.gz (of link group lzma) doesn't exist
+#12 49.53 update-alternatives: warning: skip creation of /usr/share/man/man1/lzmore.1.gz because associated file /usr/share/man/man1/xzmore.1.gz (of link group lzma) doesn't exist
+#12 49.53 update-alternatives: warning: skip creation of /usr/share/man/man1/lzless.1.gz because associated file /usr/share/man/man1/xzless.1.gz (of link group lzma) doesn't exist
+#12 49.53 update-alternatives: warning: skip creation of /usr/share/man/man1/lzdiff.1.gz because associated file /usr/share/man/man1/xzdiff.1.gz (of link group lzma) doesn't exist
+#12 49.53 update-alternatives: warning: skip creation of /usr/share/man/man1/lzcmp.1.gz because associated file /usr/share/man/man1/xzcmp.1.gz (of link group lzma) doesn't exist
+#12 49.53 update-alternatives: warning: skip creation of /usr/share/man/man1/lzgrep.1.gz because associated file /usr/share/man/man1/xzgrep.1.gz (of link group lzma) doesn't exist
+#12 49.53 update-alternatives: warning: skip creation of /usr/share/man/man1/lzegrep.1.gz because associated file /usr/share/man/man1/xzegrep.1.gz (of link group lzma) doesn't exist
+#12 49.54 update-alternatives: warning: skip creation of /usr/share/man/man1/lzfgrep.1.gz because associated file /usr/share/man/man1/xzfgrep.1.gz (of link group lzma) doesn't exist
+#12 49.56 Setting up libquadmath0:amd64 (12.2.0-14+deb12u1) ...
+#12 49.58 Setting up libmpc3:amd64 (1.3.1-1) ...
+#12 49.61 Setting up libatomic1:amd64 (12.2.0-14+deb12u1) ...
+#12 49.64 Setting up patch (2.7.6-7) ...
+#12 49.67 Setting up libk5crypto3:amd64 (1.20.1-2+deb12u5) ...
+#12 49.71 Setting up libsasl2-2:amd64 (2.1.28+dfsg-10) ...
+#12 49.75 Setting up libubsan1:amd64 (12.2.0-14+deb12u1) ...
+#12 49.77 Setting up libcrypt-dev:amd64 (1:4.4.33-2) ...
+#12 49.84 Setting up libasan8:amd64 (12.2.0-14+deb12u1) ...
+#12 49.86 Setting up git-man (1:2.39.5-0+deb12u3) ...
+#12 49.87 Setting up libssh2-1:amd64 (1.10.0-3+b1) ...
+#12 49.88 Setting up libkrb5-3:amd64 (1.20.1-2+deb12u5) ...
+#12 49.89 Setting up libtsan2:amd64 (12.2.0-14+deb12u1) ...
+#12 49.91 Setting up libbinutils:amd64 (2.40-2) ...
+#12 49.92 Setting up libisl23:amd64 (0.25-1.1) ...
+#12 49.93 Setting up libc-dev-bin (2.36-9+deb12u14) ...
+#12 49.94 Setting up libcc1-0:amd64 (12.2.0-14+deb12u1) ...
+#12 49.96 Setting up liblsan0:amd64 (12.2.0-14+deb12u1) ...
+#12 49.98 Setting up libitm1:amd64 (12.2.0-14+deb12u1) ...
+#12 50.01 Setting up libgdbm6:amd64 (1.23-3) ...
+#12 50.04 Setting up libctf0:amd64 (2.40-2) ...
+#12 50.06 Setting up cpp-12 (12.2.0-14+deb12u1) ...
+#12 50.09 Setting up libldap-2.5-0:amd64 (2.5.13+dfsg-5) ...
+#12 50.12 Setting up libgprofng0:amd64 (2.40-2) ...
+#12 50.16 Setting up libgcc-12-dev:amd64 (12.2.0-14+deb12u1) ...
+#12 50.19 Setting up libgssapi-krb5-2:amd64 (1.20.1-2+deb12u5) ...
+#12 50.23 Setting up libgdbm-compat4:amd64 (1.23-3) ...
+#12 50.26 Setting up cpp (4:12.2.0-3) ...
+#12 50.30 Setting up libperl5.36:amd64 (5.36.0-7+deb12u3) ...
+#12 50.34 Setting up binutils-x86-64-linux-gnu (2.40-2) ...
+#12 50.37 Setting up libtirpc3:amd64 (1.3.3+ds-1) ...
+#12 50.40 Setting up libcurl3-gnutls:amd64 (7.88.1-10+deb12u15) ...
+#12 50.44 Setting up binutils (2.40-2) ...
+#12 50.48 Setting up perl (5.36.0-7+deb12u3) ...
+#12 50.55 Setting up libtirpc-dev:amd64 (1.3.3+ds-1) ...
+#12 50.58 Setting up gcc-12 (12.2.0-14+deb12u1) ...
+#12 50.61 Setting up libdpkg-perl (1.21.23) ...
+#12 50.63 Setting up libnsl2:amd64 (1.3.0-2) ...
+#12 50.67 Setting up gcc (4:12.2.0-3) ...
+#12 50.74 Setting up dpkg-dev (1.21.23) ...
+#12 50.81 Setting up liberror-perl (0.17029-2) ...
+#12 50.84 Setting up git (1:2.39.5-0+deb12u3) ...
+#12 50.86 Setting up libnsl-dev:amd64 (1.3.0-2) ...
+#12 50.89 Setting up libc6-dev:amd64 (2.36-9+deb12u14) ...
+#12 50.90 Setting up libstdc++-12-dev:amd64 (12.2.0-14+deb12u1) ...
+#12 50.92 Setting up g++-12 (12.2.0-14+deb12u1) ...
+#12 50.93 Setting up g++ (4:12.2.0-3) ...
+#12 50.94 update-alternatives: using /usr/bin/g++ to provide /usr/bin/c++ (c++) in auto mode
+#12 50.95 Setting up build-essential (12.9) ...
+#12 50.96 Processing triggers for libc-bin (2.36-9+deb12u14) ...
+#12 DONE 51.3s
+
+#16 [builder  3/16] WORKDIR /app
+#16 DONE 0.1s
+
+#17 [builder  4/16] RUN mix local.hex --force   && mix local.rebar --force
+#17 4.528 * creating /root/.mix/archives/hex-2.5.1
+#17 7.765 * creating /root/.mix/elixir/1-19-otp-27/rebar3
+#17 DONE 7.8s
+
+#18 [builder  5/16] COPY ./src/flagd-ui/mix.exs ./src/flagd-ui/mix.lock ./
+#18 DONE 0.1s
+
+#19 [builder  6/16] RUN HEX_HTTP_CONCURRENCY=1 HEX_HTTP_TIMEOUT=120 mix deps.get --only prod
+#19 1.071 * Getting heroicons (https://github.com/tailwindlabs/heroicons.git - v2.2.0)
+#19 3.293 remote: Enumerating objects: 9314, done.        
+#19 3.293 remote: Counting objects:   0% (1/9314)        
+remote: Counting objects:   1% (94/9314)        
+remote: Counting objects:   2% (187/9314)        
+remote: Counting objects:   3% (280/9314)        
+remote: Counting objects:   4% (373/9314)        
+remote: Counting objects:   5% (466/9314)        
+remote: Counting objects:   6% (559/9314)        
+remote: Counting objects:   7% (652/9314)        
+remote: Counting objects:   8% (746/9314)        
+remote: Counting objects:   9% (839/9314)        
+remote: Counting objects:  10% (932/9314)        
+remote: Counting objects:  11% (1025/9314)        
+remote: Counting objects:  12% (1118/9314)        
+remote: Counting objects:  13% (1211/9314)        
+remote: Counting objects:  14% (1304/9314)        
+remote: Counting objects:  15% (1398/9314)        
+remote: Counting objects:  16% (1491/9314)        
+remote: Counting objects:  17% (1584/9314)        
+remote: Counting objects:  18% (1677/9314)        
+remote: Counting objects:  19% (1770/9314)        
+remote: Counting objects:  20% (1863/9314)        
+remote: Counting objects:  21% (1956/9314)        
+remote: Counting objects:  22% (2050/9314)        
+remote: Counting objects:  23% (2143/9314)        
+remote: Counting objects:  24% (2236/9314)        
+remote: Counting objects:  25% (2329/9314)        
+remote: Counting objects:  26% (2422/9314)        
+remote: Counting objects:  27% (2515/9314)        
+remote: Counting objects:  28% (2608/9314)        
+remote: Counting objects:  29% (2702/9314)        
+remote: Counting objects:  30% (2795/9314)        
+remote: Counting objects:  31% (2888/9314)        
+remote: Counting objects:  32% (2981/9314)        
+remote: Counting objects:  33% (3074/9314)        
+remote: Counting objects:  34% (3167/9314)        
+remote: Counting objects:  35% (3260/9314)        
+remote: Counting objects:  36% (3354/9314)        
+remote: Counting objects:  37% (3447/9314)        
+remote: Counting objects:  38% (3540/9314)        
+remote: Counting objects:  39% (3633/9314)        
+remote: Counting objects:  40% (3726/9314)        
+remote: Counting objects:  41% (3819/9314)        
+remote: Counting objects:  42% (3912/9314)        
+remote: Counting objects:  43% (4006/9314)        
+remote: Counting objects:  44% (4099/9314)        
+remote: Counting objects:  45% (4192/9314)        
+remote: Counting objects:  46% (4285/9314)        
+remote: Counting objects:  47% (4378/9314)        
+remote: Counting objects:  48% (4471/9314)        
+remote: Counting objects:  49% (4564/9314)        
+remote: Counting objects:  50% (4657/9314)        
+remote: Counting objects:  51% (4751/9314)        
+remote: Counting objects:  52% (4844/9314)        
+remote: Counting objects:  53% (4937/9314)        
+remote: Counting objects:  54% (5030/9314)        
+remote: Counting objects:  55% (5123/9314)        
+remote: Counting objects:  56% (5216/9314)        
+remote: Counting objects:  57% (5309/9314)        
+remote: Counting objects:  58% (5403/9314)        
+remote: Counting objects:  59% (5496/9314)        
+remote: Counting objects:  60% (5589/9314)        
+remote: Counting objects:  61% (5682/9314)        
+remote: Counting objects:  62% (5775/9314)        
+remote: Counting objects:  63% (5868/9314)        
+remote: Counting objects:  64% (5961/9314)        
+remote: Counting objects:  65% (6055/9314)        
+remote: Counting objects:  66% (6148/9314)        
+remote: Counting objects:  67% (6241/9314)        
+remote: Counting objects:  68% (6334/9314)        
+remote: Counting objects:  69% (6427/9314)        
+remote: Counting objects:  70% (6520/9314)        
+remote: Counting objects:  71% (6613/9314)        
+remote: Counting objects:  72% (6707/9314)        
+remote: Counting objects:  73% (6800/9314)        
+remote: Counting objects:  74% (6893/9314)        
+remote: Counting objects:  75% (6986/9314)        
+remote: Counting objects:  76% (7079/9314)        
+remote: Counting objects:  77% (7172/9314)        
+remote: Counting objects:  78% (7265/9314)        
+remote: Counting objects:  79% (7359/9314)        
+remote: Counting objects:  80% (7452/9314)        
+remote: Counting objects:  81% (7545/9314)        
+remote: Counting objects:  82% (7638/9314)        
+remote: Counting objects:  83% (7731/9314)        
+remote: Counting objects:  84% (7824/9314)        
+remote: Counting objects:  85% (7917/9314)        
+remote: Counting objects:  86% (8011/9314)        
+remote: Counting objects:  87% (8104/9314)        
+remote: Counting objects:  88% (8197/9314)        
+remote: Counting objects:  89% (8290/9314)        
+remote: Counting objects:  90% (8383/9314)        
+remote: Counting objects:  91% (8476/9314)        
+remote: Counting objects:  92% (8569/9314)        
+remote: Counting objects:  93% (8663/9314)        
+remote: Counting objects:  94% (8756/9314)        
+remote: Counting objects:  95% (8849/9314)        
+remote: Counting objects:  96% (8942/9314)        
+remote: Counting objects:  97% (9035/9314)        
+remote: Counting objects:  98% (9128/9314)        
+remote: Counting objects:  99% (9221/9314)        
+remote: Counting objects: 100% (9314/9314)        
+remote: Counting objects: 100% (9314/9314), done.        
+#19 3.503 remote: Compressing objects:   0% (1/5403)        
+remote: Compressing objects:   1% (55/5403)        
+remote: Compressing objects:   2% (109/5403)        
+remote: Compressing objects:   3% (163/5403)        
+remote: Compressing objects:   4% (217/5403)        
+remote: Compressing objects:   5% (271/5403)        
+remote: Compressing objects:   6% (325/5403)        
+remote: Compressing objects:   7% (379/5403)        
+remote: Compressing objects:   8% (433/5403)        
+remote: Compressing objects:   9% (487/5403)        
+remote: Compressing objects:  10% (541/5403)        
+remote: Compressing objects:  11% (595/5403)        
+remote: Compressing objects:  12% (649/5403)        
+remote: Compressing objects:  13% (703/5403)        
+remote: Compressing objects:  14% (757/5403)        
+remote: Compressing objects:  15% (811/5403)        
+remote: Compressing objects:  16% (865/5403)        
+remote: Compressing objects:  17% (919/5403)        
+remote: Compressing objects:  18% (973/5403)        
+remote: Compressing objects:  19% (1027/5403)        
+remote: Compressing objects:  20% (1081/5403)        
+remote: Compressing objects:  21% (1135/5403)        
+remote: Compressing objects:  22% (1189/5403)        
+remote: Compressing objects:  23% (1243/5403)        
+remote: Compressing objects:  24% (1297/5403)        
+remote: Compressing objects:  25% (1351/5403)        
+remote: Compressing objects:  26% (1405/5403)        
+remote: Compressing objects:  27% (1459/5403)        
+remote: Compressing objects:  28% (1513/5403)        
+remote: Compressing objects:  29% (1567/5403)        
+remote: Compressing objects:  30% (1621/5403)        
+remote: Compressing objects:  31% (1675/5403)        
+remote: Compressing objects:  32% (1729/5403)        
+remote: Compressing objects:  33% (1783/5403)        
+remote: Compressing objects:  34% (1838/5403)        
+remote: Compressing objects:  35% (1892/5403)        
+remote: Compressing objects:  36% (1946/5403)        
+remote: Compressing objects:  37% (2000/5403)        
+remote: Compressing objects:  38% (2054/5403)        
+remote: Compressing objects:  39% (2108/5403)        
+remote: Compressing objects:  40% (2162/5403)        
+remote: Compressing objects:  41% (2216/5403)        
+remote: Compressing objects:  42% (2270/5403)        
+remote: Compressing objects:  43% (2324/5403)        
+remote: Compressing objects:  44% (2378/5403)        
+remote: Compressing objects:  45% (2432/5403)        
+remote: Compressing objects:  46% (2486/5403)        
+remote: Compressing objects:  47% (2540/5403)        
+remote: Compressing objects:  48% (2594/5403)        
+remote: Compressing objects:  49% (2648/5403)        
+remote: Compressing objects:  50% (2702/5403)        
+remote: Compressing objects:  51% (2756/5403)        
+remote: Compressing objects:  52% (2810/5403)        
+remote: Compressing objects:  53% (2864/5403)        
+remote: Compressing objects:  54% (2918/5403)        
+remote: Compressing objects:  55% (2972/5403)        
+remote: Compressing objects:  56% (3026/5403)        
+remote: Compressing objects:  57% (3080/5403)        
+remote: Compressing objects:  58% (3134/5403)        
+remote: Compressing objects:  59% (3188/5403)        
+remote: Compressing objects:  60% (3242/5403)        
+remote: Compressing objects:  61% (3296/5403)        
+remote: Compressing objects:  62% (3350/5403)        
+remote: Compressing objects:  63% (3404/5403)        
+remote: Compressing objects:  64% (3458/5403)        
+remote: Compressing objects:  65% (3512/5403)        
+remote: Compressing objects:  66% (3566/5403)        
+remote: Compressing objects:  67% (3621/5403)        
+remote: Compressing objects:  68% (3675/5403)        
+remote: Compressing objects:  69% (3729/5403)        
+remote: Compressing objects:  70% (3783/5403)        
+remote: Compressing objects:  71% (3837/5403)        
+remote: Compressing objects:  72% (3891/5403)        
+remote: Compressing objects:  73% (3945/5403)        
+remote: Compressing objects:  74% (3999/5403)        
+remote: Compressing objects:  75% (4053/5403)        
+remote: Compressing objects:  76% (4107/5403)        
+remote: Compressing objects:  77% (4161/5403)        
+remote: Compressing objects:  78% (4215/5403)        
+remote: Compressing objects:  79% (4269/5403)        
+remote: Compressing objects:  80% (4323/5403)        
+remote: Compressing objects:  81% (4377/5403)        
+remote: Compressing objects:  82% (4431/5403)        
+remote: Compressing objects:  83% (4485/5403)        
+remote: Compressing objects:  84% (4539/5403)        
+remote: Compressing objects:  85% (4593/5403)        
+remote: Compressing objects:  86% (4647/5403)        
+remote: Compressing objects:  87% (4701/5403)        
+remote: Compressing objects:  88% (4755/5403)        
+remote: Compressing objects:  89% (4809/5403)        
+remote: Compressing objects:  90% (4863/5403)        
+remote: Compressing objects:  91% (4917/5403)        
+remote: Compressing objects:  92% (4971/5403)        
+remote: Compressing objects:  93% (5025/5403)        
+remote: Compressing objects:  94% (5079/5403)        
+remote: Compressing objects:  95% (5133/5403)        
+remote: Compressing objects:  96% (5187/5403)        
+remote: Compressing objects:  97% (5241/5403)        
+remote: Compressing objects:  98% (5295/5403)        
+remote: Compressing objects:  99% (5349/5403)        
+remote: Compressing objects: 100% (5403/5403)        
+remote: Compressing objects: 100% (5403/5403), done.        
+#19 4.851 remote: Total 9314 (delta 4195), reused 8259 (delta 3849), pack-reused 0 (from 0)        
+#19 23.06 Resolving Hex dependencies...
+#19 23.27 Resolution completed in 0.196s
+#19 23.33 Unchanged:
+#19 23.33   acceptor_pool 1.0.0
+#19 23.33   bandit 1.10.1 VULNERABLE!
+#19 23.34     EEF-CVE-2026-39806 (HIGH)
+#19 23.34     aka: CVE-2026-39806, GHSA-rf5q-vwxw-gmrf
+#19 23.34     HTTP/1 chunked decoder infinite loop on requests with trailer fields in bandit
+#19 23.34     https://osv.dev/vulnerability/EEF-CVE-2026-39806
+#19 23.34 
+#19 23.34     EEF-CVE-2026-39807 (MEDIUM)
+#19 23.34     aka: CVE-2026-39807, GHSA-375f-4r2h-f99j
+#19 23.34     Client-supplied URI scheme trusted without transport verification in bandit
+#19 23.34     https://osv.dev/vulnerability/EEF-CVE-2026-39807
+#19 23.34 
+#19 23.34     EEF-CVE-2026-42788 (MEDIUM)
+#19 23.34     aka: CVE-2026-42788, GHSA-q6v9-r226-v65f
+#19 23.34     HTTP/2 frame size limit checked after body is buffered in bandit
+#19 23.34     https://osv.dev/vulnerability/EEF-CVE-2026-42788
+#19 23.34 
+#19 23.34     EEF-CVE-2026-39805 (MEDIUM)
+#19 23.34     aka: CVE-2026-39805, GHSA-c67r-gc9j-2qf7
+#19 23.34     CL.CL HTTP request smuggling via duplicate Content-Length in bandit
+#19 23.34     https://osv.dev/vulnerability/EEF-CVE-2026-39805
+#19 23.34 
+#19 23.34     EEF-CVE-2026-39804 (HIGH)
+#19 23.34     aka: CVE-2026-39804, GHSA-frh3-6pv6-rc8j
+#19 23.34     WebSocket permessage-deflate inflate has no output-size cap in bandit
+#19 23.34     https://osv.dev/vulnerability/EEF-CVE-2026-39804
+#19 23.34 
+#19 23.34     EEF-CVE-2026-39803 (HIGH)
+#19 23.34     aka: CVE-2026-39803, GHSA-9q9q-324x-93r2
+#19 23.34     HTTP/1 chunked body reader ignores length cap in bandit
+#19 23.34     https://osv.dev/vulnerability/EEF-CVE-2026-39803
+#19 23.34 
+#19 23.34     EEF-CVE-2026-42786 (HIGH)
+#19 23.34     aka: CVE-2026-42786, GHSA-pf94-94m9-536p
+#19 23.34     WebSocket fragmented message reassembly unbounded in bandit
+#19 23.34     https://osv.dev/vulnerability/EEF-CVE-2026-42786
+#19 23.34   ctx 0.6.0
+#19 23.34   dns_cluster 0.2.0
+#19 23.34   esbuild 0.10.0
+#19 23.34   expo 1.1.1
+#19 23.34   finch 0.20.0
+#19 23.34   gettext 1.0.2
+#19 23.34   gproc 0.9.1
+#19 23.34   grpcbox 0.17.1
+#19 23.34   hpack_erl 0.3.0
+#19 23.34   hpax 1.0.3 VULNERABLE!
+#19 23.34     EEF-CVE-2026-58226 (HIGH)
+#19 23.34     aka: CVE-2026-58226, GHSA-jj2p-32j7-whj2
+#19 23.34     Unauthenticated denial-of-service via unbounded HPACK integer decoding in hpax
+#19 23.34     https://osv.dev/vulnerability/EEF-CVE-2026-58226
+#19 23.34   idna 6.1.1
+#19 23.34   jason 1.4.4
+#19 23.34   mime 2.0.7
+#19 23.34   mint 1.7.1 VULNERABLE!
+#19 23.34     EEF-CVE-2026-59246 (MEDIUM)
+#19 23.34     aka: CVE-2026-59246, GHSA-8pf6-g464-h6h9
+#19 23.34     Zero-length HTTP/2 CONTINUATION frames bypass Mint's header-block byte-size cap and exhaust client memory
+#19 23.34     https://osv.dev/vulnerability/EEF-CVE-2026-59246
+#19 23.34 
+#19 23.34     EEF-CVE-2026-49754 (HIGH)
+#19 23.34     aka: CVE-2026-49754, GHSA-2p26-p43x-fhp8
+#19 23.34     HTTP/2 CONTINUATION flood in Mint client via unbounded header-block accumulation
+#19 23.34     https://osv.dev/vulnerability/EEF-CVE-2026-49754
+#19 23.34 
+#19 23.34     EEF-CVE-2026-49753 (MEDIUM)
+#19 23.34     aka: CVE-2026-49753, GHSA-mjqx-c6f6-7rc2
+#19 23.34     HTTP response smuggling in Mint HTTP/1 client via lenient Content-Length parsing
+#19 23.34     https://osv.dev/vulnerability/EEF-CVE-2026-49753
+#19 23.34 
+#19 23.34     EEF-CVE-2026-56810 (HIGH)
+#19 23.34     aka: CVE-2026-56810, GHSA-c59h-fq4p-r36r
+#19 23.34     mint buffers an entire chunked response chunk in memory in Mint.HTTP1.decode_body/5
+#19 23.34     https://osv.dev/vulnerability/EEF-CVE-2026-56810
+#19 23.34 
+#19 23.34     EEF-CVE-2026-58229 (HIGH)
+#19 23.34     aka: CVE-2026-58229, GHSA-qrfr-wh4c-3qhw
+#19 23.34     Unbounded HTTP/1 response-header and chunked-trailer accumulation in Mint causes memory-exhaustion DoS
+#19 23.34     https://osv.dev/vulnerability/EEF-CVE-2026-58229
+#19 23.34 
+#19 23.34     EEF-CVE-2026-48862 (HIGH)
+#19 23.34     aka: CVE-2026-48862, GHSA-g586-ccqf-7x4r
+#19 23.34     Unbounded conn.streams growth in Mint HTTP/2 client via unenforced PUSH_PROMISE concurrency
+#19 23.34     https://osv.dev/vulnerability/EEF-CVE-2026-48862
+#19 23.34 
+#19 23.34     EEF-CVE-2026-48861 (LOW)
+#19 23.34     aka: CVE-2026-48861, GHSA-2pg6-44cx-c49v
+#19 23.34     CRLF injection in HTTP/1 request line via unvalidated method in Mint
+#19 23.34     https://osv.dev/vulnerability/EEF-CVE-2026-48861
+#19 23.34 
+#19 23.34     EEF-CVE-2026-59249 (MEDIUM)
+#19 23.34     aka: CVE-2026-59249, GHSA-x3x7-96vm-6h2w
+#19 23.34     Sign-tolerant HTTP/1 chunk-size parser in Mint enables response smuggling against strict intermediaries on pooled connections
+#19 23.34     https://osv.dev/vulnerability/EEF-CVE-2026-59249
+#19 23.34   nimble_options 1.1.1
+#19 23.34   nimble_pool 1.1.0
+#19 23.34   opentelemetry 1.7.0
+#19 23.34   opentelemetry_api 1.5.0
+#19 23.34   opentelemetry_bandit 0.3.0
+#19 23.34   opentelemetry_exporter 1.10.0
+#19 23.34   opentelemetry_phoenix 2.0.1
+#19 23.34   opentelemetry_process_propagator 0.3.0
+#19 23.34   opentelemetry_semantic_conventions 1.27.0
+#19 23.34   opentelemetry_telemetry 1.1.2
+#19 23.34   otel_http 0.2.0
+#19 23.34   phoenix 1.8.3 VULNERABLE!
+#19 23.34     EEF-CVE-2026-32689 (HIGH)
+#19 23.34     aka: CVE-2026-32689, GHSA-628h-q48j-jr6q
+#19 23.34     Long-poll NDJSON body splitting causes unbounded memory allocation in Phoenix
+#19 23.34     https://osv.dev/vulnerability/EEF-CVE-2026-32689
+#19 23.34 
+#19 23.34     EEF-CVE-2026-56811 (HIGH)
+#19 23.34     aka: CVE-2026-56811, GHSA-6983-jfq8-485w
+#19 23.34     Phoenix transports do not limit channel joins per connection, enabling process-exhaustion denial of service
+#19 23.34     https://osv.dev/vulnerability/EEF-CVE-2026-56811
+#19 23.34 
+#19 23.34     EEF-CVE-2026-56812 (MEDIUM)
+#19 23.34     aka: CVE-2026-56812, GHSA-63mc-hw7g-86rr
+#19 23.34     Phoenix JavaScript presence client crashes on presence keys colliding with Object.prototype members in Presence.syncState/syncDiff
+#19 23.34     https://osv.dev/vulnerability/EEF-CVE-2026-56812
+#19 23.34   phoenix_html 4.3.0
+#19 23.34   phoenix_live_dashboard 0.8.7
+#19 23.34   phoenix_live_view 1.1.19
+#19 23.34   phoenix_pubsub 2.2.0
+#19 23.34   phoenix_template 1.0.4
+#19 23.34   plug 1.19.1 VULNERABLE!
+#19 23.34     EEF-CVE-2026-56814 (MEDIUM)
+#19 23.34     aka: CVE-2026-56814, GHSA-95qv-c9g9-rm63
+#19 23.34     Plug: multipart :length limit is not charged for part headers, enabling unbounded temp-file creation (denial of service)
+#19 23.34     https://osv.dev/vulnerability/EEF-CVE-2026-56814
+#19 23.34 
+#19 23.34     EEF-CVE-2026-56813 (LOW)
+#19 23.34     aka: CVE-2026-56813, GHSA-wpmj-jh88-rpgm
+#19 23.34     Cookie attribute injection in Plug.Conn.Cookies.encode/2
+#19 23.34     https://osv.dev/vulnerability/EEF-CVE-2026-56813
+#19 23.34 
+#19 23.34     EEF-CVE-2026-54892 (HIGH)
+#19 23.34     aka: CVE-2026-54892, GHSA-j43x-5hjq-rgxf
+#19 23.34     Plug: quadratic-time decoding of nested query/body parameters enables denial of service
+#19 23.34     https://osv.dev/vulnerability/EEF-CVE-2026-54892
+#19 23.34 
+#19 23.34     EEF-CVE-2026-8468 (HIGH)
+#19 23.34     aka: CVE-2026-8468, GHSA-468c-vq7p-gh64
+#19 23.34     Unbounded buffer accumulation in multipart header parsing causes denial of service in plug
+#19 23.34     https://osv.dev/vulnerability/EEF-CVE-2026-8468
+#19 23.35   plug_crypto 2.1.1
+#19 23.35   req 0.5.17 VULNERABLE!
+#19 23.35     EEF-CVE-2026-49756 (LOW)
+#19 23.35     aka: CVE-2026-49756, GHSA-px9f-whj3-246m
+#19 23.35     Multipart form-data header injection in Req via unescaped name/filename/content_type
+#19 23.35     https://osv.dev/vulnerability/EEF-CVE-2026-49756
+#19 23.35 
+#19 23.35     EEF-CVE-2026-49755 (HIGH)
+#19 23.35     aka: CVE-2026-49755, GHSA-655f-mp8p-96gv
+#19 23.35     Decompression bomb DoS in Req via auto-decoded archive and compressed response bodies
+#19 23.35     https://osv.dev/vulnerability/EEF-CVE-2026-49755
+#19 23.35   ssl_verify_fun 1.1.7
+#19 23.35   swoosh 1.20.0 VULNERABLE!
+#19 23.35     EEF-CVE-2026-54893 (LOW)
+#19 23.35     aka: CVE-2026-54893, GHSA-754j-98wh-57rf
+#19 23.35     Email-derived URL path injection in the Swoosh Microsoft Graph adapter
+#19 23.35     https://osv.dev/vulnerability/EEF-CVE-2026-54893
+#19 23.35   tailwind 0.4.1
+#19 23.35   telemetry 1.3.0
+#19 23.35   telemetry_metrics 1.1.0
+#19 23.35   telemetry_poller 1.3.0
+#19 23.35   thousand_island 1.4.3
+#19 23.35   tls_certificate_check 1.30.0
+#19 23.35   ts_chatterbox 0.15.1
+#19 23.35   unicode_util_compat 0.7.1
+#19 23.35   websock 0.5.3
+#19 23.35   websock_adapter 0.5.9
+#19 23.36 * Getting phoenix (Hex package)
+#19 39.79 * Getting phoenix_html (Hex package)
+#19 40.28 * Getting phoenix_live_view (Hex package)
+#19 40.36 * Getting phoenix_live_dashboard (Hex package)
+#19 42.41 * Getting esbuild (Hex package)
+#19 42.42 * Getting tailwind (Hex package)
+#19 42.42 * Getting swoosh (Hex package)
+#19 42.44 * Getting req (Hex package)
+#19 42.46 * Getting telemetry_metrics (Hex package)
+#19 42.47 * Getting telemetry_poller (Hex package)
+#19 42.48 * Getting gettext (Hex package)
+#19 42.49 * Getting jason (Hex package)
+#19 42.50 * Getting dns_cluster (Hex package)
+#19 42.50 * Getting bandit (Hex package)
+#19 42.53 * Getting opentelemetry (Hex package)
+#19 42.54 * Getting opentelemetry_api (Hex package)
+#19 42.93 * Getting opentelemetry_exporter (Hex package)
+#19 42.94 * Getting opentelemetry_phoenix (Hex package)
+#19 42.95 * Getting opentelemetry_bandit (Hex package)
+#19 42.95 * Getting nimble_options (Hex package)
+#19 42.96 * Getting opentelemetry_semantic_conventions (Hex package)
+#19 43.01 * Getting otel_http (Hex package)
+#19 43.02 * Getting plug (Hex package)
+#19 43.04 * Getting telemetry (Hex package)
+#19 43.05 * Getting mime (Hex package)
+#19 43.73 * Getting plug_crypto (Hex package)
+#19 43.76 * Getting opentelemetry_process_propagator (Hex package)
+#19 43.78 * Getting opentelemetry_telemetry (Hex package)
+#19 43.79 * Getting grpcbox (Hex package)
+#19 43.80 * Getting tls_certificate_check (Hex package)
+#19 43.81 * Getting ssl_verify_fun (Hex package)
+#19 43.82 * Getting acceptor_pool (Hex package)
+#19 43.82 * Getting chatterbox (Hex package)
+#19 43.83 * Getting ctx (Hex package)
+#19 43.84 * Getting gproc (Hex package)
+#19 43.85 * Getting hpack (Hex package)
+#19 43.85 * Getting hpax (Hex package)
+#19 43.86 * Getting thousand_island (Hex package)
+#19 43.86 * Getting websock (Hex package)
+#19 43.87 * Getting expo (Hex package)
+#19 43.88 * Getting finch (Hex package)
+#19 43.89 * Getting mint (Hex package)
+#19 43.90 * Getting nimble_pool (Hex package)
+#19 43.90 * Getting idna (Hex package)
+#19 43.92 * Getting unicode_util_compat (Hex package)
+#19 43.92 * Getting phoenix_template (Hex package)
+#19 43.93 * Getting phoenix_pubsub (Hex package)
+#19 43.94 * Getting websock_adapter (Hex package)
+#19 43.94 Found packages with security advisories, see above for details
+#19 DONE 44.1s
+#20 [builder  7/16] RUN mkdir config
+#20 DONE 0.4s
+
+#21 [builder  8/16] COPY ./src/flagd-ui/config/config.exs ./src/flagd-ui/config/prod.exs ./src/flagd-ui/config/runtime.exs config/
+#21 DONE 0.1s
+
+#22 [builder  9/16] RUN mix deps.compile
+#22 1.282 ==> opentelemetry_semantic_conventions
+#22 1.285 Compiling 2 files (.erl)
+#22 1.311 Compiling 79 files (.ex)
+#22 1.657 Generated opentelemetry_semantic_conventions app
+#22 3.540 ==> flagd_ui
+#22 3.540 ===> Fetching rebar3_ex_doc v0.3.0
+#22 5.957 ===> Analyzing applications...
+#22 5.990 ===> Compiling rebar3_ex_doc
+#22 6.215 ===> Analyzing applications...
+#22 6.219 ===> Compiling otel_http
+#22 6.289 ==> mime
+#22 6.289 Compiling 1 file (.ex)
+#22 6.385 Generated mime app
+#22 6.407 ==> nimble_options
+#22 6.407 Compiling 3 files (.ex)
+#22 6.742 Generated nimble_options app
+#22 7.126 ==> flagd_ui
+#22 7.126 ===> Analyzing applications...
+#22 7.172 ===> Compiling gproc
+#22 8.388 ===> Analyzing applications...
+#22 8.487 ===> Compiling unicode_util_compat
+#22 9.157 ===> Analyzing applications...
+#22 9.492 ===> Compiling idna
+#22 15.57 ===> Analyzing applications...
+#22 15.61 ===> Compiling telemetry
+#22 15.80 ==> telemetry_metrics
+#22 15.80 Compiling 7 files (.ex)
+#22 15.92 Generated telemetry_metrics app
+#22 16.31 ==> flagd_ui
+#22 16.31 ===> Analyzing applications...
+#22 16.34 ===> Compiling telemetry_poller
+#22 16.52 ==> thousand_island
+#22 16.52 Compiling 18 files (.ex)
+#22 16.69 Generated thousand_island app
+#22 16.73 ==> jason
+#22 16.73 Compiling 10 files (.ex)
+#22 18.01 Generated jason app
+#22 18.05 ==> esbuild
+#22 18.05 Compiling 4 files (.ex)
+#22 18.14 Generated esbuild app
+#22 18.16 ==> phoenix_html
+#22 18.16 Compiling 6 files (.ex)
+#22 18.43 Generated phoenix_html app
+#22 18.46 ==> phoenix_template
+#22 18.46 Compiling 4 files (.ex)
+#22 18.57 Generated phoenix_template app
+#22 18.61 ==> expo
+#22 18.61 Compiling 2 files (.erl)
+#22 19.02 Compiling 22 files (.ex)
+#22 19.26 Generated expo app
+#22 19.31 ==> phoenix_pubsub
+#22 19.31 Compiling 12 files (.ex)
+#22 19.61 Generated phoenix_pubsub app
+#22 19.64 ==> plug_crypto
+#22 19.64 Compiling 5 files (.ex)
+#22 19.74 Generated plug_crypto app
+#22 19.76 ==> hpax
+#22 19.76 Compiling 4 files (.ex)
+#22 20.16 Generated hpax app
+#22 20.20 ==> mint
+#22 20.20 Compiling 1 file (.erl)
+#22 20.28 Compiling 20 files (.ex)
+#22 21.24 Generated mint app
+#22 21.79 ==> flagd_ui
+#22 21.79 ===> Analyzing applications...
+#22 21.82 ===> Compiling acceptor_pool
+#22 21.95     ΓöîΓöÇ src/acceptor_pool.erl:
+#22 21.95     Γöé
+#22 21.95  56 Γöé  -behaviour(gen_server).
+#22 21.95     Γöé   Γò░ΓöÇΓöÇ Warning: the callback gen_server:format_status(_,_) is deprecated; use format_status/1 instead
+#22 21.95 
+#22 21.95 
+#22 21.99 ==> dns_cluster
+#22 21.99 Compiling 1 file (.ex)
+#22 22.07 Generated dns_cluster app
+#22 22.10 ==> gettext
+#22 22.10 Compiling 18 files (.ex)
+#22 22.32 Generated gettext app
+#22 22.76 ==> flagd_ui
+#22 22.76 ===> Analyzing applications...
+#22 22.80 ===> Compiling hpack
+#22 23.30 ==> ssl_verify_fun
+#22 23.30 Compiling 7 files (.erl)
+#22 23.35 Generated ssl_verify_fun app
+#22 23.73 ==> flagd_ui
+#22 23.73 ===> Analyzing applications...
+#22 23.84 ===> Compiling tls_certificate_check
+#22 25.98 ==> plug
+#22 25.98 Compiling 1 file (.erl)
+#22 26.11 Compiling 42 files (.ex)
+#22 27.93 Generated plug app
+#22 28.34 ==> flagd_ui
+#22 28.34 ===> Analyzing applications...
+#22 28.37 ===> Compiling ctx
+#22 28.64 ==> nimble_pool
+#22 28.64 Compiling 2 files (.ex)
+#22 28.84 Generated nimble_pool app
+#22 28.87 ==> finch
+#22 28.87 Compiling 14 files (.ex)
+#22 29.30 Generated finch app
+#22 29.35 ==> req
+#22 29.35 Compiling 19 files (.ex)
+#22 30.20 Generated req app
+#22 30.23 ==> tailwind
+#22 30.23 Compiling 3 files (.ex)
+#22 30.37 Generated tailwind app
+#22 30.82 ==> flagd_ui
+#22 30.82 ===> Analyzing applications...
+#22 30.90 ===> Compiling chatterbox
+#22 32.03 ===> Analyzing applications...
+#22 32.10 ===> Compiling grpcbox
+#22 32.89 ==> websock
+#22 32.89 Compiling 1 file (.ex)
+#22 32.92 Generated websock app
+#22 32.95 ==> bandit
+#22 32.95 Compiling 54 files (.ex)
+#22 33.54 Generated bandit app
+#22 33.63 ==> swoosh
+#22 33.63 Compiling 55 files (.ex)
+#22 34.31 Generated swoosh app
+#22 34.40 ==> websock_adapter
+#22 34.40 Compiling 4 files (.ex)
+#22 34.47 Generated websock_adapter app
+#22 34.51 ==> phoenix
+#22 34.51 Compiling 74 files (.ex)
+#22 35.50 Generated phoenix app
+#22 35.58 ==> phoenix_live_view
+#22 35.58 Compiling 49 files (.ex)
+#22 37.39 Generated phoenix_live_view app
+#22 37.47 ==> phoenix_live_dashboard
+#22 37.47 Compiling 36 files (.ex)
+#22 38.57 Generated phoenix_live_dashboard app
+#22 38.60 ==> opentelemetry_api
+#22 38.60 Compiling 19 files (.erl)
+#22 38.72 Compiling 5 files (.ex)
+#22 38.78 Generated opentelemetry_api app
+#22 39.29 ==> flagd_ui
+#22 39.29 ===> Analyzing applications...
+#22 39.36 ===> Compiling opentelemetry
+#22 40.21 ===> Analyzing applications...
+#22 40.30 ===> Compiling opentelemetry_exporter
+#22 42.45 ==> opentelemetry_bandit
+#22 42.45 Compiling 1 file (.ex)
+#22 42.61 Generated opentelemetry_bandit app
+#22 42.64 ==> opentelemetry_process_propagator
+#22 42.64 Compiling 1 file (.erl)
+#22 42.65 Compiling 4 files (.ex)
+#22 42.75 Generated opentelemetry_process_propagator app
+#22 42.78 ==> opentelemetry_telemetry
+#22 42.78 Compiling 1 file (.erl)
+#22 42.81 Compiling 1 file (.ex)
+#22 42.84 Generated opentelemetry_telemetry app
+#22 42.87 ==> opentelemetry_phoenix
+#22 42.87 Compiling 1 file (.ex)
+#22 42.91 Generated opentelemetry_phoenix app
+#22 DONE 43.0s
+
+#23 [builder 10/16] RUN mix assets.setup
+#23 1.274 
+#23 1.274 11:25:58.164 [debug] Downloading tailwind from https://github.com/tailwindlabs/tailwindcss/releases/download/v4.0.9/tailwindcss-linux-x64
+#23 21.29 
+#23 21.29 11:26:18.183 [debug] Downloading esbuild from https://registry.npmjs.org/@esbuild/linux-x64/0.17.11
+#23 DONE 22.8s
+
+#24 [builder 11/16] COPY ./src/flagd-ui/priv priv
+#24 DONE 0.1s
+
+#25 [builder 12/16] COPY ./src/flagd-ui/lib lib
+#25 DONE 0.1s
+
+#26 [builder 13/16] COPY ./src/flagd-ui/assets assets
+#26 DONE 0.1s
+
+#27 [builder 14/16] RUN mix assets.deploy
+#27 1.598 /*! ≡ƒî╝ daisyUI 5.6.14 */
+#27 1.714 Γëê tailwindcss v4.0.9
+#27 1.714 
+#27 1.714 Done in 206ms
+#27 1.760 
+#27 1.760   ../priv/static/assets/js/app.js  131.8kb
+#27 1.760 
+#27 1.760 ΓÜí Done in 19ms
+#27 1.849 Compiling 18 files (.ex)
+#27 2.687 Generated flagd_ui app
+#27 2.773 Check your digested files at "priv/static"
+#27 DONE 2.9s
+
+#28 [builder 15/16] RUN mix compile
+#28 DONE 1.4s
+
+#29 [builder 16/16] RUN mix release
+#29 1.228 * assembling flagd_ui-0.1.1 on MIX_ENV=prod
+#29 1.231 * using config/runtime.exs to configure the release at runtime
+#29 1.463 * skipping elixir.bat for windows (bin/elixir.bat not found in the Elixir installation)
+#29 1.464 * skipping iex.bat for windows (bin/iex.bat not found in the Elixir installation)
+#29 1.807 
+#29 1.807 Release created at _build/prod/rel/flagd_ui
+#29 1.807 
+#29 1.807     # To start your system
+#29 1.807     _build/prod/rel/flagd_ui/bin/flagd_ui start
+#29 1.807 
+#29 1.807 Once the release is running:
+#29 1.807 
+#29 1.807     # To connect to it remotely
+#29 1.807     _build/prod/rel/flagd_ui/bin/flagd_ui remote
+#29 1.807 
+#29 1.807     # To stop it gracefully (you may also send SIGINT/SIGTERM)
+#29 1.807     _build/prod/rel/flagd_ui/bin/flagd_ui stop
+#29 1.807 
+#29 1.807 To list all commands:
+#29 1.807 
+#29 1.807     _build/prod/rel/flagd_ui/bin/flagd_ui
+#29 1.807 
+#29 DONE 2.0s
+
+#30 [final 6/6] COPY --from=builder --chown=appuser:appgroup /app/_build/prod/rel/flagd_ui ./
+#30 DONE 0.5s
+
+#31 exporting to image
+#31 exporting layers
+#31 exporting layers 2.5s done
+#31 exporting manifest sha256:3e4d413eeb3c1e19ed0c3b73bde0d08a0eba995792babe53c590cfffede294ab 0.0s done
+#31 exporting config sha256:ea6c26affac4f53fa149da952bdd61a790f71b02141aedca431295c8de301379 0.1s done
+#31 exporting attestation manifest sha256:41c427672db8784cfe0d8c80fda27497dc44179eb8719c574b630c1b1e3ef360
+#31 exporting attestation manifest sha256:41c427672db8784cfe0d8c80fda27497dc44179eb8719c574b630c1b1e3ef360 0.1s done
+#31 exporting manifest list sha256:23f67c2f857376b5da39f3569754769c70d25d47dfab502abe75d44660e4a84e 0.0s done
+#31 naming to docker.io/local/flagd-ui:trivy-test
+#31 naming to docker.io/local/flagd-ui:trivy-test 0.0s done
+#31 unpacking to docker.io/local/flagd-ui:trivy-test
+#31 unpacking to docker.io/local/flagd-ui:trivy-test 1.0s done
+#31 DONE 3.8s

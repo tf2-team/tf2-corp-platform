@@ -7,7 +7,9 @@ This service provides checkout services for the application.
 Set `CHECKOUT_OUTBOX_TABLE` in production to enable the DynamoDB durable
 outbox. Checkout persists the protobuf order event under the order ID and
 returns without waiting for Kafka. A background worker retries pending records
-and deletes them only after broker acknowledgement.
+and marks them `published` after Kafka accepts them. Accounting emits an
+`orders-persisted` acknowledgement only after its PostgreSQL transaction
+commits; checkout deletes the DynamoDB event only after consuming that ACK.
 
 The pod uses the AWS default credential chain; on EKS, configure a dedicated
 IRSA ServiceAccount with `PutItem`, `Query`, `UpdateItem`, and `DeleteItem`

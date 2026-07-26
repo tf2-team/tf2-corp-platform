@@ -119,6 +119,9 @@ service ShoppingCopilotService {
 
 message CopilotSearchRequest {
     string user_message = 1;
+    // Browser-scoped session ID used for PoC rate limiting and pending cart ownership.
+    // This is not an authenticated user identity.
+    string user_id = 2;
     // session_id is reserved for A2.4 (multi-turn) — omit in current MVP.
 }
 
@@ -155,6 +158,9 @@ message CopilotSource {
     // "catalog" for product facts, "review" for review-grounded claims.
     string source_type = 2;
     string product_id = 3;
+    string username = 4;
+    float score = 5;
+    string description = 6;
 }
 
 message ConfirmCartActionRequest {

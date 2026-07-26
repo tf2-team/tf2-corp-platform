@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 
-FROM golang:1.24-bookworm@sha256:1a6d4452c65dea36aac2e2d606b01b4a029ec90cc1ae53890540ce6173ea77ac AS builder
+FROM golang:1.25-bookworm@sha256:ea341baa9bd5ba6784f6d7161ace70544349a6242d54d34a0fbfd2c4d51c9d58 AS builder
 
 WORKDIR /usr/src/app/
 
@@ -23,6 +23,7 @@ WORKDIR /usr/src/app/
 COPY --from=builder /usr/src/app/product-catalog/ ./
 
 EXPOSE ${PRODUCT_CATALOG_PORT}
-USER nonroot
+# Numeric UID required: kubelet cannot verify runAsNonRoot when USER is a name (e.g. nonroot).
+USER 65532
 ENTRYPOINT [ "./product-catalog" ]
-# Change trail: @hungxqt - 2026-07-20 - Explicit nonroot USER before ENTRYPOINT for Semgrep/CI container hardening
+# Change trail: @hungxqt - 2026-07-21 - Use numeric UID 65532 so Kubernetes runAsNonRoot can verify non-root

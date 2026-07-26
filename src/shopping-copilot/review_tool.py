@@ -61,9 +61,10 @@ def answer_with_reviews(
     # Convert proto reviews to the raw format sanitize_reviews expects.
     raw_reviews = [
         {
+            "id": r.id,
+            "username": r.username,
             "description": r.description,
             "score": r.score,
-            # source_id will be sha256-derived since proto has no id field
         }
         for r in response.product_reviews
     ]
@@ -78,7 +79,7 @@ def answer_with_reviews(
         return GroundedResponse(
             status=ResponseStatus.ABSTAINED,
             reason="The current reviews do not provide enough information.",
-        )
+        ), safe_reviews
 
     draft = (
         generate_bedrock_grounded_summary(safe_reviews, question)
@@ -91,4 +92,4 @@ def answer_with_reviews(
         "Review Q&A for product_id=%r: status=%s claims=%d",
         product_id, grounded.status.value, len(grounded.claims),
     )
-    return grounded
+    return grounded, safe_reviews

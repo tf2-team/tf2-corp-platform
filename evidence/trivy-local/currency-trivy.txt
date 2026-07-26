@@ -1,0 +1,12 @@
+
+Report Summary
+
+┌───────────────────────────────────────────┬────────┬─────────────────┐
+│                  Target                   │  Type  │ Vulnerabilities │
+├───────────────────────────────────────────┼────────┼─────────────────┤
+│ local/currency:trivy-test (alpine 3.21.7) │ alpine │        0        │
+└───────────────────────────────────────────┴────────┴─────────────────┘
+Legend:
+- '-': Not scanned
+- '0': Clean (no security findings detected)
+

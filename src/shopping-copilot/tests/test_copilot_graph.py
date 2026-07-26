@@ -147,12 +147,29 @@ class TestCartNodeDoesNotWriteCart:
         deps = _make_deps(
             catalog_results=[_make_proto_product("P1", "Sony WH-1000XM5")]
         )
-        state = run_copilot("Add Sony headphones to my cart", deps)
+        state = run_copilot("Add Sony headphones to my cart", deps, "shopper-1")
         # Cart write must NOT happen inside the graph.
         deps.cart_stub.AddItem.assert_not_called()
         # A pending token should exist instead.
         assert state.get("pending_action") is not None
         assert state["pending_action"].product_id == "P1"
+        assert state["pending_action"].user_id == "shopper-1"
+
+    def test_rate_limit_uses_request_user_id(self, monkeypatch):
+        import copilot_graph
+        import intent_parser
+
+        calls = []
+        monkeypatch.setattr(
+            copilot_graph,
+            "check_rate_limit",
+            lambda **kwargs: (calls.append(kwargs["client_id"]) or (True, None)),
+        )
+        monkeypatch.setattr(intent_parser, "parse_intent", lambda _: ShoppingIntent(query="headphones"))
+
+        run_copilot("I want headphones", _make_deps(), "shopper-2")
+
+        assert calls == ["shopper-2"]
 
 
 class TestFallbackOnLLMFailure:
@@ -182,3 +199,23 @@ class TestOutOfScopeRejection:
         state = run_copilot("Solve 2 + 2 for me", deps)
         assert state["status"] == CopilotStatus.BLOCKED
         assert "shopping assistant" in state["reason"]
+
+
+class TestOutputGuardrail:
+    """Output scan must BLOCK responses containing PII or system prompt leaks."""
+
+    def test_output_pii_leak_blocked(self, monkeypatch):
+        import intent_parser
+        monkeypatch.setattr(
+            intent_parser, "parse_intent",
+            lambda _: ShoppingIntent(query="laptop", wants_description=True),
+        )
+        deps = _make_deps(
+            catalog_results=[_make_proto_product("P1", "Laptop", price_units=100)]
+        )
+        # Mock product description containing PII email leak
+        deps.catalog_stub.SearchProducts.return_value.results[0].description = "Contact admin@example.com for discount."
+        state = run_copilot("Show laptop description", deps)
+        assert state["status"] == CopilotStatus.BLOCKED
+        assert "Output blocked" in state["reason"] or "PII" in state["reason"]
+

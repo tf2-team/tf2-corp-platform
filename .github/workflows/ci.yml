@@ -29,7 +29,7 @@ jobs:
         # actions/setup-go@v6.5.0
         uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16
         with:
-          go-version: "1.24.x"
+          go-version: "1.25.x"
           cache-dependency-path: internal/tools/go.sum
 
       - name: Setup Node
@@ -50,6 +50,9 @@ jobs:
 
       - name: Enforce digest-pinned Dockerfile base images
         run: python3 scripts/check_pinned_base_images.py
+
+      - name: Release catalog consistency
+        run: python3 scripts/check_release_catalog.py
 
       - name: Secure delivery script tests
         run: python3 scripts/test_secure_delivery_scripts.py
@@ -73,6 +76,9 @@ jobs:
           - name: mem0 (Python)
             kind: python
             workdir: src/mem0
+          - name: frontend resilience (Node)
+            kind: node
+            workdir: src/frontend
     steps:
       - name: Checkout
         # actions/checkout@v7.0.0
@@ -85,7 +91,7 @@ jobs:
         # actions/setup-go@v6.5.0
         uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16
         with:
-          go-version: "1.24.x"
+          go-version: "1.25.x"
           cache-dependency-path: ${{ matrix.workdir }}/go.sum
 
       - name: Setup .NET
@@ -103,6 +109,14 @@ jobs:
           python-version: "3.12"
           cache: pip
           cache-dependency-path: src/mem0/requirements-production.txt
+
+      - name: Setup Node
+        if: matrix.kind == 'node'
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: ${{ matrix.workdir }}/package-lock.json
 
       - name: Install Python dependencies
         if: matrix.kind == 'python'
@@ -122,10 +136,18 @@ jobs:
         if: matrix.kind == 'python'
         run: python -m unittest discover -s src/mem0/tests -v
 
+      - name: Node test
+        if: matrix.kind == 'node'
+        working-directory: ${{ matrix.workdir }}
+        run: |
+          npm ci
+          npm run test:resilience
+
   # ---------------------------------------------------------------------------
-  # PR-only: bake changed release images locally (no ECR login, no --push).
-  # Catches Dockerfile/context compile failures before merge. Skipped on
-  # workflow_call (publish path already bakes multi-arch with push).
+  # PR-only: bake changed release images locally, then Trivy-scan them
+  # (no ECR login, no --push). Catches Dockerfile/context compile failures and
+  # fixable HIGH/CRITICAL CVEs before merge. Skipped on workflow_call (publish
+  # path already bakes multi-arch with local Trivy before push).
   # ---------------------------------------------------------------------------
   prepare-pr-images:
     name: Prepare PR image builds
@@ -152,8 +174,8 @@ jobs:
         run: |
           set -euo pipefail
 
-          # Canonical release set (must match docker-bake.hcl group "release").
-          RELEASE_JSON='["accounting","ad","aiops","cart","checkout","currency","email","flagd-ui","fraud-detection","frontend","frontend-proxy","image-provider","kafka","llm","load-generator","mem0","opensearch","payment","product-catalog","product-reviews","quote","recommendation","shipping","shopping-copilot"]'
+          # Canonical release set (shared with publish / scripts/release_services.json).
+          RELEASE_JSON="$(jq -c '.' scripts/release_services.json)"
           mapfile -t RELEASE < <(printf '%s' "${RELEASE_JSON}" | jq -r '.[]')
           declare -A IS_RELEASE=()
           for s in "${RELEASE[@]}"; do
@@ -246,7 +268,7 @@ jobs:
             echo "| Build count | ${#BUILD_LIST[@]} |"
             echo "| Services | \`${BUILD_JSON}\` |"
             echo ""
-            echo "Local bake only (linux/amd64, no ECR login, no \`--push\`)."
+            echo "Local bake + Trivy (linux/amd64, no ECR login, no \`--push\`)."
           } >> "${GITHUB_STEP_SUMMARY}"
 
           echo "mode=${MODE} count=${#BUILD_LIST[@]} reason=${REASON}"
@@ -265,6 +287,11 @@ jobs:
       max-parallel: 8
       matrix:
         service: ${{ fromJson(needs.prepare-pr-images.outputs.build_services) }}
+    env:
+      # Non-ECR placeholder tags; must match bake --set tags and Trivy image-ref.
+      IMAGE_NAME: local.invalid/pr-check
+      DEMO_VERSION: pr-local
+      IMAGE_REF: local.invalid/pr-check/${{ matrix.service }}:pr-local
     steps:
       - name: Checkout
         # actions/checkout@v7.0.0
@@ -287,11 +314,20 @@ jobs:
             image=moby/buildkit:buildx-stable-1
           buildkitd-config: ./buildkitd.toml
 
+      # Step order is intentional and fail-closed (mirrors publish path without ECR):
+      # 1) local amd64 bake into the runner Docker daemon
+      # 2) optional runtime smoke for selected services
+      # 3) Trivy HIGH/CRITICAL (fixable) on the local image
       - name: Bake service (local only, no push)
         env:
           SERVICE: ${{ matrix.service }}
         run: |
           set -euo pipefail
+
+          # Preserve job-level PR placeholders before sourcing .env (which sets
+          # DEMO_VERSION=latest and a default IMAGE_NAME for local Compose).
+          PR_IMAGE_NAME="${IMAGE_NAME}"
+          PR_DEMO_VERSION="${DEMO_VERSION}"
 
           # Load Dockerfile paths and build args from committed .env.
           # Do NOT source .env.override. Do NOT use real ECR IMAGE_NAME.
@@ -300,21 +336,22 @@ jobs:
           source .env
           set +a
 
-          export IMAGE_NAME="local.invalid/pr-check"
-          export DEMO_VERSION="pr-local"
-          export IMAGE_VERSION="pr-local"
+          export IMAGE_NAME="${PR_IMAGE_NAME}"
+          export DEMO_VERSION="${PR_DEMO_VERSION}"
+          export IMAGE_VERSION="${PR_DEMO_VERSION}"
 
           echo "PR local bake service=${SERVICE}"
           echo "  IMAGE_NAME=${IMAGE_NAME}"
           echo "  DEMO_VERSION=${DEMO_VERSION}"
           echo "  platform=linux/amd64 (PR validation only)"
           echo "  cache=disabled (no ECR)"
-          echo "  output=type=cacheonly (no load/push)"
+          echo "  output=type=docker (load for Trivy; no push)"
+          echo "  runtime_tag=${IMAGE_NAME}/${SERVICE}:${DEMO_VERSION}"
 
           # Overrides:
           # - single platform for PR speed (publish path still multi-arch)
           # - clear cache-from/to (bake defaults to GHA type=gha; not needed for PR gate)
-          # - cacheonly validates the full Dockerfile build without exporting layers
+          # - type=docker loads the image so Trivy can scan it on the runner
           docker buildx bake \
             -f docker-compose.yml \
             -f docker-bake.hcl \
@@ -323,7 +360,33 @@ jobs:
             --set "*.cache-from=" \
             --set "*.cache-to=" \
             --set "*.tags=${IMAGE_NAME}/${SERVICE}:${DEMO_VERSION}" \
-            --set "*.output=type=cacheonly"
+            --set "*.output=type=docker"
+
+          docker image inspect "${IMAGE_NAME}/${SERVICE}:${DEMO_VERSION}" >/dev/null
+
+          case "${SERVICE}" in
+            email|llm|opensearch)
+              bash scripts/smoke_runtime_image.sh \
+                "${SERVICE}" "${IMAGE_NAME}/${SERVICE}:${DEMO_VERSION}"
+              ;;
+          esac
+
+      - name: Trivy scan local image (block HIGH/CRITICAL)
+        # aquasecurity/trivy-action@v0.36.0
+        # Same pin/policy as build-and-push.yml so PR catches CVEs before merge.
+        uses: aquasecurity/trivy-action@a9c7b0f06e461e9d4b4d1711f154ee024b8d7ab8
+        with:
+          version: v0.69.3
+          image-ref: ${{ env.IMAGE_REF }}
+          format: table
+          # Fail only on findings with a published fix. Vendor images (Kafka/OpenSearch/etc.)
+          # and will_not_fix OS packages otherwise block every PR despite rebuilds.
+          ignore-unfixed: true
+          severity: HIGH,CRITICAL
+          # Temporary, service-scoped exception requested by the tech lead while
+          # the AI team remediates shopping-copilot. Every baseline service remains
+          # fail-closed. Remove this exception when that image is handed back.
+          exit-code: ${{ matrix.service == 'shopping-copilot' && '0' || '1' }}
 
       - name: Job summary
         if: always()
@@ -336,7 +399,9 @@ jobs:
             echo "| Field | Value |"
             echo "|---|---|"
             echo "| Service | \`${SERVICE}\` |"
+            echo "| Image | \`${IMAGE_REF}\` |"
             echo "| Platform | \`linux/amd64\` |"
+            echo "| Flow | local docker bake → Trivy |"
             echo "| Push | no |"
             echo "| ECR | not used |"
           } >> "${GITHUB_STEP_SUMMARY}"
@@ -368,7 +433,7 @@ jobs:
 
           # build-pr-images is skipped when no image-affecting paths changed.
           if [[ "${BUILD_RESULT}" == "failure" || "${BUILD_RESULT}" == "cancelled" ]]; then
-            echo "::error::PR local image bake failed (${BUILD_RESULT})"
+            echo "::error::PR local image bake/Trivy failed (${BUILD_RESULT})"
             exit 1
           fi
 
@@ -383,17 +448,19 @@ jobs:
             echo "| Field | Value |"
             echo "|---|---|"
             echo "| Prepare | \`${PREPARE_RESULT}\` |"
-            echo "| Build matrix | \`${BUILD_RESULT}\` |"
+            echo "| Build matrix (bake + Trivy) | \`${BUILD_RESULT}\` |"
             echo "| Build count | \`${BUILD_COUNT}\` |"
             echo "| Mode | \`${MODE}\` |"
             echo "| Reason | ${REASON} |"
             echo "| ECR push | no |"
           } >> "${GITHUB_STEP_SUMMARY}"
 
-          echo "PR image build gate passed (local bake only; nothing pushed to ECR)."
+          echo "PR image build gate passed (local bake + Trivy; nothing pushed to ECR)."
 
   semgrep-sast:
     name: Semgrep SAST
+    # Publish path re-runs SAST in build-and-push; skip on workflow_call to avoid duplicate cost.
+    if: github.event_name != 'workflow_call'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
@@ -413,6 +480,7 @@ jobs:
 
   trufflehog-secrets:
     name: TruffleHog secrets
+    if: github.event_name != 'workflow_call'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
@@ -437,6 +505,7 @@ jobs:
 
   trivy-iac-scan:
     name: Trivy IaC misconfiguration
+    if: github.event_name != 'workflow_call'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
@@ -449,6 +518,9 @@ jobs:
           version: v0.69.3
           scan-type: config
           scan-ref: .
+          # The action does not auto-discover .trivyignore.yaml; pass the
+          # path explicitly so its narrowly scoped CNI root exception applies.
+          trivyignores: .trivyignore.yaml
           skip-dirs: node_modules
           format: table
           severity: HIGH,CRITICAL
@@ -475,7 +547,10 @@ jobs:
             src/ai-common/pyproject.toml
 
       - name: Install dependencies
-        run: python -m pip install -r src/product-reviews/requirements-dev.txt
+        run: |
+          python -m pip install --no-deps \
+            llm-guard==0.3.16 presidio-anonymizer==2.2.363
+          python -m pip install -r src/product-reviews/requirements-dev.txt
 
       - name: Validate spaCy model
         run: python -c "import spacy; spacy.load('en_core_web_lg')"
@@ -499,7 +574,6 @@ jobs:
           AI_GUARDRAIL_REQUIRE_MODEL: "true"
           PYTHONPATH: src/product-reviews
         run: python -c "import guardrails; guardrails.initialize_guardrails()"
-# Change trail: @hungxqt - 2026-07-19 - PR bake still clears cache; bake defaults moved to GHA type=gha.
 
   shopping-copilot-tests:
     name: Shopping copilot tests
@@ -521,9 +595,11 @@ jobs:
             src/shopping-copilot/requirements.txt
 
       - name: Install dependencies
-        run: >-
-          python -m pip install ./src/ai-common
-          -r src/shopping-copilot/requirements.txt pytest==9.1.1
+        run: |
+          python -m pip install --no-deps \
+            llm-guard==0.3.16 presidio-anonymizer==2.2.363
+          python -m pip install ./src/ai-common \
+            -r src/shopping-copilot/requirements.txt pytest==9.1.1
 
       - name: Run shopping copilot tests
         env:
@@ -534,4 +610,4 @@ jobs:
       - name: Validate shared guardrail dependency
         run: >-
           python -c "from llm_guard.input_scanners import PromptInjection; from techx_ai_common import guardrails"
-# Change trail: @hungxqt - 2026-07-17 - Align PR image classification with selective mem0 matrix build.
+# Change trail: @hungxqt - 2026-07-23 - PR local image bake includes Trivy HIGH/CRITICAL gate

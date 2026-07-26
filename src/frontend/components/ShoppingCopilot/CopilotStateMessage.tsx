@@ -12,6 +12,8 @@ const Banner = styled.div<{ status: string }>`
   line-height: 1.6;
   background-color: ${({ status }) => {
     switch (status) {
+      case 'GROUNDED':
+        return '#eff6ff';
       case 'NO_RESULTS':
         return '#fefce8';
       case 'ABSTAINED':
@@ -26,19 +28,21 @@ const Banner = styled.div<{ status: string }>`
   }};
   border: 1px solid
     ${({ status }) => {
-      switch (status) {
-        case 'NO_RESULTS':
-          return '#fef08a';
-        case 'ABSTAINED':
-          return '#bae6fd';
-        case 'BLOCKED':
-          return '#fecaca';
-        case 'FALLBACK':
-          return '#e2e8f0';
-        default:
-          return '#e2e8f0';
-      }
-    }};
+    switch (status) {
+      case 'GROUNDED':
+        return '#bfdbfe';
+      case 'NO_RESULTS':
+        return '#fef08a';
+      case 'ABSTAINED':
+        return '#bae6fd';
+      case 'BLOCKED':
+        return '#fecaca';
+      case 'FALLBACK':
+        return '#e2e8f0';
+      default:
+        return '#e2e8f0';
+    }
+  }};
   color: #1e293b;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.03);
 `;
@@ -106,7 +110,17 @@ interface Props {
 export const CopilotStateMessage: React.FC<Props> = ({ response, onSuggestionClick }) => {
   const { status, reason } = response;
 
-  if (status === 'GROUNDED') return null;
+  if (status === 'GROUNDED') {
+    if (!reason || !reason.trim()) return null;
+    return (
+      <Banner status="GROUNDED">
+        <TitleRow>
+          <Title>Shopping Assistant</Title>
+        </TitleRow>
+        <Content>{reason}</Content>
+      </Banner>
+    );
+  }
 
   const getTitle = () => {
     switch (status) {
@@ -127,15 +141,15 @@ export const CopilotStateMessage: React.FC<Props> = ({ response, onSuggestionCli
     switch (status) {
       case 'BLOCKED':
         return [
-          'Show me lens cleaning kits under $30',
-          'Find stargazing accessories under $100',
+          'Show me products under $30',
+          'Find accessories under $100',
           'Add the Lens Cleaning Kit to my cart',
         ];
       case 'NO_RESULTS':
         return [
-          'Lens Cleaning Kit',
-          'Solar System Color Imager',
-          'Red Flashlight',
+          'Show me products under $30',
+          'Find accessories under $100',
+          'Add the Lens Cleaning Kit to my cart',
         ];
       default:
         return [];

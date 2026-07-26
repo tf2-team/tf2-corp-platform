@@ -67,6 +67,22 @@ class RuntimeConfigTest(unittest.TestCase):
         self.assertIn("http_server_request_duration_seconds_count", config.prometheus_queries["cart.error_rate_5m"])
         self.assertIn("rpc_client_duration_milliseconds_count", config.prometheus_queries["checkout.payment_error_rate.5m"])
         self.assertIn("0.000000001", config.prometheus_queries["checkout.payment_error_rate.5m"])
+        self.assertIn('namespace="techx-corp-prod"', config.prometheus_queries["payment.cpu_millicores"])
+        self.assertIn('pod=~"payment-[0-9a-f]{6,10}-.*"', config.prometheus_queries["payment.cpu_millicores"])
+        self.assertIn('pod=~"frontend-[0-9a-f]{6,10}-.*"', config.prometheus_queries["frontend.socket_io_bytes_per_second"])
+        self.assertNotIn('pod=~"frontend.*"', config.prometheus_queries["frontend.socket_io_bytes_per_second"])
+        self.assertIn("db_client_connection_count", config.prometheus_queries["postgresql.active_connections"])
+        self.assertIn("kafka_consumer_records_lag", config.prometheus_queries["kafka.consumer_lag"])
+        self.assertIn("shopping-copilot.cpu_millicores", config.prometheus_queries)
+        self.assertIn("shopping-copilot.request_rate_5m", config.prometheus_queries)
+        self.assertEqual(
+            config.prometheus_query_specs["payment.memory_usage_bytes"].unit,
+            "bytes",
+        )
+        self.assertEqual(
+            config.prometheus_query_specs["frontend.socket_io_bytes_per_second"].unit,
+            "bytes_per_second",
+        )
         self.assertTrue(
             {
                 "payment_p95_latency_5m",
@@ -103,9 +119,9 @@ class RuntimeConfigTest(unittest.TestCase):
 
         self.assertEqual(profile.step_seconds, 1)
         self.assertEqual(profile.required_source_resolution_seconds, 1)
-        self.assertEqual(profile.detector_bucket_seconds, 60)
+        self.assertEqual(profile.detector_bucket_seconds, 5)
         self.assertEqual(profile.lookback_seconds, 2700)
-        self.assertEqual(profile.lookback_seconds // profile.detector_bucket_seconds, 45)
+        self.assertEqual(profile.lookback_seconds // profile.detector_bucket_seconds, 540)
         self.assertEqual(registry.result_defaults.on_empty, "zero")
 
     def test_template_can_override_default_empty_result_policy(self):

@@ -1,0 +1,601 @@
+#1 [internal] load local bake definitions
+#1 reading docker-compose.yml 31.23kB / 31.23kB done
+#1 reading docker-bake.hcl 6.69kB / 6.69kB done
+#1 DONE 0.0s
+{
+  "group": {
+    "default": {
+      "targets": [
+        "accounting",
+        "ad",
+        "cart",
+        "checkout",
+        "currency",
+        "email",
+        "flagd-ui",
+        "fraud-detection",
+        "frontend",
+        "frontend-proxy",
+        "image-provider",
+        "kafka",
+        "llm",
+        "load-generator",
+        "mem0",
+        "opensearch",
+        "payment",
+        "product-catalog",
+        "product-reviews",
+        "quote",
+        "recommendation",
+        "shipping",
+        "shopping-copilot"
+      ]
+    }
+  },
+  "target": {
+    "accounting": {
+      "context": ".",
+      "dockerfile": "./src/accounting/Dockerfile",
+      "tags": [
+        "/accounting:dev"
+      ],
+      "cache-from": [
+        {
+          "scope": "accounting",
+          "type": "gha"
+        }
+      ],
+      "cache-to": [
+        {
+          "mode": "max",
+          "scope": "accounting",
+          "type": "gha"
+        }
+      ],
+      "platforms": [
+        "linux/amd64",
+        "linux/arm64"
+      ]
+    },
+    "ad": {
+      "context": ".",
+      "dockerfile": "./src/ad/Dockerfile",
+      "args": {
+        "OTEL_JAVA_AGENT_VERSION": "2.29.0"
+      },
+      "tags": [
+        "/ad:dev"
+      ],
+      "cache-from": [
+        {
+          "scope": "ad",
+          "type": "gha"
+        }
+      ],
+      "cache-to": [
+        {
+          "mode": "max",
+          "scope": "ad",
+          "type": "gha"
+        }
+      ],
+      "platforms": [
+        "linux/amd64",
+        "linux/arm64"
+      ]
+    },
+    "cart": {
+      "context": ".",
+      "dockerfile": "./src/cart/src/Dockerfile",
+      "tags": [
+        "/cart:dev"
+      ],
+      "cache-from": [
+        {
+          "scope": "cart",
+          "type": "gha"
+        }
+      ],
+      "cache-to": [
+        {
+          "mode": "max",
+          "scope": "cart",
+          "type": "gha"
+        }
+      ],
+      "platforms": [
+        "linux/amd64",
+        "linux/arm64"
+      ]
+    },
+    "checkout": {
+      "context": ".",
+      "dockerfile": "./src/checkout/Dockerfile",
+      "tags": [
+        "/checkout:dev"
+      ],
+      "cache-from": [
+        {
+          "scope": "checkout",
+          "type": "gha"
+        }
+      ],
+      "cache-to": [
+        {
+          "mode": "max",
+          "scope": "checkout",
+          "type": "gha"
+        }
+      ],
+      "platforms": [
+        "linux/amd64",
+        "linux/arm64"
+      ]
+    },
+    "currency": {
+      "context": ".",
+      "dockerfile": "./src/currency/Dockerfile",
+      "args": {
+        "OPENTELEMETRY_CPP_VERSION": "1.24.0"
+      },
+      "tags": [
+        "/currency:dev"
+      ],
+      "cache-from": [
+        {
+          "scope": "currency",
+          "type": "gha"
+        }
+      ],
+      "cache-to": [
+        {
+          "mode": "max",
+          "scope": "currency",
+          "type": "gha"
+        }
+      ],
+      "platforms": [
+        "linux/amd64",
+        "linux/arm64"
+      ]
+    },
+    "email": {
+      "context": ".",
+      "dockerfile": "./src/email/Dockerfile",
+      "tags": [
+        "/email:dev"
+      ],
+      "cache-from": [
+        {
+          "scope": "email",
+          "type": "gha"
+        }
+      ],
+      "cache-to": [
+        {
+          "mode": "max",
+          "scope": "email",
+          "type": "gha"
+        }
+      ],
+      "platforms": [
+        "linux/amd64",
+        "linux/arm64"
+      ]
+    },
+    "flagd-ui": {
+      "context": ".",
+      "dockerfile": "./src/flagd-ui/Dockerfile",
+      "tags": [
+        "/flagd-ui:dev"
+      ],
+      "cache-from": [
+        {
+          "scope": "flagd-ui",
+          "type": "gha"
+        }
+      ],
+      "cache-to": [
+        {
+          "mode": "max",
+          "scope": "flagd-ui",
+          "type": "gha"
+        }
+      ],
+      "platforms": [
+        "linux/amd64",
+        "linux/arm64"
+      ]
+    },
+    "fraud-detection": {
+      "context": ".",
+      "dockerfile": "./src/fraud-detection/Dockerfile",
+      "args": {
+        "OTEL_JAVA_AGENT_VERSION": "2.29.0"
+      },
+      "tags": [
+        "/fraud-detection:dev"
+      ],
+      "cache-from": [
+        {
+          "scope": "fraud-detection",
+          "type": "gha"
+        }
+      ],
+      "cache-to": [
+        {
+          "mode": "max",
+          "scope": "fraud-detection",
+          "type": "gha"
+        }
+      ],
+      "platforms": [
+        "linux/amd64",
+        "linux/arm64"
+      ]
+    },
+    "frontend": {
+      "context": ".",
+      "dockerfile": "./src/frontend/Dockerfile",
+      "tags": [
+        "/frontend:dev"
+      ],
+      "cache-from": [
+        {
+          "scope": "frontend",
+          "type": "gha"
+        }
+      ],
+      "cache-to": [
+        {
+          "mode": "max",
+          "scope": "frontend",
+          "type": "gha"
+        }
+      ],
+      "platforms": [
+        "linux/amd64",
+        "linux/arm64"
+      ]
+    },
+    "frontend-proxy": {
+      "context": ".",
+      "dockerfile": "./src/frontend-proxy/Dockerfile",
+      "tags": [
+        "/frontend-proxy:dev"
+      ],
+      "cache-from": [
+        {
+          "scope": "frontend-proxy",
+          "type": "gha"
+        }
+      ],
+      "cache-to": [
+        {
+          "mode": "max",
+          "scope": "frontend-proxy",
+          "type": "gha"
+        }
+      ],
+      "platforms": [
+        "linux/amd64",
+        "linux/arm64"
+      ]
+    },
+    "image-provider": {
+      "context": ".",
+      "dockerfile": "./src/image-provider/Dockerfile",
+      "tags": [
+        "/image-provider:dev"
+      ],
+      "cache-from": [
+        {
+          "scope": "image-provider",
+          "type": "gha"
+        }
+      ],
+      "cache-to": [
+        {
+          "mode": "max",
+          "scope": "image-provider",
+          "type": "gha"
+        }
+      ],
+      "platforms": [
+        "linux/amd64",
+        "linux/arm64"
+      ]
+    },
+    "kafka": {
+      "context": ".",
+      "dockerfile": "./src/kafka/Dockerfile",
+      "args": {
+        "OTEL_JAVA_AGENT_VERSION": "2.29.0"
+      },
+      "tags": [
+        "/kafka:dev"
+      ],
+      "cache-from": [
+        {
+          "scope": "kafka",
+          "type": "gha"
+        }
+      ],
+      "cache-to": [
+        {
+          "mode": "max",
+          "scope": "kafka",
+          "type": "gha"
+        }
+      ],
+      "platforms": [
+        "linux/amd64",
+        "linux/arm64"
+      ]
+    },
+    "llm": {
+      "context": ".",
+      "dockerfile": "./src/llm/Dockerfile",
+      "tags": [
+        "/llm:dev"
+      ],
+      "cache-from": [
+        {
+          "scope": "llm",
+          "type": "gha"
+        }
+      ],
+      "cache-to": [
+        {
+          "mode": "max",
+          "scope": "llm",
+          "type": "gha"
+        }
+      ],
+      "platforms": [
+        "linux/amd64",
+        "linux/arm64"
+      ]
+    },
+    "load-generator": {
+      "context": ".",
+      "dockerfile": "./src/load-generator/Dockerfile",
+      "tags": [
+        "/load-generator:dev"
+      ],
+      "cache-from": [
+        {
+          "scope": "load-generator",
+          "type": "gha"
+        }
+      ],
+      "cache-to": [
+        {
+          "mode": "max",
+          "scope": "load-generator",
+          "type": "gha"
+        }
+      ],
+      "platforms": [
+        "linux/amd64",
+        "linux/arm64"
+      ]
+    },
+    "mem0": {
+      "context": ".",
+      "dockerfile": "./src/mem0/Dockerfile",
+      "tags": [
+        "/mem0:dev"
+      ],
+      "cache-from": [
+        {
+          "scope": "mem0",
+          "type": "gha"
+        }
+      ],
+      "cache-to": [
+        {
+          "mode": "max",
+          "scope": "mem0",
+          "type": "gha"
+        }
+      ],
+      "platforms": [
+        "linux/amd64",
+        "linux/arm64"
+      ]
+    },
+    "opensearch": {
+      "context": ".",
+      "dockerfile": "./src/opensearch/Dockerfile",
+      "tags": [
+        "/opensearch:dev"
+      ],
+      "cache-from": [
+        {
+          "scope": "opensearch",
+          "type": "gha"
+        }
+      ],
+      "cache-to": [
+        {
+          "mode": "max",
+          "scope": "opensearch",
+          "type": "gha"
+        }
+      ],
+      "platforms": [
+        "linux/amd64",
+        "linux/arm64"
+      ]
+    },
+    "payment": {
+      "context": ".",
+      "dockerfile": "./src/payment/Dockerfile",
+      "tags": [
+        "/payment:dev"
+      ],
+      "cache-from": [
+        {
+          "scope": "payment",
+          "type": "gha"
+        }
+      ],
+      "cache-to": [
+        {
+          "mode": "max",
+          "scope": "payment",
+          "type": "gha"
+        }
+      ],
+      "platforms": [
+        "linux/amd64",
+        "linux/arm64"
+      ]
+    },
+    "product-catalog": {
+      "context": ".",
+      "dockerfile": "./src/product-catalog/Dockerfile",
+      "tags": [
+        "/product-catalog:dev"
+      ],
+      "cache-from": [
+        {
+          "scope": "product-catalog",
+          "type": "gha"
+        }
+      ],
+      "cache-to": [
+        {
+          "mode": "max",
+          "scope": "product-catalog",
+          "type": "gha"
+        }
+      ],
+      "platforms": [
+        "linux/amd64",
+        "linux/arm64"
+      ]
+    },
+    "product-reviews": {
+      "context": ".",
+      "dockerfile": "./src/product-reviews/Dockerfile",
+      "tags": [
+        "/product-reviews:dev"
+      ],
+      "cache-from": [
+        {
+          "scope": "product-reviews",
+          "type": "gha"
+        }
+      ],
+      "cache-to": [
+        {
+          "mode": "max",
+          "scope": "product-reviews",
+          "type": "gha"
+        }
+      ],
+      "platforms": [
+        "linux/amd64",
+        "linux/arm64"
+      ]
+    },
+    "quote": {
+      "context": ".",
+      "dockerfile": "./src/quote/Dockerfile",
+      "tags": [
+        "/quote:dev"
+      ],
+      "cache-from": [
+        {
+          "scope": "quote",
+          "type": "gha"
+        }
+      ],
+      "cache-to": [
+        {
+          "mode": "max",
+          "scope": "quote",
+          "type": "gha"
+        }
+      ],
+      "platforms": [
+        "linux/amd64",
+        "linux/arm64"
+      ]
+    },
+    "recommendation": {
+      "context": ".",
+      "dockerfile": "./src/recommendation/Dockerfile",
+      "tags": [
+        "/recommendation:dev"
+      ],
+      "cache-from": [
+        {
+          "scope": "recommendation",
+          "type": "gha"
+        }
+      ],
+      "cache-to": [
+        {
+          "mode": "max",
+          "scope": "recommendation",
+          "type": "gha"
+        }
+      ],
+      "platforms": [
+        "linux/amd64",
+        "linux/arm64"
+      ]
+    },
+    "shipping": {
+      "context": ".",
+      "dockerfile": "./src/shipping/Dockerfile",
+      "tags": [
+        "/shipping:dev"
+      ],
+      "cache-from": [
+        {
+          "scope": "shipping",
+          "type": "gha"
+        }
+      ],
+      "cache-to": [
+        {
+          "mode": "max",
+          "scope": "shipping",
+          "type": "gha"
+        }
+      ],
+      "platforms": [
+        "linux/amd64",
+        "linux/arm64"
+      ]
+    },
+    "shopping-copilot": {
+      "context": ".",
+      "dockerfile": "./src/shopping-copilot/Dockerfile",
+      "tags": [
+        "/shopping-copilot:dev"
+      ],
+      "cache-from": [
+        {
+          "scope": "shopping-copilot",
+          "type": "gha"
+        }
+      ],
+      "cache-to": [
+        {
+          "mode": "max",
+          "scope": "shopping-copilot",
+          "type": "gha"
+        }
+      ],
+      "platforms": [
+        "linux/amd64",
+        "linux/arm64"
+      ]
+    }
+  }
+}

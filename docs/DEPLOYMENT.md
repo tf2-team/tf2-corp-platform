@@ -253,7 +253,7 @@ Runbook: `techx-corp-chart/docs/operations/external-secrets.md` · infra: `techx
 > [!TIP]
 > **Khuyến nghị — GitHub Actions** (`.github/workflows/build-and-push.yml`):
 >
-> **Job graph:** `CI → prepare → AWS/ECR preflight → build matrix (23) → verify ECR → release-ready → update-chart-dev (dev) | create-chart-prod-pr (prod)`
+> **Job graph:** `CI → prepare → AWS/ECR preflight → build matrix (local amd64 → Trivy → multi-arch ECR push) → verify ECR → release-ready → update-chart-dev (dev) | create-chart-prod-pr (prod)`
 >
 > | Trigger | GitHub Environment | ECR PROJECT |
 > |---|---|---|
@@ -465,4 +465,4 @@ aws s3api list-object-versions --bucket techx-tf-state-493499579600-us-east-1 \
 - `techx-corp-infra` — Terraform `bootstrap/` (OIDC + GHA ECR roles), modules `ecr`, `github-actions-ecr`  
 - `techx-corp-chart` — Helm values + smoke test  
 
-<!-- Change trail: @hungxqt - 2026-07-19 - Release catalog is 23 services including shopping-copilot. -->
+<!-- Change trail: @hungxqt - 2026-07-22 - Document local Trivy before ECR push in CI job graph. -->

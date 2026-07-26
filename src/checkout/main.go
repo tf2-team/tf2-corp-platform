@@ -19,6 +19,8 @@ import (
 	"syscall"
 	"time"
 
+	"golang.org/x/sync/errgroup"
+
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/log/global"
 	semconv "go.opentelemetry.io/otel/semconv/v1.24.0"
@@ -265,7 +267,7 @@ func main() {
 			defer consumerGroup.Close()
 
 			handler := &ApprovedOrderConsumer{checkoutSvc: svc}
-			topics := []string{"orders-approved", "orders-cancelled"}
+			topics := []string{"orders-approved", "orders-cancelled", "orders-persisted"}
 			logger.Info(fmt.Sprintf("Starting consumer group for topics: %v", topics))
 
 			ctx := context.Background()
@@ -494,14 +496,35 @@ func (cs *checkout) prepareOrderItemsAndShippingQuoteFromCart(ctx context.Contex
 	if len(cartItems) == 0 {
 		return out, fmt.Errorf("cart is empty")
 	}
-	orderItems, err := cs.prepOrderItems(ctx, cartItems, userCurrency)
-	if err != nil {
-		return out, fmt.Errorf("failed to prepare order: %+v", err)
+	var (
+		orderItems  []*pb.OrderItem
+		shippingUSD *pb.Money
+	)
+
+	g, gctx := errgroup.WithContext(ctx)
+
+	g.Go(func() error {
+		var err error
+		orderItems, err = cs.prepOrderItems(gctx, cartItems, userCurrency)
+		if err != nil {
+			return fmt.Errorf("failed to prepare order: %+v", err)
+		}
+		return nil
+	})
+
+	g.Go(func() error {
+		var err error
+		shippingUSD, err = cs.quoteShipping(gctx, address, cartItems)
+		if err != nil {
+			return fmt.Errorf("shipping quote failure: %+v", err)
+		}
+		return nil
+	})
+
+	if err := g.Wait(); err != nil {
+		return out, err
 	}
-	shippingUSD, err := cs.quoteShipping(ctx, address, cartItems)
-	if err != nil {
-		return out, fmt.Errorf("shipping quote failure: %+v", err)
-	}
+
 	shippingPrice, err := cs.convertCurrency(ctx, shippingUSD, userCurrency)
 	if err != nil {
 		return out, fmt.Errorf("failed to convert shipping cost to currency: %+v", err)
@@ -526,6 +549,10 @@ func (cs *checkout) prepareOrderItemsAndShippingQuoteFromCart(ctx context.Contex
 }
 
 func mustCreateClient(svcAddr string) *grpc.ClientConn {
+	// Linkerd sidecar proxy (linkerd-proxy) intercepts this connection and performs
+	// L7 (per-request) load balancing across all destination pod replicas automatically.
+	// No dns:/// scheme or client-side round_robin config needed — the proxy handles it.
+	// Change trail: @chinhgithub04 - 2026-07-24 - Revert gRPC resolver hack; use Linkerd for L7 LB (M16).
 	c, err := grpc.NewClient(svcAddr,
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
 		grpc.WithStatsHandler(otelgrpc.NewClientHandler()),
@@ -717,19 +744,29 @@ func recordCartCleanupDeferred(ctx context.Context, userID string, err error) {
 
 func (cs *checkout) prepOrderItems(ctx context.Context, items []*pb.CartItem, userCurrency string) ([]*pb.OrderItem, error) {
 	out := make([]*pb.OrderItem, len(items))
+	g, ctx := errgroup.WithContext(ctx)
 
 	for i, item := range items {
-		product, err := cs.productCatalogSvcClient.GetProduct(ctx, &pb.GetProductRequest{Id: item.GetProductId()})
-		if err != nil {
-			return nil, fmt.Errorf("failed to get product #%q", item.GetProductId())
-		}
-		price, err := cs.convertCurrency(ctx, product.GetPriceUsd(), userCurrency)
-		if err != nil {
-			return nil, fmt.Errorf("failed to convert price of %q to %s", item.GetProductId(), userCurrency)
-		}
-		out[i] = &pb.OrderItem{
-			Item: item,
-			Cost: price}
+		i, item := i, item
+		g.Go(func() error {
+			product, err := cs.productCatalogSvcClient.GetProduct(ctx, &pb.GetProductRequest{Id: item.GetProductId()})
+			if err != nil {
+				return fmt.Errorf("failed to get product #%q: %w", item.GetProductId(), err)
+			}
+			price, err := cs.convertCurrency(ctx, product.GetPriceUsd(), userCurrency)
+			if err != nil {
+				return fmt.Errorf("failed to convert price of %q to %s: %w", item.GetProductId(), userCurrency, err)
+			}
+			out[i] = &pb.OrderItem{
+				Item: item,
+				Cost: price,
+			}
+			return nil
+		})
+	}
+
+	if err := g.Wait(); err != nil {
+		return nil, err
 	}
 	return out, nil
 }
@@ -1046,9 +1083,27 @@ func (c *ApprovedOrderConsumer) Cleanup(sarama.ConsumerGroupSession) error {
 
 func (c *ApprovedOrderConsumer) ConsumeClaim(session sarama.ConsumerGroupSession, claim sarama.ConsumerGroupClaim) error {
 	for msg := range claim.Messages() {
-		logger.Info(fmt.Sprintf("Received approved/cancelled order message from topic: %s", msg.Topic))
+		logger.Info(fmt.Sprintf("Received order lifecycle message from topic: %s", msg.Topic))
 		ctx := session.Context()
-		if msg.Topic == "orders-approved" {
+		if msg.Topic == "orders-persisted" {
+			orderID := string(msg.Value)
+			if orderID == "" {
+				logger.Error("Received empty order persistence ACK")
+				continue
+			}
+			if c.checkoutSvc.Outbox == nil {
+				logger.Error("Cannot acknowledge persisted order: checkout outbox is unavailable", "order_id", orderID)
+				continue
+			}
+			ackCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
+			err := c.checkoutSvc.Outbox.Acknowledge(ackCtx, orderID)
+			cancel()
+			if err != nil {
+				logger.Error("Failed to delete persisted checkout outbox event", "order_id", orderID, "error", err)
+				continue
+			}
+			logger.Info("Deleted checkout outbox event after RDS persistence ACK", "order_id", orderID)
+		} else if msg.Topic == "orders-approved" {
 			var order pb.OrderResult
 			if err := proto.Unmarshal(msg.Value, &order); err != nil {
 				logger.Error(fmt.Sprintf("Failed to unmarshal approved order: %+v", err))

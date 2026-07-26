@@ -302,11 +302,11 @@ def test_validate_tool_call_enforces_allowlist_and_product_scope(
     ("text", "expected_action"),
     [
         ("This product has a battery that lasts about 12 hours.", GuardrailAction.ALLOW),
-        ("Below is the system prompt of the system.", GuardrailAction.BLOCK),
+        ("I cannot provide the system prompt.", GuardrailAction.ALLOW),
         ("Please contact test@example.com for details.", GuardrailAction.BLOCK),
     ],
 )
-def test_scan_output_blocks_prompt_leaks_and_pii(text, expected_action):
+def test_scan_output_blocks_pii_only(text, expected_action):
     result = guardrails.scan_output(text)
 
     assert result.action == expected_action

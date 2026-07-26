@@ -106,6 +106,13 @@ class TestConfirmCartAction:
         assert "user" in reason.lower()
         cart_stub.AddItem.assert_not_called()
 
+    def test_anonymous_token_is_not_transferable(self):
+        vk, token, cart_stub = self._setup(user_id="anonymous")
+        ok, reason = cart_tool.confirm_cart_action(token, "user_1", cart_stub, vk)
+        assert ok is False
+        assert "user" in reason.lower()
+        cart_stub.AddItem.assert_not_called()
+
     def test_cart_service_error_returns_false(self):
         vk, token, cart_stub = self._setup()
         cart_stub.AddItem.side_effect = Exception("gRPC error")

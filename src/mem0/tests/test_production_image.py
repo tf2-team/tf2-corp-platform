@@ -53,6 +53,10 @@ class ProductionImageContractTest(unittest.TestCase):
         self.assertRegex(REQUIREMENTS, r"(?m)^boto3==")
         self.assertIn("--no-deps /build/mem0", DOCKERFILE)
 
+    def test_jose_asn1_stack_uses_remediated_versions(self):
+        self.assertRegex(REQUIREMENTS, r"(?m)^python-jose==3\.5\.0$")
+        self.assertRegex(REQUIREMENTS, r"(?m)^pyasn1==0\.6\.3$")
+
 
 if __name__ == "__main__":
     unittest.main()

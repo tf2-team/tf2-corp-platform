@@ -1,0 +1,87 @@
+#0 building with "desktop-linux" instance using docker driver
+
+#1 [internal] load local bake definitions
+#1 reading docker-compose.yml 31.23kB / 31.23kB done
+#1 reading docker-bake.hcl 6.69kB / 6.69kB done
+#1 DONE 0.0s
+
+#2 [internal] load build definition from Dockerfile
+#2 DONE 0.0s
+
+#2 [internal] load build definition from Dockerfile
+#2 transferring dockerfile: 1.56kB 0.0s done
+#2 DONE 0.0s
+
+#3 [internal] load metadata for mcr.microsoft.com/dotnet/aspnet:10.0@sha256:1fa23fc4872d95fd71c2833ebe65d7e84a43b2d51a31d119516852f13d9505a7
+#3 ...
+
+#4 [internal] load metadata for mcr.microsoft.com/dotnet/sdk:10.0@sha256:ed034a8bf0b24ded0cbbac07e17825d8e9ebfe21e308191d0f7421eaf5ad4664
+#4 DONE 1.2s
+
+#3 [internal] load metadata for mcr.microsoft.com/dotnet/aspnet:10.0@sha256:1fa23fc4872d95fd71c2833ebe65d7e84a43b2d51a31d119516852f13d9505a7
+#3 DONE 1.2s
+
+#5 [internal] load .dockerignore
+#5 transferring context: 464B done
+#5 DONE 0.0s
+
+#6 [builder 1/7] FROM mcr.microsoft.com/dotnet/sdk:10.0@sha256:ed034a8bf0b24ded0cbbac07e17825d8e9ebfe21e308191d0f7421eaf5ad4664
+#6 resolve mcr.microsoft.com/dotnet/sdk:10.0@sha256:ed034a8bf0b24ded0cbbac07e17825d8e9ebfe21e308191d0f7421eaf5ad4664 0.0s done
+#6 DONE 0.0s
+
+#7 [stage-2 1/7] FROM mcr.microsoft.com/dotnet/aspnet:10.0@sha256:1fa23fc4872d95fd71c2833ebe65d7e84a43b2d51a31d119516852f13d9505a7
+#7 resolve mcr.microsoft.com/dotnet/aspnet:10.0@sha256:1fa23fc4872d95fd71c2833ebe65d7e84a43b2d51a31d119516852f13d9505a7 0.0s done
+#7 DONE 0.0s
+
+#8 [internal] load build context
+#8 transferring context: 1.88kB done
+#8 DONE 0.0s
+
+#9 [builder 7/7] RUN dotnet build "./Accounting.csproj" -r linux-amd64 -c Release -o /app/build
+#9 CACHED
+
+#10 [builder 4/7] COPY [/pb/demo.proto, Accounting/src/protos/demo.proto]
+#10 CACHED
+
+#11 [publish 1/1] RUN dotnet publish "./Accounting.csproj" -r linux-amd64 -c Release -o /app/publish /p:UseAppHost=false
+#11 CACHED
+
+#12 [stage-2 2/7] WORKDIR /app
+#12 CACHED
+
+#13 [builder 6/7] WORKDIR /src/Accounting
+#13 CACHED
+
+#14 [stage-2 3/7] COPY --from=publish /app/publish .
+#14 CACHED
+
+#15 [builder 2/7] WORKDIR /src
+#15 CACHED
+
+#16 [stage-2 4/7] RUN mkdir -p "/var/log/opentelemetry/dotnet"
+#16 CACHED
+
+#17 [builder 3/7] COPY [/src/accounting/, Accounting/]
+#17 CACHED
+
+#18 [stage-2 5/7] RUN chown 10001:10001 "/var/log/opentelemetry/dotnet"
+#18 CACHED
+
+#19 [stage-2 6/7] RUN chmod +x "/app/instrument.sh" && chown 10001:10001 "/app/instrument.sh"
+#19 CACHED
+
+#20 [builder 5/7] RUN dotnet restore "./Accounting/Accounting.csproj" -r linux-amd64
+#20 CACHED
+
+#21 [stage-2 7/7] RUN test -x /app/instrument.sh
+#21 CACHED
+
+#22 exporting to image
+#22 exporting layers done
+#22 exporting manifest sha256:a51d94991ceb51ef68594af89d5871736cd393895e2b7e9aee8bf27195d9fd8c done
+#22 exporting config sha256:6dcce0dc88a98d3d309538d66651611bc05006d97eec01c704290e2f4c9425da done
+#22 exporting attestation manifest sha256:3f27845730267129e2e9a467325964a4761b74dae12825c5b3b3d4cc79865fb2 0.0s done
+#22 exporting manifest list sha256:b6c5ac007fea06e6a1f6c5f7a741174819079253558eefbaae90eb91a8a5f799 0.0s done
+#22 naming to docker.io/local/accounting:trivy-test done
+#22 unpacking to docker.io/local/accounting:trivy-test 0.0s done
+#22 DONE 0.1s

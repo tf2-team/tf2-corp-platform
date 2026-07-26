@@ -14,10 +14,11 @@
 #   - https://pkgs.org/ - resource for finding needed packages
 #   - Ex: docker.io/hexpm/elixir:1.18.4-erlang-27.3.4-debian-bookworm-20250610-slim
 #
-FROM docker.io/hexpm/elixir:1.19.3-erlang-27.2.4-debian-bullseye-20251117-slim@sha256:1037258b28f07ccf0bc0bedb582867148fbf6d459140ac90be010583c067ab85 AS builder
+FROM docker.io/hexpm/elixir:1.19.3-erlang-27.2.4-debian-bookworm-20251117-slim@sha256:f829829ed6e2774ed9418ea2f93273a87b2aecf5cd9ef033981bf0ed772f629d AS builder
 
 # install build dependencies
 RUN apt-get update \
+  && apt-get upgrade -y --no-install-recommends \
   && apt-get install -y --no-install-recommends build-essential git \
   && rm -rf /var/lib/apt/lists/*
 
@@ -60,10 +61,11 @@ RUN mix release
 
 # start a new build stage so that the final image will only contain
 # the compiled release and other runtime necessities
-FROM docker.io/debian:bullseye-20251117-slim@sha256:530a3348fc4b5734ffe1a137ddbcee6850154285251b53c3425c386ea8fac77b AS final
+FROM docker.io/library/debian:trixie-slim@sha256:020c0d20b9880058cbe785a9db107156c3c75c2ac944a6aa7ab59f2add76a7bd AS final
 
 RUN apt-get update \
-  && apt-get install -y --no-install-recommends libstdc++6 openssl libncurses5 locales ca-certificates \
+  && apt-get upgrade -y --no-install-recommends \
+  && apt-get install -y --no-install-recommends libstdc++6 openssl libncurses6 locales ca-certificates \
   && rm -rf /var/lib/apt/lists/*
 
 # Set the locale
@@ -97,3 +99,4 @@ EXPOSE ${FLAGD_UI_PORT}
 # ENTRYPOINT ["/tini", "--"]
 
 CMD ["/app/bin/flagd_ui", "start"]
+# Change trail: @hungxqt - 2026-07-20 - Trivy HIGH/CRITICAL remediation (base upgrades, OS package updates, dep bumps)

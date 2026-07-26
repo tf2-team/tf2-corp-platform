@@ -12,9 +12,19 @@ response is serialised back to proto.
 """
 
 from enum import Enum
-from typing import Optional
+from typing import Literal, Optional
 
 from pydantic import BaseModel, ConfigDict, Field
+
+AllowedCategory = Literal[
+    "telescopes",
+    "accessories",
+    "travel",
+    "binoculars",
+    "flashlights",
+    "assembly",
+    "books",
+]
 
 
 class CopilotContractModel(BaseModel):
@@ -45,39 +55,47 @@ class ShoppingIntent(CopilotContractModel):
     validates it and uses each field as a hard filter — not a hint — when
     calling ProductCatalogService.SearchProducts.
     """
+    is_greeting: bool = Field(
+        default=False,
+        description="True if the user message is a simple greeting or chit-chat start (e.g. 'hi', 'hello', 'hey', 'good morning').",
+    )
     is_shopping_related: bool = Field(
         default=True,
-        description="True if the user request is related to shopping, products, reviews, or cart actions. False if unrelated (e.g. math, coding, general trivia)."
+        description="True if the user request is related to shopping, products, reviews, cart actions, or a greeting. False if completely unrelated (e.g. math problems, coding tasks, weather).",
     )
     query: str = Field(description="Keyword(s) to search in product name/description.")
     category: Optional[str] = Field(
         default=None,
-        description="Exact product category to filter by (e.g. 'headphones', 'clothing')."
+        description="Exact product category to filter by. Must be one of: 'telescopes', 'accessories', 'travel', 'binoculars', 'flashlights', 'assembly', 'books'. Set to null if not mentioned or matching another category.",
     )
     max_price: Optional[float] = Field(
         default=None,
         ge=0,
-        description="Maximum price in USD. Applied as a hard upper bound."
+        description="Maximum price in USD. Applied as a hard upper bound.",
     )
     features: list[str] = Field(
         default_factory=list,
-        description="Desired features mentioned by the user (informational, for Q&A)."
+        description="Desired features mentioned by the user (informational, for Q&A).",
+    )
+    wants_description: bool = Field(
+        default=False,
+        description="True if the user explicitly asked for a description, summary, or details of a product.",
     )
     needs_review_qa: bool = Field(
         default=False,
-        description="True if the user wants review-grounded Q&A after search."
+        description="True if the user wants review-grounded Q&A, quality feedback, pros/cons, or ratings after search.",
     )
     follow_up_question: Optional[str] = Field(
         default=None,
-        description="The specific question to answer from reviews, if needs_review_qa is True."
+        description="The specific question to answer from reviews, if needs_review_qa is True.",
     )
     wants_add_to_cart: bool = Field(
         default=False,
-        description="True if the user explicitly asked to add a product to their cart."
+        description="True if the user explicitly asked to add a product to their cart.",
     )
     cart_product_hint: Optional[str] = Field(
         default=None,
-        description="Product name or descriptor the user wants to add (resolved to ID by backend)."
+        description="Product name or descriptor the user wants to add (resolved to ID by backend).",
     )
 
 
@@ -89,6 +107,7 @@ class CopilotProductResult(CopilotContractModel):
     """A single product returned from catalog search."""
     product_id: str = Field(min_length=1)
     name: str = Field(min_length=1)
+    description: str = ""
     price_units: int = 0
     price_nanos: int = 0
     currency_code: str = "USD"

@@ -17,5 +17,15 @@ namespace Accounting
             Level = LogLevel.Information,
             Message = "Successfully completed shipment and updated order {orderId} status to COMPLETED.")]
         public static partial void ShipmentCompleted(ILogger logger, string orderId);
+
+        [LoggerMessage(
+            Level = LogLevel.Information,
+            Message = "Published RDS persistence acknowledgement for order {orderId}.")]
+        public static partial void PersistenceAckPublished(ILogger logger, string orderId);
+
+        [LoggerMessage(
+            Level = LogLevel.Information,
+            Message = "Replayed RDS persistence ACK for stale outbox event {orderId}.")]
+        public static partial void PersistenceAckReplayed(ILogger logger, string orderId);
     }
 }

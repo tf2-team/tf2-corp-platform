@@ -1,0 +1,11 @@
+# Copyright The OpenTelemetry Authors
+# SPDX-License-Identifier: Apache-2.0
+# Local development only. Do not include this file in CI or production deploys.
+services:
+  product-reviews:
+    volumes:
+      - ./src/ai-common/techx_ai_common:/app/techx_ai_common:ro
+
+  shopping-copilot:
+    volumes:
+      - ./src/ai-common/techx_ai_common:/app/techx_ai_common:ro

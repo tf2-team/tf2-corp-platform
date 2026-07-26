@@ -50,6 +50,13 @@ const Price = styled.div`
   letter-spacing: -0.3px;
 `;
 
+const DescriptionText = styled.p`
+  font-size: 13px;
+  color: #475569;
+  margin: 8px 0 0 0;
+  line-height: 1.5;
+`;
+
 const ViewButton = styled.a`
   display: inline-flex;
   align-items: center;
@@ -95,12 +102,13 @@ export const CopilotProductCard: React.FC<Props> = ({ products }) => {
                 product.currencyCode || 'USD'
               )}
             </Price>
-          </ProductHeader>
+            {product.description && <DescriptionText>{product.description}</DescriptionText>}
+          </ProductHeader >
           <Link href={`/product/${product.productId}`} passHref legacyBehavior>
             <ViewButton>View Details</ViewButton>
           </Link>
-        </Card>
+        </Card >
       ))}
-    </Grid>
+    </Grid >
   );
 };

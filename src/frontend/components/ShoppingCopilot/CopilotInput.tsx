@@ -182,12 +182,11 @@ interface PromptCategory {
 
 const CATEGORIZED_PROMPTS: PromptCategory[] = [
   {
-    title: 'Products Under $100',
+    title: 'Product Catalog',
     variant: 'catalog',
     prompts: [
-      'Show me lens cleaning kits under $30',
-      'Find stargazing accessories under $100',
-      'Find a red flashlight under $60',
+      'Show me all products under $100',
+      'Show me accessories under $100',
     ],
   },
   {
@@ -222,6 +221,7 @@ interface CopilotInputProps {
 
 export const CopilotInput: React.FC<CopilotInputProps> = ({ externalQuery }) => {
   const [query, setQuery] = useState('');
+  const [cooldown, setCooldown] = useState(false);
   const { searchCopilot, loading } = useShoppingCopilot();
 
   useEffect(() => {
@@ -230,16 +230,25 @@ export const CopilotInput: React.FC<CopilotInputProps> = ({ externalQuery }) => 
     }
   }, [externalQuery]);
 
+  const triggerSearch = (text: string) => {
+    if (cooldown || loading) return;
+    setCooldown(true);
+    searchCopilot(text);
+    setTimeout(() => {
+      setCooldown(false);
+    }, 2000);
+  };
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (query.trim()) {
-      searchCopilot(query.trim());
+      triggerSearch(query.trim());
     }
   };
 
   const handleSampleClick = (prompt: string) => {
     setQuery(prompt);
-    searchCopilot(prompt);
+    triggerSearch(prompt);
   };
 
   return (
@@ -251,7 +260,7 @@ export const CopilotInput: React.FC<CopilotInputProps> = ({ externalQuery }) => 
             placeholder="Ask Shopping Copilot (e.g., Lens cleaning kit under $30)..."
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            disabled={loading}
+            disabled={loading || cooldown}
           />
           {query && (
             <ClearButton type="button" onClick={() => setQuery('')}>
@@ -259,8 +268,8 @@ export const CopilotInput: React.FC<CopilotInputProps> = ({ externalQuery }) => 
             </ClearButton>
           )}
         </InputWrapper>
-        <SubmitButton type="submit" disabled={loading || !query.trim()}>
-          {loading ? 'Searching...' : 'Send Request'}
+        <SubmitButton type="submit" disabled={loading || cooldown || !query.trim()}>
+          {loading ? 'Searching...' : cooldown ? 'Please wait 2s...' : 'Send Request'}
         </SubmitButton>
       </Form>
 
@@ -275,7 +284,7 @@ export const CopilotInput: React.FC<CopilotInputProps> = ({ externalQuery }) => 
                   key={pIdx}
                   type="button"
                   onClick={() => handleSampleClick(p)}
-                  disabled={loading}
+                  disabled={loading || cooldown}
                 >
                   {p}
                 </SamplePill>

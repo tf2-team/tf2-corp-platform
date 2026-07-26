@@ -1,7 +1,7 @@
 // Copyright The OpenTelemetry Authors
 // SPDX-License-Identifier: Apache-2.0
 
-import { ChannelCredentials } from '@grpc/grpc-js';
+import { ChannelCredentials, Metadata } from '@grpc/grpc-js';
 import {ProductReview, ProductReviewServiceClient} from '../../protos/demo';
 
 const { PRODUCT_REVIEWS_ADDR = '' } = process.env;
@@ -20,9 +20,11 @@ const ProductReviewGateway = () => ({
             client.getAverageProductReviewScore({ productId }, (error, response) => (error ? reject(error) : resolve(response.averageScore)))
         );
     },
-    askProductAIAssistant(productId: string, question: string) {
+    askProductAIAssistant(productId: string, question: string, userId: string) {
+        const metadata = new Metadata();
+        metadata.set('x-session-id', userId || 'anonymous');
         return new Promise<string>((resolve, reject) =>
-            client.askProductAiAssistant({ productId, question }, (error, response) => {
+            client.askProductAiAssistant({ productId, question }, metadata, (error, response) => {
                 if (error) return reject(error);
                 // response.response contains a JSON string with status, answer, reason, claims
                 try {

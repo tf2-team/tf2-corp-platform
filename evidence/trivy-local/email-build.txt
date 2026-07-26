@@ -1,0 +1,325 @@
+#0 building with "desktop-linux" instance using docker driver
+
+#1 [internal] load local bake definitions
+#1 reading docker-compose.yml 31.23kB / 31.23kB done
+#1 reading docker-bake.hcl 6.69kB / 6.69kB done
+#1 DONE 0.0s
+
+#2 [internal] load build definition from Dockerfile
+#2 transferring dockerfile: 1.59kB 0.0s done
+#2 DONE 0.0s
+
+#3 [internal] load metadata for docker.io/library/ruby:3.4.7-alpine3.22@sha256:2a968472f07d03fd9c9fdfe220881c18fc0b28eb4d514b36b2c2d23810d70b89
+#3 ...
+
+#4 [auth] library/ruby:pull token for registry-1.docker.io
+#4 DONE 0.0s
+
+#3 [internal] load metadata for docker.io/library/ruby:3.4.7-alpine3.22@sha256:2a968472f07d03fd9c9fdfe220881c18fc0b28eb4d514b36b2c2d23810d70b89
+#3 DONE 4.4s
+
+#5 [internal] load .dockerignore
+#5 transferring context: 464B 0.0s done
+#5 DONE 0.0s
+
+#6 [internal] load build context
+#6 DONE 0.0s
+
+#7 [builder 1/4] FROM docker.io/library/ruby:3.4.7-alpine3.22@sha256:2a968472f07d03fd9c9fdfe220881c18fc0b28eb4d514b36b2c2d23810d70b89
+#7 resolve docker.io/library/ruby:3.4.7-alpine3.22@sha256:2a968472f07d03fd9c9fdfe220881c18fc0b28eb4d514b36b2c2d23810d70b89 0.0s done
+#7 DONE 0.0s
+
+#6 [internal] load build context
+#6 transferring context: 20.09kB 0.0s done
+#6 DONE 0.1s
+
+#7 [builder 1/4] FROM docker.io/library/ruby:3.4.7-alpine3.22@sha256:2a968472f07d03fd9c9fdfe220881c18fc0b28eb4d514b36b2c2d23810d70b89
+#7 sha256:1261df6a2e6246201132e6c2f19aaa777a643636400d9e71c6ad31601263b198 0B / 138B 0.2s
+#7 sha256:7c24c53351ad07adf6b65d9f2b09be7b38e8cef4e4c287a2f2cd74dbbd95d0e8 0B / 39.36MB 0.2s
+#7 sha256:6c0a2d76294b1f2beb6844e6d85b7a85409462f5899b8d96469e32f602241dd6 0B / 191B 0.2s
+#7 sha256:2d35ebdb57d9971fea0cac1582aa78935adf8058b2cc32db163c98822e5dfa1b 0B / 3.80MB 0.2s
+#7 sha256:1261df6a2e6246201132e6c2f19aaa777a643636400d9e71c6ad31601263b198 138B / 138B 0.5s done
+#7 sha256:6c0a2d76294b1f2beb6844e6d85b7a85409462f5899b8d96469e32f602241dd6 191B / 191B 1.5s done
+#7 sha256:7c24c53351ad07adf6b65d9f2b09be7b38e8cef4e4c287a2f2cd74dbbd95d0e8 2.10MB / 39.36MB 2.3s
+#7 sha256:7c24c53351ad07adf6b65d9f2b09be7b38e8cef4e4c287a2f2cd74dbbd95d0e8 4.19MB / 39.36MB 2.6s
+#7 sha256:7c24c53351ad07adf6b65d9f2b09be7b38e8cef4e4c287a2f2cd74dbbd95d0e8 6.29MB / 39.36MB 2.7s
+#7 sha256:7c24c53351ad07adf6b65d9f2b09be7b38e8cef4e4c287a2f2cd74dbbd95d0e8 8.39MB / 39.36MB 3.2s
+#7 sha256:7c24c53351ad07adf6b65d9f2b09be7b38e8cef4e4c287a2f2cd74dbbd95d0e8 12.58MB / 39.36MB 3.3s
+#7 sha256:7c24c53351ad07adf6b65d9f2b09be7b38e8cef4e4c287a2f2cd74dbbd95d0e8 15.73MB / 39.36MB 3.5s
+#7 sha256:2d35ebdb57d9971fea0cac1582aa78935adf8058b2cc32db163c98822e5dfa1b 1.05MB / 3.80MB 3.3s
+#7 sha256:7c24c53351ad07adf6b65d9f2b09be7b38e8cef4e4c287a2f2cd74dbbd95d0e8 17.83MB / 39.36MB 3.6s
+#7 sha256:7c24c53351ad07adf6b65d9f2b09be7b38e8cef4e4c287a2f2cd74dbbd95d0e8 19.92MB / 39.36MB 4.4s
+#7 sha256:7c24c53351ad07adf6b65d9f2b09be7b38e8cef4e4c287a2f2cd74dbbd95d0e8 23.07MB / 39.36MB 5.9s
+#7 sha256:2d35ebdb57d9971fea0cac1582aa78935adf8058b2cc32db163c98822e5dfa1b 2.10MB / 3.80MB 4.4s
+#7 sha256:2d35ebdb57d9971fea0cac1582aa78935adf8058b2cc32db163c98822e5dfa1b 3.80MB / 3.80MB 6.1s done
+#7 extracting sha256:2d35ebdb57d9971fea0cac1582aa78935adf8058b2cc32db163c98822e5dfa1b
+#7 extracting sha256:2d35ebdb57d9971fea0cac1582aa78935adf8058b2cc32db163c98822e5dfa1b 0.2s done
+#7 extracting sha256:6c0a2d76294b1f2beb6844e6d85b7a85409462f5899b8d96469e32f602241dd6 0.0s done
+#7 sha256:7c24c53351ad07adf6b65d9f2b09be7b38e8cef4e4c287a2f2cd74dbbd95d0e8 27.26MB / 39.36MB 6.7s
+#7 sha256:7c24c53351ad07adf6b65d9f2b09be7b38e8cef4e4c287a2f2cd74dbbd95d0e8 32.51MB / 39.36MB 6.8s
+#7 sha256:7c24c53351ad07adf6b65d9f2b09be7b38e8cef4e4c287a2f2cd74dbbd95d0e8 35.65MB / 39.36MB 7.0s
+#7 sha256:7c24c53351ad07adf6b65d9f2b09be7b38e8cef4e4c287a2f2cd74dbbd95d0e8 37.75MB / 39.36MB 7.1s
+#7 sha256:7c24c53351ad07adf6b65d9f2b09be7b38e8cef4e4c287a2f2cd74dbbd95d0e8 39.36MB / 39.36MB 7.2s done
+#7 extracting sha256:7c24c53351ad07adf6b65d9f2b09be7b38e8cef4e4c287a2f2cd74dbbd95d0e8
+#7 extracting sha256:7c24c53351ad07adf6b65d9f2b09be7b38e8cef4e4c287a2f2cd74dbbd95d0e8 0.9s done
+#7 DONE 8.3s
+
+#7 [builder 1/4] FROM docker.io/library/ruby:3.4.7-alpine3.22@sha256:2a968472f07d03fd9c9fdfe220881c18fc0b28eb4d514b36b2c2d23810d70b89
+#7 extracting sha256:1261df6a2e6246201132e6c2f19aaa777a643636400d9e71c6ad31601263b198 0.0s done
+#7 DONE 8.3s
+
+#8 [stage-1  2/11] RUN apk upgrade --no-cache &&     gem install --no-document erb:6.0.6 zlib:3.2.3 net-imap:0.6.4.1 puma:8.0.2
+#8 ...
+
+#9 [builder 2/4] COPY ./src/email/Gemfile Gemfile
+#9 DONE 0.2s
+
+#10 [builder 3/4] COPY ./src/email/Gemfile.lock Gemfile.lock
+#10 DONE 0.0s
+
+#8 [stage-1  2/11] RUN apk upgrade --no-cache &&     gem install --no-document erb:6.0.6 zlib:3.2.3 net-imap:0.6.4.1 puma:8.0.2
+#8 0.296 fetch https://dl-cdn.alpinelinux.org/alpine/v3.22/main/x86_64/APKINDEX.tar.gz
+#8 2.427 fetch https://dl-cdn.alpinelinux.org/alpine/v3.22/community/x86_64/APKINDEX.tar.gz
+#8 3.396 Upgrading critical system libraries and apk-tools:
+#8 3.396 (1/2) Upgrading libapk2 (2.14.9-r3 -> 2.14.10-r0)
+#8 3.688 (2/2) Upgrading apk-tools (2.14.9-r3 -> 2.14.10-r0)
+#8 3.942 Executing busybox-1.37.0-r19.trigger
+#8 4.063 Continuing the upgrade transaction with new apk-tools:
+#8 4.067 fetch https://dl-cdn.alpinelinux.org/alpine/v3.22/main/x86_64/APKINDEX.tar.gz
+#8 5.724 fetch https://dl-cdn.alpinelinux.org/alpine/v3.22/community/x86_64/APKINDEX.tar.gz
+#8 6.828 (1/10) Upgrading musl (1.2.5-r10 -> 1.2.5-r12)
+#8 7.128 (2/10) Upgrading libcrypto3 (3.5.4-r0 -> 3.5.7-r0)
+#8 7.573 (3/10) Upgrading libssl3 (3.5.4-r0 -> 3.5.7-r0)
+#8 7.934 (4/10) Upgrading zlib (1.3.1-r2 -> 1.3.2-r0)
+#8 8.194 (5/10) Upgrading busybox (1.37.0-r19 -> 1.37.0-r20)
+#8 8.486 Executing busybox-1.37.0-r20.post-upgrade
+#8 8.521 (6/10) Upgrading ssl_client (1.37.0-r19 -> 1.37.0-r20)
+#8 8.754 (7/10) Upgrading busybox-binsh (1.37.0-r19 -> 1.37.0-r20)
+#8 8.990 (8/10) Upgrading alpine-release (3.22.2-r0 -> 3.22.5-r0)
+#8 9.227 (9/10) Upgrading ca-certificates-bundle (20250911-r0 -> 20260611-r0)
+#8 ...
+
+#11 [builder 4/4] RUN apk upgrade --no-cache &&     apk add --no-cache make gcc musl-dev gcompat &&     bundle install &&     gem install --no-document erb:6.0.6 zlib:3.2.3 net-imap:0.6.4.1 puma:8.0.2
+#11 0.214 fetch https://dl-cdn.alpinelinux.org/alpine/v3.22/main/x86_64/APKINDEX.tar.gz
+#11 2.152 fetch https://dl-cdn.alpinelinux.org/alpine/v3.22/community/x86_64/APKINDEX.tar.gz
+#11 3.118 Upgrading critical system libraries and apk-tools:
+#11 3.118 (1/2) Upgrading libapk2 (2.14.9-r3 -> 2.14.10-r0)
+#11 3.389 (2/2) Upgrading apk-tools (2.14.9-r3 -> 2.14.10-r0)
+#11 3.637 Executing busybox-1.37.0-r19.trigger
+#11 3.781 Continuing the upgrade transaction with new apk-tools:
+#11 3.786 fetch https://dl-cdn.alpinelinux.org/alpine/v3.22/main/x86_64/APKINDEX.tar.gz
+#11 5.462 fetch https://dl-cdn.alpinelinux.org/alpine/v3.22/community/x86_64/APKINDEX.tar.gz
+#11 6.576 (1/10) Upgrading musl (1.2.5-r10 -> 1.2.5-r12)
+#11 6.878 (2/10) Upgrading libcrypto3 (3.5.4-r0 -> 3.5.7-r0)
+#11 7.366 (3/10) Upgrading libssl3 (3.5.4-r0 -> 3.5.7-r0)
+#11 7.674 (4/10) Upgrading zlib (1.3.1-r2 -> 1.3.2-r0)
+#11 7.932 (5/10) Upgrading busybox (1.37.0-r19 -> 1.37.0-r20)
+#11 8.220 Executing busybox-1.37.0-r20.post-upgrade
+#11 8.254 (6/10) Upgrading ssl_client (1.37.0-r19 -> 1.37.0-r20)
+#11 8.488 (7/10) Upgrading busybox-binsh (1.37.0-r19 -> 1.37.0-r20)
+#11 8.725 (8/10) Upgrading alpine-release (3.22.2-r0 -> 3.22.5-r0)
+#11 8.963 (9/10) Upgrading ca-certificates-bundle (20250911-r0 -> 20260611-r0)
+#11 ...
+
+#8 [stage-1  2/11] RUN apk upgrade --no-cache &&     gem install --no-document erb:6.0.6 zlib:3.2.3 net-imap:0.6.4.1 puma:8.0.2
+#8 9.514 (10/10) Upgrading musl-utils (1.2.5-r10 -> 1.2.5-r12)
+#8 9.755 Executing busybox-1.37.0-r20.trigger
+#8 9.778 OK: 8 MiB in 21 packages
+#8 11.03 Building native extensions. This could take a while...
+#8 11.19 ERROR:  Error installing erb:
+#8 11.19 	ERROR: Failed to build gem native extension.
+#8 11.19 
+#8 11.19     current directory: /usr/local/bundle/gems/erb-6.0.6/ext/erb/escape
+#8 11.19 /usr/local/bin/ruby extconf.rb
+#8 11.19 checking for rb_ext_ractor_safe() in ruby.h... *** extconf.rb failed ***
+#8 11.19 Could not create Makefile due to some reason, probably lack of necessary
+#8 11.19 libraries and/or headers.  Check the mkmf.log file for more details.  You may
+#8 11.19 need configuration options.
+#8 11.19 
+#8 11.19 Provided configuration options:
+#8 11.19 	--with-opt-dir
+#8 11.19 	--without-opt-dir
+#8 11.19 	--with-opt-include=${opt-dir}/include
+#8 11.19 	--without-opt-include
+#8 11.19 	--with-opt-lib=${opt-dir}/lib
+#8 11.19 	--without-opt-lib
+#8 11.19 	--with-make-prog
+#8 11.19 	--without-make-prog
+#8 11.19 	--srcdir=.
+#8 11.19 	--curdir
+#8 11.19 	--ruby=/usr/local/bin/$(RUBY_BASE_NAME)
+#8 11.19 /usr/local/lib/ruby/3.4.0/mkmf.rb:528:in 'MakeMakefile#try_do': The compiler failed to generate an executable file. (RuntimeError)
+#8 11.19 You have to install development tools first.
+#8 11.19 
+#8 11.19 	from /usr/local/lib/ruby/3.4.0/mkmf.rb:621:in 'MakeMakefile#try_link0'
+#8 11.19 	from /usr/local/lib/ruby/3.4.0/mkmf.rb:639:in 'MakeMakefile#try_link'
+#8 11.19 	from /usr/local/lib/ruby/3.4.0/mkmf.rb:881:in 'MakeMakefile#try_func'
+#8 11.19 	from /usr/local/lib/ruby/3.4.0/mkmf.rb:1201:in 'block in MakeMakefile#have_func'
+#8 11.19 	from /usr/local/lib/ruby/3.4.0/mkmf.rb:1070:in 'block in MakeMakefile#checking_for'
+#8 11.19 	from /usr/local/lib/ruby/3.4.0/mkmf.rb:370:in 'block (2 levels) in MakeMakefile::Logging.postpone'
+#8 11.19 	from /usr/local/lib/ruby/3.4.0/mkmf.rb:340:in 'MakeMakefile::Logging.open'
+#8 11.19 	from /usr/local/lib/ruby/3.4.0/mkmf.rb:370:in 'block in MakeMakefile::Logging.postpone'
+#8 11.19 	from /usr/local/lib/ruby/3.4.0/mkmf.rb:340:in 'MakeMakefile::Logging.open'
+#8 11.19 	from /usr/local/lib/ruby/3.4.0/mkmf.rb:366:in 'MakeMakefile::Logging.postpone'
+#8 11.19 	from /usr/local/lib/ruby/3.4.0/mkmf.rb:1069:in 'MakeMakefile#checking_for'
+#8 11.19 	from /usr/local/lib/ruby/3.4.0/mkmf.rb:1200:in 'MakeMakefile#have_func'
+#8 11.19 	from extconf.rb:7:in '<main>'
+#8 11.19 
+#8 11.19 To see why this extension failed to compile, please check the mkmf.log which can be found here:
+#8 11.19 
+#8 11.19   /usr/local/bundle/extensions/x86_64-linux-musl/3.4.0/erb-6.0.6/mkmf.log
+#8 11.19 
+#8 11.19 extconf failed, exit code 1
+#8 11.19 
+#8 11.19 Gem files will remain installed in /usr/local/bundle/gems/erb-6.0.6 for inspection.
+#8 11.19 Results logged to /usr/local/bundle/extensions/x86_64-linux-musl/3.4.0/erb-6.0.6/gem_make.out
+#8 11.48 Building native extensions. This could take a while...
+#8 11.58 ERROR:  Error installing zlib:
+#8 11.58 	ERROR: Failed to build gem native extension.
+#8 11.58 
+#8 11.58     current directory: /usr/local/bundle/gems/zlib-3.2.3/ext/zlib
+#8 11.58 /usr/local/bin/ruby extconf.rb
+#8 11.58 checking for deflateReset(NULL) in -lz... *** extconf.rb failed ***
+#8 11.58 Could not create Makefile due to some reason, probably lack of necessary
+#8 11.58 libraries and/or headers.  Check the mkmf.log file for more details.  You may
+#8 11.58 need configuration options.
+#8 11.58 
+#8 11.58 Provided configuration options:
+#8 11.58 	--with-opt-dir
+#8 11.58 	--without-opt-dir
+#8 11.58 	--with-opt-include=${opt-dir}/include
+#8 11.58 	--without-opt-include
+#8 11.58 	--with-opt-lib=${opt-dir}/lib
+#8 11.58 	--without-opt-lib
+#8 11.58 	--with-make-prog
+#8 11.58 	--without-make-prog
+#8 11.58 	--srcdir=.
+#8 11.58 	--curdir
+#8 11.58 	--ruby=/usr/local/bin/$(RUBY_BASE_NAME)
+#8 11.58 	--with-zlib-dir
+#8 11.58 	--without-zlib-dir
+#8 11.58 	--with-zlib-include=${zlib-dir}/include
+#8 11.58 	--without-zlib-include
+#8 11.58 	--with-zlib-lib=${zlib-dir}/lib
+#8 11.58 	--without-zlib-lib
+#8 11.58 	--with-z-dir
+#8 11.58 	--without-z-dir
+#8 11.58 	--with-z-include=${z-dir}/include
+#8 11.58 	--without-z-include
+#8 11.58 	--with-z-lib=${z-dir}/lib
+#8 11.58 	--without-z-lib
+#8 11.58 	--with-zlib
+#8 11.58 	--without-zlib
+#8 11.58 /usr/local/lib/ruby/3.4.0/mkmf.rb:528:in 'MakeMakefile#try_do': The compiler failed to generate an executable file. (RuntimeError)
+#8 11.58 You have to install development tools first.
+#8 11.58 
+#8 11.58 	from /usr/local/lib/ruby/3.4.0/mkmf.rb:621:in 'MakeMakefile#try_link0'
+#8 11.58 	from /usr/local/lib/ruby/3.4.0/mkmf.rb:639:in 'MakeMakefile#try_link'
+#8 11.58 	from /usr/local/lib/ruby/3.4.0/mkmf.rb:888:in 'MakeMakefile#try_func'
+#8 11.58 	from /usr/local/lib/ruby/3.4.0/mkmf.rb:1147:in 'block in MakeMakefile#have_library'
+#8 11.58 	from /usr/local/lib/ruby/3.4.0/mkmf.rb:1070:in 'block in MakeMakefile#checking_for'
+#8 11.58 	from /usr/local/lib/ruby/3.4.0/mkmf.rb:370:in 'block (2 levels) in MakeMakefile::Logging.postpone'
+#8 11.58 	from /usr/local/lib/ruby/3.4.0/mkmf.rb:340:in 'MakeMakefile::Logging.open'
+#8 11.58 	from /usr/local/lib/ruby/3.4.0/mkmf.rb:370:in 'block in MakeMakefile::Logging.postpone'
+#8 11.58 	from /usr/local/lib/ruby/3.4.0/mkmf.rb:340:in 'MakeMakefile::Logging.open'
+#8 11.58 	from /usr/local/lib/ruby/3.4.0/mkmf.rb:366:in 'MakeMakefile::Logging.postpone'
+#8 11.58 	from /usr/local/lib/ruby/3.4.0/mkmf.rb:1069:in 'MakeMakefile#checking_for'
+#8 11.58 	from /usr/local/lib/ruby/3.4.0/mkmf.rb:1142:in 'MakeMakefile#have_library'
+#8 11.58 	from extconf.rb:14:in 'block in <main>'
+#8 11.58 	from extconf.rb:14:in 'Array#any?'
+#8 11.58 	from extconf.rb:14:in '<main>'
+#8 11.58 
+#8 11.58 To see why this extension failed to compile, please check the mkmf.log which can be found here:
+#8 11.58 
+#8 11.58   /usr/local/bundle/extensions/x86_64-linux-musl/3.4.0/zlib-3.2.3/mkmf.log
+#8 11.58 
+#8 11.58 extconf failed, exit code 1
+#8 11.58 
+#8 11.58 Gem files will remain installed in /usr/local/bundle/gems/zlib-3.2.3 for inspection.
+#8 11.58 Results logged to /usr/local/bundle/extensions/x86_64-linux-musl/3.4.0/zlib-3.2.3/gem_make.out
+#8 12.67 Successfully installed net-imap-0.6.4.1
+#8 12.67 Building native extensions. This could take a while...
+#8 12.74 ERROR:  Error installing puma:
+#8 12.74 	ERROR: Failed to build gem native extension.
+#8 12.74 
+#8 12.74     current directory: /usr/local/bundle/gems/nio4r-2.7.5/ext/nio4r
+#8 12.74 /usr/local/bin/ruby extconf.rb
+#8 12.74 checking for unistd.h... *** extconf.rb failed ***
+#8 12.74 Could not create Makefile due to some reason, probably lack of necessary
+#8 12.74 libraries and/or headers.  Check the mkmf.log file for more details.  You may
+#8 12.74 need configuration options.
+#8 12.74 
+#8 12.74 Provided configuration options:
+#8 12.74 	--with-opt-dir
+#8 12.74 	--without-opt-dir
+#8 12.74 	--with-opt-include=${opt-dir}/include
+#8 12.74 	--without-opt-include
+#8 12.74 	--with-opt-lib=${opt-dir}/lib
+#8 12.74 	--without-opt-lib
+#8 12.74 	--with-make-prog
+#8 12.74 	--without-make-prog
+#8 12.74 	--srcdir=.
+#8 12.74 	--curdir
+#8 12.74 	--ruby=/usr/local/bin/$(RUBY_BASE_NAME)
+#8 12.74 	--with-unistd-dir
+#8 12.74 	--without-unistd-dir
+#8 12.74 	--with-unistd-include=${unistd-dir}/include
+#8 12.74 	--without-unistd-include
+#8 12.74 	--with-unistd-lib=${unistd-dir}/lib
+#8 12.74 	--without-unistd-lib
+#8 12.74 /usr/local/lib/ruby/3.4.0/mkmf.rb:528:in 'MakeMakefile#try_do': The compiler failed to generate an executable file. (RuntimeError)
+#8 12.74 You have to install development tools first.
+#8 12.74 
+#8 12.74 	from /usr/local/lib/ruby/3.4.0/mkmf.rb:655:in 'MakeMakefile#try_compile'
+#8 12.74 	from /usr/local/lib/ruby/3.4.0/mkmf.rb:1242:in 'block in MakeMakefile#have_header'
+#8 12.74 	from /usr/local/lib/ruby/3.4.0/mkmf.rb:1070:in 'block in MakeMakefile#checking_for'
+#8 12.74 	from /usr/local/lib/ruby/3.4.0/mkmf.rb:370:in 'block (2 levels) in MakeMakefile::Logging.postpone'
+#8 12.74 	from /usr/local/lib/ruby/3.4.0/mkmf.rb:340:in 'MakeMakefile::Logging.open'
+#8 12.74 	from /usr/local/lib/ruby/3.4.0/mkmf.rb:370:in 'block in MakeMakefile::Logging.postpone'
+#8 12.74 	from /usr/local/lib/ruby/3.4.0/mkmf.rb:340:in 'MakeMakefile::Logging.open'
+#8 12.74 	from /usr/local/lib/ruby/3.4.0/mkmf.rb:366:in 'MakeMakefile::Logging.postpone'
+#8 12.74 	from /usr/local/lib/ruby/3.4.0/mkmf.rb:1069:in 'MakeMakefile#checking_for'
+#8 12.74 	from /usr/local/lib/ruby/3.4.0/mkmf.rb:1241:in 'MakeMakefile#have_header'
+#8 12.74 	from extconf.rb:32:in '<main>'
+#8 12.74 
+#8 12.74 To see why this extension failed to compile, please check the mkmf.log which can be found here:
+#8 12.74 
+#8 12.74   /usr/local/bundle/extensions/x86_64-linux-musl/3.4.0/nio4r-2.7.5/mkmf.log
+#8 12.74 
+#8 12.74 extconf failed, exit code 1
+#8 12.74 
+#8 12.74 Gem files will remain installed in /usr/local/bundle/gems/nio4r-2.7.5 for inspection.
+#8 12.74 Results logged to /usr/local/bundle/extensions/x86_64-linux-musl/3.4.0/nio4r-2.7.5/gem_make.out
+#8 12.75 1 gem installed
+#8 ERROR: process "/bin/sh -c apk upgrade --no-cache &&     gem install --no-document erb:6.0.6 zlib:3.2.3 net-imap:0.6.4.1 puma:8.0.2" did not complete successfully: exit code: 1
+
+#11 [builder 4/4] RUN apk upgrade --no-cache &&     apk add --no-cache make gcc musl-dev gcompat &&     bundle install &&     gem install --no-document erb:6.0.6 zlib:3.2.3 net-imap:0.6.4.1 puma:8.0.2
+#11 9.248 (10/10) Upgrading musl-utils (1.2.5-r10 -> 1.2.5-r12)
+#11 9.492 Executing busybox-1.37.0-r20.trigger
+#11 9.514 OK: 8 MiB in 21 packages
+#11 9.598 fetch https://dl-cdn.alpinelinux.org/alpine/v3.22/main/x86_64/APKINDEX.tar.gz
+#11 11.22 fetch https://dl-cdn.alpinelinux.org/alpine/v3.22/community/x86_64/APKINDEX.tar.gz
+#11 12.14 (1/15) Installing jansson (2.14.1-r0)
+#11 12.38 (2/15) Installing libstdc++ (14.2.0-r6)
+#11 CANCELED
+------
+ > [stage-1  2/11] RUN apk upgrade --no-cache &&     gem install --no-document erb:6.0.6 zlib:3.2.3 net-imap:0.6.4.1 puma:8.0.2:
+12.74 
+12.74 To see why this extension failed to compile, please check the mkmf.log which can be found here:
+12.74 
+12.74   /usr/local/bundle/extensions/x86_64-linux-musl/3.4.0/nio4r-2.7.5/mkmf.log
+12.74 
+12.74 extconf failed, exit code 1
+12.74 
+12.74 Gem files will remain installed in /usr/local/bundle/gems/nio4r-2.7.5 for inspection.
+12.74 Results logged to /usr/local/bundle/extensions/x86_64-linux-musl/3.4.0/nio4r-2.7.5/gem_make.out
+12.75 1 gem installed
+------
+Dockerfile:18
+--------------------
+  17 |     
+  18 | >>> RUN apk upgrade --no-cache && \
+  19 | >>>     gem install --no-document erb:6.0.6 zlib:3.2.3 net-imap:0.6.4.1 puma:8.0.2
+  20 |     
+--------------------
+ERROR: failed to solve: process "/bin/sh -c apk upgrade --no-cache &&     gem install --no-document erb:6.0.6 zlib:3.2.3 net-imap:0.6.4.1 puma:8.0.2" did not complete successfully: exit code: 1
