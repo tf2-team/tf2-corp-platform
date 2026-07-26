@@ -19,7 +19,7 @@
   "correlation": {
     "window_seconds": 300,
     "confidence_threshold": 0.5,
-    "topology_max_hops": 3,
+    "topology_max_hops": 2,
     "suppress_min_root_score": 0.8,
     "rca_notification_min_score": 0.8,
     "suppress_breakout_multiplier": 1.5,
@@ -177,7 +177,7 @@
         "default": 1.0
       },
       "traffic_shape_min_spearman": 0.6,
-      "traffic_shape_max_lag_buckets": 2
+      "traffic_shape_max_lag_buckets": 1
     },
     "graph": {
       "damping": 0.85,
