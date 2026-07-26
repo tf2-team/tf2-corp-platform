@@ -221,6 +221,23 @@ class DetectorEngineTest(unittest.TestCase):
         self.assertEqual(candidates[0].window, "5m")
         self.assertEqual(candidates[0].flow, "monitoring")
 
+    def test_no_data_detector_logs_one_block_for_multiple_signals(self):
+        features = FeatureBuilder().build(
+            [
+                Observation(signal_id="checkout_cpu_millicores", value=None, unit="millicores", window="5m", quality=SignalQuality.STALE),
+                Observation(signal_id="checkout_memory_usage_bytes", value=None, unit="bytes", window="5m", quality=SignalQuality.MISSING),
+            ]
+        )
+
+        with self.assertLogs("aiops.detectors.no_data", level="WARNING") as logs:
+            candidates = DetectorEngine([no_data_detector()]).evaluate(features)
+
+        self.assertEqual(len(candidates), 2)
+        self.assertEqual(len(logs.records), 1)
+        self.assertIn("checkout_cpu_millicores", logs.output[0])
+        self.assertIn("checkout_memory_usage_bytes", logs.output[0])
+        self.assertIn(" | ", logs.output[0])
+
     def test_correlator_ranks_dependency_with_transparent_components(self):
         primary = CandidateEvent(
             environment="tf2",

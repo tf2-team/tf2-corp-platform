@@ -35,16 +35,13 @@ class NoDataDetector(Detector):
 
     def evaluate(self, features: list[Feature]) -> list[CandidateEvent]:
         candidates: list[CandidateEvent] = []
+        log_items: list[str] = []
         for feature in features:
             if feature.signal_id not in self.required_signal_ids or feature.status != "unknown":
                 continue
-            logger.warning(
-                "AIOPS_DETECT no_data_fire detector=%s signal=%s quality=%s service=%s severity=%s",
-                self.detector_id,
-                feature.signal_id,
-                feature.quality.value,
-                self.service,
-                self.severity,
+            log_items.append(
+                f"detector={self.detector_id} signal={feature.signal_id} quality={feature.quality.value} "
+                f"service={self.service} severity={self.severity}"
             )
             candidates.append(
                 candidate_from_feature(
@@ -59,4 +56,6 @@ class NoDataDetector(Detector):
                     confidence=self.missing_confidence if feature.quality in {SignalQuality.MISSING, SignalQuality.STALE} else self.unknown_confidence,
                 )
             )
+        if log_items:
+            logger.warning("AIOPS_DETECT no_data_fire %s", " | ".join(log_items))
         return candidates
