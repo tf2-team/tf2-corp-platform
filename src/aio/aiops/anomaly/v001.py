@@ -199,7 +199,7 @@ class LogTemplateMetricBuilder:
                 continue
             latest = max(buckets) if buckets else 0
             start = latest - (self.history_buckets - 1) * self.bucket_seconds
-            digest = hashlib.sha1(service.encode() + b":" + template.encode()).hexdigest()[:10]
+            digest = hashlib.sha256(service.encode() + b":" + template.encode()).hexdigest()[:10]
             metric = f"log_template_count_{digest}"
             series.append(
                 MetricSeries(
