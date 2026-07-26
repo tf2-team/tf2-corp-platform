@@ -207,7 +207,7 @@
     "resource.cpu_millicores": {
       "query_id_template": "$service.cpu_millicores",
       "signal_id_template": "${service_id}_cpu_millicores",
-      "promql": "(sum(rate(container_cpu_usage_seconds_total{container=\"$service\"}[5m])) * 1000) or (sum(rate(container_cpu_usage_total{container_name=~\".*$service.*\"}[5m])) * 1000) or (sum(k8s_pod_cpu_usage{k8s_deployment_name=\"$service\"}) * 1000)",
+      "promql": "(sum(rate(container_cpu_usage_seconds_total{namespace=\"techx-corp-prod\",pod=~\"$service-[0-9a-f]{6,10}-.*\",container=\"$service\"}[5m])) * 1000) or (sum(rate(container_cpu_usage_seconds_total{pod=~\"$service-[0-9a-f]{6,10}-.*\",container=\"$service\"}[5m])) * 1000) or (sum(rate(container_cpu_usage_total{container_name=~\".*$service.*\"}[5m])) * 1000) or (sum(k8s_pod_cpu_usage{k8s_deployment_name=\"$service\"}) * 1000)",
       "unit": "millicores",
       "window": "5m",
       "metric": "cpu_millicores",
@@ -247,7 +247,7 @@
     "resource.socket_io_bytes_per_second": {
       "query_id_template": "$service.socket_io_bytes_per_second",
       "signal_id_template": "${service_id}_socket_io_bytes_per_second",
-      "promql": "((sum(rate(container_network_receive_bytes_total{pod=~\"$service.*\"}[5m])) or 0 * sum(rate(container_network_transmit_bytes_total{pod=~\"$service.*\"}[5m]))) + (sum(rate(container_network_transmit_bytes_total{pod=~\"$service.*\"}[5m])) or 0 * sum(rate(container_network_receive_bytes_total{pod=~\"$service.*\"}[5m])))) or ((sum(rate(container_network_io_usage_rx_bytes{container_name=~\".*$service.*\"}[5m])) or 0 * sum(rate(container_network_io_usage_tx_bytes{container_name=~\".*$service.*\"}[5m]))) + (sum(rate(container_network_io_usage_tx_bytes{container_name=~\".*$service.*\"}[5m])) or 0 * sum(rate(container_network_io_usage_rx_bytes{container_name=~\".*$service.*\"}[5m]))))",
+      "promql": "sum(rate(container_network_receive_bytes_total{namespace=\"techx-corp-prod\",pod=~\"$service-[0-9a-f]{6,10}-.*\"}[5m])) + sum(rate(container_network_transmit_bytes_total{namespace=\"techx-corp-prod\",pod=~\"$service-[0-9a-f]{6,10}-.*\"}[5m])) or sum(rate(container_network_receive_bytes_total{pod=~\"$service-[0-9a-f]{6,10}-.*\"}[5m])) + sum(rate(container_network_transmit_bytes_total{pod=~\"$service-[0-9a-f]{6,10}-.*\"}[5m])) or sum(rate(container_network_io_usage_rx_bytes{container_name=~\".*$service.*\"}[5m])) + sum(rate(container_network_io_usage_tx_bytes{container_name=~\".*$service.*\"}[5m]))",
       "unit": "bytes_per_second",
       "window": "5m",
       "metric": "socket_io_bytes_per_second",
@@ -308,7 +308,7 @@
     "postgres.active_connections": {
       "query_id_template": "postgresql.active_connections",
       "signal_id_template": "postgresql_active_connections",
-      "promql": "sum(db_client_connection_count{db_client_connection_state=\"used\"})",
+      "promql": "sum(db_client_connection_count{db_client_connection_state=\"used\"}) or sum(db_client_connection_count) or sum(postgresql_backends)",
       "unit": "count",
       "window": "instant",
       "metric": "active_connections",
@@ -328,7 +328,7 @@
     "kafka.consumer_lag": {
       "query_id_template": "kafka.consumer_lag",
       "signal_id_template": "kafka_consumer_lag",
-      "promql": "sum(kafka_consumer_records_lag)",
+      "promql": "sum(kafka_consumer_records_lag) or sum(kafka_consumer_group_lag)",
       "unit": "count",
       "window": "instant",
       "metric": "consumer_lag",
