@@ -25,6 +25,14 @@ def render(service: str, digest: str) -> str:
         "# Managed by tf2-corp-platform secure delivery pipeline.\n"
         "# Change trail: @hungxqt - 2026-07-20 - Selective service digest promote into service-digest/.\n"
     )
+    if service == "aiops":
+        return (
+            f"{header}aiops:\n"
+            "  enabled: true\n"
+            "  existingSecret: techx-corp-aiops-grafana-webhook\n"
+            "  image:\n"
+            f'    digest: "{digest}"\n'
+        )
     if service in TOP_LEVEL_IMAGES:
         return f'{header}{service}:\n  image:\n    digest: "{digest}"\n'
     if service == "flagd-ui":
@@ -42,9 +50,8 @@ def render(service: str, digest: str) -> str:
 
 def resolve_output_dir(directory: Path, subdir: str) -> Path:
     """Accept chart root or service-digest path."""
-    directory = directory.resolve()
     if directory.name == DEFAULT_SUBDIR or subdir in ("", "."):
-        return directory
+        return directory.resolve()
     return directory / subdir
 
 def main() -> None:
@@ -78,7 +85,7 @@ def main() -> None:
         path = out_dir / f"values-{service}.yaml"
         content = render(service, digest)
         if not path.exists() or path.read_text(encoding="utf-8") != content:
-            path.write_text(content, encoding="utf-8", newline="\n")
+            path.write_text(content.replace("\r\n", "\n"), encoding="utf-8")
             if out_dir.name == DEFAULT_SUBDIR:
                 changed.append(f"{DEFAULT_SUBDIR}/values-{service}.yaml")
             else:
