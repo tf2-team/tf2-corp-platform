@@ -177,7 +177,7 @@
         "default": 1.0
       },
       "traffic_shape_min_spearman": 0.6,
-      "traffic_shape_max_lag_buckets": 2
+      "traffic_shape_max_lag_buckets": 1
     },
     "graph": {
       "damping": 0.85,

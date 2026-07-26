@@ -1039,7 +1039,7 @@ class V001AnomalyRcaTest(unittest.TestCase):
 
         self.assertEqual(result.root_causes[0].root_cause_metrics, ["cpu_millicores"])
 
-    def test_rca_promotes_breakout_metric_for_breakout_service_only(self):
+    def test_rca_uses_next_root_metric_for_error_breakout(self):
         runtime_config = load_runtime_config(Path("config/runtime.json"))
         findings = [
             AnomalyFinding(algorithm="weighted_sum", service="checkout", metric="cpu_millicores", signal_id="checkout_cpu_millicores", score=99.0, timestamp=5),
@@ -1048,7 +1048,18 @@ class V001AnomalyRcaTest(unittest.TestCase):
 
         result = rca_engine(runtime_config).rank(findings, [], top_k=5, breakout_metrics={"checkout": {"error_rate_5m"}})
 
-        self.assertEqual(result.root_causes[0].root_cause_metrics[0], "error_rate_5m")
+        self.assertEqual(result.root_causes[0].root_cause_metrics[0], "cpu_millicores")
+
+    def test_rca_promotes_root_cause_breakout_metric_for_breakout_service_only(self):
+        runtime_config = load_runtime_config(Path("config/runtime.json"))
+        findings = [
+            AnomalyFinding(algorithm="weighted_sum", service="checkout", metric="cpu_millicores", signal_id="checkout_cpu_millicores", score=99.0, timestamp=5),
+            AnomalyFinding(algorithm="weighted_sum", service="checkout", metric="memory_usage_bytes", signal_id="checkout_memory_usage_bytes", score=1.0, timestamp=5),
+        ]
+
+        result = rca_engine(runtime_config).rank(findings, [], top_k=5, breakout_metrics={"checkout": {"memory_usage_bytes"}})
+
+        self.assertEqual(result.root_causes[0].root_cause_metrics[0], "memory_usage_bytes")
 
     def test_rca_ignores_breakout_service_when_breakout_metric_is_absent(self):
         runtime_config = load_runtime_config(Path("config/runtime.json"))
@@ -1057,7 +1068,7 @@ class V001AnomalyRcaTest(unittest.TestCase):
             AnomalyFinding(algorithm="weighted_sum", service="payment", metric="cpu_millicores", signal_id="payment_cpu_millicores", score=1.0, timestamp=5),
         ]
 
-        result = rca_engine(runtime_config).rank(findings, [], top_k=5, breakout_metrics={"checkout": {"error_rate_5m"}})
+        result = rca_engine(runtime_config).rank(findings, [], top_k=5, breakout_metrics={"checkout": {"memory_usage_bytes"}})
 
         self.assertEqual(result.root_causes[0].service, "payment")
 
