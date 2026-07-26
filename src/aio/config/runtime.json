@@ -298,7 +298,7 @@
     {
       "id": "ops02_monitoring_loss",
       "type": "no-data",
-      "enabled": true,
+      "enabled": false,
       "signal_ids": [
         "__all_prometheus__"
       ],
@@ -310,7 +310,7 @@
     {
       "id": "ops01_checkout_slo_burn_rate",
       "type": "threshold",
-      "enabled": true,
+      "enabled": false,
       "signal_id": "checkout_error_budget_burn_rate_24h",
       "flow": "checkout",
       "service": "checkout",

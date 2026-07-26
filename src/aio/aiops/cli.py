@@ -5,6 +5,8 @@ from __future__ import annotations
 
 import argparse
 
+from aiops import capture as capture_module
+from aiops import replay as replay_module
 from aiops.api.app import run_live_pipeline
 from aiops.config import Settings
 from aiops.schemas import Incident
@@ -14,8 +16,32 @@ from pydantic import ValidationError
 
 def main() -> None:
     parser = argparse.ArgumentParser(prog="python -m aiops.cli")
-    parser.add_argument("command", choices=["run-live", "list"], help="run live pipeline or list stored incidents")
+    subparsers = parser.add_subparsers(dest="command", required=True)
+    subparsers.add_parser("run-live", help="run the live pipeline once")
+    subparsers.add_parser("list", help="list stored incidents")
+    replay_parser = subparsers.add_parser(
+        "replay",
+        help="AI MANDATE #15: replay an external labeled scenario set through the detector",
+        description=replay_module.__doc__,
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+    replay_module.add_arguments(replay_parser)
+    capture_parser = subparsers.add_parser(
+        "capture",
+        help="AI MANDATE #15: capture a real live-Prometheus scenario into a case folder for replay",
+        description=capture_module.__doc__,
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+    capture_module.add_arguments(capture_parser)
+
     args = parser.parse_args()
+
+    if args.command == "replay":
+        replay_module.run_from_args(args)
+        return
+    if args.command == "capture":
+        capture_module.run_from_args(args)
+        return
 
     settings = Settings()
     if args.command == "run-live":

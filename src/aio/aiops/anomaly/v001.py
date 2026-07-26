@@ -337,6 +337,7 @@ class V001AnomalyEngine:
             log_min_nonzero_buckets,
         )
         self.last_normal_growth_breakout_metrics: dict[str, set[str]] = {}
+        self.last_normal_growth_zero_score_metrics: dict[str, set[str]] = {}
         self.last_algorithm_findings: list[AnomalyFinding] = []
 
     def evaluate(self, series: list[MetricSeries], logs: list[tuple[str, int, str]] | None = None) -> list[AnomalyFinding]:
@@ -430,7 +431,16 @@ class V001AnomalyEngine:
             for service, (normal, detail) in decisions.items()
             if not normal and detail.startswith(NORMAL_GROWTH_BREAKOUT_REASONS)
         }
-        logger.info(
+        # Only literal all-zero series (`zero_metrics=...`) count as monitoring-loss.
+        # A DTW shape score of `cpu=0.000` / `socket_io=0.000` means "no shape match",
+        # not "telemetry disappeared" — treating those as zero-vector spam produced the
+        # Scenario 1 false positives on healthy services under Locust load.
+        self.last_normal_growth_zero_score_metrics = {
+            service: metrics
+            for service, (normal, detail) in decisions.items()
+            if not normal and (metrics := _zero_score_metrics_for_detail(detail))
+        }
+        (logger.warning if any("zero_metrics=" in detail for _, detail in decisions.values()) else logger.info)(
             "growth_gate_event %s",
             " | ".join(
                 f"service={service} result={'skip' if normal else 'detect'} breakout={str(not normal and detail.startswith(NORMAL_GROWTH_BREAKOUT_REASONS)).lower()} {detail}"
@@ -504,6 +514,12 @@ def _breakout_metrics_for_reason(detail: str, series: list[MetricSeries]) -> set
         return {metric.metric for metric in series if is_error_metric(metric.metric)}
     if detail.startswith("reason=ready_pods_"):
         return {metric.metric for metric in series if "ready_pods" in metric.metric}
+    return set()
+
+
+def _zero_score_metrics_for_detail(detail: str) -> set[str]:
+    if match := re.search(r"\bzero_metrics=([^ ]+)", detail):
+        return {item for item in match.group(1).split(",") if item}
     return set()
 
 

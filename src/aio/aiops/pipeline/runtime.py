@@ -32,7 +32,7 @@ from aiops.remediation import (
     RemediationFeatureExtractor,
 )
 from aiops.schemas import ActionCatalogItem, ActionProposal, CandidateEvent, Incident, RemediationDecision, VerificationResult
-from aiops.shared.metrics import is_memory_metric
+from aiops.shared.metrics import is_busy_infra_metric
 from aiops.shared.series import prepare_detector_series
 from aiops.shared.tail import evaluate_tail_change, metric_group
 from aiops.topology import TopologyGraph
@@ -290,7 +290,7 @@ class AiopsPipeline:
     def _rca_root_metric_can_notify(self, service: str, metric: str, metric_series: list[MetricSeries]) -> bool:
         if not is_root_cause_metric(metric):
             return False
-        if not is_memory_metric(metric):
+        if not is_busy_infra_metric(metric):
             return True
         config = self.rca_hyperparameters.get("anomaly", {})
         combined = self.rca_hyperparameters.get("combined", {})

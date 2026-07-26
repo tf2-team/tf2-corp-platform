@@ -1,5 +1,14 @@
 # Evaluation Pipeline
 
+> **AI MANDATE #15 replay entrypoint:** to run the detector against an external labeled
+> scenario set (including the hidden set organizers inject at grading time), use
+> `python -m aiops.cli replay --dataset <path>` instead of this offline harness. It reuses
+> the same baseline-deviation scoring described below but reports fired/no-fire, severity,
+> lead-time, and precision/recall per case. See `aiops/replay.py` and
+> `docs/mandates/15/MANDATE-15-detection-standard-analysis.md`. A small labeled demo set
+> covering the 3 required scenario types (real incident / masking / high-load-healthy)
+> is committed at `evaluate/dataset/mandate15/`.
+
 Runner: `evaluate/e2e_pipeline.py`
 
 The runner evaluates anomaly/incident detection and RCA top-K over the existing dataset folder:

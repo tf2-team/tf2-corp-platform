@@ -1,0 +1,46 @@
+# Scenario 5 — CHECKOUT P95 LATENCY
+
+## Purpose
+Labeled case for Mandate #7a metric #1: checkout service p95 latency. This
+scenario isolates the checkout_p95_latency_5m signal as the primary claim,
+separate from Scenario 2 (cart error rate) and Scenario 4 (checkout memory).
+
+## Fault plan
+- Flag: local-cartFailure=on
+- This flag is proven (Scenario 2 re-run) to push checkout_p95_latency_5m
+  above the 2.0s threshold, not just cart error rate.
+- Primary detector: auto_checkout_latency_p95 (signal checkout_p95_latency_5m,
+  threshold 2.0s per config/hyperparameters.json detectors.latency_slo_overrides.checkout)
+- Secondary/expected: cart error detector (auto_cart_error_rate) will very
+  likely also fire from the same fault, since local-cartFailure drives both
+  cart errors and downstream checkout latency.
+- Labeling rule: label BOTH detectors/incidents if they fire, but the primary
+  claim for this scenario's dataset entry is checkout p95 latency
+  (auto_checkout_latency_p95), not cart error rate.
+
+## State paths (canonical, isolated from other scenarios)
+- State dir: state/7b/s5-checkout-p95/
+- AIOPS_STATE_STORE_PATH=state/7b/s5-checkout-p95/aiops.sqlite3
+- AIOPS_RCA_HISTORY_PATH=state/7b/s5-checkout-p95/rca-history.jsonl
+- AIOPS_REMEDIATION_AUDIT_PATH=state/7b/s5-checkout-p95/remediation-audit.jsonl
+- Runtime config: AIOPS_RUNTIME_CONFIG_PATH=config/runtime.json (default, unchanged)
+
+## Threshold
+- checkout_p95_latency_5m threshold: 2.0s
+  (config/hyperparameters.json -> detectors.latency_slo_overrides.checkout = 2)
+
+## Operator steps outline
+1. Confirm runtime is up: GET /health/ready, and flagd reachable on :4000.
+2. Confirm baseline is clean: GET /api/v1/incidents -> [] before enabling fault.
+3. Enable fault flag: local-cartFailure=on via flagd.
+4. Watch uvicorn log for AIOPS_DETECT threshold_fire on auto_checkout_latency_p95
+   (signal checkout_p95_latency_5m, threshold 2.0), and note whether
+   auto_cart_error_rate also fires.
+5. Capture Grafana/incident evidence once checkout p95 crosses 2.0s.
+6. Disable fault flag: local-cartFailure=off; confirm recovery (checkout p95
+   back under 2.0s, cart error rate back near 0).
+7. Export incidents (GET /api/v1/incidents) and save dataset artifacts under
+   evaluate/dataset/mandate7b_live/ following the naming convention used by
+   prior scenarios (checkout_p95_* normal_baseline / real_incident folders).
+8. Record fault_start_unix / fault_disabled timestamps and detector fire
+   evidence in a rerun meta note, following the s2/s3/s4 precedent.

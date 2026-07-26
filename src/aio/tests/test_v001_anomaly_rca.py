@@ -667,6 +667,36 @@ class V001AnomalyRcaTest(unittest.TestCase):
         self.assertIn("growth_gate_event", logs.output[0])
         self.assertIn("service=checkout", logs.output[0])
 
+    def test_growth_gate_records_zero_score_metrics_for_monitoring_notification(self):
+        engine = anomaly_engine()
+        series = [
+            minute_metric("fraud-detection", "request_rate_5m", [10] * 30 + [30] * 15),
+            minute_metric("fraud-detection", "cpu_millicores", [0] * 45),
+            minute_metric("fraud-detection", "socket_io_bytes_per_second", [0] * 45),
+            minute_metric("fraud-detection", "error_rate_5m", [0] * 45),
+        ]
+
+        with self.assertLogs("aiops.anomaly.v001", level="WARNING") as logs:
+            engine._filter_normal_traffic_growth(series)
+
+        self.assertIn("zero_metrics=", logs.output[0])
+        self.assertEqual(engine.last_normal_growth_zero_score_metrics["fraud-detection"], {"cpu_millicores", "socket_io_bytes_per_second"})
+
+    def test_growth_gate_shape_mismatch_score_zero_is_not_monitoring_loss(self):
+        """DTW score 0.000 on non-zero series must not open growth_gate_zero_vector incidents."""
+        engine = anomaly_engine()
+        series = [
+            minute_metric("product-catalog", "request_rate_5m", [10] * 30 + [40] * 15),
+            # Non-zero but uncorrelated with request-rate growth → shape score can be 0.000
+            minute_metric("product-catalog", "cpu_millicores", [100] * 45),
+            minute_metric("product-catalog", "socket_io_bytes_per_second", [1_000_000] * 45),
+            minute_metric("product-catalog", "error_rate_5m", [0] * 45),
+        ]
+
+        engine._filter_normal_traffic_growth(series)
+
+        self.assertNotIn("product-catalog", engine.last_normal_growth_zero_score_metrics)
+
     def test_staggered_load_growth_is_not_treated_as_simultaneous(self):
         engine = anomaly_engine()
 

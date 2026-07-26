@@ -91,6 +91,17 @@ def metric(service: str, name: str, values: list[float]) -> MetricSeries:
     )
 
 
+def cpu_ramp_metric(service: str, baseline: float = 100.0, tail: float = 160.0) -> MetricSeries:
+    """CPU series with a real tail jump (60s spacing) so it clears the busy-infra significance gate."""
+    values = [baseline] * 30 + [tail] * 15
+    return MetricSeries(
+        service=service,
+        metric="cpu_millicores",
+        signal_id=f"{service}_cpu_millicores",
+        points=[MetricPoint(timestamp=index * 60, value=value) for index, value in enumerate(values)],
+    )
+
+
 def anomaly(name: str, score: float = 0.5, timestamp: int = 5) -> AnomalyFinding:
     return AnomalyFinding(algorithm="weighted_sum", service="checkout", metric=name, signal_id=f"checkout_{name}", score=score, timestamp=timestamp)
 
@@ -505,6 +516,7 @@ class RuntimePipelineTest(unittest.TestCase):
                 detectors=[],
                 store=store,
                 policy=policy(settings),
+                rca_hyperparameters=load_hyperparameters(settings.hyperparameters_path)["rca"],
                 **runtime_kwargs(settings),
             )
             pipeline._run_v001_rca = lambda metric_series, incidents: RcaResult(
@@ -529,7 +541,7 @@ class RuntimePipelineTest(unittest.TestCase):
             )
 
             with self.assertLogs("aiops.pipeline.runtime", level="INFO") as logs:
-                result = pipeline.run_once(metric_series=[metric("frontend", "cpu_millicores", [100.0] * 31)])
+                result = pipeline.run_once(metric_series=[cpu_ramp_metric("frontend")])
             store.close()
 
         self.assertEqual(result.candidates, [])
@@ -555,14 +567,15 @@ class RuntimePipelineTest(unittest.TestCase):
                 store=store,
                 policy=policy(settings),
                 notification_sender=sender,
+                rca_hyperparameters=load_hyperparameters(settings.hyperparameters_path)["rca"],
                 **runtime_kwargs(settings),
             )
             pipeline._run_v001_rca = lambda metric_series, incidents: RcaResult(
                 root_causes=[RootCauseCandidate(service="payment", score=1.0, root_cause_metrics=["cpu_millicores"])]
             )
 
-            first = pipeline.run_once(metric_series=[metric("payment", "cpu_millicores", [100.0] * 31)])
-            second = pipeline.run_once(metric_series=[metric("payment", "cpu_millicores", [100.0] * 31)])
+            first = pipeline.run_once(metric_series=[cpu_ramp_metric("payment")])
+            second = pipeline.run_once(metric_series=[cpu_ramp_metric("payment")])
             store.close()
 
         self.assertEqual([message.service for message in sender.sent], ["payment"])
@@ -603,6 +616,7 @@ class RuntimePipelineTest(unittest.TestCase):
                 detectors=[],
                 store=store,
                 policy=policy(settings),
+                rca_hyperparameters=load_hyperparameters(settings.hyperparameters_path)["rca"],
                 **runtime_kwargs(settings),
             )
             rca_result = RcaResult(
@@ -614,7 +628,11 @@ class RuntimePipelineTest(unittest.TestCase):
             )
 
             with self.assertLogs("aiops.pipeline.runtime", level="INFO") as logs:
-                incidents = pipeline._upsert_rca_root_incidents(rca_result, [])
+                incidents = pipeline._upsert_rca_root_incidents(
+                    rca_result,
+                    [],
+                    [cpu_ramp_metric("checkout"), cpu_ramp_metric("payment"), cpu_ramp_metric("ad")],
+                )
             notifications = store.pending_notifications_for(incidents)
             store.close()
 
@@ -647,6 +665,7 @@ class RuntimePipelineTest(unittest.TestCase):
                 store=store,
                 policy=policy(settings),
                 notification_sender=sender,
+                rca_hyperparameters=load_hyperparameters(settings.hyperparameters_path)["rca"],
                 **runtime_kwargs(settings),
             )
 
@@ -668,7 +687,7 @@ class RuntimePipelineTest(unittest.TestCase):
 
             pipeline._run_v001_rca = run_rca
 
-            result = pipeline.run_once(metric_series=[metric("payment", "error_rate_5m", [0.0] * 31)])
+            result = pipeline.run_once(metric_series=[metric("payment", "error_rate_5m", [0.0] * 31), cpu_ramp_metric("payment")])
             store.close()
 
         self.assertEqual([incident.service for incident in result.incidents], ["checkout", "payment"])
@@ -745,6 +764,41 @@ class RuntimePipelineTest(unittest.TestCase):
         self.assertEqual(skipped, [])
         self.assertEqual([incident.service for incident in notified], ["frontend-proxy"])
         self.assertEqual(notifications[0].summary, "rca_root_cause on memory_usage_bytes")
+
+    def test_pipeline_filters_rca_cpu_root_by_tail_threshold(self):
+        settings = Settings()
+        hyperparameters = load_hyperparameters(settings.hyperparameters_path)["rca"]
+
+        with TemporaryDirectory() as tmp:
+            store = SQLiteIncidentStore(Path(tmp) / "aiops.sqlite3", environment=settings.environment)
+            pipeline = AiopsPipeline(
+                collector=StaticCollector([]),
+                detectors=[],
+                store=store,
+                policy=policy(settings),
+                rca_hyperparameters=hyperparameters,
+                **runtime_kwargs(settings),
+            )
+            rca_result = RcaResult(
+                root_causes=[RootCauseCandidate(service="recommendation", score=1.0, root_cause_metrics=["cpu_millicores"])]
+            )
+
+            skipped = pipeline._upsert_rca_root_incidents(
+                rca_result,
+                [],
+                [metric("recommendation", "cpu_millicores", [100.0] * 30 + [105.0] * 15)],
+            )
+            notified = pipeline._upsert_rca_root_incidents(
+                rca_result,
+                [],
+                [cpu_ramp_metric("recommendation", baseline=100.0, tail=160.0)],
+            )
+            notifications = store.pending_notifications_for(notified)
+            store.close()
+
+        self.assertEqual(skipped, [])
+        self.assertEqual([incident.service for incident in notified], ["recommendation"])
+        self.assertEqual(notifications[0].summary, "rca_root_cause on cpu_millicores")
 
     def test_pipeline_flushes_notification_outbox_to_sender(self):
         settings = Settings()
@@ -1124,7 +1178,7 @@ class RuntimePipelineTest(unittest.TestCase):
                 metric_series=[
                     metric("checkout", "error_rate_5m", [0.0] * 40 + [0.4] * 20),
                     metric("checkout", "p95_latency_5m", [0.1] * 40 + [1.5] * 20),
-                    metric("checkout", "cpu_millicores", [100.0] * 60),
+                    metric("checkout", "cpu_millicores", [100.0] * 40 + [180.0] * 20),
                 ]
             )
             store.close()
@@ -1149,13 +1203,14 @@ class RuntimePipelineTest(unittest.TestCase):
                 detectors=[MultiServiceDetector()],
                 store=store,
                 policy=policy(settings),
+                rca_hyperparameters=load_hyperparameters(settings.hyperparameters_path)["rca"],
                 **runtime_kwargs(settings),
             )
             pipeline._run_v001_rca = lambda metric_series, incidents: RcaResult(
                 root_causes=[RootCauseCandidate(service="valkey-cart", score=1.0, root_cause_metrics=["cpu_millicores"])]
             )
 
-            result = pipeline.run_once()
+            result = pipeline.run_once(metric_series=[cpu_ramp_metric("valkey-cart")])
             outbox_rows = store._connection.execute("SELECT incident_id, status FROM notification_outbox ORDER BY incident_id").fetchall()
             store.close()
 

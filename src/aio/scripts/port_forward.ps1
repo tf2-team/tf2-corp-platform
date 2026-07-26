@@ -1,7 +1,11 @@
 [CmdletBinding()]
 param(
     [string]$Namespace = $env:AIOPS_SMOKE_NAMESPACE,
-    [int]$StartupTimeoutSeconds = 20
+    [int]$StartupTimeoutSeconds = 20,
+    # Which services to tunnel. Default = all 4 (back-compat). Pass a subset
+    # (e.g. -Services prometheus) to skip services whose pods aren't Ready
+    # right now (e.g. opensearch stuck Pending) without failing the whole run.
+    [string[]]$Services = @("prometheus", "jaeger", "opensearch", "grafana")
 )
 
 $ErrorActionPreference = "Stop"
@@ -9,14 +13,35 @@ if ([string]::IsNullOrWhiteSpace($Namespace)) {
     $Namespace = "techx-corp-prod"
 }
 
-$forwards = @(
+$allForwards = @(
     [pscustomobject]@{ Name = "prometheus"; LocalPort = 9090; RemotePort = 9090; Scheme = "http" },
     [pscustomobject]@{ Name = "jaeger"; LocalPort = 16686; RemotePort = 16686; Scheme = "http" },
     [pscustomobject]@{ Name = "opensearch"; LocalPort = 9200; RemotePort = 9200; Scheme = "https" },
     [pscustomobject]@{ Name = "grafana"; LocalPort = 3000; RemotePort = 80; Scheme = "http" }
 )
+$forwards = @($allForwards | Where-Object { $_.Name -in $Services })
+$unknown = @($Services | Where-Object { $_ -notin $allForwards.Name })
+if ($unknown) {
+    throw "Unknown -Services value(s): $($unknown -join ', '). Valid: $($allForwards.Name -join ', ')"
+}
+if (-not $forwards) {
+    throw "No services selected. Pass at least one of: $($allForwards.Name -join ', ')"
+}
 $proxyPort = 8001
 $jobs = @()
+
+function Get-JobDetails {
+    param($Job)
+    try {
+        return ($Job | Receive-Job -Keep -ErrorAction Stop | Out-String)
+    }
+    catch {
+        # Receive-Job re-throws the job's own terminating error instead of
+        # returning it as text; capture that real message here so callers
+        # see the actual kubectl failure instead of a generic wrapper.
+        return $_.Exception.Message
+    }
+}
 
 function Test-LocalPort {
     param([int]$Port)
@@ -93,15 +118,15 @@ try {
         }
         $failedJobs = @($jobs | Where-Object { $_.State -ne "Running" })
         if ($failedJobs) {
-            $details = $failedJobs | Receive-Job -Keep | Out-String
-            throw "A port-forward stopped during startup.`n$details"
+            $details = ($failedJobs | ForEach-Object { Get-JobDetails $_ }) -join "`n"
+            throw "A port-forward stopped during startup.`n$details`n`nTip: if this is opensearch/jaeger/grafana and its pod isn't Ready, rerun with -Services to skip it, e.g.:`n  powershell -File scripts/port_forward.ps1 -Services prometheus"
         }
         Start-Sleep -Milliseconds 300
     } while ((Get-Date) -lt $deadline)
 
     if ($readyPorts.Count -ne $requiredPorts.Count) {
         $missing = @($requiredPorts | Where-Object { $_ -notin $readyPorts }) -join ", "
-        $details = $jobs | Receive-Job -Keep | Out-String
+        $details = ($jobs | ForEach-Object { Get-JobDetails $_ }) -join "`n"
         throw "Timed out waiting for local port(s): $missing`n$details"
     }
 
@@ -114,8 +139,8 @@ try {
 
     Write-Host "`nCredential requirements:" -ForegroundColor Yellow
     Write-Host "  Prometheus, Jaeger, Kubernetes proxy, Grafana health: no service credential"
-    Write-Host "  OpenSearch: Basic Auth username/password is required"
-    Write-Host "  Grafana inbound webhook: shared secret must match the AIOps process"
+    if ("opensearch" -in $Services) { Write-Host "  OpenSearch: Basic Auth username/password is required" }
+    if ("grafana" -in $Services) { Write-Host "  Grafana inbound webhook: shared secret must match the AIOps process" }
     Write-Host "  Notification: external webhook URL; it cannot be port-forwarded"
     Write-Host "`nPress Ctrl+C to stop only the jobs created by this script." -ForegroundColor Gray
 
@@ -123,7 +148,7 @@ try {
         Wait-Job -Job $jobs -Any -Timeout 5 | Out-Null
         $stoppedJobs = @($jobs | Where-Object { $_.State -ne "Running" })
         if ($stoppedJobs) {
-            $details = $stoppedJobs | Receive-Job -Keep | Out-String
+            $details = ($stoppedJobs | ForEach-Object { Get-JobDetails $_ }) -join "`n"
             throw "A port-forward stopped unexpectedly.`n$details"
         }
     }

@@ -7,6 +7,7 @@ state/*.sqlite3
 state/*.sqlite3-*
 state/*.jsonl
 evidence/
+dataset/
 .env
 .env.*
 !.env.example
