@@ -8,6 +8,7 @@ from collections import defaultdict
 from aiops.anomaly.stats import robust_score
 from aiops.rca.graph import GraphTraversalRca
 from aiops.schemas import AnomalyFinding, MetricSeries, RcaResult, RootCauseCandidate, RuntimeConfig, TelemetryCorroboration
+from aiops.shared.metrics import is_root_cause_metric, metric_priority
 from aiops.shared.tail import evaluate_tail_change, fixed_baseline_and_tail, metric_group, tail_aligned_spearman
 from aiops.topology import TopologyGraph
 
@@ -140,7 +141,7 @@ class V001RcaEngine:
                 continue
             if not metrics_by_service[service]:
                 continue
-            metric_scores = sorted(metrics_by_service[service], key=lambda item: (self._is_breakout_metric(service, item[0], required_breakout_metrics), _metric_priority(item[0]), item[1]), reverse=True)
+            metric_scores = sorted(metrics_by_service[service], key=lambda item: (self._is_breakout_metric(service, item[0], required_breakout_metrics), metric_priority(item[0]), item[1]), reverse=True)
             if required_breakout_metrics.get(service) and not self._is_breakout_metric(service, metric_scores[0][0], required_breakout_metrics):
                 continue
             metrics = list(dict.fromkeys(alias for metric, _, _ in metric_scores for alias in self._metric_aliases(metric)))
@@ -291,34 +292,3 @@ class V001RcaEngine:
                 return service[: -len(suffix)]
         return service
 
-
-def _is_log_metric(metric: str) -> bool:
-    return metric.startswith("log_template_count_")
-
-
-def _is_context_metric(metric: str) -> bool:
-    return "request_rate" in metric or "latency" in metric or "burn_rate" in metric or _is_error_metric(metric)
-
-
-def is_root_cause_metric(metric: str) -> bool:
-    return not (_is_log_metric(metric) or _is_context_metric(metric))
-
-
-def _is_busy_infra_metric(metric: str) -> bool:
-    return "cpu" in metric or "memory" in metric or "disk" in metric
-
-
-def _is_error_metric(metric: str) -> bool:
-    return "error_rate" in metric or "error_ratio" in metric or "bad_ratio" in metric
-
-
-def _is_oom_metric(metric: str) -> bool:
-    return "oom" in metric
-
-
-def _metric_priority(metric: str) -> int:
-    if _is_error_metric(metric):
-        return 2
-    if _is_busy_infra_metric(metric) or _is_oom_metric(metric):
-        return 1
-    return 0

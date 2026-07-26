@@ -7,7 +7,7 @@ import argparse
 
 from aiops.api.app import run_live_pipeline
 from aiops.config import Settings
-from aiops.schemas import Incident, PipelineResult
+from aiops.schemas import Incident
 from aiops.storage import SQLiteIncidentStore
 from pydantic import ValidationError
 
@@ -26,10 +26,6 @@ def main() -> None:
         print(format_incidents(load_incidents_for_cli(store)))
     finally:
         store.close()
-
-
-def format_pipeline_result(result: PipelineResult) -> str:
-    return format_incidents(result.incidents)
 
 
 def load_incidents_for_cli(store: SQLiteIncidentStore) -> list[Incident]:

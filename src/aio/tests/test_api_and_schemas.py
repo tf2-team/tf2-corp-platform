@@ -10,13 +10,11 @@ from fastapi import HTTPException
 from aiops.api import create_app
 from aiops.api.app import build_enricher, handle_grafana_webhook, run_static_pipeline
 from aiops.config import Settings, load_runtime_config
-from aiops.models import Observation as LegacyObservation
 from aiops.schemas import GrafanaWebhookEvent, Observation, PipelineRunRequest, SignalQuality
 
 
 class SchemaPackageTest(unittest.TestCase):
-    def test_schemas_are_shared_and_legacy_import_still_points_there(self):
-        self.assertIs(LegacyObservation, Observation)
+    def test_schemas_are_shared_from_schema_package(self):
         observation = Observation(signal_id="checkout", value="1.2", unit="ratio", window="5m", quality="verified")
 
         self.assertEqual(observation.value, 1.2)

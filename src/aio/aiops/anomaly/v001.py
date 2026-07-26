@@ -13,6 +13,7 @@ import warnings
 
 from aiops.anomaly.stats import mean, median, rolling_robust_scores, stdev
 from aiops.schemas import AnomalyFinding, MetricSeries
+from aiops.shared.metrics import is_error_metric, is_memory_metric, is_oom_metric
 from aiops.shared.tail import evaluate_tail_change, fixed_baseline_and_tail, metric_group, normal_traffic_growth_decision
 
 logger = logging.getLogger(__name__)
@@ -426,7 +427,7 @@ class V001AnomalyEngine:
         return [
             metric
             for metric in series
-            if metric.service not in normal_services or _is_error_metric(metric.metric)
+            if metric.service not in normal_services or is_error_metric(metric.metric)
         ]
 
     def _normal_traffic_growth_decision(self, series: list[MetricSeries]) -> tuple[bool, str]:
@@ -443,7 +444,7 @@ class V001AnomalyEngine:
         )
 
     def _memory_oom_detected(self, memory: MetricSeries) -> bool:
-        if not _is_memory_metric(memory.metric) or len(memory.points) < self.memory_oom_min_points:
+        if not is_memory_metric(memory.metric) or len(memory.points) < self.memory_oom_min_points:
             return False
         values = [point.value for point in memory.points]
         if max(values) <= 0:
@@ -475,23 +476,11 @@ class V001AnomalyEngine:
             if residuals[index] < median(residuals[index - period : index]) and score >= self.memory_oom_ewma_stl.z_threshold
         )
 
-def _is_memory_metric(metric: str) -> bool:
-    return "memory" in metric
-
-
-def _is_oom_metric(metric: str) -> bool:
-    return "oom" in metric
-
-
-def _is_error_metric(metric: str) -> bool:
-    return "error_rate" in metric or "error_ratio" in metric
-
-
 def _breakout_metrics_for_reason(detail: str, series: list[MetricSeries]) -> set[str]:
     if detail.startswith(("reason=memory_", "reason=oom_")):
-        return {metric.metric for metric in series if _is_memory_metric(metric.metric) or _is_oom_metric(metric.metric)}
+        return {metric.metric for metric in series if is_memory_metric(metric.metric) or is_oom_metric(metric.metric)}
     if detail.startswith("reason=error_"):
-        return {metric.metric for metric in series if _is_error_metric(metric.metric)}
+        return {metric.metric for metric in series if is_error_metric(metric.metric)}
     if detail.startswith("reason=ready_pods_"):
         return {metric.metric for metric in series if "ready_pods" in metric.metric}
     return set()

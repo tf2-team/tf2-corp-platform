@@ -23,8 +23,7 @@ aiops/
 ├── storage/          # sqlite.py
 ├── pipeline/         # runtime.py
 ├── schemas/          # shared Pydantic request/domain/response models
-├── shared/           # reusable helpers
-└── models.py         # compatibility exports for older imports
+└── shared/           # reusable helpers
 ```
 
 `__init__.py` files only re-export public classes. Pipeline logic stays in named modules.

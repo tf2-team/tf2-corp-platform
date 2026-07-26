@@ -7,6 +7,7 @@ from statistics import median
 
 from aiops.notifications import is_slo_notification
 from aiops.schemas import AnomalyFinding, Incident, MetricSeries, TelemetryCorroboration
+from aiops.shared.metrics import is_error_metric, is_oom_metric
 
 
 def apply_corroboration(
@@ -30,7 +31,7 @@ def apply_corroboration(
 
 
 def hard_failure(finding: AnomalyFinding, series: list[MetricSeries]) -> bool:
-    if "error_rate" in finding.metric or "error_ratio" in finding.metric or "oom" in finding.metric:
+    if is_error_metric(finding.metric) or is_oom_metric(finding.metric):
         return True
     if "ready_pods" not in finding.metric:
         return False

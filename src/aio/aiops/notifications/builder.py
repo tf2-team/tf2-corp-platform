@@ -4,12 +4,15 @@
 from __future__ import annotations
 
 from aiops.schemas import CandidateEvent, Incident, NotificationMessage
+from aiops.shared.metrics import is_error_metric
 
 
 def is_slo_notification(event: CandidateEvent) -> bool:
     return event.reason == "threshold_breached" and (
         "slo" in event.detector_id.lower()
-        or any(marker in event.signal_id for marker in ("latency", "error_rate", "error_ratio", "bad_ratio", "burn_rate"))
+        or "latency" in event.signal_id
+        or "burn_rate" in event.signal_id
+        or is_error_metric(event.signal_id)
     )
 
 
