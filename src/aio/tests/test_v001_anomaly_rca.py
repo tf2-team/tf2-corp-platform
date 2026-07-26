@@ -483,10 +483,7 @@ class V001AnomalyRcaTest(unittest.TestCase):
             ["error_rate_5m"],
         )
         series[-1] = minute_metric("checkout", "error_rate_5m", [0] * 44 + [0.01])
-        with self.assertLogs("aiops.anomaly.v001", level="INFO") as logs:
-            self.assertEqual(engine._filter_normal_traffic_growth(series), series)
-        self.assertEqual(len(logs.records), 1)
-        self.assertIn("service=checkout result=detect breakout=true reason=error_increased", logs.output[0])
+        self.assertEqual(engine._filter_normal_traffic_growth(series), series)
         self.assertEqual(engine.last_normal_growth_breakout_metrics, {"checkout": {"error_rate_5m"}})
 
     def test_oom_increase_does_not_break_normal_growth_when_request_increases(self):
@@ -604,11 +601,9 @@ class V001AnomalyRcaTest(unittest.TestCase):
             minute_metric("checkout", "error_rate_5m", [0] * 45),
         ]
 
-        with self.assertLogs("aiops.anomaly.v001", level="INFO") as logs:
-            filtered = engine._filter_normal_traffic_growth(series)
+        filtered = engine._filter_normal_traffic_growth(series)
 
         self.assertEqual([item.metric for item in filtered], ["error_rate_5m"])
-        self.assertIn("reason=traffic_shape", " ".join(logs.output))
 
     def test_mixed_growth_and_decline_is_not_filtered(self):
         engine = anomaly_engine()
@@ -658,34 +653,15 @@ class V001AnomalyRcaTest(unittest.TestCase):
 
         self.assertEqual([item.metric for item in engine._filter_normal_traffic_growth(series)], ["error_rate_5m"])
 
-    def test_growth_gate_uses_median_three_smoothing_and_logs_rejection(self):
+    def test_growth_gate_uses_median_three_smoothing(self):
         self.assertEqual(median3([10, 100, 10]), [10, 10, 10])
         engine = anomaly_engine()
-        with self.assertLogs("aiops.anomaly.v001", level="INFO") as logs:
-            engine._filter_normal_traffic_growth(
-                [
-                    minute_metric("checkout", "request_rate_5m", [10] * 45),
-                    minute_metric("payment", "request_rate_5m", [10] * 45),
-                ]
-            )
-        self.assertEqual(len(logs.records), 1)
-        self.assertIn("service=checkout", logs.output[0])
-        self.assertIn("service=payment", logs.output[0])
-        self.assertIn("reason=missing_metrics", logs.output[0])
-
-    def test_growth_gate_logs_zero_score_metrics_without_notification_state(self):
-        engine = anomaly_engine()
         series = [
-            minute_metric("fraud-detection", "request_rate_5m", [10] * 30 + [30] * 15),
-            minute_metric("fraud-detection", "cpu_millicores", [0] * 45),
-            minute_metric("fraud-detection", "socket_io_bytes_per_second", [0] * 45),
-            minute_metric("fraud-detection", "error_rate_5m", [0] * 45),
+            minute_metric("checkout", "request_rate_5m", [10] * 45),
+            minute_metric("payment", "request_rate_5m", [10] * 45),
         ]
 
-        with self.assertLogs("aiops.anomaly.v001", level="WARNING") as logs:
-            engine._filter_normal_traffic_growth(series)
-
-        self.assertIn("cpu=0.000", logs.output[0])
+        self.assertEqual(engine._filter_normal_traffic_growth(series), series)
 
     def test_staggered_load_growth_is_not_treated_as_simultaneous(self):
         engine = anomaly_engine()

@@ -384,7 +384,7 @@ class SQLiteIncidentStore:
             f"SELECT notification_json FROM notification_outbox WHERE status = 'pending' AND incident_id IN ({placeholders}) ORDER BY created_at",
             incident_ids,
         ).fetchall()
-        return [message for row in rows if not _is_growth_gate_zero_notification(message := NotificationMessage.model_validate_json(row[0]))]
+        return [NotificationMessage.model_validate_json(row[0]) for row in rows]
 
     def suppressed_incident_ids(self, incidents: list[Incident]) -> set[str]:
         return {
@@ -414,7 +414,7 @@ class SQLiteIncidentStore:
             """,
             (_now(), limit),
         ).fetchall()
-        return [message for row in rows if not _is_growth_gate_zero_notification(message := NotificationMessage.model_validate_json(row[0]))]
+        return [NotificationMessage.model_validate_json(row[0]) for row in rows]
 
     def mark_notification_sent(self, incident_id: str) -> None:
         row = self._connection.execute(
@@ -486,10 +486,6 @@ def _candidate_seen_at(candidate: CandidateEvent) -> datetime:
 
 def _now() -> str:
     return datetime.now(UTC).isoformat()
-
-
-def _is_growth_gate_zero_notification(message: NotificationMessage) -> bool:
-    return "growth_gate_zero_score" in message.summary or "AIOPS_NORMAL_GROWTH_GATE zero_score" in message.summary
 
 
 def _slo_cooldown_key(service: str) -> str:
