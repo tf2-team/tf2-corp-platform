@@ -215,8 +215,8 @@ def aligned_dtw_similarity(left: MetricSeries, right: MetricSeries, max_warp_buc
     from scipy.spatial import distance
 
     pairs = _aligned_pairs(left, right)
-    if len(pairs) < 3:
-        return 0.0
+    # if len(pairs) < 3:
+    #     return 0.0
     left_values = _normalize([left for left, _ in pairs])
     right_values = _normalize([right for _, right in pairs])
     if not any(left_values) or not any(right_values):
@@ -258,8 +258,8 @@ def aligned_spearman(left: MetricSeries, right: MetricSeries, right_lag_buckets:
     from scipy.stats import ConstantInputWarning, spearmanr
 
     pairs = _aligned_pairs(left, right, right_lag_buckets)
-    if len(pairs) < 3:
-        return 0.0
+    # if len(pairs) < 3:
+    #     return 0.0
     with warnings.catch_warnings():
         warnings.simplefilter("ignore", ConstantInputWarning)
         coefficient = spearmanr(*zip(*pairs)).statistic
