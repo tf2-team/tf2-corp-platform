@@ -409,9 +409,9 @@ func (cs *checkout) PlaceOrder(ctx context.Context, req *pb.PlaceOrderRequest) (
 	shippingTrackingAttribute := attribute.String("app.shipping.tracking.id", shippingTrackingID)
 	span.AddEvent("hold", trace.WithAttributes(shippingTrackingAttribute))
 
-	// Do not swallow EmptyCart errors (e.g. cartFailure / local-cartFailure inject).
+	// EmptyCart is best-effort cleanup: cart failure must not block order completion after payment succeeds.
 	if err := cs.emptyUserCart(ctx, req.UserId); err != nil {
-		return nil, status.Errorf(codes.Internal, "failed to empty user cart: %+v", err)
+		logger.Warn(fmt.Sprintf("cart cleanup failed for user %s: %+v (deferred)", req.UserId, err))
 	}
 
 	orderResult := &pb.OrderResult{
