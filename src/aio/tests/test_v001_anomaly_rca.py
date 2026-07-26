@@ -18,7 +18,7 @@ from aiops.rca.graph import GraphTraversalRca
 from aiops.rca import V001RcaEngine
 from aiops.schemas import AnomalyFinding, MetricPoint, MetricSeries, PipelineResult, PipelineRunRequest, RcaResult, RootCauseCandidate, RuntimeConfig, TelemetryCorroboration
 from aiops.shared.series import prepare_detector_series
-from aiops.shared.tail import aligned_spearman, fixed_baseline_and_tail, median3, metric_group, normal_traffic_growth_decision, point_changed
+from aiops.shared.tail import aligned_spearman, cusum_tail_change, evaluate_tail_change, fixed_baseline_and_tail, median3, metric_group, normal_traffic_growth_decision, point_changed, tail_aligned_dtw_similarity
 from scipy.stats import ConstantInputWarning
 
 
@@ -138,6 +138,14 @@ class V001AnomalyRcaTest(unittest.TestCase):
 
         self.assertTrue(normal, reason)
 
+    def test_dtw_shape_requires_configured_onset_window_for_infra(self):
+        request_tail = [30, 10, 50, 10, 20, 10, 45, 10, 15, 10, 35, 10, 25, 10, 40]
+        request = minute_metric("checkout", "request_rate_5m", [10] * 30 + request_tail)
+        delayed = minute_metric("checkout", "cpu_millicores", [100] * 30 + [100, 100, *[100 + 10 * value for value in request_tail[:-2]]])
+
+        self.assertLess(tail_aligned_dtw_similarity(request, delayed, 900, 29, max_warp_buckets=0, enforce_onset=True), 0.7)
+        self.assertGreaterEqual(tail_aligned_dtw_similarity(request, delayed, 900, 29, max_warp_buckets=2, enforce_onset=True), 0.7)
+
     def test_normal_traffic_growth_rejects_missing_socket_and_memory_shape_mismatch(self):
         common = {
             "detection_window_seconds": 900,
@@ -174,6 +182,12 @@ class V001AnomalyRcaTest(unittest.TestCase):
         self.assertFalse(point_changed(8.75, 8.0, min_relative=0.3, min_absolute=1.0))
         self.assertFalse(point_changed(8.25, 8.0, min_relative=0.3, min_absolute=1.0))
         self.assertTrue(point_changed(11.0, 8.0, min_relative=0.3, min_absolute=1.0))
+
+    def test_cusum_tail_change_detects_creeping_cpu_drift(self):
+        series = minute_metric("payment", "cpu_millicores", [100] * 30 + [108] * 15)
+
+        self.assertFalse(evaluate_tail_change(series, 900, 29, 3, 0.3, 10.0).significant)
+        self.assertTrue(cusum_tail_change(series, 900, 29, 3, 0.3, 10.0).significant)
 
     def test_socket_io_metric_uses_socket_io_thresholds(self):
         self.assertEqual(metric_group("socket_io_bytes_per_second"), "socket_io")
@@ -546,6 +560,12 @@ class V001AnomalyRcaTest(unittest.TestCase):
         cpu = minute_metric("checkout", "cpu_millicores", [100] * 30 + [240] * 12 + [55] * 3)
 
         self.assertFalse(engine._memory_oom_detected(cpu))
+
+    def test_memory_oom_pattern_requires_stable_baseline(self):
+        engine = anomaly_engine()
+        memory = minute_metric("checkout", "memory_usage_bytes", [100_000_000, 130_000_000] * 15 + [240_000_000] * 12 + [55_000_000] * 3)
+
+        self.assertFalse(engine._memory_oom_detected(memory))
 
     def test_memory_growth_without_request_growth_keeps_all_metrics(self):
         engine = anomaly_engine()

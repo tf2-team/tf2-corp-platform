@@ -69,6 +69,31 @@ def evaluate_tail_change(
     )
 
 
+def cusum_tail_change(metric: MetricSeries, detection_window_seconds: int | None, start: int, min_buckets: int, min_relative: float, min_absolute: float) -> TailChange:
+    change = evaluate_tail_change(metric, detection_window_seconds, start, min_buckets, min_relative, min_absolute)
+    if change.significant or not change.indexes:
+        return change
+    limit = max(min_absolute, abs(change.baseline) * min_relative) * max(2, min_buckets)
+    cumulative = 0.0
+    first_changed = None
+    positive_buckets = 0
+    for index in change.indexes:
+        delta = change.values[index] - change.baseline
+        positive_buckets += int(delta > 0)
+        cumulative = max(0.0, cumulative + delta)
+        if positive_buckets >= min_buckets and cumulative >= limit:
+            first_changed = metric.points[index].timestamp
+            break
+    return TailChange(
+        indexes=change.indexes,
+        values=change.values,
+        baseline=change.baseline,
+        changed_buckets=change.changed_buckets,
+        first_changed_at=first_changed or change.first_changed_at,
+        significant=first_changed is not None,
+    )
+
+
 def tail_indexes(metric: MetricSeries, detection_window_seconds: int | None, start: int) -> range:
     if not metric.points:
         return range(0)
@@ -155,8 +180,7 @@ def normal_traffic_growth_decision(
     scores = {
         group: max(
             (
-                tail_aligned_spearman(rate, metric, detection_window_seconds, start, right_lag_buckets=lag)
-                for lag in range(max(0, traffic_shape_max_lag_buckets) + 1)
+                tail_aligned_dtw_similarity(rate, metric, detection_window_seconds, start, max_warp_buckets=traffic_shape_max_lag_buckets, enforce_onset=group in required_infra_groups)
                 for rate in request
                 for metric in (memory_shape_metrics if group == "memory" else by_group[group])
             ),
@@ -171,6 +195,50 @@ def normal_traffic_growth_decision(
     zero_metrics = [metric.metric for metrics in by_group.values() for metric in metrics if metric.points and all(point.value == 0 for point in metric.points)]
     zero_detail = f" zero_metrics={','.join(zero_metrics)}" if zero_metrics else ""
     return False, f"reason=shape_mismatch cpu={scores['cpu']:.3f} socket_io={scores['socket_io']:.3f}{memory_detail} threshold={traffic_shape_min_spearman:.3f}{zero_detail}"
+
+
+def tail_aligned_dtw_similarity(left: MetricSeries, right: MetricSeries, detection_window_seconds: int | None, start: int, max_warp_buckets: int = 0, *, enforce_onset: bool = False) -> float:
+    tail = tail_indexes(left, detection_window_seconds, start)
+    if not tail:
+        return aligned_dtw_similarity(left, right, max_warp_buckets)
+    first = max(0, tail.start - max(1, max_warp_buckets + 1))
+    indexes = set(range(first, tail.stop))
+    return aligned_dtw_similarity(
+        left.model_copy(update={"points": [point for index, point in enumerate(left.points) if index in indexes]}),
+        right,
+        max_warp_buckets,
+        enforce_onset=enforce_onset,
+    )
+
+
+def aligned_dtw_similarity(left: MetricSeries, right: MetricSeries, max_warp_buckets: int = 0, *, enforce_onset: bool = False) -> float:
+    from scipy.spatial import distance
+
+    pairs = _aligned_pairs(left, right)
+    if len(pairs) < 3:
+        return 0.0
+    left_values = _normalize([left for left, _ in pairs])
+    right_values = _normalize([right for _, right in pairs])
+    if not any(left_values) or not any(right_values):
+        return 0.0
+    if enforce_onset:
+        left_first = next(index for index, value in enumerate(left_values) if value > 0.1)
+        right_first = next(index for index, value in enumerate(right_values) if value > 0.1)
+        if abs(left_first - right_first) > max(0, max_warp_buckets):
+            return 0.0
+    window = max(0, max_warp_buckets)
+    previous = [float("inf")] * (len(right_values) + 1)
+    previous[0] = 0.0
+    for left_index, left_value in enumerate(left_values, start=1):
+        current = [float("inf")] * (len(right_values) + 1)
+        low = max(1, left_index - window)
+        high = min(len(right_values), left_index + window)
+        for right_index in range(low, high + 1):
+            cost = distance.euclidean((left_value,), (right_values[right_index - 1],))
+            current[right_index] = cost + min(previous[right_index], current[right_index - 1], previous[right_index - 1])
+        previous = current
+    cost = previous[-1] / max(len(left_values), len(right_values))
+    return 1.0 / (1.0 + 2.0 * cost)
 
 
 def tail_aligned_spearman(left: MetricSeries, right: MetricSeries, detection_window_seconds: int | None, start: int, right_lag_buckets: int = 0) -> float:
@@ -189,6 +257,16 @@ def tail_aligned_spearman(left: MetricSeries, right: MetricSeries, detection_win
 def aligned_spearman(left: MetricSeries, right: MetricSeries, right_lag_buckets: int = 0) -> float:
     from scipy.stats import ConstantInputWarning, spearmanr
 
+    pairs = _aligned_pairs(left, right, right_lag_buckets)
+    if len(pairs) < 3:
+        return 0.0
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", ConstantInputWarning)
+        coefficient = spearmanr(*zip(*pairs)).statistic
+    return float(coefficient) if coefficient == coefficient else 0.0
+
+
+def _aligned_pairs(left: MetricSeries, right: MetricSeries, right_lag_buckets: int = 0) -> list[tuple[float, float]]:
     tolerance = max(series_step_seconds(left), series_step_seconds(right))
     lag_seconds = max(0, right_lag_buckets) * series_step_seconds(right)
     pairs = []
@@ -199,12 +277,13 @@ def aligned_spearman(left: MetricSeries, right: MetricSeries, right_lag_buckets:
             right_index += 1
         if right.points and abs(right.points[right_index].timestamp - target_timestamp) <= tolerance:
             pairs.append((point.value, right.points[right_index].value))
-    if len(pairs) < 3:
-        return 0.0
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore", ConstantInputWarning)
-        coefficient = spearmanr(*zip(*pairs)).statistic
-    return float(coefficient) if coefficient == coefficient else 0.0
+    return pairs
+
+
+def _normalize(values: list[float]) -> list[float]:
+    low, high = min(values), max(values)
+    spread = high - low
+    return [(value - low) / spread for value in values] if spread else [0.0 for _ in values]
 
 def _smoothed_tail_change(metric, detection_window_seconds, start, min_buckets_by_group, min_relative_by_group, min_absolute_by_group) -> TailChange:
     group = metric_group(metric.metric)

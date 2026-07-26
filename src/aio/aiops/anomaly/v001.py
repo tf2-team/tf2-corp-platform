@@ -9,14 +9,16 @@ import logging
 import os
 from pathlib import Path
 import re
+from statistics import linear_regression
 import warnings
 
 from aiops.anomaly.stats import mean, median, rolling_robust_scores, stdev
 from aiops.schemas import AnomalyFinding, MetricSeries
 from aiops.shared.metrics import is_error_metric, is_memory_metric, is_oom_metric
-from aiops.shared.tail import evaluate_tail_change, fixed_baseline_and_tail, metric_group, normal_traffic_growth_decision
+from aiops.shared.tail import cusum_tail_change, evaluate_tail_change, fixed_baseline_and_tail, metric_group, normal_traffic_growth_decision
 
 logger = logging.getLogger(__name__)
+CUSUM_TAIL_GROUPS = {"cpu", "memory", "latency", "socket_io"}
 NORMAL_GROWTH_BREAKOUT_REASONS = (
     "reason=oom_increased",
     "reason=memory_oom_pattern",
@@ -361,14 +363,25 @@ class V001AnomalyEngine:
 
     def _has_significant_tail_change(self, metric: MetricSeries) -> bool:
         group = metric_group(metric.metric)
-        return evaluate_tail_change(
+        change = evaluate_tail_change(
             metric,
             self.detection_window_seconds,
             self.min_points - 1,
             self.min_tail_anomaly_buckets[group],
             self.min_relative_change_ratio[group],
             self.min_absolute_change[group],
-        ).significant
+        )
+        return change.significant or (
+            group in CUSUM_TAIL_GROUPS
+            and cusum_tail_change(
+                metric,
+                self.detection_window_seconds,
+                self.min_points - 1,
+                self.min_tail_anomaly_buckets[group],
+                self.min_relative_change_ratio[group],
+                self.min_absolute_change[group],
+            ).significant
+        )
 
     def _correlated_log_findings(self, log_findings: list[AnomalyFinding], metric_findings: list[AnomalyFinding]) -> list[AnomalyFinding]:
         return [
@@ -455,12 +468,20 @@ class V001AnomalyEngine:
         tail = values[-max(2, period // 2) :]
         if not baseline or not pre_tail or not tail:
             return False
-        if (
-            median(pre_tail) <= median(baseline) * self.memory_oom_pre_tail_growth_ratio
-            or median(tail) > median(pre_tail) * self.memory_oom_tail_drop_ratio
-        ):
+        if not self._memory_oom_state_transition(values, period, baseline, pre_tail, tail):
             return False
         return self._memory_ewma_stl_tail_anomaly_count(memory) >= self.min_tail_anomaly_buckets["memory"]
+
+    def _memory_oom_state_transition(self, values: list[float], period: int, baseline: list[float], pre_tail: list[float], tail: list[float]) -> bool:
+        stable = values[: -3 * period] or baseline
+        base = median(stable)
+        baseline_spread = max(abs(value - base) for value in stable) if stable else 0.0
+        stable_baseline = baseline_spread <= max(abs(base) * 0.05, 1.0)
+        ramp = values[-3 * period : -max(2, period // 2)]
+        slope = _linear_slope(ramp)
+        sustained_growth = median(pre_tail) > median(baseline) * self.memory_oom_pre_tail_growth_ratio or slope > max(abs(base) * 0.01, 1.0)
+        sharp_drawdown = median(tail) <= median(pre_tail) * self.memory_oom_tail_drop_ratio
+        return stable_baseline and sustained_growth and sharp_drawdown
 
     def _memory_ewma_stl_tail_anomaly_count(self, memory: MetricSeries) -> int:
         values = [point.value for point in memory.points]
@@ -484,6 +505,10 @@ def _breakout_metrics_for_reason(detail: str, series: list[MetricSeries]) -> set
     if detail.startswith("reason=ready_pods_"):
         return {metric.metric for metric in series if "ready_pods" in metric.metric}
     return set()
+
+
+def _linear_slope(values: list[float]) -> float:
+    return linear_regression(range(len(values)), values).slope if len(values) >= 2 else 0.0
 
 
 def build_v001_anomaly_engine(config: dict, **overrides) -> V001AnomalyEngine:

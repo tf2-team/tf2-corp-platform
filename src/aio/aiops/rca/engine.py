@@ -9,8 +9,10 @@ from aiops.anomaly.stats import robust_score
 from aiops.rca.graph import GraphTraversalRca
 from aiops.schemas import AnomalyFinding, MetricSeries, RcaResult, RootCauseCandidate, RuntimeConfig, TelemetryCorroboration
 from aiops.shared.metrics import is_root_cause_metric, metric_priority
-from aiops.shared.tail import evaluate_tail_change, fixed_baseline_and_tail, metric_group, tail_aligned_spearman
+from aiops.shared.tail import cusum_tail_change, evaluate_tail_change, fixed_baseline_and_tail, metric_group, tail_aligned_spearman
 from aiops.topology import TopologyGraph
+
+CUSUM_TAIL_GROUPS = {"cpu", "memory", "latency", "socket_io"}
 
 
 class V001RcaEngine:
@@ -209,14 +211,25 @@ class V001RcaEngine:
 
     def _significant_tail_change(self, metric: MetricSeries) -> bool:
         group = metric_group(metric.metric)
-        return evaluate_tail_change(
+        change = evaluate_tail_change(
             metric,
             self.detection_window_seconds,
             self.drift_min_points - 1,
             self.min_tail_anomaly_buckets[group],
             self.min_relative_change_ratio[group],
             self.min_absolute_change[group],
-        ).significant
+        )
+        return change.significant or (
+            group in CUSUM_TAIL_GROUPS
+            and cusum_tail_change(
+                metric,
+                self.detection_window_seconds,
+                self.drift_min_points - 1,
+                self.min_tail_anomaly_buckets[group],
+                self.min_relative_change_ratio[group],
+                self.min_absolute_change[group],
+            ).significant
+        )
 
     def _correlation_scores(
         self,
@@ -291,4 +304,3 @@ class V001RcaEngine:
             if suffix and service.endswith(suffix):
                 return service[: -len(suffix)]
         return service
-
