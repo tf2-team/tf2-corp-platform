@@ -337,7 +337,6 @@ class V001AnomalyEngine:
             log_min_nonzero_buckets,
         )
         self.last_normal_growth_breakout_metrics: dict[str, set[str]] = {}
-        self.last_normal_growth_zero_score_metrics: dict[str, set[str]] = {}
         self.last_algorithm_findings: list[AnomalyFinding] = []
 
     def evaluate(self, series: list[MetricSeries], logs: list[tuple[str, int, str]] | None = None) -> list[AnomalyFinding]:
@@ -431,11 +430,6 @@ class V001AnomalyEngine:
             for service, (normal, detail) in decisions.items()
             if not normal and detail.startswith(NORMAL_GROWTH_BREAKOUT_REASONS)
         }
-        self.last_normal_growth_zero_score_metrics = {
-            service: _zero_score_metrics_for_detail(detail, by_service[service])
-            for service, (normal, detail) in decisions.items()
-            if not normal and "0.000" in detail
-        }
         (logger.warning if any("zero_metrics=" in detail for _, detail in decisions.values()) else logger.info)(
             "AIOPS_NORMAL_GROWTH_GATE %s",
             " | ".join(
@@ -511,14 +505,6 @@ def _breakout_metrics_for_reason(detail: str, series: list[MetricSeries]) -> set
     if detail.startswith("reason=ready_pods_"):
         return {metric.metric for metric in series if "ready_pods" in metric.metric}
     return set()
-
-
-def _zero_score_metrics_for_detail(detail: str, series: list[MetricSeries]) -> set[str]:
-    groups = {match.group(1) for match in re.finditer(r"\b(cpu|socket_io|memory)=0\.000\b", detail)}
-    zero_metrics = set()
-    if match := re.search(r"\bzero_metrics=([^ ]+)", detail):
-        zero_metrics.update(item for item in match.group(1).split(",") if item)
-    return zero_metrics | {metric.metric for metric in series if metric_group(metric.metric) in groups}
 
 
 def _linear_slope(values: list[float]) -> float:

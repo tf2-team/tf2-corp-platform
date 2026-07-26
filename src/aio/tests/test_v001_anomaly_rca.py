@@ -673,7 +673,7 @@ class V001AnomalyRcaTest(unittest.TestCase):
         self.assertIn("service=payment", logs.output[0])
         self.assertIn("reason=missing_metrics", logs.output[0])
 
-    def test_growth_gate_records_zero_score_metrics_for_monitoring_notification(self):
+    def test_growth_gate_logs_zero_score_metrics_without_notification_state(self):
         engine = anomaly_engine()
         series = [
             minute_metric("fraud-detection", "request_rate_5m", [10] * 30 + [30] * 15),
@@ -686,7 +686,6 @@ class V001AnomalyRcaTest(unittest.TestCase):
             engine._filter_normal_traffic_growth(series)
 
         self.assertIn("cpu=0.000", logs.output[0])
-        self.assertEqual(engine.last_normal_growth_zero_score_metrics["fraud-detection"], {"cpu_millicores", "socket_io_bytes_per_second"})
 
     def test_staggered_load_growth_is_not_treated_as_simultaneous(self):
         engine = anomaly_engine()

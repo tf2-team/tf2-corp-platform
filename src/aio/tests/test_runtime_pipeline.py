@@ -1013,39 +1013,6 @@ class RuntimePipelineTest(unittest.TestCase):
         self.assertEqual(result.incidents[0].flow, "monitoring")
         self.assertEqual(result.incidents[0].events[0].reason, "signal_unqualified")
 
-    def test_growth_gate_zero_score_metrics_notify_with_store_dedup(self):
-        settings = Settings()
-        with TemporaryDirectory() as tmp:
-            store = SQLiteIncidentStore(Path(tmp) / "aiops.sqlite3", environment=settings.environment)
-            pipeline = AiopsPipeline(
-                collector=StaticCollector([]),
-                detectors=[],
-                store=store,
-                policy=policy(settings),
-            )
-            pipeline.last_normal_growth_zero_score_metrics = {"fraud-detection": {"cpu_millicores", "socket_io_bytes_per_second"}}
-
-            first = pipeline._upsert_growth_gate_zero_incidents(
-                [
-                    metric("fraud-detection", "cpu_millicores", [0] * 45),
-                    metric("fraud-detection", "socket_io_bytes_per_second", [0] * 45),
-                ]
-            )
-            second = pipeline._upsert_growth_gate_zero_incidents(
-                [
-                    metric("fraud-detection", "cpu_millicores", [0] * 45),
-                    metric("fraud-detection", "socket_io_bytes_per_second", [0] * 45),
-                ]
-            )
-            notifications = pipeline._flush_notifications(first, only_incidents=True)
-            store.close()
-
-        self.assertEqual(first[0].incident_id, second[0].incident_id)
-        self.assertEqual(first[0].events[-1].reason, "growth_gate_zero_score")
-        self.assertEqual(notifications[0].title, "monitoring incident")
-        self.assertIn("AIOPS_NORMAL_GROWTH_GATE zero_score", notifications[0].summary)
-        self.assertIn("fraud-detection_cpu_millicores", notifications[0].summary)
-
     def test_pipeline_extracts_log_evidence_for_v001_rca(self):
         settings = Settings()
         with TemporaryDirectory() as tmp:

@@ -10,7 +10,7 @@ from pathlib import Path
 from aiops.config import load_runtime_config
 from aiops.detectors import ThresholdDetector
 from aiops.features import FeatureBuilder
-from aiops.schemas import CandidateEvent, Observation, SignalQuality
+from aiops.schemas import CandidateEvent, NotificationMessage, Observation, SignalQuality
 from aiops.storage import SQLiteIncidentStore
 from aiops.topology import TopologyGraph
 
@@ -233,6 +233,32 @@ class SQLiteIncidentStoreTest(unittest.TestCase):
 
         self.assertEqual(retry_row, ("retry", 1, "receiver down"))
         self.assertEqual(sent_row, ("sent",))
+
+    def test_due_notifications_skips_legacy_growth_gate_zero_messages(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            store = SQLiteIncidentStore(Path(tmp) / "aiops.sqlite3", environment="tf2")
+            message = NotificationMessage(
+                incident_id="inc-growth-zero",
+                severity="SEV2",
+                state="open",
+                title="monitoring incident",
+                summary="AIOPS_NORMAL_GROWTH_GATE zero_score detector=growth_gate_zero_vector",
+                flow="monitoring",
+                service="fraud-detection",
+                likely_dependency="unknown",
+                runbook_id="RB-MONITORING-LOSS",
+            )
+            store._connection.execute(
+                """
+                INSERT INTO notification_outbox (incident_id, fingerprint, notification_json, status, next_attempt_at)
+                VALUES (?, ?, ?, 'pending', ?)
+                """,
+                (message.incident_id, "fp-growth-zero", message.model_dump_json(), datetime.now(UTC).isoformat()),
+            )
+            notifications = store.due_notifications()
+            store.close()
+
+        self.assertEqual(notifications, [])
 
     def test_missing_canonical_runbook_is_rejected_before_incident_commit(self):
         with tempfile.TemporaryDirectory() as tmp:

@@ -27,11 +27,7 @@ class NotificationBuilder:
         if last_event.detector_id != "rca_root_cause" and dependency != "unknown":
             title = f"{incident.flow} likely dependency: {dependency}"
         signals = tuple(dict.fromkeys(signal for event in incident.events for signal in (event.contributing_signals or (event.signal_id,))))
-        summary = (
-            f"AIOPS_NORMAL_GROWTH_GATE zero_score {last_event.labels['growth_gate_zero_score_items']}"
-            if "growth_gate_zero_score_items" in last_event.labels
-            else f"{last_event.reason} on {', '.join(signals)}"
-        )
+        summary = f"{last_event.reason} on {', '.join(signals)}"
         return NotificationMessage(
             incident_id=incident.incident_id,
             severity=incident.severity,
