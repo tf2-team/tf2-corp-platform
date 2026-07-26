@@ -102,11 +102,13 @@ class AiopsPipeline:
         self.remediation = remediation
         self.notification_sender = notification_sender
         self.rca_history_path = rca_history_path
+        self.last_normal_growth_zero_score_metrics: dict[str, set[str]] = {}
 
     def run_once(self, metric_series: list[MetricSeries] | None = None) -> PipelineResult:
         run_number = next(_RUN_COUNTER)
         logger.info("AIOPS_RUN_START run=%s", run_number)
         logger.debug("AIOPS_BLOCK start metric_series=%s", len(metric_series or []))
+        self.last_normal_growth_zero_score_metrics = {}
         collected = self.collector.collect()
         logger.debug("AIOPS_BLOCK collect observations=%s", len(collected))
         observations = self.qualification.evaluate(self.normalizer.normalize(collected))
@@ -140,10 +142,16 @@ class AiopsPipeline:
 
         rca_result = self._run_v001_rca(metric_series or [], analysis_incidents)
         root_incidents = self._upsert_rca_root_incidents(rca_result, analysis_incidents)
+        growth_zero_incidents = self._upsert_growth_gate_zero_incidents(metric_series or [])
         if root_incidents:
             incidents.extend(root_incidents)
             analysis_incidents = incidents
             regular_incidents = [incident for incident in incidents if not is_slo_notification(incident.events[-1])]
+            deduped_incidents = _unique_incidents(incidents)
+        if growth_zero_incidents:
+            incidents.extend(growth_zero_incidents)
+            analysis_incidents = incidents
+            regular_incidents = [incident for incident in regular_incidents if incident.incident_id not in {item.incident_id for item in growth_zero_incidents}]
             deduped_incidents = _unique_incidents(incidents)
         logger.info(
             "AIOPS_DEDUP_RESULT input_candidates=%s rca_incidents=%s incidents=%s ids=%s services=%s occurrences=%s",
@@ -165,7 +173,7 @@ class AiopsPipeline:
         suppressed_incident_ids = self._suppress_related_notifications(_unique_incidents(regular_incidents), rca_result)
         actionable_incidents = [incident for incident in regular_incidents if incident.incident_id not in suppressed_incident_ids]
         self._record_rca_history(rca_result, incidents, enriched, metric_series or [])
-        notifications = direct_notifications + self._flush_notifications(_unique_incidents(regular_incidents))
+        notifications = direct_notifications + self._flush_notifications(_unique_incidents(growth_zero_incidents), only_incidents=True) + self._flush_notifications(_unique_incidents(regular_incidents))
         logger.debug("AIOPS_BLOCK notify notifications=%s", len(notifications))
         decisions: list[PolicyDecision] = []
         for incident in actionable_incidents:
@@ -272,6 +280,46 @@ class AiopsPipeline:
             )
         return rows
 
+    def _upsert_growth_gate_zero_incidents(self, metric_series: list[MetricSeries]) -> list[Incident]:
+        rows = []
+        by_service: dict[str, list[MetricSeries]] = {}
+        for item in metric_series:
+            by_service.setdefault(item.service, []).append(item)
+        for service, metrics in self.last_normal_growth_zero_score_metrics.items():
+            service_series = by_service.get(service, [])
+            signal_by_metric = {item.metric: item.signal_id for item in service_series}
+            signal_ids = tuple(signal_by_metric.get(metric, f"{service}_{metric}") for metric in sorted(metrics))
+            if not signal_ids:
+                continue
+            items = " | ".join(
+                f"detector=growth_gate_zero_vector signal={signal_id} metric={metric} service={service} severity=SEV2 zero_score=true"
+                for metric, signal_id in sorted((metric, signal_by_metric.get(metric, f"{service}_{metric}")) for metric in metrics)
+            )
+            logger.warning("AIOPS_NORMAL_GROWTH_GATE zero_score %s", items)
+            rows.append(
+                self.store.upsert(
+                    CandidateEvent(
+                        detector_id="growth_gate_zero_vector",
+                        flow="monitoring",
+                        service=service,
+                        severity="SEV2",
+                        signal_id=signal_ids[0],
+                        value=0.0,
+                        unit="score",
+                        window="growth_gate",
+                        threshold=0.0,
+                        quality=SignalQuality.FALLBACK_ONLY,
+                        reason="growth_gate_zero_score",
+                        runbook_id="RB-MONITORING-LOSS",
+                        likely_dependency="unknown",
+                        confidence=1.0,
+                        contributing_signals=signal_ids,
+                        labels={"growth_gate_zero_score_items": items},
+                    )
+                )
+            )
+        return rows
+
     def _dedup_rca_root_causes(self, root_causes: list[RootCauseCandidate]) -> list[RootCauseCandidate]:
         kept: list[RootCauseCandidate] = []
         max_hops = int(self.correlation_hyperparameters["topology_max_hops"])
@@ -317,6 +365,7 @@ class AiopsPipeline:
             return RcaResult()
         anomaly_engine = build_v001_anomaly_engine(config)
         findings = anomaly_engine.evaluate(detector_series, logs=log_messages) if log_messages else anomaly_engine.evaluate(detector_series)
+        self.last_normal_growth_zero_score_metrics = getattr(anomaly_engine, "last_normal_growth_zero_score_metrics", {})
         anomaly_config = config["anomaly"]
         corroboration = self.enricher.corroborate(impact_findings + findings, int(anomaly_config["evidence_window_seconds"]))
         findings = impact_findings + _apply_corroboration(
