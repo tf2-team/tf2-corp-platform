@@ -1,0 +1,9 @@
+{
+  "scenario_type": "real_incident",
+  "expected_incident": true,
+  "incident_start_ts": 1785077972,
+  "captured_at": "2026-07-26T15:13:28.155212+00:00",
+  "notes": "attempted local-adHighCpu; ad CPU did not rise; observed checkout memory RCA fire",
+  "source": "live_prometheus_capture",
+  "prometheus_base_url_host": "localhost:9090"
+}

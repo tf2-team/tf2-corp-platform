@@ -58,7 +58,7 @@ test/tracetesting/tracetesting-vars.yaml
 !src/currency/build
 src/cart/src/Program.cs.bak
 src/flagd/demo.flagd.json.bak
-src/aio/evaluate/dataset/
+src/aio/evaluate/dataset/*
 # AI MANDATE #15: labeled scenario sets must stay committed as evidence.
 # mandate15/ is a SYNTHETIC smoke-test fixture only (see the README inside it).
 !src/aio/evaluate/dataset/mandate15/
@@ -66,6 +66,9 @@ src/aio/evaluate/dataset/
 # mandate15_live/ is the REAL evidence, captured from live Prometheus via `aiops.cli capture`.
 !src/aio/evaluate/dataset/mandate15_live/
 !src/aio/evaluate/dataset/mandate15_live/**
+# mandate7b_live/ is the REAL evidence for AI MANDATE #7b live detection measurement.
+!src/aio/evaluate/dataset/mandate7b_live/
+!src/aio/evaluate/dataset/mandate7b_live/**
 contract
 
 # Generated AI model archives are published to S3, never committed.

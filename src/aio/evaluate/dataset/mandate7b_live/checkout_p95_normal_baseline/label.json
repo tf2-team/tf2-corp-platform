@@ -1,0 +1,9 @@
+{
+  "scenario_type": "normal",
+  "expected_incident": false,
+  "incident_start_ts": null,
+  "captured_at": "2026-07-26T15:59:51.796119+00:00",
+  "notes": "baseline before local-cartFailure for checkout p95",
+  "source": "live_prometheus_capture",
+  "prometheus_base_url_host": "localhost:9090"
+}
