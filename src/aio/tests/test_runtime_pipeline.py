@@ -917,12 +917,14 @@ class RuntimePipelineTest(unittest.TestCase):
                         score=0.9,
                         root_cause_metrics=["cpu_millicores"],
                         evidence=["metric=cpu_millicores anomaly_score=1.600"],
+                        metric_scores={"cpu_millicores": 1.6},
                     ),
                     RootCauseCandidate(
                         service="currency",
                         score=0.9,
                         root_cause_metrics=["cpu_millicores"],
                         evidence=["metric=cpu_millicores anomaly_score=1.800"],
+                        metric_scores={"cpu_millicores": 1.8},
                     ),
                 ]
             )

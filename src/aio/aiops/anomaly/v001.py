@@ -11,20 +11,13 @@ from pathlib import Path
 import re
 import warnings
 
-from aiops.anomaly.stats import mean, median, rolling_robust_scores, stdev
+from aiops.anomaly.stats import mean, rolling_robust_scores, stdev
 from aiops.schemas import AnomalyFinding, MetricSeries
-from aiops.shared.metrics import is_error_metric, is_memory_metric, is_oom_metric
+from aiops.shared.metrics import is_error_metric, is_oom_metric
 from aiops.shared.tail import cusum_tail_change, evaluate_tail_change, fixed_baseline_and_tail, metric_group, normal_traffic_growth_decision, page_hinkley_tail_change, slow_drift_tail_change, traffic_explained_metrics
 
 logger = logging.getLogger(__name__)
 CUSUM_TAIL_GROUPS = {"cpu", "memory", "latency", "socket_io"}
-NORMAL_GROWTH_BREAKOUT_REASONS = (
-    "reason=oom_increased",
-    "reason=memory_increased_without_traffic",
-    "reason=memory_shape_mismatch",
-    "reason=error_increased",
-    "reason=ready_pods_decreased",
-)
 
 os.environ.setdefault("MPLCONFIGDIR", "/tmp")
 
@@ -291,7 +284,6 @@ class V001AnomalyEngine:
         min_relative_change_ratio: dict[str, float],
         min_absolute_change: dict[str, float],
         slow_drift: dict | None,
-        traffic_shape_min_spearman: float,
         traffic_shape_max_lag_buckets: int,
         traffic_explanation: dict | None,
         detection_window_seconds: int | None,
@@ -306,7 +298,6 @@ class V001AnomalyEngine:
         self.min_relative_change_ratio = min_relative_change_ratio
         self.min_absolute_change = min_absolute_change
         self.slow_drift = slow_drift or {}
-        self.traffic_shape_min_spearman = traffic_shape_min_spearman
         self.traffic_shape_max_lag_buckets = traffic_shape_max_lag_buckets
         self.traffic_explanation = traffic_explanation
         self.page_hinkley_min_bucket_factor = page_hinkley_min_bucket_factor
@@ -449,21 +440,19 @@ class V001AnomalyEngine:
         for metric in series:
             by_service[metric.service].append(metric)
         decisions = {service: self._normal_traffic_growth_decision(service_series) for service, service_series in by_service.items()}
-        normal_services = {service for service, (normal, _) in decisions.items() if normal}
-        self.last_normal_growth_services = normal_services
         self.last_normal_growth_breakout_metrics = {
-            service: _breakout_metrics_for_reason(detail, by_service[service])
+            service: metrics
             for service, (normal, detail) in decisions.items()
-            if not normal and detail.startswith(NORMAL_GROWTH_BREAKOUT_REASONS)
+            if not normal
+            if (metrics := _breakout_metrics_for_detail(detail, by_service[service]))
         }
         self.last_normal_growth_metrics = {
             service: metrics
             for service, (normal, _) in decisions.items()
-            if normal
-            if service not in self.last_normal_growth_breakout_metrics
             if (
-                metrics := traffic_explained_metrics(
+                metrics := _normal_growth_metrics_for_service(
                     by_service[service],
+                    normal,
                     self.normal_growth_detection_window_seconds,
                     self.min_points - 1,
                     self.traffic_shape_max_lag_buckets,
@@ -471,6 +460,7 @@ class V001AnomalyEngine:
                 )
             )
         }
+        self.last_normal_growth_services = set(self.last_normal_growth_metrics)
         # Only literal all-zero series (`zero_metrics=...`) count as monitoring-loss.
         # A DTW shape score of `cpu=0.000` / `socket_io=0.000` means "no shape match",
         # not "telemetry disappeared" — treating those as zero-vector spam produced the
@@ -483,7 +473,7 @@ class V001AnomalyEngine:
         (logger.warning if any("zero_metrics=" in detail for _, detail in decisions.values()) else logger.info)(
             "growth_gate_event %s",
             " | ".join(
-                f"service={service} result={'skip' if normal else 'detect'} breakout={str(not normal and detail.startswith(NORMAL_GROWTH_BREAKOUT_REASONS)).lower()} {detail}"
+                f"service={service} result={'skip' if service in self.last_normal_growth_metrics else 'detect'} breakout={str(service in self.last_normal_growth_breakout_metrics).lower()} {detail}"
                 f"{' explained_metrics=' + ','.join(sorted(self.last_normal_growth_metrics[service])) if service in self.last_normal_growth_metrics else ''}"
                 for service, (normal, detail) in decisions.items()
             ),
@@ -498,19 +488,30 @@ class V001AnomalyEngine:
             self.min_tail_anomaly_buckets,
             self.min_relative_change_ratio,
             self.min_absolute_change,
-            self.traffic_shape_min_spearman,
             self.traffic_shape_max_lag_buckets,
             self.traffic_explanation,
         )
 
-def _breakout_metrics_for_reason(detail: str, series: list[MetricSeries]) -> set[str]:
-    if detail.startswith(("reason=memory_", "reason=oom_")):
-        return {metric.metric for metric in series if is_memory_metric(metric.metric) or is_oom_metric(metric.metric)}
+def _breakout_metrics_for_detail(detail: str, series: list[MetricSeries]) -> set[str]:
+    if detail.startswith("reason=oom_"):
+        return {metric.metric for metric in series if is_oom_metric(metric.metric)}
     if detail.startswith("reason=error_"):
         return {metric.metric for metric in series if is_error_metric(metric.metric)}
-    if detail.startswith("reason=ready_pods_"):
-        return {metric.metric for metric in series if "ready_pods" in metric.metric}
     return set()
+
+
+def _normal_growth_metrics_for_service(
+    series: list[MetricSeries],
+    normal: bool,
+    detection_window_seconds: int | None,
+    start: int,
+    traffic_shape_max_lag_buckets: int,
+    traffic_explanation: dict | None,
+) -> set[str]:
+    metrics = traffic_explained_metrics(series, detection_window_seconds, start, traffic_shape_max_lag_buckets, traffic_explanation)
+    if normal:
+        return metrics
+    return {metric for metric in metrics if metric_group(metric) not in {"cpu", "socket_io"}}
 
 
 def _zero_score_metrics_for_detail(detail: str) -> set[str]:
@@ -521,6 +522,8 @@ def _zero_score_metrics_for_detail(detail: str) -> set[str]:
 
 def build_v001_anomaly_engine(config: dict, **overrides) -> V001AnomalyEngine:
     anomaly = config["anomaly"]
+    if "threshold" not in anomaly.get("traffic_explanation", {}):
+        raise KeyError("traffic_explanation.threshold")
     config = {**config, **overrides}
     return V001AnomalyEngine(
         ewma_alpha=float(config["ewma_alpha"]),
@@ -545,7 +548,6 @@ def build_v001_anomaly_engine(config: dict, **overrides) -> V001AnomalyEngine:
         min_relative_change_ratio={key: float(value) for key, value in anomaly["min_relative_change_ratio"].items()},
         min_absolute_change={key: float(value) for key, value in anomaly["min_absolute_change"].items()},
         slow_drift=anomaly.get("slow_drift"),
-        traffic_shape_min_spearman=float(anomaly["traffic_shape_min_spearman"]),
         traffic_shape_max_lag_buckets=int(anomaly["traffic_shape_max_lag_buckets"]),
         traffic_explanation=anomaly.get("traffic_explanation"),
         detection_window_seconds=int(anomaly["detection_window_seconds"]) or None,
