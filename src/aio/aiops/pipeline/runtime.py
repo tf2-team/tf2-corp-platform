@@ -18,7 +18,7 @@ from aiops.enrichment import Enricher
 from aiops.features import FeatureBuilder
 from aiops.anomaly import build_v001_anomaly_engine
 from aiops.rca import V001RcaEngine, is_root_cause_metric
-from aiops.schemas import AnomalyFinding, MetricSeries, NotificationMessage, PipelineResult, PolicyDecision, RcaResult, RootCauseCandidate, RuntimeConfig, SignalQuality
+from aiops.schemas import AnomalyFinding, EvidenceItem, MetricSeries, NotificationMessage, PipelineResult, PolicyDecision, RcaResult, RootCauseCandidate, RuntimeConfig, SignalQuality
 from aiops.normalization import Normalizer
 from aiops.notifications import is_slo_notification
 from aiops.qualification import QualificationGate
@@ -283,6 +283,7 @@ class AiopsPipeline:
                         likely_dependency="unknown",
                         confidence=root.score,
                         contributing_signals=tuple(root.root_cause_metrics),
+                        evidence=tuple(EvidenceItem(source="rca", reference=root.service, summary=item) for item in root.evidence),
                     )
                 )
             )

@@ -535,7 +535,7 @@ class RuntimePipelineTest(unittest.TestCase):
                         service="frontend",
                         score=0.882,
                         root_cause_metrics=["cpu_millicores"],
-                        evidence=["isolation_forest=5.127"],
+                        evidence=["isolation_forest=5.127", "log_classification=hard_failure count=3", "trace_id=trace-123 status=ERROR"],
                     )
                 ],
             )
@@ -549,6 +549,12 @@ class RuntimePipelineTest(unittest.TestCase):
         self.assertEqual([message.service for message in result.notifications], ["frontend"])
         self.assertEqual(result.notifications[0].flow, "web")
         self.assertEqual(result.notifications[0].title, "RCA root cause: frontend")
+        self.assertIn("Root: frontend", result.notifications[0].summary)
+        self.assertIn("Metric: cpu_millicores", result.notifications[0].summary)
+        self.assertIn("RCA score: 0.882", result.notifications[0].summary)
+        self.assertIn("log_classification=hard_failure count=3", result.notifications[0].summary)
+        self.assertIn("trace_id=trace-123 status=ERROR", result.notifications[0].summary)
+        self.assertIn("Action: check pod restarts/OOMKilled", result.notifications[0].summary)
         self.assertEqual(result.notifications[0].likely_dependency, "unknown")
         self.assertEqual(result.incidents[0].events[-1].quality, SignalQuality.FALLBACK_ONLY)
         self.assertEqual(result.incidents[0].events[-1].runbook_id, "RB-SERVICE-RESOURCE")
@@ -813,7 +819,8 @@ class RuntimePipelineTest(unittest.TestCase):
 
         self.assertEqual(skipped, [])
         self.assertEqual([incident.service for incident in notified], ["frontend-proxy"])
-        self.assertEqual(notifications[0].summary, "rca_root_cause on memory_usage_bytes")
+        self.assertIn("Metric: memory_usage_bytes", notifications[0].summary)
+        self.assertIn("Runbook: RB-SERVICE-RESOURCE", notifications[0].summary)
 
     def test_pipeline_notifies_memory_root_when_oom_counter_increases(self):
         settings = Settings()
@@ -847,7 +854,8 @@ class RuntimePipelineTest(unittest.TestCase):
             store.close()
 
         self.assertEqual([incident.service for incident in incidents], ["email"])
-        self.assertEqual(notifications[0].summary, "rca_root_cause on memory_usage_bytes")
+        self.assertIn("Root: email", notifications[0].summary)
+        self.assertIn("Metric: memory_usage_bytes", notifications[0].summary)
 
     def test_pipeline_filters_rca_cpu_root_by_tail_threshold(self):
         settings = Settings()
@@ -882,7 +890,8 @@ class RuntimePipelineTest(unittest.TestCase):
 
         self.assertEqual(skipped, [])
         self.assertEqual([incident.service for incident in notified], ["recommendation"])
-        self.assertEqual(notifications[0].summary, "rca_root_cause on cpu_millicores")
+        self.assertIn("Root: recommendation", notifications[0].summary)
+        self.assertIn("Metric: cpu_millicores", notifications[0].summary)
 
     def test_pipeline_flushes_notification_outbox_to_sender(self):
         settings = Settings()
