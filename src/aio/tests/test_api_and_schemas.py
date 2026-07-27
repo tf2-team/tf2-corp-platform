@@ -8,7 +8,7 @@ from tempfile import TemporaryDirectory
 from fastapi import HTTPException
 
 from aiops.api import create_app
-from aiops.api.app import build_enricher, handle_grafana_webhook, run_static_pipeline
+from aiops.api.app import build_enricher, handle_grafana_webhook, readiness, run_static_pipeline
 from aiops.config import Settings, load_runtime_config
 from aiops.schemas import GrafanaWebhookEvent, Observation, PipelineRunRequest, SignalQuality
 
@@ -53,6 +53,21 @@ class FastApiAppTest(unittest.TestCase):
         self.assertIn("/api/v1/pipeline/run/live", paths)
         self.assertIn("/api/v1/incidents", paths)
         self.assertIn("/api/v1/events/grafana", paths)
+
+    def test_readiness_requires_notification_webhook_for_automatic_runs(self):
+        settings = Settings().model_copy(
+            update={
+                "auto_run_enabled": True,
+                "prometheus_base_url": "http://prometheus:9090",
+                "notification_webhook_url": "",
+                "grafana_webhook_secret": "configured",
+            }
+        )
+
+        with self.assertRaises(HTTPException) as raised:
+            readiness(settings)
+
+        self.assertEqual(raised.exception.status_code, 503)
 
     def test_template_settings_do_not_enable_external_enrichment_clients(self):
         settings = Settings().model_copy(

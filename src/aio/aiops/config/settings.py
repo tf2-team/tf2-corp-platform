@@ -28,7 +28,7 @@ class Settings(BaseSettings):
     health_status: str = "ok"
 
     environment: str = "techx-corp-prod"
-    policy_mode: str = "dry-run"
+    policy_mode: Literal["observe", "dry-run", "live-approved"] = "dry-run"
     evidence_dir: Path = Path("evidence")
     state_store_path: Path = DEFAULT_STATE_STORE_PATH
     runtime_config_path: Path = Path("config/runtime.json")

@@ -116,6 +116,11 @@ class PrometheusCollector(Collector):
             if detector.type == "dependency" and detector.signal_id and detector.dependency
         }
 
+    def close(self) -> None:
+        close = getattr(self.client, "close", None)
+        if callable(close):
+            close()
+
     def collect(self) -> list[Observation]:
         if self.plan is not None:
             queries = self.plan.observation_queries

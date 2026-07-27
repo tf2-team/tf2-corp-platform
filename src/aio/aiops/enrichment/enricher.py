@@ -54,6 +54,12 @@ class Enricher:
         self.log_evidence_hits = int(hyperparameters["log_evidence_hits"])
         self.log_excerpt_max_chars = int(hyperparameters["log_excerpt_max_chars"])
 
+    def close(self) -> None:
+        for client in (self.jaeger, self.opensearch, self.kubernetes):
+            close = getattr(client, "close", None)
+            if callable(close):
+                close()
+
     def enrich(self, candidates: list[CandidateEvent], features: list[Feature]) -> list[CandidateEvent]:
         by_signal = index_features(features)
         enriched: list[CandidateEvent] = []

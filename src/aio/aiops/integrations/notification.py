@@ -28,6 +28,8 @@ DISCORD_COLORS = {
 class NotificationAdapter(Protocol):
     def send(self, message: NotificationMessage) -> dict[str, Any]: ...
 
+    def close(self) -> None: ...
+
 
 class JsonWebhookNotificationAdapter:
     """Send the platform NotificationMessage contract to a generic JSON webhook."""
@@ -50,6 +52,9 @@ class JsonWebhookNotificationAdapter:
     def send(self, message: NotificationMessage) -> dict[str, Any]:
         return _post(self._client, self._webhook_url, message.model_dump(mode="json"))
 
+    def close(self) -> None:
+        self._client.close()
+
 
 class DiscordNotificationAdapter:
     """Translate NotificationMessage into a Discord webhook embed."""
@@ -60,6 +65,9 @@ class DiscordNotificationAdapter:
 
     def send(self, message: NotificationMessage) -> dict[str, Any]:
         return _post(self._client, self._webhook_url, _discord_payload(message))
+
+    def close(self) -> None:
+        self._client.close()
 
 
 class NotificationClient:
@@ -83,6 +91,9 @@ class NotificationClient:
 
     def send(self, message: NotificationMessage) -> dict[str, Any]:
         return self._adapter.send(message)
+
+    def close(self) -> None:
+        self._adapter.close()
 
 
 def _is_discord_webhook(webhook_url: str) -> bool:

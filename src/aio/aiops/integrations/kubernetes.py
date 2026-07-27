@@ -32,3 +32,6 @@ class KubernetesClient:
 
     def list_pods(self, namespace: str) -> dict:
         return self._http.get(f"/api/v1/namespaces/{namespace}/pods")
+
+    def close(self) -> None:
+        self._http.close()

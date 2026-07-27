@@ -125,12 +125,16 @@ class IntegrationClientTest(unittest.TestCase):
             notification_token="CHANGE_ME_NOTIFICATION_TOKEN",
             notification_account="CHANGE_ME_NOTIFICATION_ACCOUNT",
         )
-        response = NotificationClient(cfg, transport=httpx.MockTransport(handler)).send(message)
+        client = NotificationClient(cfg, transport=httpx.MockTransport(handler))
+        response = client.send(message)
+        client.close()
 
         self.assertEqual(response["accepted"], True)
         self.assertEqual(str(seen[0].url), "https://notification.example")
         self.assertEqual(seen[0].headers["authorization"], "Bearer CHANGE_ME_NOTIFICATION_TOKEN")
         self.assertEqual(json.loads(seen[0].content)["incident_id"], "inc-1")
+        with self.assertRaises(RuntimeError):
+            client.send(message)
 
     def test_notification_client_auto_detects_discord_and_sends_embed(self):
         seen: list[httpx.Request] = []

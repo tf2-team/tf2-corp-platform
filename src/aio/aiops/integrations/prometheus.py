@@ -30,3 +30,6 @@ class PrometheusClient:
 
     def targets(self) -> dict:
         return self._http.get("/api/v1/targets")
+
+    def close(self) -> None:
+        self._http.close()

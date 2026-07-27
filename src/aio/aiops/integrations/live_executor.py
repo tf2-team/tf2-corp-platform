@@ -20,3 +20,6 @@ class LiveExecutorClient:
 
     def submit_action(self, action: dict) -> dict:
         return self._http.post("/actions", json=action)
+
+    def close(self) -> None:
+        self._http.close()

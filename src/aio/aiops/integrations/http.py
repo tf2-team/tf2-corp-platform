@@ -53,3 +53,6 @@ class HttpApiClient:
         response = self._client.post(path, json=json)
         response.raise_for_status()
         return self._decode_response(response)
+
+    def close(self) -> None:
+        self._client.close()

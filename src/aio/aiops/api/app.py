@@ -70,12 +70,12 @@ def run_live_pipeline(settings: Settings | None = None) -> PipelineResult:
         runtime_config,
         cache_namespace=settings.prometheus_base_url,
     )
-    return run_pipeline_with_collector(
-        collector,
-        settings,
-        runtime_config,
-        metric_series=collector.collect_metric_series(),
-    )
+    try:
+        metric_series = collector.collect_metric_series()
+    except Exception:
+        collector.close()
+        raise
+    return run_pipeline_with_collector(collector, settings, runtime_config, metric_series=metric_series)
 
 
 def run_pipeline_with_collector(collector, settings: Settings, runtime_config, metric_series=None) -> PipelineResult:
@@ -94,6 +94,8 @@ def run_pipeline_with_collector(collector, settings: Settings, runtime_config, m
         notification_error_max_chars=int(hyperparameters["incident"]["notification_error_max_chars"]),
         topology_graph=topology_graph,
     )
+    enricher = build_enricher(settings, runtime_config, hyperparameters["enrichment"])
+    notification_sender = NotificationClient(settings) if _configured_url(settings.notification_webhook_url) else None
     pipeline = AiopsPipeline(
         collector=collector,
         detectors=build_detectors(runtime_config, hyperparameters["no_data"], hyperparameters["detectors"]),
@@ -114,7 +116,7 @@ def run_pipeline_with_collector(collector, settings: Settings, runtime_config, m
         qualification_max_sample_age_seconds=int(hyperparameters["qualification"]["max_sample_age_seconds"]),
         rca_hyperparameters=hyperparameters["rca"],
         correlation_hyperparameters=hyperparameters["correlation"],
-        enricher=build_enricher(settings, runtime_config, hyperparameters["enrichment"]),
+        enricher=enricher,
         remediation=(
             RemediationFeatureExtractor(),
             HistoryRetriever(
@@ -134,7 +136,7 @@ def run_pipeline_with_collector(collector, settings: Settings, runtime_config, m
             IncidentHistoryStore(settings.incidents_history_path),
             RemediationAuditLog(settings.remediation_audit_path),
         ),
-        notification_sender=NotificationClient(settings) if _configured_url(settings.notification_webhook_url) else None,
+        notification_sender=notification_sender,
         rca_history_path=settings.rca_history_path,
     )
     try:
@@ -147,6 +149,9 @@ def run_pipeline_with_collector(collector, settings: Settings, runtime_config, m
         raise
     finally:
         store.close()
+        _close_if_supported(notification_sender)
+        _close_if_supported(enricher)
+        _close_if_supported(collector)
 
 
 def print_rca_result(result: PipelineResult) -> None:
@@ -211,6 +216,12 @@ def _configured_secret(value: str) -> bool:
     return bool(text) and "CHANGE_ME" not in text and "<FILL_IN" not in text
 
 
+def _close_if_supported(component) -> None:
+    close = getattr(component, "close", None)
+    if callable(close):
+        close()
+
+
 def _configured_kubernetes(settings: Settings) -> bool:
     if not _configured_secret(settings.kubernetes_api_url):
         return False
@@ -230,6 +241,8 @@ def readiness(settings: Settings) -> HealthResponse:
         load_normalization_schema(settings.normalization_schema_path)
         if settings.auto_run_enabled and not _configured_url(settings.prometheus_base_url):
             raise RuntimeError("automatic runs require Prometheus")
+        if settings.auto_run_enabled and not _configured_url(settings.notification_webhook_url):
+            raise RuntimeError("automatic runs require an incident notification webhook")
         if not _configured_secret(settings.grafana_webhook_secret):
             raise RuntimeError("Grafana webhook secret is not configured")
         state_parent = settings.state_store_path.parent

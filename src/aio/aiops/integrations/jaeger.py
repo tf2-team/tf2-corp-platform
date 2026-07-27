@@ -25,3 +25,6 @@ class JaegerClient:
 
     def trace_ui_url(self, trace_id: str) -> str:
         return f"{self._base_url}/trace/{trace_id}"
+
+    def close(self) -> None:
+        self._http.close()
