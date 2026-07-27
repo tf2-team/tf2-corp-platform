@@ -247,6 +247,8 @@ class AiopsPipeline:
             return []
         severity = min((incident.severity for incident in incidents), default="SEV2")
         threshold = float(self.correlation_hyperparameters["rca_notification_min_score"])
+        min_metric_score = float(self.correlation_hyperparameters.get("rca_notification_min_metric_score", 0.0))
+        strong_correlation_score = float(self.correlation_hyperparameters.get("rca_notification_strong_correlation_score", 1.1))
         valid_roots = [
             root.model_copy(
                 update={
@@ -258,7 +260,7 @@ class AiopsPipeline:
                 }
             )
             for root in rca_result.root_causes
-            if root.score >= threshold
+            if root.score >= threshold and _has_strong_notification_evidence(root, min_metric_score, strong_correlation_score)
         ]
         valid_roots = [root for root in valid_roots if root.root_cause_metrics]
         rows = []
@@ -629,6 +631,22 @@ def _service_oom_counter_increased(service: str, series: list[MetricSeries], det
         if baseline and indexes and max(values[index] for index in indexes) > max(baseline):
             return True
     return False
+
+
+def _has_strong_notification_evidence(root: RootCauseCandidate, min_metric_score: float, strong_correlation_score: float) -> bool:
+    if min_metric_score <= 0:
+        return True
+    metric_scores = [
+        float(match.group(1))
+        for item in root.evidence
+        for match in re.finditer(r"(?:anomaly|drift)_score=([0-9.]+)", item)
+    ]
+    correlation_scores = [
+        float(match.group(1))
+        for item in root.evidence
+        for match in re.finditer(r"correlation_score=([0-9.]+)", item)
+    ]
+    return not metric_scores or max(metric_scores) >= min_metric_score or max(correlation_scores or [0.0]) >= strong_correlation_score
 
 
 def _combined_rca_hyperparameters(config: dict) -> dict:
