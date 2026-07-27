@@ -15,3 +15,6 @@ Acceptance criteria:
 This is a safe positive-path trigger. Negative evidence must come from the
 scanner result itself or a dedicated non-release fixture; no vulnerable package
 is introduced by this file.
+
+<!-- Trigger CI verification for ci-gate fix -->
+
