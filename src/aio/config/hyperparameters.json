@@ -116,7 +116,8 @@
       "algorithm_weights": {
         "robust_drift": 0.8,
         "ewma_stl": 0.8,
-        "isolation_forest": 0.2
+        "isolation_forest": 0.2,
+        "slow_drift": 1.0
       },
       "weighted_score_threshold": 1.0,
       "single_algorithm_min_normalized_score": 2.0,
@@ -166,6 +167,54 @@
         "socket_io": 1048576.0,
         "request_rate": 5.0,
         "default": 1.0
+      },
+      "slow_drift": {
+        "enabled": true,
+        "window_seconds": 3600,
+        "min_points": 12,
+        "positive_bucket_ratio": 0.65,
+        "metrics": {
+          "memory": {
+            "direction": "up",
+            "min_total_change": 5242880.0
+          },
+          "cpu": {
+            "direction": "up",
+            "min_total_change": 100.0
+          },
+          "socket_io": {
+            "direction": "up",
+            "min_total_change": 1048576.0
+          },
+          "disk": {
+            "direction": "up",
+            "min_total_change": 1048576.0
+          },
+          "latency": {
+            "direction": "up",
+            "min_total_change": 0.05
+          },
+          "error": {
+            "direction": "up",
+            "min_total_change": 0.002
+          },
+          "burn_rate": {
+            "direction": "up",
+            "min_total_change": 0.2
+          },
+          "kafka_lag": {
+            "direction": "up",
+            "min_total_change": 100.0
+          },
+          "active_connections": {
+            "direction": "up",
+            "min_total_change": 5.0
+          },
+          "queue_saturation": {
+            "direction": "up",
+            "min_total_change": 0.05
+          }
+        }
       },
       "traffic_shape_min_spearman": 0.6,
       "traffic_shape_max_lag_buckets": 5,

@@ -14,7 +14,7 @@ import warnings
 from aiops.anomaly.stats import mean, median, rolling_robust_scores, stdev
 from aiops.schemas import AnomalyFinding, MetricSeries
 from aiops.shared.metrics import is_error_metric, is_memory_metric, is_oom_metric
-from aiops.shared.tail import cusum_tail_change, evaluate_tail_change, fixed_baseline_and_tail, metric_group, normal_traffic_growth_decision, page_hinkley_tail_change, traffic_explained_metrics
+from aiops.shared.tail import cusum_tail_change, evaluate_tail_change, fixed_baseline_and_tail, metric_group, normal_traffic_growth_decision, page_hinkley_tail_change, slow_drift_tail_change, traffic_explained_metrics
 
 logger = logging.getLogger(__name__)
 CUSUM_TAIL_GROUPS = {"cpu", "memory", "latency", "socket_io"}
@@ -290,6 +290,7 @@ class V001AnomalyEngine:
         min_tail_anomaly_buckets: dict[str, int],
         min_relative_change_ratio: dict[str, float],
         min_absolute_change: dict[str, float],
+        slow_drift: dict | None,
         traffic_shape_min_spearman: float,
         traffic_shape_max_lag_buckets: int,
         traffic_explanation: dict | None,
@@ -304,6 +305,7 @@ class V001AnomalyEngine:
         self.min_tail_anomaly_buckets = min_tail_anomaly_buckets
         self.min_relative_change_ratio = min_relative_change_ratio
         self.min_absolute_change = min_absolute_change
+        self.slow_drift = slow_drift or {}
         self.traffic_shape_min_spearman = traffic_shape_min_spearman
         self.traffic_shape_max_lag_buckets = traffic_shape_max_lag_buckets
         self.traffic_explanation = traffic_explanation
@@ -314,6 +316,7 @@ class V001AnomalyEngine:
             "robust_drift": robust_drift_threshold,
             "ewma_stl": ewma_z_threshold,
             "isolation_forest": isolation_score_threshold,
+            "slow_drift": 1.0,
         }
         self.robust_drift = RobustDriftDetector(robust_drift_threshold, min_points, robust_drift_min_baseline_points, detection_window_seconds)
         self.ewma_stl = EwmaStlDetector(ewma_alpha, ewma_z_threshold, min_points, seasonal_period, detection_window_seconds)
@@ -334,11 +337,13 @@ class V001AnomalyEngine:
     def evaluate(self, series: list[MetricSeries], logs: list[tuple[str, int, str]] | None = None) -> list[AnomalyFinding]:
         detector_series = self._filter_normal_traffic_growth(series)
         detector_series = [metric for metric in detector_series if self._has_significant_tail_change(metric)]
+        slow_drift_findings = self._slow_drift_findings(detector_series)
         raw_metric_findings = (
             [
                 *self.robust_drift.evaluate(detector_series),
                 *self.ewma_stl.evaluate(detector_series),
                 *self.isolation_forest.evaluate(detector_series),
+                *slow_drift_findings,
             ]
             if detector_series
             else []
@@ -363,7 +368,7 @@ class V001AnomalyEngine:
             self.min_relative_change_ratio[group],
             self.min_absolute_change[group],
         )
-        return change.significant or (
+        return change.significant or slow_drift_tail_change(metric, self.detection_window_seconds, self.min_points - 1, self.slow_drift).significant or (
             group in CUSUM_TAIL_GROUPS
             and (
                 cusum_tail_change(
@@ -385,6 +390,23 @@ class V001AnomalyEngine:
                 ).significant
             )
         )
+
+    def _slow_drift_findings(self, series: list[MetricSeries]) -> list[AnomalyFinding]:
+        findings = []
+        for metric in series:
+            change = slow_drift_tail_change(metric, self.detection_window_seconds, self.min_points - 1, self.slow_drift)
+            if change.significant:
+                findings.append(
+                    AnomalyFinding(
+                        algorithm="slow_drift",
+                        service=metric.service,
+                        metric=metric.metric,
+                        signal_id=metric.signal_id,
+                        score=1.0,
+                        timestamp=change.first_changed_at or metric.points[-1].timestamp,
+                    )
+                )
+        return findings
 
     def _correlated_log_findings(self, log_findings: list[AnomalyFinding], metric_findings: list[AnomalyFinding]) -> list[AnomalyFinding]:
         return [
@@ -522,6 +544,7 @@ def build_v001_anomaly_engine(config: dict, **overrides) -> V001AnomalyEngine:
         min_tail_anomaly_buckets={key: int(value) for key, value in anomaly["min_tail_anomaly_buckets"].items()},
         min_relative_change_ratio={key: float(value) for key, value in anomaly["min_relative_change_ratio"].items()},
         min_absolute_change={key: float(value) for key, value in anomaly["min_absolute_change"].items()},
+        slow_drift=anomaly.get("slow_drift"),
         traffic_shape_min_spearman=float(anomaly["traffic_shape_min_spearman"]),
         traffic_shape_max_lag_buckets=int(anomaly["traffic_shape_max_lag_buckets"]),
         traffic_explanation=anomaly.get("traffic_explanation"),

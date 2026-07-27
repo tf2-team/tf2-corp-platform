@@ -130,6 +130,39 @@ def page_hinkley_tail_change(
     )
 
 
+def slow_drift_tail_change(metric: MetricSeries, detection_window_seconds: int | None, start: int, config: dict | None) -> TailChange:
+    params = _slow_drift_params(metric, config)
+    values = tuple(point.value for point in metric.points)
+    indexes = tuple(tail_indexes(metric, int(params.get("window_seconds", detection_window_seconds or 0)) or detection_window_seconds, 0))
+    if not params or len(indexes) < int(params.get("min_points", 6)):
+        return TailChange(indexes, values, 0.0, 0, None, False)
+    xs = [metric.points[index].timestamp for index in indexes]
+    ys = [values[index] for index in indexes]
+    span = max(xs) - min(xs)
+    if span <= 0:
+        return TailChange(indexes, values, ys[0], 0, None, False)
+    x_mean = sum(xs) / len(xs)
+    y_mean = sum(ys) / len(ys)
+    denom = sum((x - x_mean) ** 2 for x in xs)
+    slope = sum((x - x_mean) * (y - y_mean) for x, y in zip(xs, ys)) / denom if denom else 0.0
+    direction = -1.0 if params.get("direction") == "down" else 1.0
+    deltas = [direction * (right - left) for left, right in zip(ys, ys[1:])]
+    positive_ratio = sum(delta > 0 for delta in deltas) / len(deltas) if deltas else 0.0
+    projected_change = direction * slope * span
+    significant = (
+        projected_change >= float(params.get("min_total_change", 0.0))
+        and positive_ratio >= float(params.get("positive_bucket_ratio", config.get("positive_bucket_ratio", 0.65)))
+    )
+    return TailChange(
+        indexes=indexes,
+        values=values,
+        baseline=ys[0],
+        changed_buckets=sum(delta > 0 for delta in deltas),
+        first_changed_at=metric.points[indexes[0]].timestamp if significant else None,
+        significant=significant,
+    )
+
+
 def tail_indexes(metric: MetricSeries, detection_window_seconds: int | None, start: int) -> range:
     if not metric.points:
         return range(0)
@@ -156,6 +189,17 @@ def series_step_seconds(metric: MetricSeries) -> int:
         return metric.detector_bucket_seconds or metric.step_seconds or 1
     differences = [right.timestamp - left.timestamp for left, right in zip(metric.points, metric.points[1:]) if right.timestamp > left.timestamp]
     return int(median(differences)) if differences else 1
+
+
+def _slow_drift_params(metric: MetricSeries, config: dict | None) -> dict:
+    if not config or not config.get("enabled", False):
+        return {}
+    metrics = config.get("metrics", {})
+    group = metric_group(metric.metric)
+    for key in (group, *(key for key in metrics if key in metric.metric)):
+        if key in metrics:
+            return {**config, **metrics[key]}
+    return {}
 
 
 def normal_traffic_growth_decision(

@@ -9,7 +9,7 @@ from aiops.anomaly.stats import robust_score
 from aiops.rca.graph import GraphTraversalRca
 from aiops.schemas import AnomalyFinding, MetricSeries, RcaResult, RootCauseCandidate, RuntimeConfig, TelemetryCorroboration
 from aiops.shared.metrics import is_root_cause_metric, metric_priority
-from aiops.shared.tail import cusum_tail_change, evaluate_tail_change, fixed_baseline_and_tail, metric_group, page_hinkley_tail_change, tail_aligned_spearman
+from aiops.shared.tail import cusum_tail_change, evaluate_tail_change, fixed_baseline_and_tail, metric_group, page_hinkley_tail_change, slow_drift_tail_change, tail_aligned_spearman
 from aiops.topology import TopologyGraph
 
 CUSUM_TAIL_GROUPS = {"cpu", "memory", "latency", "socket_io"}
@@ -33,6 +33,7 @@ class V001RcaEngine:
         self.min_tail_anomaly_buckets = {key: int(value) for key, value in combined_hyperparameters["min_tail_anomaly_buckets"].items()}
         self.min_relative_change_ratio = {key: float(value) for key, value in combined_hyperparameters["min_relative_change_ratio"].items()}
         self.min_absolute_change = {key: float(value) for key, value in combined_hyperparameters["min_absolute_change"].items()}
+        self.slow_drift = combined_hyperparameters.get("slow_drift", {})
         self.page_hinkley_min_bucket_factor = float(combined_hyperparameters["page_hinkley_min_bucket_factor"])
         self.traffic_shape_min_spearman = float(combined_hyperparameters["traffic_shape_min_spearman"])
         self.traffic_shape_max_lag_buckets = int(combined_hyperparameters["traffic_shape_max_lag_buckets"])
@@ -306,7 +307,7 @@ class V001RcaEngine:
             self.min_relative_change_ratio[group],
             self.min_absolute_change[group],
         )
-        return change.significant or (
+        return change.significant or slow_drift_tail_change(metric, self.detection_window_seconds, self.drift_min_points - 1, self.slow_drift).significant or (
             group in CUSUM_TAIL_GROUPS
             and (
                 cusum_tail_change(

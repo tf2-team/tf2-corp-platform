@@ -18,7 +18,7 @@ from aiops.rca.graph import GraphTraversalRca
 from aiops.rca import V001RcaEngine
 from aiops.schemas import AnomalyFinding, MetricPoint, MetricSeries, PipelineResult, PipelineRunRequest, RcaResult, RootCauseCandidate, RuntimeConfig, TelemetryCorroboration
 from aiops.shared.series import prepare_detector_series
-from aiops.shared.tail import aligned_spearman, cusum_tail_change, evaluate_tail_change, fixed_baseline_and_tail, median3, metric_group, normal_traffic_growth_decision, page_hinkley_tail_change, point_changed, tail_aligned_dtw_similarity
+from aiops.shared.tail import aligned_spearman, cusum_tail_change, evaluate_tail_change, fixed_baseline_and_tail, median3, metric_group, normal_traffic_growth_decision, page_hinkley_tail_change, point_changed, slow_drift_tail_change, tail_aligned_dtw_similarity
 from scipy.stats import ConstantInputWarning
 
 
@@ -197,6 +197,13 @@ class V001AnomalyRcaTest(unittest.TestCase):
         self.assertFalse(evaluate_tail_change(series, 900, 29, 3, 0.25, 0.05).significant)
         self.assertTrue(page_hinkley_tail_change(series, 900, 29, 3, 0.25, 0.05).significant)
 
+    def test_slow_drift_detects_small_sustained_memory_growth(self):
+        series = minute_metric("ad", "memory_usage_bytes", [460_000_000 + index * 100_000 for index in range(60)])
+        config = {"enabled": True, "window_seconds": 3600, "min_points": 12, "positive_bucket_ratio": 0.65, "metrics": {"memory": {"direction": "up", "min_total_change": 5_000_000}}}
+
+        self.assertFalse(evaluate_tail_change(series, 1800, 29, 2, 0.05, 10_485_760).significant)
+        self.assertTrue(slow_drift_tail_change(series, 1800, 29, config).significant)
+
     def test_socket_io_metric_uses_socket_io_thresholds(self):
         self.assertEqual(metric_group("socket_io_bytes_per_second"), "socket_io")
 
@@ -278,6 +285,27 @@ class V001AnomalyRcaTest(unittest.TestCase):
 
         self.assertEqual([(finding.algorithm, finding.service, finding.metric) for finding in findings], [("weighted_sum", "payment", "error_ratio_5m")])
         self.assertGreaterEqual(findings[0].score, rca_hyperparameters()["anomaly"]["weighted_score_threshold"])
+
+    def test_v001_emits_slow_drift_finding_when_other_tail_thresholds_do_not_fire(self):
+        config = rca_hyperparameters()
+        anomaly = {
+            **config["anomaly"],
+            "robust_drift_threshold": 99.0,
+            "log_history_buckets": 8,
+            "log_min_nonzero_buckets": 1,
+            "slow_drift": {
+                "enabled": True,
+                "window_seconds": 3600,
+                "min_points": 12,
+                "positive_bucket_ratio": 0.65,
+                "metrics": {"memory": {"direction": "up", "min_total_change": 5_000_000}},
+            },
+        }
+        engine = build_v001_anomaly_engine({**config, "anomaly": anomaly, "min_points": 30})
+
+        findings = engine.evaluate([minute_metric("ad", "memory_usage_bytes", [460_000_000 + index * 100_000 for index in range(60)])])
+
+        self.assertEqual([(finding.algorithm, finding.service, finding.metric) for finding in findings], [("weighted_sum", "ad", "memory_usage_bytes")])
 
     def test_v001_does_not_flag_low_noise_as_hidden_error_signal(self):
         findings = anomaly_engine().evaluate(
