@@ -108,6 +108,141 @@ MTTD reduction: `300s -> 29.5s`, about `90.2%` faster.
 | Masking checkout observability | `docs/mandates/15/evidence/24-masking-checkout-observability.png` |
 | Masking Discord summary | `docs/mandates/15/evidence/25-masking-discord-summary.png` |
 
+## 4.1 Embedded proof gallery with captions
+
+### Baseline and runtime setup
+
+**01 - AIOps normal run / no incidents.**  
+Shows the continuous AIOps run with `candidates=0`, `incidents=0`, and `root_causes=0`, proving the detector starts clean during normal telemetry.
+
+![AIOps normal run/no incidents](./evidence/01-aiops-run-no-incidents.png)
+
+**02 - Port-forward ready.**  
+Shows Prometheus, OpenSearch, Grafana, Kubernetes proxy, and AIOps endpoints prepared for the live evidence run.
+
+![Port-forward ready](./evidence/02-port-forward-ready.png)
+
+**03 - Checkout observability baseline.**  
+Shows checkout latency, error ratio, request rate, CPU, memory, disk, network, and pod readiness in the baseline window.
+
+![Checkout observability baseline](./evidence/03-grafana-checkout-observability.png)
+
+**04 - Checkout SLO / resource baseline.**  
+Shows service-level health and resource panels before incidents are injected, used as the normal reference.
+
+![SLO/resources baseline](./evidence/04-grafana-slo-resources.png)
+
+**05 - Locust baseline load.**  
+Shows the traffic generator running at the baseline load level before the high-load and incident scenarios.
+
+![Locust baseline load](./evidence/05-locust-load-state.png)
+
+**06 - Flagd all faults off.**  
+Shows incident flags are disabled before baseline capture, so the no-alert baseline is clean.
+
+![Flagd all off](./evidence/06-flagd-all-off.png)
+
+**07 - Baseline checkout pre-capture.**  
+Shows checkout observability immediately before the labeled baseline capture is saved.
+
+![Baseline checkout observability before capture](./evidence/07-baseline-checkout-observability-before-capture.png)
+
+**08 - Baseline SLO pre-capture.**  
+Shows checkout SLO remains healthy before baseline capture, supporting the expected no-incident label.
+
+![Baseline SLO before capture](./evidence/08-baseline-slo-before-capture.png)
+
+### High-load healthy no-alert proof
+
+**09 - High-load Locust at 400 users.**  
+Shows the load-only stress case where user count is increased, but no fault flag is enabled.
+
+![High-load Locust 400 users](./evidence/09-high-load-locust-400-users.png)
+
+**10 - High-load checkout observability.**  
+Shows checkout under high traffic so the detector can distinguish busy-but-healthy from broken.
+
+![High-load checkout observability](./evidence/10-high-load-checkout-observability.png)
+
+**11 - High-load flagd all off.**  
+Confirms the high-load case has all incident flags disabled, so any alert would be a false positive.
+
+![High-load flagd all off](./evidence/11-high-load-flagd-all-off.png)
+
+**12 - High-load SLO still healthy.**  
+Shows checkout SLO remains healthy during high load, supporting the expected no-incident label.
+
+![High-load SLO healthy](./evidence/12-high-load-slo-healthy.png)
+
+**13 - AIOps no incident during high load.**  
+Shows the detector does not fire on high-load-only telemetry, proving false-positive control for busy-but-healthy traffic.
+
+![High-load AIOps no incidents](./evidence/13-high-load-aiops-no-incidents.png)
+
+**14 - Recovery back to baseline load.**  
+Shows Locust returns from high load to the normal traffic level.
+
+![Recovery after high-load](./evidence/14-recovery-locust-back-to-200.png)
+
+**15 - AIOps remains clean after high load.**  
+Shows no stale incident/noise remains after the high-load scenario ends.
+
+![Recovery AIOps post high-load](./evidence/15-recovery-aiops-post-high-load.png)
+
+### Real incident fire proof
+
+**16 - Real incident detected by AIOps.**  
+Shows the detector firing during the `checkout_real_incident` case, satisfying the live end-to-end detection proof.
+
+![Real incident AIOps detected](./evidence/16-real-incident-aiops-detected.png)
+
+**17 - Real incident Discord summary.**  
+Shows the generated incident summary delivered to the real Discord / TF2 AIOps channel.
+
+![Real incident Discord summary](./evidence/17-real-incident-discord-summary.png)
+
+**18 - Real incident checkout observability.**  
+Shows checkout telemetry during the incident window, including health signals used by the detector.
+
+![Real incident checkout observability](./evidence/18-real-incident-checkout-observability.png)
+
+**19 - Real incident SLO degraded.**  
+Shows user-visible/SLO degradation during the injected incident, proving this is not just telemetry noise.
+
+![Real incident SLO degraded](./evidence/19-real-incident-slo-degraded.png)
+
+### Masking / no-masking proof
+
+**20 - Masking case SLO degraded.**  
+Shows the masking scenario still has real SLO impact even with unrelated load/noise present.
+
+![Masking SLO degraded](./evidence/20-masking-slo-degraded.png)
+
+**21 - Masking AIOps RCA and dedup.**  
+Shows AIOps keeps the incident grouped/deduped and still surfaces the relevant RCA during the noisy masking case.
+
+![Masking AIOps RCA and dedup](./evidence/21-masking-aiops-dedup-rca.png)
+
+**22 - Masking threshold fires.**  
+Shows the detector threshold/health signal fires during the masking incident window.
+
+![Masking threshold fires](./evidence/22-masking-threshold-fires.png)
+
+**23 - Masking cart observability.**  
+Shows cart-side telemetry for the masking case, supporting the checkout dependency/root-cause context.
+
+![Masking cart observability](./evidence/23-masking-cart-observability.png)
+
+**24 - Masking checkout observability.**  
+Shows checkout-side telemetry during masking, proving the checkout incident remains visible despite unrelated noise.
+
+![Masking checkout observability](./evidence/24-masking-checkout-observability.png)
+
+**25 - Masking Discord summary.**  
+Shows the masking incident summary delivered to the real Discord / TF2 AIOps channel.
+
+![Masking Discord summary](./evidence/25-masking-discord-summary.png)
+
 ## 5. Reproduction steps
 
 1. Start port-forward:
@@ -197,3 +332,7 @@ Evidence links/files:
 - [x] MTTD before and after is documented.
 - [x] External replay entry point is available.
 - [ ] Signed ADR is linked after reviewer sign-off.
+
+
+
+

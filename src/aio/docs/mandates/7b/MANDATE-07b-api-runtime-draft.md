@@ -140,7 +140,7 @@ Chỉ có **2 incident**, cả 2 đều nằm trong tập nhãn mong đợi (pay
 
 ### 5.1 Baseline (xác nhận state sạch, không còn incident checkout cũ)
 
-![Baseline incidents empty after state reset](./s2-rerun-01-baseline-incidents-empty.png)
+![Baseline incidents empty after state reset](./evidence/s2-rerun-01-baseline-incidents-empty.png)
 
 ### 5.2 Fault Injection
 
@@ -149,29 +149,29 @@ Chỉ có **2 incident**, cả 2 đều nằm trong tập nhãn mong đợi (pay
 | Fault | `local-cartFailure` |
 | Fault start timestamp | TODO |
 
-![Fault start timestamp](./s2-rerun-02-fault-start-timestamp.png)
+![Fault start timestamp](./evidence/s2-rerun-02-fault-start-timestamp.png)
 
-![Flagd cart flag enabled](./s2-rerun-03-flagd-cart-enabled.png)
+![Flagd cart flag enabled](./evidence/s2-rerun-03-flagd-cart-enabled.png)
 
 ### 5.3 Detector Fire and Incident
 
-![Cart detector fired](./s2-rerun-04-detector-fired.png)
+![Cart detector fired](./evidence/s2-rerun-04-detector-fired.png)
 
-![Cart dedup and RCA snapshot](./s2-rerun-04b-dedup-rca.png)
+![Cart dedup and RCA snapshot](./evidence/s2-rerun-04b-dedup-rca.png)
 
 **Full unfiltered incident list:**
 
-![Fault capture CLI](./s2-rerun-08-fault-capture-cli.png)
+![Fault capture CLI](./evidence/s2-rerun-08-fault-capture-cli.png)
 
 ### 5.4 User-Visible Impact
 
-![Cart SLO impact dashboard](./s2-rerun-07b-fault-slo-dashboard.png)
+![Cart SLO impact dashboard](./evidence/s2-rerun-07b-fault-slo-dashboard.png)
 
 ### 5.5 Recovery
 
-![Flagd cart flag disabled](./s2-rerun-09-flagd-off.png)
+![Flagd cart flag disabled](./evidence/s2-rerun-09-flagd-off.png)
 
-![Recovery SLO dashboard](./s2-rerun-10-recovery-slo-dashboard.png)
+![Recovery SLO dashboard](./evidence/s2-rerun-10-recovery-slo-dashboard.png)
 
 **Full unfiltered incident list cuối scenario:**
 
@@ -191,9 +191,9 @@ Chi tiết: [`s3-burn-rate-meta.txt`](./s3-burn-rate-meta.txt).
 Runtime: `candidates=0`, `incidents=0`, `root_causes=0` (165 metric series).  
 Grafana burn-rate ~`0.82` (dưới ngưỡng `1.0x`).
 
-![Burn-rate baseline runtime no-fire](./18a-burn-rate-baseline-runtime-no-fire.png)
+![Burn-rate baseline runtime no-fire](./evidence/18a-burn-rate-baseline-runtime-no-fire.png)
 
-![Burn-rate baseline below 1x](./18b-burn-rate-baseline-below-1x.png)
+![Burn-rate baseline below 1x](./evidence/18b-burn-rate-baseline-below-1x.png)
 
 ### 6.2 Escalating Fault
 
@@ -204,13 +204,13 @@ Grafana burn-rate ~`0.82` (dưới ngưỡng `1.0x`).
 | ~11:40 | escalate `100%` |
 | ~11:44 | Grafana burn-rate crossed `1.03` (> `1.0x`) |
 
-![Fault enabled 50 percent](./18c-burn-rate-fault-enabled-50-percent.png)
+![Fault enabled 50 percent](./evidence/18c-burn-rate-fault-enabled-50-percent.png)
 
-![Fault escalated 75 percent](./18d-burn-rate-fault-escalated-75-percent.png)
+![Fault escalated 75 percent](./evidence/18d-burn-rate-fault-escalated-75-percent.png)
 
-![Fault escalated 100 percent](./18e-burn-rate-fault-escalated-100-percent.png)
+![Fault escalated 100 percent](./evidence/18e-burn-rate-fault-escalated-100-percent.png)
 
-![Burn rate crossed 1x in Grafana](./18f-burn-rate-crossed-1x-grafana.png)
+![Burn rate crossed 1x in Grafana](./evidence/18f-burn-rate-crossed-1x-grafana.png)
 
 ### 6.3 Detector Fire, Incident, Dedup, No-Spam
 
@@ -224,17 +224,17 @@ Grafana burn-rate ~`0.82` (dưới ngưỡng `1.0x`).
 | Runbook | `RB-CHECKOUT-SLO` |
 | Dedup | same fingerprint; `occurrence_count` 1 → 2 → 3 (no spam) |
 
-![Burn-rate detector fired, incident, notification](./18g-burn-rate-detector-fired-incident-notification.png)
+![Burn-rate detector fired, incident, notification](./evidence/18g-burn-rate-detector-fired-incident-notification.png)
 
-![Burn-rate dedup same incident](./18h-burn-rate-dedup-same-incident-occurrence2.png)
+![Burn-rate dedup same incident](./evidence/18h-burn-rate-dedup-same-incident-occurrence2.png)
 
-![Incident API final occurrence 3](./18j-burn-rate-final-incident-api-occurrence3.png)
+![Incident API final occurrence 3](./evidence/18j-burn-rate-final-incident-api-occurrence3.png)
 
 ### 6.4 Fault Removal and Recovery
 
-![Burn-rate fault disabled](./18i-burn-rate-fault-disabled.png)
+![Burn-rate fault disabled](./evidence/18i-burn-rate-fault-disabled.png)
 
-![Checkout error-ratio impact and recovery](./18k-burn-rate-supporting-error-ratio-impact-recovery.png)
+![Checkout error-ratio impact and recovery](./evidence/18k-burn-rate-supporting-error-ratio-impact-recovery.png)
 
 **Caveat:** burn-rate 24h không về dưới 1.0x ngay sau khi tắt fault (cửa sổ dài — expected).
 
@@ -277,9 +277,9 @@ Capture: `evaluate/dataset/mandate7b_live/checkout_memory_normal_baseline/`.
 | Expected primary signal | `ad` CPU / ad latency |
 | Observed primary fire | `checkout` `memory_usage_bytes` (RCA) |
 
-![Flagd attempted ad high cpu on](./s4-rerun-03-flagd-attempted-adHighCpu-on.png)
+![Flagd attempted ad high cpu on](./evidence/s4-rerun-03-flagd-attempted-adHighCpu-on.png)
 
-![Ad Grafana CPU not clearly elevated](./s4-rerun-07b-ad-grafana-cpu-not-elevated.png)
+![Ad Grafana CPU not clearly elevated](./evidence/s4-rerun-07b-ad-grafana-cpu-not-elevated.png)
 
 ### 7.3 Detector Fire and Lead-Time (observed)
 
@@ -293,9 +293,9 @@ Capture: `evaluate/dataset/mandate7b_live/checkout_memory_normal_baseline/`.
 | Path | `rca_root_cause` / anomaly `weighted_sum` |
 | Approx lead-time from flag unix | `1785078300 - 1785077972 ≈ 328s` (metric ts) / wall ~`22:05:43 - fault_start` |
 
-![RCA checkout memory fire](./s4-rerun-04-detector-rca-checkout-memory.png)
+![RCA checkout memory fire](./evidence/s4-rerun-04-detector-rca-checkout-memory.png)
 
-![Checkout memory spike Grafana](./s4-rerun-07-checkout-memory-spike.png)
+![Checkout memory spike Grafana](./evidence/s4-rerun-07-checkout-memory-spike.png)
 
 ### 7.4 User-Visible / Telemetry Impact
 
@@ -306,7 +306,7 @@ Capture: `evaluate/dataset/mandate7b_live/checkout_memory_normal_baseline/`.
 
 Operator tắt `local-adHighCpu` (toàn bộ flag Basic = off). Toast `Saved: local-adHighCpu`.
 
-![Flagd adHighCpu off](./s4-rerun-08-flagd-adHighCpu-off.png)
+![Flagd adHighCpu off](./evidence/s4-rerun-08-flagd-adHighCpu-off.png)
 
 **Final incident dump:** `evaluate/dataset/mandate7b_live/checkout_memory_incidents_final.json`
 
@@ -336,41 +336,41 @@ Chi tiết: [`s5-checkout-p95-meta.txt`](./s5-checkout-p95-meta.txt).
 
 ### Baseline
 
-![S5 baseline checkout Grafana](./s5-01-baseline-checkout-grafana.png)
+![S5 baseline checkout Grafana](./evidence/s5-01-baseline-checkout-grafana.png)
 
-![S5 baseline runtime clean](./s5-02-baseline-runtime-clean.png)
+![S5 baseline runtime clean](./evidence/s5-02-baseline-runtime-clean.png)
 
-![S5 baseline capture](./s5-03-baseline-capture-cli.png)
+![S5 baseline capture](./evidence/s5-03-baseline-capture-cli.png)
 
-![S5 baseline SLO](./s5-04-baseline-slo-dashboard.png)
+![S5 baseline SLO](./evidence/s5-04-baseline-slo-dashboard.png)
 
 ### Fault + fire
 
-![S5 fault start unix](./s5-05-fault-start-unix.png)
+![S5 fault start unix](./evidence/s5-05-fault-start-unix.png)
 
-![S5 flagd before](./s5-06-flagd-before-all-off.png)
+![S5 flagd before](./evidence/s5-06-flagd-before-all-off.png)
 
-![S5 cartFailure on](./s5-07-flagd-cartFailure-on.png)
+![S5 cartFailure on](./evidence/s5-07-flagd-cartFailure-on.png)
 
-![S5 detector fired](./s5-08-detector-fired-log.png)
+![S5 detector fired](./evidence/s5-08-detector-fired-log.png)
 
-![S5 p95 spike](./s5-09-fault-checkout-p95-spike.png)
+![S5 p95 spike](./evidence/s5-09-fault-checkout-p95-spike.png)
 
-![S5 checkout RED](./s5-10-fault-checkout-p95-dashboard.png)
+![S5 checkout RED](./evidence/s5-10-fault-checkout-p95-dashboard.png)
 
 ### Capture / dump / recovery
 
-![S5 capture fault](./s5-11-capture-fault-cli.png)
+![S5 capture fault](./evidence/s5-11-capture-fault-cli.png)
 
-![S5 dump incidents](./s5-12-dump-incidents-cli.png)
+![S5 dump incidents](./evidence/s5-12-dump-incidents-cli.png)
 
-![S5 flagd off](./s5-13-flagd-cartFailure-off.png)
+![S5 flagd off](./evidence/s5-13-flagd-cartFailure-off.png)
 
-![S5 recovery Grafana](./s5-14-recovery-checkout-grafana.png)
+![S5 recovery Grafana](./evidence/s5-14-recovery-checkout-grafana.png)
 
-![S5 recovery SLO](./s5-15-recovery-slo-dashboard.png)
+![S5 recovery SLO](./evidence/s5-15-recovery-slo-dashboard.png)
 
-![S5 dump final](./s5-16-dump-final-cli.png)
+![S5 dump final](./evidence/s5-16-dump-final-cli.png)
 
 ## 8. RCA and Incident Lifecycle Caveats
 
@@ -425,59 +425,59 @@ Công thức mandate: **recall** = bắt được / K; **precision** = lần kê
 
 | File | Purpose |
 | --- | --- |
-| `18a-burn-rate-baseline-runtime-no-fire.png` | S3 burn-rate evidence |
-| `18b-burn-rate-baseline-below-1x.png` | S3 burn-rate evidence |
-| `18c-burn-rate-fault-enabled-50-percent.png` | S3 burn-rate evidence |
-| `18d-burn-rate-fault-escalated-75-percent.png` | S3 burn-rate evidence |
-| `18e-burn-rate-fault-escalated-100-percent.png` | S3 burn-rate evidence |
-| `18f-burn-rate-crossed-1x-grafana.png` | S3 burn-rate evidence |
-| `18g-burn-rate-detector-fired-incident-notification.png` | S3 burn-rate evidence |
-| `18h-burn-rate-dedup-same-incident-occurrence2.png` | S3 burn-rate evidence |
-| `18i-burn-rate-fault-disabled.png` | S3 burn-rate evidence |
-| `18j-burn-rate-final-incident-api-occurrence3.png` | S3 burn-rate evidence |
-| `18k-burn-rate-supporting-error-ratio-impact-recovery.png` | S3 burn-rate evidence |
-| `s2-rerun-00-port-forward-ready.png` | S2 cart rerun evidence |
-| `s2-rerun-01-baseline-incidents-empty.png` | S2 cart rerun evidence |
-| `s2-rerun-01c-baseline-cart-grafana.png` | S2 cart rerun evidence |
-| `s2-rerun-01d-baseline-slo-dashboard.png` | S2 cart rerun evidence |
-| `s2-rerun-02-fault-start-timestamp.png` | S2 cart rerun evidence |
-| `s2-rerun-03-flagd-cart-enabled.png` | S2 cart rerun evidence |
-| `s2-rerun-04b-dedup-rca.png` | S2 cart rerun evidence |
-| `s2-rerun-04-detector-fired.png` | S2 cart rerun evidence |
-| `s2-rerun-07b-fault-slo-dashboard.png` | S2 cart rerun evidence |
-| `s2-rerun-07-fault-cart-error-grafana.png` | S2 cart rerun evidence |
-| `s2-rerun-08-fault-capture-cli.png` | S2 cart rerun evidence |
-| `s2-rerun-09-flagd-off.png` | S2 cart rerun evidence |
-| `s2-rerun-10b-recovery-cart-error-grafana.png` | S2 cart rerun evidence |
-| `s2-rerun-10-recovery-slo-dashboard.png` | S2 cart rerun evidence |
+| `evidence/18a-burn-rate-baseline-runtime-no-fire.png` | S3 burn-rate evidence |
+| `evidence/18b-burn-rate-baseline-below-1x.png` | S3 burn-rate evidence |
+| `evidence/18c-burn-rate-fault-enabled-50-percent.png` | S3 burn-rate evidence |
+| `evidence/18d-burn-rate-fault-escalated-75-percent.png` | S3 burn-rate evidence |
+| `evidence/18e-burn-rate-fault-escalated-100-percent.png` | S3 burn-rate evidence |
+| `evidence/18f-burn-rate-crossed-1x-grafana.png` | S3 burn-rate evidence |
+| `evidence/18g-burn-rate-detector-fired-incident-notification.png` | S3 burn-rate evidence |
+| `evidence/18h-burn-rate-dedup-same-incident-occurrence2.png` | S3 burn-rate evidence |
+| `evidence/18i-burn-rate-fault-disabled.png` | S3 burn-rate evidence |
+| `evidence/18j-burn-rate-final-incident-api-occurrence3.png` | S3 burn-rate evidence |
+| `evidence/18k-burn-rate-supporting-error-ratio-impact-recovery.png` | S3 burn-rate evidence |
+| `evidence/s2-rerun-00-port-forward-ready.png` | S2 cart rerun evidence |
+| `evidence/s2-rerun-01-baseline-incidents-empty.png` | S2 cart rerun evidence |
+| `evidence/s2-rerun-01c-baseline-cart-grafana.png` | S2 cart rerun evidence |
+| `evidence/s2-rerun-01d-baseline-slo-dashboard.png` | S2 cart rerun evidence |
+| `evidence/s2-rerun-02-fault-start-timestamp.png` | S2 cart rerun evidence |
+| `evidence/s2-rerun-03-flagd-cart-enabled.png` | S2 cart rerun evidence |
+| `evidence/s2-rerun-04b-dedup-rca.png` | S2 cart rerun evidence |
+| `evidence/s2-rerun-04-detector-fired.png` | S2 cart rerun evidence |
+| `evidence/s2-rerun-07b-fault-slo-dashboard.png` | S2 cart rerun evidence |
+| `evidence/s2-rerun-07-fault-cart-error-grafana.png` | S2 cart rerun evidence |
+| `evidence/s2-rerun-08-fault-capture-cli.png` | S2 cart rerun evidence |
+| `evidence/s2-rerun-09-flagd-off.png` | S2 cart rerun evidence |
+| `evidence/s2-rerun-10b-recovery-cart-error-grafana.png` | S2 cart rerun evidence |
+| `evidence/s2-rerun-10-recovery-slo-dashboard.png` | S2 cart rerun evidence |
 | `s2-rerun-meta.txt` | S2 cart rerun evidence |
 | `s3-burn-rate-meta.txt` | Scenario metadata / reproduce notes |
-| `s4-rerun-03-flagd-attempted-adHighCpu-on.png` | S4 checkout memory rerun evidence |
-| `s4-rerun-04c-discord-alert-checkout-memory.png` | S4 checkout memory rerun evidence |
-| `s4-rerun-04-detector-rca-checkout-memory.png` | S4 checkout memory rerun evidence |
-| `s4-rerun-07b-ad-grafana-cpu-not-elevated.png` | S4 checkout memory rerun evidence |
-| `s4-rerun-07-checkout-memory-spike.png` | S4 checkout memory rerun evidence |
-| `s4-rerun-08-flagd-adHighCpu-off.png` | S4 checkout memory rerun evidence |
-| `s4-rerun-09-flagd-off.png` | S4 checkout memory rerun evidence |
-| `s4-rerun-10b-post-recovery-rca-noise.png` | S4 checkout memory rerun evidence |
-| `s4-rerun-10-recovery-checkout-memory.png` | S4 checkout memory rerun evidence |
+| `evidence/s4-rerun-03-flagd-attempted-adHighCpu-on.png` | S4 checkout memory rerun evidence |
+| `evidence/s4-rerun-04c-discord-alert-checkout-memory.png` | S4 checkout memory rerun evidence |
+| `evidence/s4-rerun-04-detector-rca-checkout-memory.png` | S4 checkout memory rerun evidence |
+| `evidence/s4-rerun-07b-ad-grafana-cpu-not-elevated.png` | S4 checkout memory rerun evidence |
+| `evidence/s4-rerun-07-checkout-memory-spike.png` | S4 checkout memory rerun evidence |
+| `evidence/s4-rerun-08-flagd-adHighCpu-off.png` | S4 checkout memory rerun evidence |
+| `evidence/s4-rerun-09-flagd-off.png` | S4 checkout memory rerun evidence |
+| `evidence/s4-rerun-10b-post-recovery-rca-noise.png` | S4 checkout memory rerun evidence |
+| `evidence/s4-rerun-10-recovery-checkout-memory.png` | S4 checkout memory rerun evidence |
 | `s4-rerun-meta.txt` | S4 checkout memory rerun evidence |
-| `s5-01-baseline-checkout-grafana.png` | S5 checkout p95 evidence |
-| `s5-02-baseline-runtime-clean.png` | S5 checkout p95 evidence |
-| `s5-03-baseline-capture-cli.png` | S5 checkout p95 evidence |
-| `s5-04-baseline-slo-dashboard.png` | S5 checkout p95 evidence |
-| `s5-05-fault-start-unix.png` | S5 checkout p95 evidence |
-| `s5-06-flagd-before-all-off.png` | S5 checkout p95 evidence |
-| `s5-07-flagd-cartFailure-on.png` | S5 checkout p95 evidence |
-| `s5-08-detector-fired-log.png` | S5 checkout p95 evidence |
-| `s5-09-fault-checkout-p95-spike.png` | S5 checkout p95 evidence |
-| `s5-10-fault-checkout-p95-dashboard.png` | S5 checkout p95 evidence |
-| `s5-11-capture-fault-cli.png` | S5 checkout p95 evidence |
-| `s5-12-dump-incidents-cli.png` | S5 checkout p95 evidence |
-| `s5-13-flagd-cartFailure-off.png` | S5 checkout p95 evidence |
-| `s5-14-recovery-checkout-grafana.png` | S5 checkout p95 evidence |
-| `s5-15-recovery-slo-dashboard.png` | S5 checkout p95 evidence |
-| `s5-16-dump-final-cli.png` | S5 checkout p95 evidence |
+| `evidence/s5-01-baseline-checkout-grafana.png` | S5 checkout p95 evidence |
+| `evidence/s5-02-baseline-runtime-clean.png` | S5 checkout p95 evidence |
+| `evidence/s5-03-baseline-capture-cli.png` | S5 checkout p95 evidence |
+| `evidence/s5-04-baseline-slo-dashboard.png` | S5 checkout p95 evidence |
+| `evidence/s5-05-fault-start-unix.png` | S5 checkout p95 evidence |
+| `evidence/s5-06-flagd-before-all-off.png` | S5 checkout p95 evidence |
+| `evidence/s5-07-flagd-cartFailure-on.png` | S5 checkout p95 evidence |
+| `evidence/s5-08-detector-fired-log.png` | S5 checkout p95 evidence |
+| `evidence/s5-09-fault-checkout-p95-spike.png` | S5 checkout p95 evidence |
+| `evidence/s5-10-fault-checkout-p95-dashboard.png` | S5 checkout p95 evidence |
+| `evidence/s5-11-capture-fault-cli.png` | S5 checkout p95 evidence |
+| `evidence/s5-12-dump-incidents-cli.png` | S5 checkout p95 evidence |
+| `evidence/s5-13-flagd-cartFailure-off.png` | S5 checkout p95 evidence |
+| `evidence/s5-14-recovery-checkout-grafana.png` | S5 checkout p95 evidence |
+| `evidence/s5-15-recovery-slo-dashboard.png` | S5 checkout p95 evidence |
+| `evidence/s5-16-dump-final-cli.png` | S5 checkout p95 evidence |
 | `s5-checkout-p95-meta.txt` | S5 checkout p95 evidence |
 
 ## 11. Reproduce (tóm tắt)
@@ -508,7 +508,7 @@ AI MANDATE #7b — Live detection + measurement
 - L3 Checkout memory (sat. substitute): attempted local-adHighCpu; ad CPU did not rise; RCA checkout memory_usage_bytes (inc-788d322c0b2f), lead-time ~328s
 - Impact: burn-rate ops01_checkout_slo_burn_rate (inc-ca09d8e8a247), occurrence 1→2→3+ (dedup/no-spam)
 
-Evidence: tf2-corp-platform/src/aio/docs/mandates/7b/ (s2-rerun-*, s5-*, s4-rerun-*, 18a–18k)
+Evidence: tf2-corp-platform/src/aio/docs/mandates/7b/evidence/ (s2-rerun-*, s5-*, s4-rerun-*, 18a–18k)
 Datasets: evaluate/dataset/mandate7b_live/
 State: state/7b/s2-cart, s3-burn-rate, s4-checkout-memory, s5-checkout-p95
 
@@ -525,3 +525,4 @@ dry-run uvicorn :8540; Flagd operator toggle; per-scenario state paths; capture 
 ## 14. Conclusion
 
 #7b DoD **đạt trên evidence hiện có**: e2e fire (latency + error + memory-substitute + burn-rate), measurement trên bộ nhãn K=3, impact alerting không spam. Hạn chế đã ghi: saturation dùng checkout memory thay catalog/ad CPU; precision bị kéo bởi RCA/frontend noise; hai labeled case (cart error + checkout p95) cùng family fault `cartFailure` nhưng run/state tách.
+

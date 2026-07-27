@@ -1,4 +1,4 @@
-ï»¿# Scenario 4 â€” CHECKOUT MEMORY (relabeled)
+# Scenario 4 — CHECKOUT MEMORY (relabeled)
 
 ## Paths (canonical)
 - State: state/7b/s4-checkout-memory/
@@ -11,7 +11,7 @@
 - Grafana ad CPU did not rise clearly
 - Detector/RCA fired on checkout memory_usage_bytes (inc-788d322c0b2f)
 - Evidence pack and dataset/state names use checkout_memory going forward
-- Old folder state/7b/s4-ad-cpu may remain locked while uvicorn runs â€” stop uvicorn then delete it
+- Old folder state/7b/s4-ad-cpu may remain locked while uvicorn runs — stop uvicorn then delete it
 
 ## Evidence files
 - s4-rerun-03-flagd-attempted-adHighCpu-on.png
@@ -24,3 +24,4 @@
 - Flagd local-adHighCpu=off (screenshot s4-rerun-08-flagd-adHighCpu-off.png, toast Saved: local-adHighCpu)
 - Final dump: evaluate/dataset/mandate7b_live/checkout_memory_incidents_final.json (inc-788d322c0b2f still open, occ~34; recovered_at null expected for RCA persistence)
 - All flags off in Basic view
+

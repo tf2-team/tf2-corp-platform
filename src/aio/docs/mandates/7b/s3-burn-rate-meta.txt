@@ -38,3 +38,4 @@
 ## Dataset note
 - Incidents JSON exported from sqlite (same role as cart_fault_incidents*.json).
 - burn_rate_* folders: label.json present; metric_series.json / simple_metrics.csv chưa có (lần chạy này không lưu capture Prometheus riêng — khác cart/checkout_memory).
+

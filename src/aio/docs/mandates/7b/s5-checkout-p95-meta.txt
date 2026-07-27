@@ -44,3 +44,4 @@ separate from Scenario 2 (cart error rate) and Scenario 4 (checkout memory).
    prior scenarios (checkout_p95_* normal_baseline / real_incident folders).
 8. Record fault_start_unix / fault_disabled timestamps and detector fire
    evidence in a rerun meta note, following the s2/s3/s4 precedent.
+

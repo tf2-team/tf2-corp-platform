@@ -1,4 +1,4 @@
-﻿# Cart scenario RE-RUN meta
+# Cart scenario RE-RUN meta
 fault_start_unix_utc: 1785076022
 flag: local-cartFailure=on
 note: images prefixed s2-rerun-* are from the second run; earlier s2-* may be from first run
@@ -15,3 +15,4 @@ note: if this is not first cycle, check rca-history.jsonl line 1 for true first 
 fault_disabled_local: 2026-07-26 21:41:48.975 +07:00
 flag: local-cartFailure=off
 recovery: Cart/Checkout Success Rate 100%
+
