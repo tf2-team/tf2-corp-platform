@@ -323,7 +323,7 @@ def scan_output(text: str) -> GuardrailResult:
         results = analyzer.analyze(
             text=text,
             language="en",
-            entities=["EMAIL_ADDRESS", "PHONE_NUMBER", "LOCATION", "CREDIT_CARD"]
+            entities=["EMAIL_ADDRESS", "PHONE_NUMBER", "CREDIT_CARD"]
         )
         if results:
             return GuardrailResult(

@@ -699,6 +699,14 @@ services:
       - PRODUCT_REVIEWS_ADDR
       - CART_ADDR
       - VALKEY_ADDR
+      - MEM0_API_URL=${MEM0_API_URL:-http://mem0:8000}
+      - MEM0_API_KEY=${MEM0_API_KEY:-${ADMIN_API_KEY}}
+      - MEM0_READ_ENABLED=${MEM0_READ_ENABLED:-false}
+      - MEM0_WRITE_ENABLED=${MEM0_WRITE_ENABLED:-false}
+      - MEM0_TIMEOUT_MS=${MEM0_TIMEOUT_MS:-500}
+      - MEM0_TOP_K=${MEM0_TOP_K:-5}
+      - MEM0_MEMORY_TTL_DAYS=${MEM0_MEMORY_TTL_DAYS:-30}
+      - MEM0_AGENT_ID=${MEM0_AGENT_ID:-shopping-copilot}
       - AI_CACHE_ADDR=${AI_CACHE_ADDR:-valkey-ai-cache:6379}
       - AI_CACHE_ENABLED=${AI_CACHE_ENABLED:-false}
       - AI_CACHE_TLS=${AI_CACHE_TLS:-false}

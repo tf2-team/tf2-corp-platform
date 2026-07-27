@@ -24,6 +24,10 @@ def _key(conversation_id: str) -> str:
     return f"{KEY_PREFIX}{conversation_id}"
 
 
+def _memory_turn_key(conversation_id: str, turn_id: str) -> str:
+    return f"{KEY_PREFIX}{conversation_id}:memory-turn:{turn_id}"
+
+
 def empty_state() -> dict[str, Any]:
     return {
         "schema_version": 1,
@@ -106,3 +110,22 @@ def update_after_catalog(
         state["selected_product_id"] = selected_product_id
     save(conversation_id, state, client)
     return state
+
+
+def memory_turn_written(conversation_id: str, turn_id: str, client: Any) -> bool:
+    if not conversation_id or not turn_id or client is None:
+        return False
+    try:
+        return bool(client.get(_memory_turn_key(conversation_id, turn_id)))
+    except Exception:
+        return False
+
+
+def mark_memory_turn_written(conversation_id: str, turn_id: str, client: Any) -> None:
+    if not conversation_id or not turn_id or client is None:
+        return
+    try:
+        ttl = int(os.environ.get("COPILOT_CONVERSATION_TTL_SECONDS", DEFAULT_TTL_SECONDS))
+        client.setex(_memory_turn_key(conversation_id, turn_id), ttl, "1")
+    except Exception as exc:
+        logger.warning("Memory turn marker save failed: %s", exc)
