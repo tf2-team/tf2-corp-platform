@@ -43,7 +43,25 @@ def _converse(system_prompt: str, user_prompt: str) -> dict:
 
 
 def converse_text(system_prompt: str, user_prompt: str) -> str:
-    return _response_text(_converse(system_prompt, user_prompt))
+    """Return only response text (backward compatible)."""
+    text, _, _ = converse_with_usage(system_prompt, user_prompt)
+    return text
+
+
+def converse_with_usage(
+    system_prompt: str, user_prompt: str
+) -> tuple[str, int, int]:
+    """Return (text, input_tokens, output_tokens) from a real Bedrock response.
+
+    Token counts come from the provider usage block; they are not estimated
+    from string length.
+    """
+    response = _converse(system_prompt, user_prompt)
+    text = _response_text(response)
+    usage = response.get("usage") or {}
+    input_tokens = int(usage.get("inputTokens") or usage.get("input_tokens") or 0)
+    output_tokens = int(usage.get("outputTokens") or usage.get("output_tokens") or 0)
+    return text, input_tokens, output_tokens
 
 
 def converse_json(response_model: type[T], system_prompt: str, user_prompt: str) -> T:

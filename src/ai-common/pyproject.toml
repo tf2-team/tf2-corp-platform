@@ -32,6 +32,7 @@ dependencies = [
   "regex==2024.11.6",
   "structlog>=24",
   "tiktoken>=0.9,<1.0",
+  "valkey>=5.0.0",
   # Trivy HIGH/CRITICAL floors (product-reviews / shopping-copilot images)
   "torch==2.6.0",
   "transformers==4.51.3",

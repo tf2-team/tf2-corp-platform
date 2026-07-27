@@ -220,6 +220,9 @@ message AskProductAIAssistantResponse {
     string status = 2;
     string reason = 3;
     repeated GroundedClaim claims = 4;
+    string cache_status = 5;  // hit | miss
+    string cache_match = 6;   // exact | semantic | none
+    float cache_distance = 7; // 0 for exact/miss
 }
 
 // ---------------Shipping Service----------

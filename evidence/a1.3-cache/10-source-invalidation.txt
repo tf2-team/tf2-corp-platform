@@ -1,0 +1,30 @@
+﻿=== Source invalidation evidence ===
+Date: 2026-07-27 13:29:07
+Product: OLJCESPC7Z
+User: user_invalidation
+Question: Is this product good?
+Procedure:
+  1) FLUSHDB + recreate index
+  2) First request -> miss + store (GROUNDED)
+  3) Second identical request -> hit exact
+  4) UPDATE reviews.productreviews description for product
+  5) Third identical request -> miss (source_hash changed)
+
+--- STEP A: first request ---
+STEP_A_FIRST cache_status=miss cache_match=none response_status=GROUNDED latency_ms=7226.5
+STEP_A_FIRST answer_preview=Perfect for camping trips. It's lightweight and portable, making it easy to take anywhere. The views are surprisingly good for its size. Great entry-level telescope! Easy to set up
+--- STEP B: second identical request ---
+STEP_B_HIT cache_status=hit cache_match=exact response_status=GROUNDED latency_ms=1956.5
+STEP_B_HIT answer_preview=Perfect for camping trips. It's lightweight and portable, making it easy to take anywhere. The views are surprisingly good for its size. Great entry-level telescope! Easy to set up
+--- STEP C: SQL edit ---
+UPDATE 1
+ id | product_id |                                                 tail                                                 
+----+------------+------------------------------------------------------------------------------------------------------
+  1 | OLJCESPC7Z |  for new astronomers. [edited for cache invalidation test 20260727132840] [edited INV20260727132918]
+(1 row)
+
+--- STEP D: after source edit ---
+STEP_D_AFTER_EDIT cache_status=miss cache_match=none response_status=GROUNDED latency_ms=5376.3
+STEP_D_AFTER_EDIT answer_preview=Perfect for camping trips. It's lightweight and portable, making it easy to take anywhere. The views are surprisingly good for its size. Great entry-level telescope! Easy to set up
+
+Expect: A=miss, B=hit exact, D=miss (source invalidation).
