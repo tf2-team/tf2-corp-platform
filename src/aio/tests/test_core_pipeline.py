@@ -12,7 +12,8 @@ from aiops.config import Settings, load_hyperparameters, load_runtime_config
 from aiops.correlation import Correlator
 from aiops.detectors import DependencyDetector, DetectorEngine, NoDataDetector, ThresholdDetector
 from aiops.features import FeatureBuilder
-from aiops.schemas import ActionCatalogItem, ActionProposal, CandidateEvent, EvidenceItem, Feature, HistoryAction, IncidentFeatures, IncidentHistoryRecord, Observation, SignalQuality
+from aiops.notifications import NotificationBuilder
+from aiops.schemas import ActionCatalogItem, ActionProposal, CandidateEvent, EvidenceItem, Feature, HistoryAction, Incident, IncidentFeatures, IncidentHistoryRecord, Observation, SignalQuality
 from aiops.remediation import HistoryRetriever, PolicyEngine, RemediationDecisionEngine
 from aiops.storage import SQLiteIncidentStore
 from aiops.topology import TopologyGraph
@@ -65,6 +66,46 @@ class PydanticModelTest(unittest.TestCase):
         self.assertNotIn("suppress_window_seconds", parameters)
         self.assertNotIn("suppress_min_root_score", parameters)
         self.assertIn("topology_max_hops", parameters)
+
+
+class NotificationBuilderTest(unittest.TestCase):
+    def test_rca_notification_keeps_correlation_score(self):
+        event = CandidateEvent(
+            detector_id="rca_root_cause",
+            flow="checkout",
+            service="payment",
+            severity="SEV2",
+            signal_id="cpu_millicores",
+            value=0.3,
+            unit="score",
+            window="rca",
+            threshold=0.25,
+            quality=SignalQuality.FALLBACK_ONLY,
+            reason="rca_root_cause",
+            runbook_id="RB-SERVICE-RESOURCE",
+            confidence=0.3,
+            evidence=(
+                EvidenceItem(source="rca", reference="payment", summary="graph_score=1.000"),
+                EvidenceItem(source="rca", reference="payment", summary="correlation_score=0.750"),
+            ),
+        )
+
+        message = NotificationBuilder().build(
+            [
+                Incident(
+                    incident_id="inc-1",
+                    fingerprint="fp",
+                    state="open",
+                    severity="SEV2",
+                    flow="checkout",
+                    service="payment",
+                    likely_dependency="unknown",
+                    events=[event],
+                )
+            ]
+        )[0]
+
+        self.assertIn("- correlation_score=0.750", message.summary)
 
 
 class FeatureBuilderTest(unittest.TestCase):

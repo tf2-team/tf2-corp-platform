@@ -93,6 +93,7 @@ class V001RcaEngine:
         if not root_findings:
             return RcaResult(anomalies=findings)
         graph_scores = self.graph.rank_services(root_findings)
+        graph_evidence_scores = {service: min(1.0, score) for service, score in graph_scores.items()}
         earliest_scores = self._earliest_drift_scores(rca_series)
         correlation_scores = self._correlation_scores(rca_series, findings, series)
         downstream_coverage_scores = self._downstream_coverage_scores(root_findings)
@@ -153,7 +154,7 @@ class V001RcaEngine:
                     score=score,
                     root_cause_metrics=metrics,
                     evidence=[
-                        f"graph_score={graph_scores.get(service, 0.0):.3f}",
+                        f"graph_score={graph_evidence_scores.get(service, 0.0):.3f}",
                         f"earliest_drift_score={earliest_scores.get(service, 0.0):.3f}",
                         f"correlation_score={correlation_scores.get(service, 0.0):.3f}",
                         f"downstream_coverage_score={downstream_coverage_scores.get(service, 0.0):.3f}",
