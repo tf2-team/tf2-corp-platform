@@ -1,0 +1,843 @@
+{
+  "metrics": {
+    "notification": {
+      "precision": 0.7142857142857143,
+      "recall": 1.0,
+      "f1": 0.8333333333333333,
+      "tp": 5,
+      "fp": 2,
+      "tn": 3,
+      "fn": 0
+    },
+    "root_top1": {
+      "precision": 0.0,
+      "recall": 0.0,
+      "f1": 0.0,
+      "tp": 0,
+      "fp": 5,
+      "tn": 0,
+      "fn": 5
+    },
+    "root_top1_hit": {
+      "precision": 0.0,
+      "recall": 0.0,
+      "f1": 0.0,
+      "tp": 0,
+      "fp": 0,
+      "tn": 0,
+      "fn": 5
+    },
+    "timing": {
+      "evaluated_cases": 5,
+      "avg_detection_latency_seconds": 402.6,
+      "avg_early_by_seconds": -402.6,
+      "min_detection_latency_seconds": 195,
+      "max_detection_latency_seconds": 836
+    },
+    "skipped_cases": [
+      "mandate7b_live/burn_rate_normal_baseline",
+      "mandate7b_live/burn_rate_real_incident"
+    ]
+  },
+  "case_count": 12,
+  "cases": [
+    {
+      "case_id": "mandate15_live/checkout_high_load_healthy",
+      "scenario_type": "high_load_healthy",
+      "expected_incident": false,
+      "predicted_notification": true,
+      "notification_count": 1,
+      "skipped": null,
+      "notification_titles": [
+        "RCA root cause: product-catalog"
+      ],
+      "notification_services": [
+        "product-catalog"
+      ],
+      "root_causes": [
+        {
+          "service": "product-catalog",
+          "score": 0.9414961636828645,
+          "root_cause_metrics": [
+            "cpu_millicores"
+          ],
+          "evidence": [
+            "graph_score=0.632",
+            "earliest_drift_score=0.025",
+            "correlation_score=0.575",
+            "downstream_coverage_score=0.000",
+            "weighted_rrf_score=0.941",
+            "evidence_strength=1.000",
+            "cpu_millicores anomaly_score=1.800"
+          ]
+        },
+        {
+          "service": "frontend",
+          "score": 0.9327094474153299,
+          "root_cause_metrics": [
+            "cpu_millicores"
+          ],
+          "evidence": [
+            "graph_score=0.609",
+            "earliest_drift_score=0.025",
+            "correlation_score=0.332",
+            "downstream_coverage_score=0.000",
+            "weighted_rrf_score=0.933",
+            "evidence_strength=1.000",
+            "cpu_millicores anomaly_score=1.600"
+          ]
+        },
+        {
+          "service": "frontend-proxy",
+          "score": 0.9245540796963946,
+          "root_cause_metrics": [
+            "cpu_millicores"
+          ],
+          "evidence": [
+            "graph_score=0.596",
+            "earliest_drift_score=0.025",
+            "correlation_score=0.427",
+            "downstream_coverage_score=0.000",
+            "weighted_rrf_score=0.925",
+            "evidence_strength=1.000",
+            "cpu_millicores anomaly_score=1.800"
+          ]
+        }
+      ],
+      "expected_root_service": null,
+      "predicted_root_services": [
+        "product-catalog"
+      ],
+      "root_hit": false,
+      "detection_timestamp": 1785092183,
+      "detection_latency_seconds": null,
+      "early_by_seconds": null
+    },
+    {
+      "case_id": "mandate15_live/checkout_masking",
+      "scenario_type": "masking",
+      "expected_incident": true,
+      "predicted_notification": true,
+      "notification_count": 4,
+      "skipped": null,
+      "notification_titles": [
+        "checkout incident",
+        "checkout incident",
+        "RCA root cause: payment",
+        "RCA root cause: quote"
+      ],
+      "notification_services": [
+        "cart",
+        "checkout",
+        "payment",
+        "quote"
+      ],
+      "root_causes": [
+        {
+          "service": "payment",
+          "score": 0.9127717391304349,
+          "root_cause_metrics": [
+            "memory_usage_bytes",
+            "cpu_millicores"
+          ],
+          "evidence": [
+            "graph_score=0.566",
+            "earliest_drift_score=0.311",
+            "correlation_score=0.817",
+            "downstream_coverage_score=1.000",
+            "weighted_rrf_score=0.913",
+            "evidence_strength=1.000",
+            "memory_usage_bytes anomaly_score=1.800",
+            "cpu_millicores anomaly_score=1.600"
+          ]
+        },
+        {
+          "service": "quote",
+          "score": 0.8351818181818184,
+          "root_cause_metrics": [
+            "memory_usage_bytes"
+          ],
+          "evidence": [
+            "graph_score=0.597",
+            "earliest_drift_score=0.311",
+            "correlation_score=0.777",
+            "downstream_coverage_score=1.000",
+            "weighted_rrf_score=0.835",
+            "evidence_strength=1.000",
+            "memory_usage_bytes anomaly_score=1.600"
+          ]
+        },
+        {
+          "service": "accounting",
+          "score": 0.7307210031347964,
+          "root_cause_metrics": [
+            "memory_usage_bytes",
+            "cpu_millicores",
+            "socket_io_bytes_per_second"
+          ],
+          "evidence": [
+            "graph_score=0.355",
+            "earliest_drift_score=0.420",
+            "correlation_score=0.654",
+            "downstream_coverage_score=0.000",
+            "weighted_rrf_score=0.731",
+            "evidence_strength=1.000",
+            "memory_usage_bytes anomaly_score=1.800",
+            "cpu_millicores anomaly_score=1.600",
+            "socket_io_bytes_per_second anomaly_score=1.600"
+          ]
+        },
+        {
+          "service": "currency",
+          "score": 0.7193764568764569,
+          "root_cause_metrics": [
+            "memory_usage_bytes"
+          ],
+          "evidence": [
+            "graph_score=0.584",
+            "earliest_drift_score=0.311",
+            "correlation_score=0.549",
+            "downstream_coverage_score=0.000",
+            "weighted_rrf_score=0.719",
+            "evidence_strength=1.000",
+            "memory_usage_bytes anomaly_score=1.600"
+          ]
+        },
+        {
+          "service": "recommendation",
+          "score": 0.683888888888889,
+          "root_cause_metrics": [
+            "memory_usage_bytes",
+            "cpu_millicores"
+          ],
+          "evidence": [
+            "graph_score=0.419",
+            "earliest_drift_score=0.311",
+            "correlation_score=0.688",
+            "downstream_coverage_score=0.000",
+            "weighted_rrf_score=0.684",
+            "evidence_strength=1.000",
+            "memory_usage_bytes anomaly_score=1.800",
+            "cpu_millicores anomaly_score=1.600"
+          ]
+        }
+      ],
+      "expected_root_service": "cart",
+      "predicted_root_services": [
+        "payment"
+      ],
+      "root_hit": false,
+      "detection_timestamp": 1785095389,
+      "detection_latency_seconds": 206,
+      "early_by_seconds": -206
+    },
+    {
+      "case_id": "mandate15_live/checkout_normal_baseline",
+      "scenario_type": "normal",
+      "expected_incident": false,
+      "predicted_notification": false,
+      "notification_count": 0,
+      "skipped": null,
+      "notification_titles": [],
+      "notification_services": [],
+      "root_causes": [],
+      "expected_root_service": null,
+      "predicted_root_services": [],
+      "root_hit": false,
+      "detection_timestamp": null,
+      "detection_latency_seconds": null,
+      "early_by_seconds": null
+    },
+    {
+      "case_id": "mandate15_live/checkout_real_incident",
+      "scenario_type": "real_incident",
+      "expected_incident": true,
+      "predicted_notification": true,
+      "notification_count": 3,
+      "skipped": null,
+      "notification_titles": [
+        "checkout incident",
+        "checkout incident",
+        "RCA root cause: frontend"
+      ],
+      "notification_services": [
+        "payment",
+        "checkout",
+        "frontend"
+      ],
+      "root_causes": [
+        {
+          "service": "frontend",
+          "score": 0.8708274894810658,
+          "root_cause_metrics": [
+            "cpu_millicores"
+          ],
+          "evidence": [
+            "graph_score=0.501",
+            "earliest_drift_score=0.044",
+            "correlation_score=0.488",
+            "downstream_coverage_score=0.190",
+            "weighted_rrf_score=0.871",
+            "evidence_strength=1.000",
+            "cpu_millicores anomaly_score=1.600"
+          ]
+        },
+        {
+          "service": "product-catalog",
+          "score": 0.7439130434782608,
+          "root_cause_metrics": [
+            "cpu_millicores"
+          ],
+          "evidence": [
+            "graph_score=0.511",
+            "earliest_drift_score=0.044",
+            "correlation_score=0.516",
+            "downstream_coverage_score=0.000",
+            "weighted_rrf_score=0.744",
+            "evidence_strength=1.000",
+            "cpu_millicores anomaly_score=1.600"
+          ]
+        },
+        {
+          "service": "payment",
+          "score": 0.7281818181818182,
+          "root_cause_metrics": [
+            "cpu_millicores"
+          ],
+          "evidence": [
+            "graph_score=0.040",
+            "earliest_drift_score=0.015",
+            "correlation_score=0.491",
+            "downstream_coverage_score=0.190",
+            "weighted_rrf_score=0.728",
+            "evidence_strength=1.000",
+            "cpu_millicores anomaly_score=1.800"
+          ]
+        },
+        {
+          "service": "recommendation",
+          "score": 0.6527350427350428,
+          "root_cause_metrics": [
+            "memory_usage_bytes"
+          ],
+          "evidence": [
+            "graph_score=0.426",
+            "earliest_drift_score=0.044",
+            "correlation_score=0.507",
+            "downstream_coverage_score=0.000",
+            "weighted_rrf_score=0.653",
+            "evidence_strength=1.000",
+            "memory_usage_bytes anomaly_score=1.800",
+            "cpu_millicores anomaly_score=1.600"
+          ]
+        },
+        {
+          "service": "postgresql",
+          "score": 0.4783783783783783,
+          "root_cause_metrics": [
+            "active_connections"
+          ],
+          "evidence": [
+            "graph_score=0.621",
+            "earliest_drift_score=0.000",
+            "correlation_score=0.061",
+            "downstream_coverage_score=1.000",
+            "weighted_rrf_score=0.478",
+            "evidence_strength=1.000",
+            "active_connections anomaly_score=1.000"
+          ]
+        }
+      ],
+      "expected_root_service": "payment",
+      "predicted_root_services": [
+        "frontend"
+      ],
+      "root_hit": false,
+      "detection_timestamp": 1785093729,
+      "detection_latency_seconds": 195,
+      "early_by_seconds": -195
+    },
+    {
+      "case_id": "mandate7b_live/burn_rate_normal_baseline",
+      "scenario_type": "normal",
+      "expected_incident": false,
+      "predicted_notification": false,
+      "notification_count": 0,
+      "skipped": "missing_metric_series"
+    },
+    {
+      "case_id": "mandate7b_live/burn_rate_real_incident",
+      "scenario_type": "real_incident",
+      "expected_incident": true,
+      "predicted_notification": false,
+      "notification_count": 0,
+      "skipped": "missing_metric_series"
+    },
+    {
+      "case_id": "mandate7b_live/cart_normal_baseline",
+      "scenario_type": "normal",
+      "expected_incident": false,
+      "predicted_notification": false,
+      "notification_count": 0,
+      "skipped": null,
+      "notification_titles": [],
+      "notification_services": [],
+      "root_causes": [],
+      "expected_root_service": null,
+      "predicted_root_services": [],
+      "root_hit": false,
+      "detection_timestamp": null,
+      "detection_latency_seconds": null,
+      "early_by_seconds": null
+    },
+    {
+      "case_id": "mandate7b_live/cart_real_incident",
+      "scenario_type": "real_incident",
+      "expected_incident": true,
+      "predicted_notification": true,
+      "notification_count": 5,
+      "skipped": null,
+      "notification_titles": [
+        "web incident",
+        "checkout incident",
+        "edge incident",
+        "checkout incident",
+        "RCA root cause: recommendation"
+      ],
+      "notification_services": [
+        "frontend",
+        "cart",
+        "frontend-proxy",
+        "checkout",
+        "recommendation"
+      ],
+      "root_causes": [
+        {
+          "service": "recommendation",
+          "score": 0.960090909090909,
+          "root_cause_metrics": [
+            "memory_usage_bytes"
+          ],
+          "evidence": [
+            "graph_score=0.504",
+            "earliest_drift_score=0.327",
+            "correlation_score=0.856",
+            "downstream_coverage_score=0.680",
+            "weighted_rrf_score=0.960",
+            "evidence_strength=1.000",
+            "memory_usage_bytes anomaly_score=1.800"
+          ]
+        },
+        {
+          "service": "currency",
+          "score": 0.9008823529411767,
+          "root_cause_metrics": [
+            "memory_usage_bytes"
+          ],
+          "evidence": [
+            "graph_score=0.589",
+            "earliest_drift_score=0.062",
+            "correlation_score=0.595",
+            "downstream_coverage_score=1.000",
+            "weighted_rrf_score=0.901",
+            "evidence_strength=1.000",
+            "memory_usage_bytes anomaly_score=1.800"
+          ]
+        },
+        {
+          "service": "product-reviews",
+          "score": 0.8846630434782609,
+          "root_cause_metrics": [
+            "memory_usage_bytes",
+            "socket_io_bytes_per_second"
+          ],
+          "evidence": [
+            "graph_score=0.308",
+            "earliest_drift_score=0.062",
+            "correlation_score=0.816",
+            "downstream_coverage_score=0.680",
+            "weighted_rrf_score=0.885",
+            "evidence_strength=1.000",
+            "memory_usage_bytes anomaly_score=1.600",
+            "socket_io_bytes_per_second anomaly_score=1.800"
+          ]
+        },
+        {
+          "service": "cart",
+          "score": 0.7959059523926285,
+          "root_cause_metrics": [
+            "cpu_millicores",
+            "memory_usage_bytes",
+            "socket_io_bytes_per_second"
+          ],
+          "evidence": [
+            "graph_score=0.051",
+            "earliest_drift_score=0.062",
+            "correlation_score=0.841",
+            "downstream_coverage_score=0.680",
+            "weighted_rrf_score=0.796",
+            "evidence_strength=1.000",
+            "cpu_millicores anomaly_score=1.600",
+            "memory_usage_bytes anomaly_score=1.600",
+            "socket_io_bytes_per_second anomaly_score=1.600"
+          ]
+        },
+        {
+          "service": "product-catalog",
+          "score": 0.7948607427055704,
+          "root_cause_metrics": [
+            "memory_usage_bytes"
+          ],
+          "evidence": [
+            "graph_score=0.299",
+            "earliest_drift_score=0.053",
+            "correlation_score=0.712",
+            "downstream_coverage_score=0.360",
+            "weighted_rrf_score=0.795",
+            "evidence_strength=1.000",
+            "memory_usage_bytes anomaly_score=1.800"
+          ]
+        }
+      ],
+      "expected_root_service": "cart",
+      "predicted_root_services": [
+        "recommendation"
+      ],
+      "root_hit": false,
+      "detection_timestamp": 1785076394,
+      "detection_latency_seconds": 372,
+      "early_by_seconds": -372
+    },
+    {
+      "case_id": "mandate7b_live/checkout_memory_normal_baseline",
+      "scenario_type": "normal",
+      "expected_incident": false,
+      "predicted_notification": true,
+      "notification_count": 1,
+      "skipped": null,
+      "notification_titles": [
+        "RCA root cause: checkout"
+      ],
+      "notification_services": [
+        "checkout"
+      ],
+      "root_causes": [
+        {
+          "service": "checkout",
+          "score": 0.9236346153846153,
+          "root_cause_metrics": [
+            "cpu_millicores",
+            "memory_usage_bytes"
+          ],
+          "evidence": [
+            "graph_score=0.228",
+            "earliest_drift_score=0.116",
+            "correlation_score=0.746",
+            "downstream_coverage_score=0.471",
+            "weighted_rrf_score=0.924",
+            "evidence_strength=1.000",
+            "cpu_millicores anomaly_score=1.600",
+            "memory_usage_bytes anomaly_score=1.000"
+          ]
+        },
+        {
+          "service": "product-reviews",
+          "score": 0.9003019323671498,
+          "root_cause_metrics": [
+            "memory_usage_bytes",
+            "socket_io_bytes_per_second"
+          ],
+          "evidence": [
+            "graph_score=0.472",
+            "earliest_drift_score=0.116",
+            "correlation_score=0.724",
+            "downstream_coverage_score=1.000",
+            "weighted_rrf_score=0.900",
+            "evidence_strength=1.000",
+            "memory_usage_bytes anomaly_score=1.000",
+            "socket_io_bytes_per_second anomaly_score=1.800"
+          ]
+        },
+        {
+          "service": "recommendation",
+          "score": 0.8993887147335425,
+          "root_cause_metrics": [
+            "memory_usage_bytes"
+          ],
+          "evidence": [
+            "graph_score=0.577",
+            "earliest_drift_score=0.116",
+            "correlation_score=0.651",
+            "downstream_coverage_score=1.000",
+            "weighted_rrf_score=0.899",
+            "evidence_strength=1.000",
+            "memory_usage_bytes anomaly_score=1.000"
+          ]
+        },
+        {
+          "service": "product-catalog",
+          "score": 0.8776755852842809,
+          "root_cause_metrics": [
+            "memory_usage_bytes"
+          ],
+          "evidence": [
+            "graph_score=0.431",
+            "earliest_drift_score=0.116",
+            "correlation_score=0.720",
+            "downstream_coverage_score=0.471",
+            "weighted_rrf_score=0.878",
+            "evidence_strength=1.000",
+            "memory_usage_bytes anomaly_score=1.000"
+          ]
+        },
+        {
+          "service": "currency",
+          "score": 0.8386946386946388,
+          "root_cause_metrics": [
+            "memory_usage_bytes"
+          ],
+          "evidence": [
+            "graph_score=0.522",
+            "earliest_drift_score=0.116",
+            "correlation_score=0.485",
+            "downstream_coverage_score=0.471",
+            "weighted_rrf_score=0.839",
+            "evidence_strength=1.000",
+            "memory_usage_bytes anomaly_score=1.000"
+          ]
+        }
+      ],
+      "expected_root_service": null,
+      "predicted_root_services": [
+        "checkout"
+      ],
+      "root_hit": false,
+      "detection_timestamp": 1785077923,
+      "detection_latency_seconds": null,
+      "early_by_seconds": null
+    },
+    {
+      "case_id": "mandate7b_live/checkout_memory_real_incident",
+      "scenario_type": "real_incident",
+      "expected_incident": true,
+      "predicted_notification": true,
+      "notification_count": 1,
+      "skipped": null,
+      "notification_titles": [
+        "RCA root cause: product-catalog"
+      ],
+      "notification_services": [
+        "product-catalog"
+      ],
+      "root_causes": [
+        {
+          "service": "product-catalog",
+          "score": 0.9237677284352477,
+          "root_cause_metrics": [
+            "memory_usage_bytes"
+          ],
+          "evidence": [
+            "graph_score=0.296",
+            "earliest_drift_score=0.086",
+            "correlation_score=0.466",
+            "downstream_coverage_score=1.000",
+            "weighted_rrf_score=0.924",
+            "evidence_strength=1.000",
+            "memory_usage_bytes anomaly_score=1.800"
+          ]
+        },
+        {
+          "service": "checkout",
+          "score": 0.85,
+          "root_cause_metrics": [
+            "memory_usage_bytes"
+          ],
+          "evidence": [
+            "graph_score=0.597",
+            "earliest_drift_score=0.164",
+            "correlation_score=1.000",
+            "downstream_coverage_score=0.000",
+            "weighted_rrf_score=0.850",
+            "evidence_strength=1.000",
+            "memory_usage_bytes anomaly_score=1.800"
+          ]
+        },
+        {
+          "service": "recommendation",
+          "score": 0.310119940029985,
+          "root_cause_metrics": [
+            "cpu_millicores"
+          ],
+          "evidence": [
+            "graph_score=0.250",
+            "earliest_drift_score=0.000",
+            "correlation_score=0.609",
+            "downstream_coverage_score=0.000",
+            "weighted_rrf_score=0.310",
+            "evidence_strength=1.000",
+            "cpu_millicores anomaly_score=1.600"
+          ]
+        },
+        {
+          "service": "cart",
+          "score": 0.2638888888888889,
+          "root_cause_metrics": [
+            "memory_usage_bytes",
+            "cpu_millicores"
+          ],
+          "evidence": [
+            "graph_score=0.051",
+            "earliest_drift_score=0.000",
+            "correlation_score=0.638",
+            "downstream_coverage_score=0.000",
+            "weighted_rrf_score=0.264",
+            "evidence_strength=1.000",
+            "memory_usage_bytes anomaly_score=1.000",
+            "cpu_millicores anomaly_score=1.000"
+          ]
+        }
+      ],
+      "expected_root_service": "checkout",
+      "predicted_root_services": [
+        "product-catalog"
+      ],
+      "root_hit": false,
+      "detection_timestamp": 1785078808,
+      "detection_latency_seconds": 836,
+      "early_by_seconds": -836
+    },
+    {
+      "case_id": "mandate7b_live/checkout_p95_normal_baseline",
+      "scenario_type": "normal",
+      "expected_incident": false,
+      "predicted_notification": false,
+      "notification_count": 0,
+      "skipped": null,
+      "notification_titles": [],
+      "notification_services": [],
+      "root_causes": [],
+      "expected_root_service": null,
+      "predicted_root_services": [],
+      "root_hit": false,
+      "detection_timestamp": null,
+      "detection_latency_seconds": null,
+      "early_by_seconds": null
+    },
+    {
+      "case_id": "mandate7b_live/checkout_p95_real_incident",
+      "scenario_type": "real_incident",
+      "expected_incident": true,
+      "predicted_notification": true,
+      "notification_count": 4,
+      "skipped": null,
+      "notification_titles": [
+        "checkout incident",
+        "edge incident",
+        "checkout incident",
+        "RCA root cause: shopping-copilot"
+      ],
+      "notification_services": [
+        "cart",
+        "frontend-proxy",
+        "checkout",
+        "shopping-copilot"
+      ],
+      "root_causes": [
+        {
+          "service": "shopping-copilot",
+          "score": 0.9562375674907646,
+          "root_cause_metrics": [
+            "memory_usage_bytes"
+          ],
+          "evidence": [
+            "graph_score=0.465",
+            "earliest_drift_score=0.434",
+            "correlation_score=0.621",
+            "downstream_coverage_score=0.000",
+            "weighted_rrf_score=0.956",
+            "evidence_strength=1.000",
+            "memory_usage_bytes anomaly_score=1.600"
+          ]
+        },
+        {
+          "service": "frontend",
+          "score": 0.9312020460358056,
+          "root_cause_metrics": [
+            "memory_usage_bytes"
+          ],
+          "evidence": [
+            "graph_score=0.607",
+            "earliest_drift_score=0.097",
+            "correlation_score=0.609",
+            "downstream_coverage_score=0.000",
+            "weighted_rrf_score=0.931",
+            "evidence_strength=1.000",
+            "memory_usage_bytes anomaly_score=1.800"
+          ]
+        },
+        {
+          "service": "currency",
+          "score": 0.8673482227115447,
+          "root_cause_metrics": [
+            "memory_usage_bytes"
+          ],
+          "evidence": [
+            "graph_score=0.534",
+            "earliest_drift_score=0.097",
+            "correlation_score=0.512",
+            "downstream_coverage_score=0.000",
+            "weighted_rrf_score=0.867",
+            "evidence_strength=1.000",
+            "memory_usage_bytes anomaly_score=1.600"
+          ]
+        },
+        {
+          "service": "recommendation",
+          "score": 0.8633776091081594,
+          "root_cause_metrics": [
+            "memory_usage_bytes",
+            "cpu_millicores"
+          ],
+          "evidence": [
+            "graph_score=0.369",
+            "earliest_drift_score=0.097",
+            "correlation_score=0.604",
+            "downstream_coverage_score=0.000",
+            "weighted_rrf_score=0.863",
+            "evidence_strength=1.000",
+            "memory_usage_bytes anomaly_score=1.800",
+            "cpu_millicores anomaly_score=1.600"
+          ]
+        },
+        {
+          "service": "cart",
+          "score": 0.8042986425339368,
+          "root_cause_metrics": [
+            "cpu_millicores",
+            "memory_usage_bytes",
+            "socket_io_bytes_per_second"
+          ],
+          "evidence": [
+            "graph_score=0.070",
+            "earliest_drift_score=0.097",
+            "correlation_score=0.617",
+            "downstream_coverage_score=0.000",
+            "weighted_rrf_score=0.804",
+            "evidence_strength=1.000",
+            "cpu_millicores anomaly_score=1.600",
+            "memory_usage_bytes anomaly_score=1.600",
+            "socket_io_bytes_per_second anomaly_score=1.600"
+          ]
+        }
+      ],
+      "expected_root_service": "cart",
+      "predicted_root_services": [
+        "shopping-copilot"
+      ],
+      "root_hit": false,
+      "detection_timestamp": 1785082149,
+      "detection_latency_seconds": 404,
+      "early_by_seconds": -404
+    }
+  ]
+}

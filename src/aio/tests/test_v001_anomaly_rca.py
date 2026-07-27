@@ -937,6 +937,17 @@ class V001AnomalyRcaTest(unittest.TestCase):
 
         self.assertLessEqual(result.root_causes[0].score, 0.2)
 
+    def test_rca_score_is_bounded_by_ranker_support(self):
+        runtime_config = load_runtime_config(Path("config/runtime.json"))
+        findings = [
+            AnomalyFinding(algorithm="weighted_sum", service="accounting", metric="memory_usage_bytes", signal_id="accounting_memory_usage_bytes", score=1.0, timestamp=5)
+        ]
+
+        result = rca_engine(runtime_config).rank(findings, [], top_k=5)
+
+        self.assertLess(result.root_causes[0].score, 0.5)
+        self.assertTrue(any("support_score=" in item for item in result.root_causes[0].evidence))
+
     def test_rca_does_not_suppress_infra_without_coordinated_normal_growth(self):
         runtime_config = load_runtime_config(Path("config/runtime.json"))
         findings = [

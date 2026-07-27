@@ -103,6 +103,14 @@ class V001RcaEngine:
                 "downstream_coverage": downstream_coverage_scores,
             }
         )
+        support_scores = self._weighted_support_scores(
+            {
+                "graph": graph_scores,
+                "earliest_drift": earliest_scores,
+                "correlation": correlation_scores,
+                "downstream_coverage": downstream_coverage_scores,
+            }
+        )
         anomaly_services = {finding.service for finding in root_findings if finding.service != "global"}
         evidence_strength = {
             service: min(1.0, max(finding.score for finding in root_findings if finding.service == service))
@@ -127,7 +135,7 @@ class V001RcaEngine:
             key=lambda item: item[1] * evidence_strength.get(item[0], 0.0),
             reverse=True,
         ):
-            score = rank_score * evidence_strength.get(service, 0.0)
+            score = rank_score * evidence_strength.get(service, 0.0) * support_scores.get(service, 0.0)
             if service not in anomaly_services:
                 continue
             if self._excluded_root_cause(service):
@@ -150,6 +158,7 @@ class V001RcaEngine:
                         f"downstream_coverage_score={downstream_coverage_scores.get(service, 0.0):.3f}",
                         f"weighted_rrf_score={rank_score:.3f}",
                         f"evidence_strength={evidence_strength.get(service, 0.0):.3f}",
+                        f"support_score={support_scores.get(service, 0.0):.3f}",
                         *log_details.get(service, []),
                         *trace_details.get(service, []),
                         *[f"{metric} {source}_score={metric_score:.3f}" for metric, metric_score, source in metric_scores],
@@ -368,6 +377,16 @@ class V001RcaEngine:
             for rank, (service, _) in enumerate(sorted(values.items(), key=lambda item: item[1], reverse=True), start=1):
                 scores[service] += weight / (self.rrf_k + rank)
         return {service: score / max_possible for service, score in scores.items()}
+
+    def _weighted_support_scores(self, rankers: dict[str, dict[str, float]]) -> dict[str, float]:
+        services = {service for values in rankers.values() for service in values}
+        total = sum(self.ranker_weights.get(name, 0.0) for name in rankers)
+        if not total:
+            return {}
+        return {
+            service: sum(self.ranker_weights.get(name, 0.0) * max(0.0, min(1.0, values.get(service, 0.0))) for name, values in rankers.items()) / total
+            for service in services
+        }
 
     def _excluded_root_cause(self, service: str) -> bool:
         services = {item.name: item for item in self.config.topology.services}
