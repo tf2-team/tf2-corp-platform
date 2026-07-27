@@ -269,8 +269,11 @@ class RuntimePipelineTest(unittest.TestCase):
             store.close()
 
         self.assertEqual([message.service for message in result.notifications], ["frontend-proxy", "checkout"])
-        self.assertEqual(result.notifications[0].summary, "threshold_breached on frontend_proxy_p99_latency_5m")
-        self.assertEqual(result.notifications[1].summary, "threshold_breached on checkout_p95_latency_5m, checkout_p99_latency_5m")
+        self.assertIn("Detected: threshold_breached", result.notifications[0].summary)
+        self.assertIn("Signal: frontend_proxy_p99_latency_5m", result.notifications[0].summary)
+        self.assertIn("Action: check slow dependency spans", result.notifications[0].summary)
+        self.assertIn("Signal: checkout_p95_latency_5m, checkout_p99_latency_5m", result.notifications[1].summary)
+        self.assertIn("Runbook: RB-CHECKOUT-SLO", result.notifications[1].summary)
 
     def test_bad_ratio_slo_incident_is_added_to_rca_anomalies(self):
         event = CandidateEvent(

@@ -176,6 +176,34 @@ class IntegrationClientTest(unittest.TestCase):
         self.assertEqual(fields["Likely dependency"], "postgresql")
         self.assertEqual(fields["Runbook"], "RB-CHECKOUT-SLO")
 
+    def test_notification_client_hides_unknown_discord_dependency(self):
+        seen: list[httpx.Request] = []
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            seen.append(request)
+            return httpx.Response(204)
+
+        message = NotificationMessage(
+            incident_id="inc-discord-2",
+            severity="SEV1",
+            state="open",
+            title="edge incident",
+            summary="summary",
+            flow="edge",
+            service="frontend-proxy",
+            likely_dependency="unknown",
+            runbook_id="RB-SERVICE-LATENCY",
+        )
+
+        NotificationClient(
+            settings().model_copy(update={"notification_provider": "discord", "notification_webhook_url": "https://discord.com/api/webhooks/123/secret-token"}),
+            transport=httpx.MockTransport(handler),
+        ).send(message)
+
+        fields = {field["name"]: field["value"] for field in json.loads(seen[0].content)["embeds"][0]["fields"]}
+        self.assertNotIn("Likely dependency", fields)
+        self.assertEqual(fields["Runbook"], "RB-SERVICE-LATENCY")
+
     def test_notification_client_accepts_empty_success_response(self):
         def handler(request: httpx.Request) -> httpx.Response:
             return httpx.Response(204)
