@@ -1,12 +1,12 @@
 {
   "metrics": {
     "notification": {
-      "precision": 0.7142857142857143,
+      "precision": 0.8333333333333334,
       "recall": 1.0,
-      "f1": 0.8333333333333333,
+      "f1": 0.9090909090909091,
       "tp": 5,
-      "fp": 2,
-      "tn": 3,
+      "fp": 1,
+      "tn": 4,
       "fn": 0
     },
     "root_top1": {
@@ -45,19 +45,15 @@
       "case_id": "mandate15_live/checkout_high_load_healthy",
       "scenario_type": "high_load_healthy",
       "expected_incident": false,
-      "predicted_notification": true,
-      "notification_count": 1,
+      "predicted_notification": false,
+      "notification_count": 0,
       "skipped": null,
-      "notification_titles": [
-        "RCA root cause: product-catalog"
-      ],
-      "notification_services": [
-        "product-catalog"
-      ],
+      "notification_titles": [],
+      "notification_services": [],
       "root_causes": [
         {
           "service": "product-catalog",
-          "score": 0.9414961636828645,
+          "score": 0.21722979936839326,
           "root_cause_metrics": [
             "cpu_millicores"
           ],
@@ -68,12 +64,13 @@
             "downstream_coverage_score=0.000",
             "weighted_rrf_score=0.941",
             "evidence_strength=1.000",
+            "support_score=0.231",
             "cpu_millicores anomaly_score=1.800"
           ]
         },
         {
           "service": "frontend",
-          "score": 0.9327094474153299,
+          "score": 0.1976522536464161,
           "root_cause_metrics": [
             "cpu_millicores"
           ],
@@ -84,12 +81,13 @@
             "downstream_coverage_score=0.000",
             "weighted_rrf_score=0.933",
             "evidence_strength=1.000",
+            "support_score=0.212",
             "cpu_millicores anomaly_score=1.600"
           ]
         },
         {
           "service": "frontend-proxy",
-          "score": 0.9245540796963946,
+          "score": 0.1967295409638734,
           "root_cause_metrics": [
             "cpu_millicores"
           ],
@@ -100,6 +98,7 @@
             "downstream_coverage_score=0.000",
             "weighted_rrf_score=0.925",
             "evidence_strength=1.000",
+            "support_score=0.213",
             "cpu_millicores anomaly_score=1.800"
           ]
         }
@@ -109,7 +108,7 @@
         "product-catalog"
       ],
       "root_hit": false,
-      "detection_timestamp": 1785092183,
+      "detection_timestamp": null,
       "detection_latency_seconds": null,
       "early_by_seconds": null
     },
@@ -118,24 +117,26 @@
       "scenario_type": "masking",
       "expected_incident": true,
       "predicted_notification": true,
-      "notification_count": 4,
+      "notification_count": 5,
       "skipped": null,
       "notification_titles": [
         "checkout incident",
         "checkout incident",
         "RCA root cause: payment",
-        "RCA root cause: quote"
+        "RCA root cause: quote",
+        "RCA root cause: accounting"
       ],
       "notification_services": [
         "cart",
         "checkout",
         "payment",
-        "quote"
+        "quote",
+        "accounting"
       ],
       "root_causes": [
         {
           "service": "payment",
-          "score": 0.9127717391304349,
+          "score": 0.47696831647991667,
           "root_cause_metrics": [
             "memory_usage_bytes",
             "cpu_millicores"
@@ -145,15 +146,16 @@
             "earliest_drift_score=0.311",
             "correlation_score=0.817",
             "downstream_coverage_score=1.000",
-            "weighted_rrf_score=0.913",
+            "weighted_rrf_score=0.924",
             "evidence_strength=1.000",
+            "support_score=0.516",
             "memory_usage_bytes anomaly_score=1.800",
             "cpu_millicores anomaly_score=1.600"
           ]
         },
         {
           "service": "quote",
-          "score": 0.8351818181818184,
+          "score": 0.43712298815170947,
           "root_cause_metrics": [
             "memory_usage_bytes"
           ],
@@ -164,12 +166,13 @@
             "downstream_coverage_score=1.000",
             "weighted_rrf_score=0.835",
             "evidence_strength=1.000",
+            "support_score=0.523",
             "memory_usage_bytes anomaly_score=1.600"
           ]
         },
         {
           "service": "accounting",
-          "score": 0.7307210031347964,
+          "score": 0.2552878769166759,
           "root_cause_metrics": [
             "memory_usage_bytes",
             "cpu_millicores",
@@ -182,6 +185,7 @@
             "downstream_coverage_score=0.000",
             "weighted_rrf_score=0.731",
             "evidence_strength=1.000",
+            "support_score=0.349",
             "memory_usage_bytes anomaly_score=1.800",
             "cpu_millicores anomaly_score=1.600",
             "socket_io_bytes_per_second anomaly_score=1.600"
@@ -189,7 +193,7 @@
         },
         {
           "service": "currency",
-          "score": 0.7193764568764569,
+          "score": 0.2575306666715169,
           "root_cause_metrics": [
             "memory_usage_bytes"
           ],
@@ -200,12 +204,13 @@
             "downstream_coverage_score=0.000",
             "weighted_rrf_score=0.719",
             "evidence_strength=1.000",
+            "support_score=0.358",
             "memory_usage_bytes anomaly_score=1.600"
           ]
         },
         {
           "service": "recommendation",
-          "score": 0.683888888888889,
+          "score": 0.21579951907914266,
           "root_cause_metrics": [
             "memory_usage_bytes",
             "cpu_millicores"
@@ -217,6 +222,7 @@
             "downstream_coverage_score=0.000",
             "weighted_rrf_score=0.684",
             "evidence_strength=1.000",
+            "support_score=0.316",
             "memory_usage_bytes anomaly_score=1.800",
             "cpu_millicores anomaly_score=1.600"
           ]
@@ -253,22 +259,20 @@
       "scenario_type": "real_incident",
       "expected_incident": true,
       "predicted_notification": true,
-      "notification_count": 3,
+      "notification_count": 2,
       "skipped": null,
       "notification_titles": [
         "checkout incident",
-        "checkout incident",
-        "RCA root cause: frontend"
+        "checkout incident"
       ],
       "notification_services": [
         "payment",
-        "checkout",
-        "frontend"
+        "checkout"
       ],
       "root_causes": [
         {
           "service": "frontend",
-          "score": 0.8708274894810658,
+          "score": 0.1963091641857812,
           "root_cause_metrics": [
             "cpu_millicores"
           ],
@@ -279,28 +283,13 @@
             "downstream_coverage_score=0.190",
             "weighted_rrf_score=0.871",
             "evidence_strength=1.000",
-            "cpu_millicores anomaly_score=1.600"
-          ]
-        },
-        {
-          "service": "product-catalog",
-          "score": 0.7439130434782608,
-          "root_cause_metrics": [
-            "cpu_millicores"
-          ],
-          "evidence": [
-            "graph_score=0.511",
-            "earliest_drift_score=0.044",
-            "correlation_score=0.516",
-            "downstream_coverage_score=0.000",
-            "weighted_rrf_score=0.744",
-            "evidence_strength=1.000",
+            "support_score=0.225",
             "cpu_millicores anomaly_score=1.600"
           ]
         },
         {
           "service": "payment",
-          "score": 0.7281818181818182,
+          "score": 0.05279954654394915,
           "root_cause_metrics": [
             "cpu_millicores"
           ],
@@ -311,29 +300,13 @@
             "downstream_coverage_score=0.190",
             "weighted_rrf_score=0.728",
             "evidence_strength=1.000",
+            "support_score=0.073",
             "cpu_millicores anomaly_score=1.800"
           ]
         },
         {
-          "service": "recommendation",
-          "score": 0.6527350427350428,
-          "root_cause_metrics": [
-            "memory_usage_bytes"
-          ],
-          "evidence": [
-            "graph_score=0.426",
-            "earliest_drift_score=0.044",
-            "correlation_score=0.507",
-            "downstream_coverage_score=0.000",
-            "weighted_rrf_score=0.653",
-            "evidence_strength=1.000",
-            "memory_usage_bytes anomaly_score=1.800",
-            "cpu_millicores anomaly_score=1.600"
-          ]
-        },
-        {
           "service": "postgresql",
-          "score": 0.4783783783783783,
+          "score": 0.16238371028537416,
           "root_cause_metrics": [
             "active_connections"
           ],
@@ -344,6 +317,7 @@
             "downstream_coverage_score=1.000",
             "weighted_rrf_score=0.478",
             "evidence_strength=1.000",
+            "support_score=0.339",
             "active_connections anomaly_score=1.000"
           ]
         }
@@ -414,7 +388,7 @@
       "root_causes": [
         {
           "service": "recommendation",
-          "score": 0.960090909090909,
+          "score": 0.44142664246864227,
           "root_cause_metrics": [
             "memory_usage_bytes"
           ],
@@ -425,12 +399,13 @@
             "downstream_coverage_score=0.680",
             "weighted_rrf_score=0.960",
             "evidence_strength=1.000",
+            "support_score=0.460",
             "memory_usage_bytes anomaly_score=1.800"
           ]
         },
         {
           "service": "currency",
-          "score": 0.9008823529411767,
+          "score": 0.3490041905784727,
           "root_cause_metrics": [
             "memory_usage_bytes"
           ],
@@ -441,12 +416,13 @@
             "downstream_coverage_score=1.000",
             "weighted_rrf_score=0.901",
             "evidence_strength=1.000",
+            "support_score=0.387",
             "memory_usage_bytes anomaly_score=1.800"
           ]
         },
         {
           "service": "product-reviews",
-          "score": 0.8846630434782609,
+          "score": 0.2354214745912311,
           "root_cause_metrics": [
             "memory_usage_bytes",
             "socket_io_bytes_per_second"
@@ -458,13 +434,14 @@
             "downstream_coverage_score=0.680",
             "weighted_rrf_score=0.885",
             "evidence_strength=1.000",
+            "support_score=0.266",
             "memory_usage_bytes anomaly_score=1.600",
             "socket_io_bytes_per_second anomaly_score=1.800"
           ]
         },
         {
           "service": "cart",
-          "score": 0.7959059523926285,
+          "score": 0.15145552348837937,
           "root_cause_metrics": [
             "cpu_millicores",
             "memory_usage_bytes",
@@ -477,6 +454,7 @@
             "downstream_coverage_score=0.680",
             "weighted_rrf_score=0.796",
             "evidence_strength=1.000",
+            "support_score=0.190",
             "cpu_millicores anomaly_score=1.600",
             "memory_usage_bytes anomaly_score=1.600",
             "socket_io_bytes_per_second anomaly_score=1.600"
@@ -484,7 +462,7 @@
         },
         {
           "service": "product-catalog",
-          "score": 0.7948607427055704,
+          "score": 0.16373073443982905,
           "root_cause_metrics": [
             "memory_usage_bytes"
           ],
@@ -495,6 +473,7 @@
             "downstream_coverage_score=0.360",
             "weighted_rrf_score=0.795",
             "evidence_strength=1.000",
+            "support_score=0.206",
             "memory_usage_bytes anomaly_score=1.800"
           ]
         }
@@ -513,18 +492,20 @@
       "scenario_type": "normal",
       "expected_incident": false,
       "predicted_notification": true,
-      "notification_count": 1,
+      "notification_count": 2,
       "skipped": null,
       "notification_titles": [
-        "RCA root cause: checkout"
+        "RCA root cause: product-reviews",
+        "RCA root cause: recommendation"
       ],
       "notification_services": [
-        "checkout"
+        "product-reviews",
+        "recommendation"
       ],
       "root_causes": [
         {
           "service": "checkout",
-          "score": 0.9236346153846153,
+          "score": 0.21629393418565943,
           "root_cause_metrics": [
             "cpu_millicores",
             "memory_usage_bytes"
@@ -536,13 +517,14 @@
             "downstream_coverage_score=0.471",
             "weighted_rrf_score=0.924",
             "evidence_strength=1.000",
+            "support_score=0.234",
             "cpu_millicores anomaly_score=1.600",
             "memory_usage_bytes anomaly_score=1.000"
           ]
         },
         {
           "service": "product-reviews",
-          "score": 0.9003019323671498,
+          "score": 0.3472652865811289,
           "root_cause_metrics": [
             "memory_usage_bytes",
             "socket_io_bytes_per_second"
@@ -554,13 +536,14 @@
             "downstream_coverage_score=1.000",
             "weighted_rrf_score=0.900",
             "evidence_strength=1.000",
+            "support_score=0.386",
             "memory_usage_bytes anomaly_score=1.000",
             "socket_io_bytes_per_second anomaly_score=1.800"
           ]
         },
         {
           "service": "recommendation",
-          "score": 0.8993887147335425,
+          "score": 0.372136475161298,
           "root_cause_metrics": [
             "memory_usage_bytes"
           ],
@@ -571,12 +554,13 @@
             "downstream_coverage_score=1.000",
             "weighted_rrf_score=0.899",
             "evidence_strength=1.000",
+            "support_score=0.414",
             "memory_usage_bytes anomaly_score=1.000"
           ]
         },
         {
           "service": "product-catalog",
-          "score": 0.8776755852842809,
+          "score": 0.25801113702323375,
           "root_cause_metrics": [
             "memory_usage_bytes"
           ],
@@ -587,12 +571,13 @@
             "downstream_coverage_score=0.471",
             "weighted_rrf_score=0.878",
             "evidence_strength=1.000",
+            "support_score=0.294",
             "memory_usage_bytes anomaly_score=1.000"
           ]
         },
         {
           "service": "currency",
-          "score": 0.8386946386946388,
+          "score": 0.2596042060630336,
           "root_cause_metrics": [
             "memory_usage_bytes"
           ],
@@ -603,6 +588,7 @@
             "downstream_coverage_score=0.471",
             "weighted_rrf_score=0.839",
             "evidence_strength=1.000",
+            "support_score=0.310",
             "memory_usage_bytes anomaly_score=1.000"
           ]
         }
@@ -632,7 +618,7 @@
       "root_causes": [
         {
           "service": "product-catalog",
-          "score": 0.9237677284352477,
+          "score": 0.28205570315444,
           "root_cause_metrics": [
             "memory_usage_bytes"
           ],
@@ -643,12 +629,13 @@
             "downstream_coverage_score=1.000",
             "weighted_rrf_score=0.924",
             "evidence_strength=1.000",
+            "support_score=0.305",
             "memory_usage_bytes anomaly_score=1.800"
           ]
         },
         {
           "service": "checkout",
-          "score": 0.85,
+          "score": 0.2644133537866531,
           "root_cause_metrics": [
             "memory_usage_bytes"
           ],
@@ -659,12 +646,13 @@
             "downstream_coverage_score=0.000",
             "weighted_rrf_score=0.850",
             "evidence_strength=1.000",
+            "support_score=0.311",
             "memory_usage_bytes anomaly_score=1.800"
           ]
         },
         {
           "service": "recommendation",
-          "score": 0.310119940029985,
+          "score": 0.03267462272171842,
           "root_cause_metrics": [
             "cpu_millicores"
           ],
@@ -675,12 +663,13 @@
             "downstream_coverage_score=0.000",
             "weighted_rrf_score=0.310",
             "evidence_strength=1.000",
+            "support_score=0.105",
             "cpu_millicores anomaly_score=1.600"
           ]
         },
         {
           "service": "cart",
-          "score": 0.2638888888888889,
+          "score": 0.01247650276469205,
           "root_cause_metrics": [
             "memory_usage_bytes",
             "cpu_millicores"
@@ -692,6 +681,7 @@
             "downstream_coverage_score=0.000",
             "weighted_rrf_score=0.264",
             "evidence_strength=1.000",
+            "support_score=0.047",
             "memory_usage_bytes anomaly_score=1.000",
             "cpu_millicores anomaly_score=1.000"
           ]
@@ -745,7 +735,7 @@
       "root_causes": [
         {
           "service": "shopping-copilot",
-          "score": 0.9562375674907646,
+          "score": 0.3703530215774715,
           "root_cause_metrics": [
             "memory_usage_bytes"
           ],
@@ -756,12 +746,13 @@
             "downstream_coverage_score=0.000",
             "weighted_rrf_score=0.956",
             "evidence_strength=1.000",
+            "support_score=0.387",
             "memory_usage_bytes anomaly_score=1.600"
           ]
         },
         {
           "service": "frontend",
-          "score": 0.9312020460358056,
+          "score": 0.24331129880460828,
           "root_cause_metrics": [
             "memory_usage_bytes"
           ],
@@ -772,12 +763,13 @@
             "downstream_coverage_score=0.000",
             "weighted_rrf_score=0.931",
             "evidence_strength=1.000",
+            "support_score=0.261",
             "memory_usage_bytes anomaly_score=1.800"
           ]
         },
         {
           "service": "currency",
-          "score": 0.8673482227115447,
+          "score": 0.2032917136644916,
           "root_cause_metrics": [
             "memory_usage_bytes"
           ],
@@ -788,12 +780,13 @@
             "downstream_coverage_score=0.000",
             "weighted_rrf_score=0.867",
             "evidence_strength=1.000",
+            "support_score=0.234",
             "memory_usage_bytes anomaly_score=1.600"
           ]
         },
         {
           "service": "recommendation",
-          "score": 0.8633776091081594,
+          "score": 0.16376835493833244,
           "root_cause_metrics": [
             "memory_usage_bytes",
             "cpu_millicores"
@@ -805,13 +798,14 @@
             "downstream_coverage_score=0.000",
             "weighted_rrf_score=0.863",
             "evidence_strength=1.000",
+            "support_score=0.190",
             "memory_usage_bytes anomaly_score=1.800",
             "cpu_millicores anomaly_score=1.600"
           ]
         },
         {
           "service": "cart",
-          "score": 0.8042986425339368,
+          "score": 0.08076483590630139,
           "root_cause_metrics": [
             "cpu_millicores",
             "memory_usage_bytes",
@@ -824,6 +818,7 @@
             "downstream_coverage_score=0.000",
             "weighted_rrf_score=0.804",
             "evidence_strength=1.000",
+            "support_score=0.100",
             "cpu_millicores anomaly_score=1.600",
             "memory_usage_bytes anomaly_score=1.600",
             "socket_io_bytes_per_second anomaly_score=1.600"

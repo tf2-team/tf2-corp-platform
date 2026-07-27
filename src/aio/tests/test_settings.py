@@ -103,11 +103,11 @@ class SettingsTest(unittest.TestCase):
         )
         self.assertEqual(config["rca"]["anomaly"]["min_tail_anomaly_buckets"]["latency"], 3)
         self.assertEqual(config["rca"]["anomaly"]["min_tail_anomaly_buckets"]["cpu"], 3)
-        self.assertEqual(config["rca"]["anomaly"]["min_relative_change_ratio"]["cpu"], 0.3)
+        self.assertEqual(config["rca"]["anomaly"]["min_relative_change_ratio"]["cpu"], 0.1)
         self.assertEqual(config["rca"]["anomaly"]["min_absolute_change"]["cpu"], 10.0)
         self.assertEqual(config["rca"]["anomaly"]["min_absolute_change"]["error"], 0.005)
         self.assertEqual(config["rca"]["anomaly"]["min_tail_anomaly_buckets"]["socket_io"], 3)
-        self.assertEqual(config["rca"]["anomaly"]["min_relative_change_ratio"]["socket_io"], 0.5)
+        self.assertEqual(config["rca"]["anomaly"]["min_relative_change_ratio"]["socket_io"], 0.1)
         self.assertEqual(config["rca"]["anomaly"]["min_absolute_change"]["socket_io"], 1048576.0)
         self.assertEqual(config["rca"]["min_points"], 30)
         self.assertEqual(config["rca"]["anomaly"]["log_correlation_window_seconds"], 120)
@@ -154,8 +154,8 @@ class SettingsTest(unittest.TestCase):
                 "accounting": 1.0,
             },
         )
-        self.assertEqual(config["correlation"]["suppress_min_root_score"], 0.8)
-        self.assertEqual(config["correlation"]["rca_notification_min_score"], 0.8)
+        self.assertEqual(config["correlation"]["suppress_min_root_score"], 0.45)
+        self.assertEqual(config["correlation"]["rca_notification_min_score"], 0.25)
         self.assertEqual(config["correlation"]["topology_max_hops"], 2)
         self.assertEqual(
             config["rca"]["combined"],
@@ -192,10 +192,7 @@ class SettingsTest(unittest.TestCase):
             no_data_hyperparameters={"missing_confidence": 0.42, "unknown_confidence": 0.24},
             detector_hyperparameters=load_hyperparameters(Path("config/hyperparameters.json"))["detectors"],
         )
-        no_data = next(item for item in detectors if item.detector_id == "ops02_monitoring_loss")
-
-        self.assertEqual(no_data.missing_confidence, 0.42)
-        self.assertEqual(no_data.unknown_confidence, 0.24)
+        self.assertFalse(any(item.detector_id == "ops02_monitoring_loss" for item in detectors))
 
     def test_qualification_dev_env_reaches_pipeline(self):
         with tempfile.TemporaryDirectory() as directory:
