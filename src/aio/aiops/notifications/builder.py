@@ -63,7 +63,7 @@ def _event_summary(incident: Incident, event: CandidateEvent, signals: tuple[str
 def _important_evidence(event: CandidateEvent) -> list[str]:
     raw = [item.summary for item in event.evidence if item.summary]
     keep = []
-    for marker in ("log_", "trace_", "graph_score", "earliest_drift_score", "downstream_coverage_score", "weighted_rrf_score", "evidence_strength", "support_score"):
+    for marker in ("log_", "trace_", "graph_score", "earliest_drift_score", "correlation_score", "downstream_coverage_score", "weighted_rrf_score", "evidence_strength", "support_score"):
         keep.extend(item for item in raw if marker in item and item not in keep)
     return keep[:6]
 

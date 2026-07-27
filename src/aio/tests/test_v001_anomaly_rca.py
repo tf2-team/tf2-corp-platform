@@ -1199,13 +1199,24 @@ class V001AnomalyRcaTest(unittest.TestCase):
         engine = graph_rca(runtime_config)
         scores = engine.rank_services(
             [
-                AnomalyFinding(algorithm="weighted_sum", service="checkout", metric="latency", signal_id="checkout_latency", score=1.0, timestamp=100),
-                AnomalyFinding(algorithm="weighted_sum", service="frontend", metric="latency", signal_id="frontend_latency", score=1.0, timestamp=90),
+                AnomalyFinding(algorithm="weighted_sum", service="checkout", metric="latency", signal_id="checkout_latency", score=9.0, timestamp=100),
+                AnomalyFinding(algorithm="weighted_sum", service="frontend", metric="latency", signal_id="frontend_latency", score=8.0, timestamp=90),
             ]
         )
 
         self.assertIn("product-catalog", scores)
         self.assertGreater(engine._timestamp_scores({"checkout": 100, "frontend": 90})["frontend"], engine._timestamp_scores({"checkout": 100, "frontend": 90})["checkout"])
+
+    def test_rca_evidence_clamps_graph_score_to_unit_range(self):
+        runtime_config = load_runtime_config(Path("config/runtime.json"))
+        findings = [
+            AnomalyFinding(algorithm="weighted_sum", service="payment", metric="cpu_millicores", signal_id="payment_cpu_millicores", score=9.0, timestamp=1)
+        ]
+
+        result = rca_engine(runtime_config).rank(findings, [], top_k=1)
+
+        graph_score = next(item for item in result.root_causes[0].evidence if item.startswith("graph_score="))
+        self.assertLessEqual(float(graph_score.split("=", 1)[1]), 1.0)
 
     def test_graph_traversal_keeps_observed_service_missing_from_topology(self):
         runtime_config = load_runtime_config(Path("config/runtime.json"))
