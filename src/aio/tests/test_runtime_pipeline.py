@@ -896,6 +896,46 @@ class RuntimePipelineTest(unittest.TestCase):
         self.assertIn("Root: recommendation", notifications[0].summary)
         self.assertIn("Metric: cpu_millicores", notifications[0].summary)
 
+    def test_pipeline_filters_rca_root_by_metric_evidence_strength(self):
+        settings = Settings()
+        hyperparameters = load_hyperparameters(settings.hyperparameters_path)
+
+        with TemporaryDirectory() as tmp:
+            store = SQLiteIncidentStore(Path(tmp) / "aiops.sqlite3", environment=settings.environment)
+            pipeline = AiopsPipeline(
+                collector=StaticCollector([]),
+                detectors=[],
+                store=store,
+                policy=policy(settings),
+                rca_hyperparameters=hyperparameters["rca"],
+                **runtime_kwargs(settings),
+            )
+            rca_result = RcaResult(
+                root_causes=[
+                    RootCauseCandidate(
+                        service="ad",
+                        score=0.9,
+                        root_cause_metrics=["cpu_millicores"],
+                        evidence=["metric=cpu_millicores anomaly_score=1.600"],
+                    ),
+                    RootCauseCandidate(
+                        service="currency",
+                        score=0.9,
+                        root_cause_metrics=["cpu_millicores"],
+                        evidence=["metric=cpu_millicores anomaly_score=1.800"],
+                    ),
+                ]
+            )
+
+            incidents = pipeline._upsert_rca_root_incidents(
+                rca_result,
+                [],
+                [cpu_ramp_metric("ad"), cpu_ramp_metric("currency")],
+            )
+            store.close()
+
+        self.assertEqual([incident.service for incident in incidents], ["currency"])
+
     def test_pipeline_flushes_notification_outbox_to_sender(self):
         settings = Settings()
         sender = FakeNotificationSender()

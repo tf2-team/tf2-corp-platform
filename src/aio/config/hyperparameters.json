@@ -21,7 +21,9 @@
     "confidence_threshold": 0.5,
     "topology_max_hops": 2,
     "suppress_min_root_score": 0.45,
-    "rca_notification_min_score": 0.25,
+    "rca_notification_min_score": 0.24,
+    "rca_notification_min_metric_score": 1.8,
+    "rca_notification_strong_correlation_score": 0.95,
     "suppress_breakout_multiplier": 1.5,
     "suppress_window_seconds": 300,
     "weights": {
@@ -157,7 +159,7 @@
         "disk": 0.1,
         "socket_io": 0.1,
         "request_rate": 0.3,
-        "default": 0.3
+        "default": 0.1
       },
       "min_absolute_change": {
         "error": 0.005,
@@ -246,9 +248,9 @@
       "canonical_service_suffixes": [],
       "metric_aliases": {},
       "ranker_weights": {
-        "graph": 0.3,
-        "earliest_drift": 0.5,
-        "correlation": 0.05,
+        "graph": 0.15,
+        "earliest_drift": 0.55,
+        "correlation": 0.15,
         "downstream_coverage": 0.15
       }
     }
