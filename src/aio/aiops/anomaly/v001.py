@@ -13,17 +13,14 @@ import warnings
 
 from aiops.anomaly.stats import mean, median, rolling_robust_scores, stdev
 from aiops.schemas import AnomalyFinding, MetricSeries
-from aiops.shared.metrics import is_error_metric, is_memory_metric, is_oom_metric
+from aiops.shared.metrics import is_error_metric, is_oom_metric
 from aiops.shared.tail import cusum_tail_change, evaluate_tail_change, fixed_baseline_and_tail, metric_group, normal_traffic_growth_decision, page_hinkley_tail_change, slow_drift_tail_change, traffic_explained_metrics
 
 logger = logging.getLogger(__name__)
 CUSUM_TAIL_GROUPS = {"cpu", "memory", "latency", "socket_io"}
 NORMAL_GROWTH_BREAKOUT_REASONS = (
     "reason=oom_increased",
-    "reason=memory_increased_without_traffic",
-    "reason=memory_shape_mismatch",
     "reason=error_increased",
-    "reason=ready_pods_decreased",
 )
 
 os.environ.setdefault("MPLCONFIGDIR", "/tmp")
@@ -458,9 +455,7 @@ class V001AnomalyEngine:
         }
         self.last_normal_growth_metrics = {
             service: metrics
-            for service, (normal, _) in decisions.items()
-            if normal
-            if service not in self.last_normal_growth_breakout_metrics
+            for service in by_service
             if (
                 metrics := traffic_explained_metrics(
                     by_service[service],
@@ -504,12 +499,10 @@ class V001AnomalyEngine:
         )
 
 def _breakout_metrics_for_reason(detail: str, series: list[MetricSeries]) -> set[str]:
-    if detail.startswith(("reason=memory_", "reason=oom_")):
-        return {metric.metric for metric in series if is_memory_metric(metric.metric) or is_oom_metric(metric.metric)}
+    if detail.startswith("reason=oom_"):
+        return {metric.metric for metric in series if is_oom_metric(metric.metric)}
     if detail.startswith("reason=error_"):
         return {metric.metric for metric in series if is_error_metric(metric.metric)}
-    if detail.startswith("reason=ready_pods_"):
-        return {metric.metric for metric in series if "ready_pods" in metric.metric}
     return set()
 
 

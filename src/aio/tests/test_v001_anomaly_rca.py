@@ -148,7 +148,7 @@ class V001AnomalyRcaTest(unittest.TestCase):
         self.assertLess(tail_aligned_dtw_similarity(request, delayed, 900, 29, max_warp_buckets=0, enforce_onset=True), 0.7)
         self.assertGreaterEqual(tail_aligned_dtw_similarity(request, delayed, 900, 29, max_warp_buckets=2, enforce_onset=True), 0.7)
 
-    def test_normal_traffic_growth_rejects_missing_socket_and_memory_shape_mismatch(self):
+    def test_normal_traffic_growth_ignores_memory_shape(self):
         common = {
             "detection_window_seconds": 900,
             "start": 29,
@@ -166,8 +166,7 @@ class V001AnomalyRcaTest(unittest.TestCase):
 
         self.assertFalse(normal_traffic_growth_decision(required[:2], **common)[0])
         normal, reason = normal_traffic_growth_decision([*required, minute_metric("checkout", "memory_usage_bytes", list(reversed(values)))], **common)
-        self.assertFalse(normal)
-        self.assertIn("reason=memory_shape_mismatch", reason)
+        self.assertTrue(normal, reason)
 
     def test_fixed_baseline_excludes_every_detection_tail_point(self):
         series = minute_metric("payment", "cpu_millicores", [10.0] * 45 + [20.0] * 15)
@@ -520,6 +519,18 @@ class V001AnomalyRcaTest(unittest.TestCase):
         self.assertEqual(engine._filter_normal_traffic_growth(series), series)
         self.assertEqual(engine.last_normal_growth_breakout_metrics, {"checkout": {"error_rate_5m"}})
 
+    def test_memory_growth_without_traffic_is_not_a_breakout_metric(self):
+        engine = anomaly_engine()
+        series = [
+            minute_metric("checkout", "request_rate_5m", [10] * 45),
+            minute_metric("checkout", "cpu_millicores", [100] * 45),
+            minute_metric("checkout", "socket_io_bytes_per_second", [1_000_000] * 45),
+            minute_metric("checkout", "memory_usage_bytes", [100_000_000] * 30 + [150_000_000] * 15),
+        ]
+
+        self.assertEqual(engine._filter_normal_traffic_growth(series), series)
+        self.assertEqual(engine.last_normal_growth_breakout_metrics, {})
+
     def test_oom_increase_does_not_break_normal_growth_when_request_increases(self):
         engine = anomaly_engine()
         series = [
@@ -573,6 +584,7 @@ class V001AnomalyRcaTest(unittest.TestCase):
             minute_metric("checkout", "memory_usage_bytes", [150_000_000] * 30 + [100_000_000] * 15),
             minute_metric("checkout", "socket_io_bytes_per_second", [3_000_000] * 30 + [1_000_000] * 15),
             minute_metric("checkout", "p95_latency_5m", [0.10] * 30 + [0.05] * 15),
+            minute_metric("checkout", "workload_ready_pods", [3] * 30 + [1] * 15),
             minute_metric("checkout", "error_rate_5m", [0] * 45),
         ]
 
@@ -673,7 +685,7 @@ class V001AnomalyRcaTest(unittest.TestCase):
 
         self.assertNotIn("product-catalog", engine.last_normal_growth_zero_score_metrics)
 
-    def test_growth_gate_only_suppresses_rca_metrics_for_busy_normal_services(self):
+    def test_growth_gate_suppresses_any_rca_metric_that_matches_request_shape(self):
         engine = anomaly_engine()
         values = [100] * 30 + list(range(100, 115))
         series = [
@@ -683,7 +695,7 @@ class V001AnomalyRcaTest(unittest.TestCase):
 
         engine._filter_normal_traffic_growth(series)
 
-        self.assertEqual(engine.last_normal_growth_metrics, {})
+        self.assertEqual(engine.last_normal_growth_metrics, {"email": {"memory_usage_bytes"}})
 
     def test_staggered_load_growth_is_not_treated_as_simultaneous(self):
         engine = anomaly_engine()
