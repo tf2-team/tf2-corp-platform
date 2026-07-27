@@ -27,18 +27,12 @@ class NotificationBuilder:
         if last_event.detector_id != "rca_root_cause" and dependency != "unknown":
             title = f"{incident.flow} likely dependency: {dependency}"
         signals = tuple(dict.fromkeys(signal for event in incident.events for signal in (event.contributing_signals or (event.signal_id,))))
-        if last_event.detector_id == "rca_root_cause":
-            summary = _rca_summary(incident, last_event, signals)
-        elif last_event.reason == "threshold_breached":
-            summary = _threshold_summary(last_event, signals)
-        else:
-            summary = f"{last_event.reason} on {', '.join(signals)}"
         return NotificationMessage(
             incident_id=incident.incident_id,
             severity=incident.severity,
             state=incident.state,
             title=title,
-            summary=summary,
+            summary=_event_summary(incident, last_event, signals),
             flow=incident.flow,
             service=incident.service,
             likely_dependency=dependency,
@@ -46,31 +40,23 @@ class NotificationBuilder:
         )
 
 
-def _rca_summary(incident: Incident, event: CandidateEvent, signals: tuple[str, ...]) -> str:
-    lines = [
-        f"Root: {incident.service}",
-        f"Metric: {', '.join(signals)}",
-        f"RCA score: {event.confidence:.3f}",
-    ]
-    evidence = _important_evidence(event)
-    if evidence:
+def _event_summary(incident: Incident, event: CandidateEvent, signals: tuple[str, ...]) -> str:
+    signal_label = "Metric" if event.detector_id == "rca_root_cause" else "Signal"
+    lines = [f"Detected: {event.reason}", f"{signal_label}: {', '.join(signals)}"]
+    if event.detector_id == "rca_root_cause":
+        lines.insert(0, f"Root: {incident.service}")
+        lines.append(f"RCA score: {event.confidence:.3f}")
+    if event.value is not None:
+        lines.append(f"Value: {_format_number(event.value)}{_unit_suffix(event.unit)}")
+    if event.threshold is not None:
+        lines.append(f"Threshold: {_format_number(event.threshold)}{_unit_suffix(event.unit)}")
+    if event.window:
+        lines.append(f"Window: {event.window}")
+    if evidence := _important_evidence(event):
         lines.append("Evidence:")
         lines.extend(f"- {item}" for item in evidence)
     lines.append(f"Action: {_action_hint(event.runbook_id, ','.join(signals))}")
     lines.append(f"Runbook: {event.runbook_id}")
-    return "\n".join(lines)
-
-
-def _threshold_summary(event: CandidateEvent, signals: tuple[str, ...]) -> str:
-    lines = [
-        "Detected: threshold_breached",
-        f"Signal: {', '.join(signals)}",
-        f"Value: {_format_number(event.value)}{_unit_suffix(event.unit)}",
-        f"Threshold: {_format_number(event.threshold)}{_unit_suffix(event.unit)}",
-        f"Window: {event.window}",
-        f"Action: {_action_hint(event.runbook_id, ','.join(signals))}",
-        f"Runbook: {event.runbook_id}",
-    ]
     return "\n".join(lines)
 
 

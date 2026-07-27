@@ -130,7 +130,8 @@ class ProdSimulationTest(unittest.TestCase):
             pipeline.store.close()
 
         self.assertEqual(result.incidents[0].service, "checkout")
-        self.assertEqual(sender.sent[0].summary, "signal_stale on checkout_cpu_millicores")
+        self.assertIn("Detected: signal_stale", sender.sent[0].summary)
+        self.assertIn("Signal: checkout_cpu_millicores", sender.sent[0].summary)
         self.assertEqual(sender.sent[0].runbook_id, "RB-MONITORING-LOSS")
 
     def test_metric_only_rca_creates_root_incident_notification(self):
