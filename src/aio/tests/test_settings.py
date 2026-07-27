@@ -98,7 +98,7 @@ class SettingsTest(unittest.TestCase):
                 "min_primary_shape": 0.55,
                 "dtw_onset_threshold": 0.1,
                 "dtw_cost_scale": 2.0,
-                "weights": {"cpu": 0.45, "socket_io": 0.35, "memory": 0.2},
+                "weights": {"cpu": 0.45, "socket_io": 0.35},
             },
         )
         self.assertEqual(config["rca"]["anomaly"]["min_tail_anomaly_buckets"]["latency"], 3)
@@ -159,7 +159,7 @@ class SettingsTest(unittest.TestCase):
         self.assertEqual(config["correlation"]["suppress_min_root_score"], 0.45)
         self.assertEqual(config["correlation"]["rca_notification_min_score"], 0.24)
         self.assertEqual(config["correlation"]["rca_notification_min_metric_score"], 1.8)
-        self.assertEqual(config["correlation"]["rca_notification_strong_correlation_score"], 0.95)
+        self.assertEqual(config["correlation"]["rca_notification_strong_shape_correlation_score"], 0.95)
         self.assertEqual(config["correlation"]["topology_max_hops"], 2)
         self.assertEqual(
             config["rca"]["combined"],
@@ -170,7 +170,7 @@ class SettingsTest(unittest.TestCase):
                 "detection_window_seconds": 1800,
                 "canonical_service_suffixes": [],
                 "metric_aliases": {},
-                "ranker_weights": {"graph": 0.15, "earliest_drift": 0.55, "correlation": 0.15, "downstream_coverage": 0.15},
+                "ranker_weights": {"graph": 0.15, "earliest_drift": 0.55, "shape_correlation": 0.15, "downstream_coverage": 0.15},
             },
         )
         self.assertEqual(config["remediation"]["similarity_weights"]["service"], 0.35)

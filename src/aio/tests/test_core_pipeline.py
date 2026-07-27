@@ -69,7 +69,7 @@ class PydanticModelTest(unittest.TestCase):
 
 
 class NotificationBuilderTest(unittest.TestCase):
-    def test_rca_notification_keeps_correlation_score(self):
+    def test_rca_notification_keeps_shape_correlation_score(self):
         event = CandidateEvent(
             detector_id="rca_root_cause",
             flow="checkout",
@@ -86,7 +86,7 @@ class NotificationBuilderTest(unittest.TestCase):
             confidence=0.3,
             evidence=(
                 EvidenceItem(source="rca", reference="payment", summary="graph_score=1.000"),
-                EvidenceItem(source="rca", reference="payment", summary="correlation_score=0.750"),
+                EvidenceItem(source="rca", reference="payment", summary="shape_correlation_score=0.750"),
             ),
         )
 
@@ -105,7 +105,7 @@ class NotificationBuilderTest(unittest.TestCase):
             ]
         )[0]
 
-        self.assertIn("- correlation_score=0.750", message.summary)
+        self.assertIn("- shape_correlation_score=0.750", message.summary)
 
 
 class FeatureBuilderTest(unittest.TestCase):

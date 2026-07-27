@@ -35,7 +35,6 @@ class V001RcaEngine:
         self.min_absolute_change = {key: float(value) for key, value in combined_hyperparameters["min_absolute_change"].items()}
         self.slow_drift = combined_hyperparameters.get("slow_drift", {})
         self.page_hinkley_min_bucket_factor = float(combined_hyperparameters["page_hinkley_min_bucket_factor"])
-        self.traffic_shape_min_spearman = float(combined_hyperparameters["traffic_shape_min_spearman"])
         self.traffic_shape_max_lag_buckets = int(combined_hyperparameters["traffic_shape_max_lag_buckets"])
         self.topology_max_hops = int(combined_hyperparameters["topology_max_hops"])
         self.canonical_service_suffixes = tuple(combined_hyperparameters["canonical_service_suffixes"])
@@ -95,28 +94,18 @@ class V001RcaEngine:
         graph_scores = self.graph.rank_services(root_findings)
         graph_evidence_scores = {service: min(1.0, score) for service, score in graph_scores.items()}
         earliest_scores = self._earliest_drift_scores(rca_series)
-        correlation_scores = self._correlation_scores(rca_series, findings, series)
+        shape_correlation_scores = self._shape_correlation_scores(rca_series, findings, series)
         downstream_coverage_scores = self._downstream_coverage_scores(root_findings)
-        service_scores = self._weighted_rrf(
-            {
-                "graph": graph_scores,
-                "earliest_drift": earliest_scores,
-                "correlation": correlation_scores,
-                "downstream_coverage": downstream_coverage_scores,
-            }
-        )
-        support_scores = self._weighted_support_scores(
-            {
-                "graph": graph_scores,
-                "earliest_drift": earliest_scores,
-                "correlation": correlation_scores,
-                "downstream_coverage": downstream_coverage_scores,
-            }
-        )
-        anomaly_services = {finding.service for finding in root_findings if finding.service != "global"}
+        rankers = {
+            "graph": graph_scores,
+            "earliest_drift": earliest_scores,
+            "shape_correlation": shape_correlation_scores,
+            "downstream_coverage": downstream_coverage_scores,
+        }
+        service_scores, support_scores = self._weighted_rank_scores(rankers)
         evidence_strength = {
             service: min(1.0, max(finding.score for finding in root_findings if finding.service == service))
-            for service in anomaly_services
+            for service in {finding.service for finding in root_findings if finding.service != "global"}
         }
 
         metrics_by_service: dict[str, list[tuple[str, float, str]]] = defaultdict(list)
@@ -138,7 +127,7 @@ class V001RcaEngine:
             reverse=True,
         ):
             score = rank_score * evidence_strength.get(service, 0.0) * support_scores.get(service, 0.0)
-            if service not in anomaly_services:
+            if service not in evidence_strength:
                 continue
             if self._excluded_root_cause(service):
                 continue
@@ -148,23 +137,36 @@ class V001RcaEngine:
             if required_breakout_metrics.get(service) and not self._is_breakout_metric(service, metric_scores[0][0], required_breakout_metrics):
                 continue
             metrics = list(dict.fromkeys(alias for metric, _, _ in metric_scores for alias in self._metric_aliases(metric)))
+            evidence_scores = {
+                "graph": graph_evidence_scores.get(service, 0.0),
+                "earliest_drift": earliest_scores.get(service, 0.0),
+                "shape_correlation": shape_correlation_scores.get(service, 0.0),
+                "downstream_coverage": downstream_coverage_scores.get(service, 0.0),
+                "weighted_rrf": rank_score,
+                "evidence_strength": evidence_strength.get(service, 0.0),
+                "support": support_scores.get(service, 0.0),
+            }
             candidates.append(
                 RootCauseCandidate(
                     service=service,
                     score=score,
                     root_cause_metrics=metrics,
                     evidence=[
-                        f"graph_score={graph_evidence_scores.get(service, 0.0):.3f}",
-                        f"earliest_drift_score={earliest_scores.get(service, 0.0):.3f}",
-                        f"correlation_score={correlation_scores.get(service, 0.0):.3f}",
-                        f"downstream_coverage_score={downstream_coverage_scores.get(service, 0.0):.3f}",
-                        f"weighted_rrf_score={rank_score:.3f}",
-                        f"evidence_strength={evidence_strength.get(service, 0.0):.3f}",
-                        f"support_score={support_scores.get(service, 0.0):.3f}",
+                        f"graph_score={evidence_scores['graph']:.3f}",
+                        f"earliest_drift_score={evidence_scores['earliest_drift']:.3f}",
+                        f"shape_correlation_score={evidence_scores['shape_correlation']:.3f}",
+                        f"downstream_coverage_score={evidence_scores['downstream_coverage']:.3f}",
+                        f"weighted_rrf_score={evidence_scores['weighted_rrf']:.3f}",
+                        f"evidence_strength={evidence_scores['evidence_strength']:.3f}",
+                        f"support_score={evidence_scores['support']:.3f}",
+                    ]
+                    + [
                         *log_details.get(service, []),
                         *trace_details.get(service, []),
                         *[f"{metric} {source}_score={metric_score:.3f}" for metric, metric_score, source in metric_scores],
                     ],
+                    evidence_scores=evidence_scores,
+                    metric_scores={metric: metric_score for metric, metric_score, _ in metric_scores},
                 )
             )
             if len(candidates) >= top_k:
@@ -331,7 +333,7 @@ class V001RcaEngine:
             )
         )
 
-    def _correlation_scores(
+    def _shape_correlation_scores(
         self,
         series: list[MetricSeries],
         findings: list[AnomalyFinding],
@@ -369,26 +371,25 @@ class V001RcaEngine:
         top = max(findings, key=lambda finding: finding.score)
         return next((metric for metric in series if metric.signal_id == top.signal_id), None)
 
-    def _weighted_rrf(self, rankers: dict[str, dict[str, float]]) -> dict[str, float]:
+    def _weighted_rank_scores(self, rankers: dict[str, dict[str, float]]) -> tuple[dict[str, float], dict[str, float]]:
         scores: dict[str, float] = defaultdict(float)
         max_possible = sum(self.ranker_weights.get(name, 0.0) / (self.rrf_k + 1) for name, values in rankers.items() if values)
         if not max_possible:
-            return {}
+            return {}, {}
         for name, values in rankers.items():
             weight = self.ranker_weights.get(name, 0.0)
             for rank, (service, _) in enumerate(sorted(values.items(), key=lambda item: item[1], reverse=True), start=1):
                 scores[service] += weight / (self.rrf_k + rank)
-        return {service: score / max_possible for service, score in scores.items()}
-
-    def _weighted_support_scores(self, rankers: dict[str, dict[str, float]]) -> dict[str, float]:
+        rrf_scores = {service: score / max_possible for service, score in scores.items()}
         services = {service for values in rankers.values() for service in values}
         total = sum(self.ranker_weights.get(name, 0.0) for name in rankers)
         if not total:
-            return {}
-        return {
+            return rrf_scores, {}
+        support_scores = {
             service: sum(self.ranker_weights.get(name, 0.0) * max(0.0, min(1.0, values.get(service, 0.0))) for name, values in rankers.items()) / total
             for service in services
         }
+        return rrf_scores, support_scores
 
     def _excluded_root_cause(self, service: str) -> bool:
         services = {item.name: item for item in self.config.topology.services}

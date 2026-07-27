@@ -248,7 +248,7 @@ class AiopsPipeline:
         severity = min((incident.severity for incident in incidents), default="SEV2")
         threshold = float(self.correlation_hyperparameters["rca_notification_min_score"])
         min_metric_score = float(self.correlation_hyperparameters.get("rca_notification_min_metric_score", 0.0))
-        strong_correlation_score = float(self.correlation_hyperparameters.get("rca_notification_strong_correlation_score", 1.1))
+        strong_shape_correlation_score = float(self.correlation_hyperparameters.get("rca_notification_strong_shape_correlation_score", 1.1))
         valid_roots = [
             root.model_copy(
                 update={
@@ -260,7 +260,7 @@ class AiopsPipeline:
                 }
             )
             for root in rca_result.root_causes
-            if root.score >= threshold and _has_strong_notification_evidence(root, min_metric_score, strong_correlation_score)
+            if root.score >= threshold and _has_strong_notification_evidence(root, min_metric_score, strong_shape_correlation_score)
         ]
         valid_roots = [root for root in valid_roots if root.root_cause_metrics]
         rows = []
@@ -307,15 +307,7 @@ class AiopsPipeline:
             return False
         if not all(key in config for key in ("min_tail_anomaly_buckets", "min_relative_change_ratio", "min_absolute_change")):
             return False
-        group = metric_group(metric)
-        return evaluate_tail_change(
-            match,
-            detection_window_seconds,
-            start,
-            int(config["min_tail_anomaly_buckets"][group]),
-            float(config["min_relative_change_ratio"][group]),
-            float(config["min_absolute_change"][group]),
-        ).significant
+        return _metric_tail_change_significant(match, detection_window_seconds, start, config)
 
     def _dedup_rca_root_causes(self, root_causes: list[RootCauseCandidate]) -> list[RootCauseCandidate]:
         kept: list[RootCauseCandidate] = []
@@ -633,20 +625,23 @@ def _service_oom_counter_increased(service: str, series: list[MetricSeries], det
     return False
 
 
-def _has_strong_notification_evidence(root: RootCauseCandidate, min_metric_score: float, strong_correlation_score: float) -> bool:
+def _metric_tail_change_significant(metric: MetricSeries, detection_window_seconds: int | None, start: int, config: dict) -> bool:
+    group = metric_group(metric.metric)
+    return evaluate_tail_change(
+        metric,
+        detection_window_seconds,
+        start,
+        int(config["min_tail_anomaly_buckets"][group]),
+        float(config["min_relative_change_ratio"][group]),
+        float(config["min_absolute_change"][group]),
+    ).significant
+
+
+def _has_strong_notification_evidence(root: RootCauseCandidate, min_metric_score: float, strong_shape_correlation_score: float) -> bool:
     if min_metric_score <= 0:
         return True
-    metric_scores = [
-        float(match.group(1))
-        for item in root.evidence
-        for match in re.finditer(r"(?:anomaly|drift)_score=([0-9.]+)", item)
-    ]
-    correlation_scores = [
-        float(match.group(1))
-        for item in root.evidence
-        for match in re.finditer(r"correlation_score=([0-9.]+)", item)
-    ]
-    return not metric_scores or max(metric_scores) >= min_metric_score or max(correlation_scores or [0.0]) >= strong_correlation_score
+    metric_scores = list(root.metric_scores.values())
+    return not metric_scores or max(metric_scores) >= min_metric_score or root.evidence_scores.get("shape_correlation", 0.0) >= strong_shape_correlation_score
 
 
 def _combined_rca_hyperparameters(config: dict) -> dict:
@@ -658,7 +653,6 @@ def _combined_rca_hyperparameters(config: dict) -> dict:
         "min_absolute_change": anomaly["min_absolute_change"],
         "slow_drift": anomaly.get("slow_drift", {}),
         "page_hinkley_min_bucket_factor": anomaly["page_hinkley_min_bucket_factor"],
-        "traffic_shape_min_spearman": anomaly["traffic_shape_min_spearman"],
         "traffic_shape_max_lag_buckets": anomaly["traffic_shape_max_lag_buckets"],
         "topology_max_hops": config.get("topology_max_hops", 2),
     }

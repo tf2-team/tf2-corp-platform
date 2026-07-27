@@ -23,7 +23,7 @@
     "suppress_min_root_score": 0.45,
     "rca_notification_min_score": 0.24,
     "rca_notification_min_metric_score": 1.8,
-    "rca_notification_strong_correlation_score": 0.95,
+    "rca_notification_strong_shape_correlation_score": 0.95,
     "suppress_breakout_multiplier": 1.5,
     "suppress_window_seconds": 300,
     "weights": {
@@ -219,7 +219,6 @@
           }
         }
       },
-      "traffic_shape_min_spearman": 0.6,
       "traffic_shape_max_lag_buckets": 5,
       "traffic_explanation": {
         "threshold": 0.65,
@@ -228,8 +227,7 @@
         "dtw_cost_scale": 2.0,
         "weights": {
           "cpu": 0.45,
-          "socket_io": 0.35,
-          "memory": 0.2
+          "socket_io": 0.35
         }
       }
     },
@@ -250,7 +248,7 @@
       "ranker_weights": {
         "graph": 0.15,
         "earliest_drift": 0.55,
-        "correlation": 0.15,
+        "shape_correlation": 0.15,
         "downstream_coverage": 0.15
       }
     }

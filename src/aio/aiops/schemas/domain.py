@@ -89,6 +89,8 @@ class RootCauseCandidate(AiopsModel):
     score: float
     root_cause_metrics: list[str] = Field(default_factory=list)
     evidence: list[str] = Field(default_factory=list)
+    evidence_scores: dict[str, float] = Field(default_factory=dict)
+    metric_scores: dict[str, float] = Field(default_factory=dict)
 
 
 class RcaResult(AiopsModel):

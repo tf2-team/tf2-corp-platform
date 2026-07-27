@@ -66,7 +66,6 @@ def rca_engine(config: RuntimeConfig, **combined_overrides) -> V001RcaEngine:
         "min_relative_change_ratio": hyperparameters["anomaly"]["min_relative_change_ratio"],
         "min_absolute_change": hyperparameters["anomaly"]["min_absolute_change"],
         "page_hinkley_min_bucket_factor": hyperparameters["anomaly"]["page_hinkley_min_bucket_factor"],
-        "traffic_shape_min_spearman": hyperparameters["anomaly"]["traffic_shape_min_spearman"],
         "traffic_shape_max_lag_buckets": hyperparameters["anomaly"]["traffic_shape_max_lag_buckets"],
         "topology_max_hops": load_hyperparameters(Path("config/hyperparameters.json"))["correlation"]["topology_max_hops"],
         **combined_overrides,
@@ -103,7 +102,6 @@ class V001AnomalyRcaTest(unittest.TestCase):
             "min_tail_anomaly_buckets": {"request_rate": 3, "cpu": 3, "memory": 3, "socket_io": 3, "error": 1, "default": 2},
             "min_relative_change_ratio": {"request_rate": 0.5, "cpu": 0.3, "memory": 0.3, "socket_io": 0.5, "error": 0.0, "default": 0.3},
             "min_absolute_change": {"request_rate": 5.0, "cpu": 10.0, "memory": 10.0, "socket_io": 10.0, "error": 0.005, "default": 1.0},
-            "traffic_shape_min_spearman": 0.7,
         }
         values = [10] * 30 + list(range(30, 45))
         series = [
@@ -123,7 +121,6 @@ class V001AnomalyRcaTest(unittest.TestCase):
             "min_tail_anomaly_buckets": {"request_rate": 3, "cpu": 3, "memory": 3, "socket_io": 3, "error": 1, "default": 2},
             "min_relative_change_ratio": {"request_rate": 0.5, "cpu": 0.3, "memory": 0.3, "socket_io": 0.5, "error": 0.0, "default": 0.3},
             "min_absolute_change": {"request_rate": 5.0, "cpu": 10.0, "memory": 10.0, "socket_io": 10.0, "error": 0.005, "default": 1.0},
-            "traffic_shape_min_spearman": 0.7,
         }
         request_tail = [30, 10, 50, 10, 20, 10, 45, 10, 15, 10, 35, 10, 25, 10, 40]
         infra_tail = [100, 100, *[100 + 10 * value for value in request_tail[:-2]]]
@@ -148,14 +145,13 @@ class V001AnomalyRcaTest(unittest.TestCase):
         self.assertLess(tail_aligned_dtw_similarity(request, delayed, 900, 29, max_warp_buckets=0, enforce_onset=True), 0.7)
         self.assertGreaterEqual(tail_aligned_dtw_similarity(request, delayed, 900, 29, max_warp_buckets=2, enforce_onset=True), 0.7)
 
-    def test_normal_traffic_growth_rejects_missing_socket_and_memory_shape_mismatch(self):
+    def test_normal_traffic_growth_ignores_memory_shape(self):
         common = {
             "detection_window_seconds": 900,
             "start": 29,
             "min_tail_anomaly_buckets": {"request_rate": 3, "cpu": 3, "memory": 3, "socket_io": 3, "error": 1, "default": 2},
             "min_relative_change_ratio": {"request_rate": 0.5, "cpu": 0.3, "memory": 0.3, "socket_io": 0.5, "error": 0.0, "default": 0.3},
             "min_absolute_change": {"request_rate": 5.0, "cpu": 10.0, "memory": 10.0, "socket_io": 10.0, "error": 0.005, "default": 1.0},
-            "traffic_shape_min_spearman": 0.7,
         }
         values = [10] * 30 + list(range(30, 45))
         required = [
@@ -166,8 +162,7 @@ class V001AnomalyRcaTest(unittest.TestCase):
 
         self.assertFalse(normal_traffic_growth_decision(required[:2], **common)[0])
         normal, reason = normal_traffic_growth_decision([*required, minute_metric("checkout", "memory_usage_bytes", list(reversed(values)))], **common)
-        self.assertFalse(normal)
-        self.assertIn("reason=memory_shape_mismatch", reason)
+        self.assertTrue(normal, reason)
 
     def test_fixed_baseline_excludes_every_detection_tail_point(self):
         series = minute_metric("payment", "cpu_millicores", [10.0] * 45 + [20.0] * 15)
@@ -466,7 +461,7 @@ class V001AnomalyRcaTest(unittest.TestCase):
     def test_anomaly_builder_requires_traffic_shape_threshold(self):
         config = rca_hyperparameters()
         anomaly = dict(config["anomaly"])
-        del anomaly["traffic_shape_min_spearman"]
+        anomaly["traffic_explanation"] = {key: value for key, value in anomaly["traffic_explanation"].items() if key != "threshold"}
 
         with self.assertRaises(KeyError):
             build_v001_anomaly_engine({**config, "anomaly": anomaly})
@@ -673,7 +668,7 @@ class V001AnomalyRcaTest(unittest.TestCase):
 
         self.assertNotIn("product-catalog", engine.last_normal_growth_zero_score_metrics)
 
-    def test_growth_gate_only_suppresses_rca_metrics_for_busy_normal_services(self):
+    def test_growth_gate_suppresses_any_rca_metric_that_matches_request_shape(self):
         engine = anomaly_engine()
         values = [100] * 30 + list(range(100, 115))
         series = [
@@ -683,7 +678,7 @@ class V001AnomalyRcaTest(unittest.TestCase):
 
         engine._filter_normal_traffic_growth(series)
 
-        self.assertEqual(engine.last_normal_growth_metrics, {})
+        self.assertEqual(engine.last_normal_growth_metrics, {"email": {"memory_usage_bytes"}})
 
     def test_staggered_load_growth_is_not_treated_as_simultaneous(self):
         engine = anomaly_engine()
@@ -858,10 +853,10 @@ class V001AnomalyRcaTest(unittest.TestCase):
             metric("payment", "cpu_millicores", [1, 2, 3, 4, 5, 6]),
         ]
 
-        result = rca_engine(runtime_config, ranker_weights={"graph": 0.0, "earliest_drift": 0.0, "correlation": 1.0}).rank(findings, series, top_k=5)
+        result = rca_engine(runtime_config, ranker_weights={"graph": 0.0, "earliest_drift": 0.0, "shape_correlation": 1.0}).rank(findings, series, top_k=5)
         payment = next(candidate for candidate in result.root_causes if candidate.service == "payment")
 
-        self.assertIn("correlation_score=1.000", payment.evidence)
+        self.assertIn("shape_correlation_score=1.000", payment.evidence)
         self.assertNotIn("checkout_p95_latency_5m", payment.root_cause_metrics)
 
     def test_rca_uses_significant_drift_when_only_slo_impact_exists(self):
@@ -898,11 +893,11 @@ class V001AnomalyRcaTest(unittest.TestCase):
             metric("cart", "cpu_millicores", [0, 1, 0, 1, 0, 1]),
         ]
 
-        result = rca_engine(runtime_config, ranker_weights={"graph": 0.0, "earliest_drift": 0.0, "correlation": 1.0}).rank(findings, series, top_k=5)
+        result = rca_engine(runtime_config, ranker_weights={"graph": 0.0, "earliest_drift": 0.0, "shape_correlation": 1.0}).rank(findings, series, top_k=5)
         evidence = {candidate.service: candidate.evidence for candidate in result.root_causes}
 
-        self.assertIn("correlation_score=1.000", evidence["payment"])
-        self.assertIn("correlation_score=1.000", evidence["cart"])
+        self.assertIn("shape_correlation_score=1.000", evidence["payment"])
+        self.assertIn("shape_correlation_score=1.000", evidence["cart"])
 
     def test_rca_uses_only_non_impact_metrics_for_ranking(self):
         runtime_config = load_runtime_config(Path("config/runtime.json"))
@@ -917,7 +912,7 @@ class V001AnomalyRcaTest(unittest.TestCase):
             metric("payment", "error_rate_5m", [0, 10, 0, 10, 0, 10]),
         ]
 
-        result = rca_engine(runtime_config, ranker_weights={"graph": 0.0, "earliest_drift": 0.0, "correlation": 1.0}).rank(findings, series, top_k=5)
+        result = rca_engine(runtime_config, ranker_weights={"graph": 0.0, "earliest_drift": 0.0, "shape_correlation": 1.0}).rank(findings, series, top_k=5)
 
         self.assertEqual(result.root_causes[0].service, "checkout")
 
