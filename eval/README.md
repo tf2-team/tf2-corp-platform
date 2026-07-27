@@ -5,22 +5,39 @@ Reproducible evaluation pipeline for the AI tier's quality and safety across bot
 
 ## Quick Start
 
+Run the following commands **from the `eval` directory**. The parent directory
+contains the uncommitted `.env.override` file with the real LLM credentials.
+
 ```bash
-# Validate a gold dataset (copilot)
-make eval DATASET=eval/datasets/gold/copilot_v0.jsonl
+# From the repository root
+cd eval
 
-# Validate a gold dataset (summary)
-make eval DATASET=eval/datasets/gold/summary_v0.jsonl
+# Create the locked Python 3.12 environment (no Docker required)
+uv sync
 
-# Validate an external dataset (BTC hidden set)
-make eval DATASET=/path/to/hidden.jsonl
+# Configure a real LLM provider in .env.override (do not commit it)
+# Bedrock: LLM_PROVIDER=bedrock, AWS_PROFILE, AWS_REGION, BEDROCK_MODEL_ID,
+#          BEDROCK_MAX_TOKENS. Verify the profile first:
+aws sts get-caller-identity --profile bedrock-dev
 
-# Install the loader dependency and run its integration tests
-python -m pip install -r eval/requirements.txt
-cd eval && python -m unittest harness.test_loader
+# Run the real LLM pipeline. Catalog/Review/Cart are deterministic case data;
+# only the LLM provider is external.
+uv run --env-file ../.env --env-file ../.env.override -- python run_eval.py \
+  --dataset datasets/gold/copilot_v0.jsonl \
+  --output results/gold-copilot
 
-# Full evaluation and before/after comparison will be available after EV-2.4
-python -m eval.run_eval --dataset eval/datasets/gold/copilot_v0.jsonl --output results/candidate --compare results/baseline results/candidate
+# One-case smoke test: real LLM on turn 1; injection must block on turn 2.
+uv run --env-file ../.env --env-file ../.env.override -- python run_eval.py \
+  --dataset datasets/examples/copilot_multiturn_injection.jsonl \
+  --output results/demo-multiturn
+
+# The same command accepts an organizer's hidden JSONL dataset.
+uv run --env-file ../.env --env-file ../.env.override -- python run_eval.py \
+  --dataset C:/path/to/hidden.jsonl \
+  --output results/hidden
+
+# Run unit tests without calling an LLM.
+uv run -- python -m unittest discover -s . -p "test_*.py"
 ```
 
 ## Bắt đầu từ đâu?

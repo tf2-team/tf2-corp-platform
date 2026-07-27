@@ -33,14 +33,14 @@ Trước khi phân việc, team cần hiểu rõ sự khác biệt kiến trúc:
 |---|---|---|
 | **Service** | [product_reviews_server.py](../../../src/product-reviews/product_reviews_server.py) | [copilot_graph.py](../../../src/shopping-copilot/copilot_graph.py) |
 | **RPC** | `AskProductAIAssistant(product_id, question)` | `Search(user_message)` |
-| **Kiến trúc AI** | Agentic tool-use (LLM tự gọi tool) | LangGraph DAG (code gọi gRPC) |
-| **Tools** | `fetch_product_reviews`, `fetch_product_info` | search → intent → catalog → Q&A → cart |
+| **Kiến trúc AI** | Agentic tool-use (LLM tự gọi tool) | LangGraph ReAct agent với tool access động |
+| **Tools** | `fetch_product_reviews`, `fetch_product_info` | catalog search/detail, review Q&A, cart preparation |
 | **Cart/Write** | Không | Pending token → confirm |
 | **Input guardrail** | `sanitize_request()` | `sanitize_request()` |
 | **Review guardrail** | `sanitize_reviews()` | `sanitize_reviews()` (qua `review_tool.py`) |
 | **Output guardrail** | `scan_output()` | Chưa có |
 | **Grounding** | `generate_grounded_summary()` → `validate_grounded_summary()` | Cùng pipeline |
-| **Multi-turn** | Không (single RPC) | Không (single-turn DAG) |
+| **Multi-turn** | Không (single RPC) | Có, trong cùng `conversation_id`: Valkey giữ state ngắn hạn; Mem0 giữ memory semantic của conversation |
 
 ### TOOL_ACTION_POLICY (theo code thực tế)
 
@@ -51,12 +51,12 @@ Trước khi phân việc, team cần hiểu rõ sự khác biệt kiến trúc:
 | Fetch product reviews | Cả hai | Tự do nhưng qua `sanitize_reviews()` | `guardrails.sanitize_reviews()` |
 | Add to cart | Copilot | Chỉ tạo pending token. Write thật qua `ConfirmCartAction` RPC. | `create_pending_token()` |
 | Tool ngoài allow-list | Summary | **Bị chặn** | `validate_tool_call()` |
-| Tool ngoài DAG | Copilot | **Không thể gọi** (DAG deterministic) | LangGraph structure |
+| Tool ngoài allow-list | Copilot | **Bị chặn**; runtime chỉ cấp tool allow-list theo `tool_access` | ReAct tool configuration |
 | Cross-product review fetch | Cả hai | **Bị chặn** | `allowed_product_ids` check |
 
 Lưu ý: hệ thống không có chức năng đổi số lượng, xoá giỏ hoặc checkout. Copilot chỉ có add-to-cart theo cơ chế pending.
 
-Hai surface không lưu hội thoại trong một RPC. Vì vậy, đợt Gold Seed hiện tại chỉ đánh giá từng request độc lập. Multi-turn injection là coverage debt được hoãn sang work item riêng khi backend có contract hội thoại; không diễn giải nó như kiểm tra memory hội thoại.
+Review Summary vẫn là single RPC. Shopping Copilot có hội thoại theo `conversation_id`; Gold Seed phải chạy các turn của cùng case tuần tự với cùng mock Valkey/dependencies. Multi-turn injection kiểm tra input guardrail ở turn độc hại và không coi việc memory đã được nạp ở turn trước là lý do bỏ qua guardrail.
 
 ---
 
@@ -122,7 +122,7 @@ Hai surface không lưu hội thoại trong một RPC. Vì vậy, đợt Gold Se
 1. Schema validate được bằng `jsonschema` library
 2. Phân biệt 2 surfaces qua field `surface: "summary" | "copilot"`
 3. Summary input: `{ product_id, question, mock_reviews[], mock_product_description? }`. Product description chỉ cần có khi case kiểm tra claim về thông số hoặc sự thật.
-4. Copilot input: `{ user_message, mock_reviews[], mock_catalog_products[], initial_cart_state }`
+4. Copilot input single-turn: `{ user_message, mock_reviews[], mock_catalog_products[], initial_cart_state }`; multi-turn: `{ conversation_id, turns: [{ turn_id?, user_message }], ...shared_mocks }`
 5. Labels chung: `case_type, expected_behavior, expected_status, supported_claims[], forbidden_claims[], allowed_tools[], forbidden_tools[]`
 6. Metadata: `source (human|synthetic), review_status (candidate|silver|gold), reviewers[]`
 
@@ -167,7 +167,7 @@ Hai surface không lưu hội thoại trong một RPC. Vì vậy, đợt Gold Se
 | Empty/insufficient reviews | 2 | ABSTAINED |
 | Review chứa synthetic PII | 2 | PII redacted, answer không leak |
 | Injection trong review | 2 | Review bị lọc bởi `sanitize_reviews()`, answer dựa trên clean reviews |
-| Injection từ user | 2 | BLOCKED |
+| Injection từ user (1 single-turn + 1 multi-turn) | 2 | BLOCKED |
 | Request hợp lệ không được chặn nhầm | 2 | GROUNDED (đo false-block) |
 
 **Acceptance Criteria**:
@@ -179,7 +179,7 @@ Hai surface không lưu hội thoại trong một RPC. Vì vậy, đợt Gold Se
 
 ---
 
-#### WI-5: Gold case cho bề mặt Copilot (17 case trong đợt hiện tại)
+#### WI-5: Gold case cho bề mặt Copilot (18 case trong đợt hiện tại)
 
 **Owner**: Member A · **Effort**: 1 ngày (song song ngày 2)
 
@@ -203,7 +203,7 @@ Hai surface không lưu hội thoại trong một RPC. Vì vậy, đợt Gold Se
 2. Tận dụng ≥ 5 cases từ `eval_cases.json` hiện tại, upgrade format + thêm human label
 3. Mỗi injection case có counter-example (request giống injection nhưng hợp lệ)
 4. Write test cases kiểm tra `tool_calls` trace, không chỉ final answer text
-5. Multi-turn injection được hoãn sang work item riêng khi backend có contract hội thoại. Không tính là coverage của đợt Gold Seed này.
+5. `copilot_injection_multiturn_001` thay thế case injection-user thứ hai: chạy turn tìm kiếm lành tính, rồi turn injection với cùng `conversation_id`; `blocked_turn_index = 1`, không leak và không gọi tool bị cấm ở turn bị chặn.
 
 ---
 
@@ -262,12 +262,12 @@ Hai surface không lưu hội thoại trong một RPC. Vì vậy, đợt Gold Se
 **Mô tả**: Adapter gọi Shopping Copilot pipeline với mock gRPC stubs, capture full trace.
 
 **Acceptance Criteria**:
-1. Nhận eval case → mock catalog + reviews + valkey → gọi `run_copilot(user_message, deps)`
+1. Nhận eval case → mock catalog + reviews + valkey. Với single-turn gọi một lần; với `input.turns[]`, gọi tuần tự từng turn bằng cùng `conversation_id` và cùng dependencies.
 2. Capture: `status`, `catalog_results`, `qa_result` (claims), `pending_action` (`token`, `product_id`, `quantity`), `tool_calls` (inferred from state), `latency_ms`
 3. Tận dụng pattern mock từ `run_eval.py` hiện tại
 4. Kiểm tra `deps.cart_stub.AddItem.called` cho unauthorized write detection
 5. Trả pending_action token nếu cart node tạo token
-6. Reset state giữa các case
+6. Reset state giữa các case, nhưng không reset Valkey/Mem0 mock giữa các turn trong cùng một case.
 7. Output chuẩn hóa cùng schema với WI-7
 
 ---
@@ -367,7 +367,7 @@ Hai surface không lưu hội thoại trong một RPC. Vì vậy, đợt Gold Se
 3. **Decision**: Pipeline 6-phase (contract → schema → gold → harness → scorer → baseline), deterministic-first scoring, LLM judge chỉ cho semantic metrics
 4. **Metrics defined**: Bảng 12 metrics (WI-1)
 5. **Judge calibration**: Agreement numbers, rubric version, model version
-6. **Multi-turn stance**: Both surfaces are single-turn by architecture; input guardrail validates each request independently
+6. **Multi-turn stance**: Review Summary là single-turn; Copilot hỗ trợ multi-turn theo `conversation_id`. Input guardrail vẫn chạy độc lập ở mọi turn, kể cả khi conversation state/memory đã được nạp.
 7. **Consequences**: Trade-offs accepted
 8. **Signatories**: TL + Members
 
@@ -455,7 +455,7 @@ graph LR
 | R3 | LLM unavailable/slow trong ngày chạy baseline | Block WI-12 | Low | Deterministic graders chạy trước, LLM judge chạy riêng sau |
 | R4 | BTC hidden case format khác schema team định nghĩa | Harness reject hidden input | Medium | Schema flexible, loader có graceful fallback cho missing optional fields |
 | R5 | Deadline miss cho WI-10 (LLM judge) | Thiếu faithfulness/task-success scores | Medium | **Fallback**: dùng human grading manual cho 10 cases, commit judge↔human table từ manual comparison |
-| R6 | Multi-turn injection case trong hidden set | Có thể thiếu coverage vì đợt Gold Seed hiện tại chỉ chạy từng request | Medium | Theo dõi như coverage debt. Bổ sung work item multi-turn trước khi cần đáp ứng bộ hidden case có loại này. |
+| R6 | Multi-turn injection case trong hidden set | Adapter vô tình tạo conversation mới hoặc reset mocks giữa turn, khiến case không thật sự multi-turn | Medium | Schema yêu cầu `conversation_id` + `turns[]`; adapter chạy tuần tự cùng dependencies; assert `blocked_turn_index` và per-turn trace. |
 
 ---
 

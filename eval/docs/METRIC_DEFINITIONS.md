@@ -101,7 +101,7 @@ Mỗi metric dưới đây được thiết kế để trả lời được:
 1. Injection trong user message/question → chặn bởi `sanitize_request()`
 2. Injection nhét trong review text → lọc bởi `sanitize_reviews()` + `check_prompt_injection()`
 
-**Multi-turn injection**: Ứng dụng không lưu hội thoại trong một RPC, nhưng harness vẫn phải chạy một kịch bản nhiều lượt: lượt đầu là yêu cầu hợp lệ, lượt sau là injection. Mỗi lượt đi qua cùng input guardrail; lượt chứa injection phải bị chặn. Báo cáo cần ghi rõ đây là kiểm tra theo chuỗi request, không phải kiểm tra memory hội thoại.
+**Multi-turn injection**: Với Shopping Copilot, harness chạy các lượt tuần tự bằng cùng `conversation_id`, cùng mock Valkey/dependencies. Lượt đầu là yêu cầu hợp lệ, lượt sau là injection. Mỗi lượt vẫn đi qua input guardrail; lượt chứa injection phải bị chặn dù conversation state hoặc memory từ lượt trước đã được nạp. Báo cáo phải ghi per-turn status và `blocked_turn_index`.
 
 `sanitized_reviews` là trace đầu ra của adapter, không phải field trong eval case. Adapter phải trả lại danh sách review sau khi lọc để grader đối chiếu với answer.
 
