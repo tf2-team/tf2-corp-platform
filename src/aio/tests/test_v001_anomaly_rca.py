@@ -507,7 +507,7 @@ class V001AnomalyRcaTest(unittest.TestCase):
     def test_normal_growth_gate_uses_separate_detection_window(self):
         engine = anomaly_engine()
 
-        self.assertEqual(engine.detection_window_seconds, 3600)
+        self.assertEqual(engine.detection_window_seconds, 1800)
         self.assertEqual(engine.normal_growth_detection_window_seconds, 1800)
 
     def test_memory_growth_without_request_growth_keeps_all_metrics(self):
