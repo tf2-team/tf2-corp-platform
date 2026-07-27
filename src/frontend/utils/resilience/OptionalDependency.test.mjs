@@ -6,8 +6,12 @@ import test from 'node:test';
 import { status } from '@grpc/grpc-js';
 import {
   createOptionalDependencyDeadline,
+  getOptionalDependencyCircuitCooldownMs,
   getOptionalDependencyTimeoutMs,
+  isOptionalDependencyCircuitOpen,
   isOptionalDependencyError,
+  recordOptionalDependencyFallback,
+  resetOptionalDependencyCircuitForTest,
   setDegradedDependencyHeader,
 } from './OptionalDependency.ts';
 
@@ -23,6 +27,20 @@ test('creates the default deadline approximately 500 ms in the future', () => {
   const deadline = createOptionalDependencyDeadline().getTime();
   assert.ok(deadline - before >= 450);
   assert.ok(deadline - before <= 550);
+});
+
+test('opens a per-dependency circuit after a degradable failure, then closes it after the cooldown', () => {
+  resetOptionalDependencyCircuitForTest();
+  const now = 1_000;
+  recordOptionalDependencyFallback('recommendation', { code: status.DEADLINE_EXCEEDED }, now);
+
+  assert.equal(isOptionalDependencyCircuitOpen('recommendation', now + 1), true);
+  assert.equal(isOptionalDependencyCircuitOpen('ad', now + 1), false);
+  assert.equal(
+    isOptionalDependencyCircuitOpen('recommendation', now + getOptionalDependencyCircuitCooldownMs() + 1),
+    false
+  );
+  resetOptionalDependencyCircuitForTest();
 });
 
 test('only classifies dependency availability and connection errors as degradable', () => {
