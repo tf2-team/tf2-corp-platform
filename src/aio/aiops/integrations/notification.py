@@ -112,9 +112,10 @@ def _discord_payload(message: NotificationMessage) -> dict[str, Any]:
         ("State", message.state),
         ("Service", message.service),
         ("Flow", message.flow),
-        ("Likely dependency", message.likely_dependency),
         ("Runbook", message.runbook_id),
     ]
+    if message.likely_dependency != "unknown":
+        fields.insert(3, ("Likely dependency", message.likely_dependency))
     return {
         "username": "TF2 AIOps",
         "allowed_mentions": {"parse": []},
