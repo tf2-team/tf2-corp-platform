@@ -11,4 +11,5 @@ tqdm>=4.66,<5
 drain3>=0.9,<1
 uvicorn[standard]>=0.35,<1
 prometheus-client>=0.22,<1
+setuptools>=80.10.2,<81
 wheel>=0.46.2,<1

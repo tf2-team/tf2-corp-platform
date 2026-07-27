@@ -10,7 +10,8 @@ pydantic==2.11.7
 pydantic-settings==2.10.1
 scikit-learn==1.7.1
 scipy==1.17.1
+setuptools==80.10.2
 statsmodels==0.14.5
 tqdm==4.67.1
 uvicorn[standard]==0.35.0
-wheel==0.46.2
+wheel==0.46.3
