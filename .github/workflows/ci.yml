@@ -383,10 +383,9 @@ jobs:
           # and will_not_fix OS packages otherwise block every PR despite rebuilds.
           ignore-unfixed: true
           severity: HIGH,CRITICAL
-          # Temporary, service-scoped exception requested by the tech lead while
-          # the AI team remediates shopping-copilot. Every baseline service remains
-          # fail-closed. Remove this exception when that image is handed back.
-          exit-code: ${{ matrix.service == 'shopping-copilot' && '0' || '1' }}
+          # Fail closed for every release service. HIGH/CRITICAL findings with a
+          # published fix must block the PR; no service-scoped release bypasses.
+          exit-code: "1"
 
       - name: Job summary
         if: always()
@@ -607,4 +606,49 @@ jobs:
       - name: Validate shared guardrail dependency
         run: >-
           python -c "from llm_guard.input_scanners import PromptInjection; from techx_ai_common import guardrails"
+
+  ci-gate:
+    name: CI gate
+    if: always()
+    needs:
+      - lint
+      - unit-tests
+      - pr-image-build
+      - semgrep-sast
+      - trufflehog-secrets
+      - trivy-iac-scan
+      - product-reviews-tests
+      - shopping-copilot-tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Enforce all required CI and security checks
+        env:
+          LINT_RESULT: ${{ needs.lint.result }}
+          UNIT_TESTS_RESULT: ${{ needs.unit-tests.result }}
+          PR_IMAGE_BUILD_RESULT: ${{ needs.pr-image-build.result }}
+          SEMGREP_RESULT: ${{ needs.semgrep-sast.result }}
+          TRUFFLEHOG_RESULT: ${{ needs.trufflehog-secrets.result }}
+          TRIVY_IAC_RESULT: ${{ needs.trivy-iac-scan.result }}
+          PRODUCT_REVIEWS_RESULT: ${{ needs.product-reviews-tests.result }}
+          SHOPPING_COPILOT_RESULT: ${{ needs.shopping-copilot-tests.result }}
+        run: |
+          set -euo pipefail
+          failed=0
+          for check in \
+            "lint:${LINT_RESULT}" \
+            "unit-tests:${UNIT_TESTS_RESULT}" \
+            "pr-image-build:${PR_IMAGE_BUILD_RESULT}" \
+            "semgrep-sast:${SEMGREP_RESULT}" \
+            "trufflehog-secrets:${TRUFFLEHOG_RESULT}" \
+            "trivy-iac-scan:${TRIVY_IAC_RESULT}" \
+            "product-reviews-tests:${PRODUCT_REVIEWS_RESULT}" \
+            "shopping-copilot-tests:${SHOPPING_COPILOT_RESULT}"; do
+            name="${check%%:*}"
+            result="${check#*:}"
+            if [[ "${result}" != "success" ]]; then
+              echo "::error::Required check '${name}' finished as '${result}'"
+              failed=1
+            fi
+          done
+          exit "${failed}"
 # Change trail: @hungxqt - 2026-07-23 - PR local image bake includes Trivy HIGH/CRITICAL gate
