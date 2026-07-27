@@ -25,7 +25,9 @@ class FakeNotificationSender:
 
 
 def observation(signal_id: str, value: float | None, quality: SignalQuality = SignalQuality.VERIFIED) -> Observation:
-    labels = {"service": "checkout", "dependency": "payment"} if signal_id == "checkout_payment_error_rate_5m" else {}
+    labels = {"service": "checkout"}
+    if signal_id == "checkout_payment_error_rate_5m":
+        labels["dependency"] = "payment"
     window = "24h" if signal_id == "checkout_bad_ratio_24h" else "5m"
     unit = "millicores" if signal_id.endswith("_cpu_millicores") else ("seconds" if "latency" in signal_id else "ratio")
     return Observation(signal_id=signal_id, value=value, unit=unit, window=window, quality=quality, labels=labels)
@@ -127,7 +129,8 @@ class ProdSimulationTest(unittest.TestCase):
             result = pipeline.run_once()
             pipeline.store.close()
 
-        self.assertEqual(result.incidents[0].service, "aiops")
+        self.assertEqual(result.incidents[0].service, "checkout")
+        self.assertEqual(sender.sent[0].summary, "signal_stale on checkout_cpu_millicores")
         self.assertEqual(sender.sent[0].runbook_id, "RB-MONITORING-LOSS")
 
     def test_metric_only_rca_creates_root_incident_notification(self):

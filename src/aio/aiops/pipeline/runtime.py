@@ -32,9 +32,9 @@ from aiops.remediation import (
     RemediationFeatureExtractor,
 )
 from aiops.schemas import ActionCatalogItem, ActionProposal, CandidateEvent, Incident, RemediationDecision, VerificationResult
-from aiops.shared.metrics import is_busy_infra_metric
+from aiops.shared.metrics import is_busy_infra_metric, is_memory_metric, is_oom_metric
 from aiops.shared.series import prepare_detector_series
-from aiops.shared.tail import evaluate_tail_change, metric_group
+from aiops.shared.tail import evaluate_tail_change, fixed_baseline_and_tail, metric_group
 from aiops.topology import TopologyGraph
 from aiops.verification import VerificationEngine
 from aiops.pipeline.analysis import (
@@ -140,8 +140,9 @@ class AiopsPipeline:
             only_incidents=True,
         )
 
-        rca_result = self._run_v001_rca(metric_series or [], analysis_incidents)
-        root_incidents = self._upsert_rca_root_incidents(rca_result, analysis_incidents, metric_series or [])
+        input_metric_series = metric_series or []
+        rca_result = self._run_v001_rca(input_metric_series, analysis_incidents)
+        root_incidents = self._upsert_rca_root_incidents(rca_result, analysis_incidents, prepare_detector_series(input_metric_series))
         if root_incidents:
             incidents.extend(root_incidents)
             analysis_incidents = incidents
@@ -294,6 +295,10 @@ class AiopsPipeline:
             return True
         config = self.rca_hyperparameters.get("anomaly", {})
         combined = self.rca_hyperparameters.get("combined", {})
+        detection_window_seconds = int(combined.get("detection_window_seconds", 0)) or None
+        start = int(self.rca_hyperparameters.get("min_points", combined.get("drift_min_points", 1))) - 1
+        if is_memory_metric(metric) and _service_oom_counter_increased(service, metric_series, detection_window_seconds, start):
+            return True
         match = next((item for item in metric_series if item.service == service and item.metric == metric), None)
         if match is None:
             return False
@@ -302,8 +307,8 @@ class AiopsPipeline:
         group = metric_group(metric)
         return evaluate_tail_change(
             match,
-            int(combined.get("detection_window_seconds", 0)) or None,
-            int(self.rca_hyperparameters.get("min_points", combined.get("drift_min_points", 1))) - 1,
+            detection_window_seconds,
+            start,
             int(config["min_tail_anomaly_buckets"][group]),
             float(config["min_relative_change_ratio"][group]),
             float(config["min_absolute_change"][group]),
@@ -612,6 +617,17 @@ def _filter_normal_growth_root_metrics(root_causes: list[RootCauseCandidate], no
     if suppressed:
         logger.info("AIOPS_RCA_BUSY_SUPPRESSED metrics=%s", {service: sorted(metrics) for service, metrics in suppressed.items()})
     return kept
+
+
+def _service_oom_counter_increased(service: str, series: list[MetricSeries], detection_window_seconds: int | None, start: int) -> bool:
+    for metric in series:
+        if metric.service != service or not is_oom_metric(metric.metric):
+            continue
+        values = [point.value for point in metric.points]
+        baseline, indexes = fixed_baseline_and_tail(metric, detection_window_seconds, start, values)
+        if baseline and indexes and max(values[index] for index in indexes) > max(baseline):
+            return True
+    return False
 
 
 def _combined_rca_hyperparameters(config: dict) -> dict:

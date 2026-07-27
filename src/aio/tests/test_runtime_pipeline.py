@@ -801,7 +801,7 @@ class RuntimePipelineTest(unittest.TestCase):
             skipped = pipeline._upsert_rca_root_incidents(
                 rca_result,
                 [],
-                [memory([100_000_000.0] * 30 + [105_000_000.0] * 15)],
+                [memory([100_000_000.0] * 30 + [104_000_000.0] * 15)],
             )
             notified = pipeline._upsert_rca_root_incidents(
                 rca_result,
@@ -813,6 +813,40 @@ class RuntimePipelineTest(unittest.TestCase):
 
         self.assertEqual(skipped, [])
         self.assertEqual([incident.service for incident in notified], ["frontend-proxy"])
+        self.assertEqual(notifications[0].summary, "rca_root_cause on memory_usage_bytes")
+
+    def test_pipeline_notifies_memory_root_when_oom_counter_increases(self):
+        settings = Settings()
+        hyperparameters = load_hyperparameters(settings.hyperparameters_path)["rca"]
+
+        with TemporaryDirectory() as tmp:
+            store = SQLiteIncidentStore(Path(tmp) / "aiops.sqlite3", environment=settings.environment)
+            pipeline = AiopsPipeline(
+                collector=StaticCollector([]),
+                detectors=[],
+                store=store,
+                policy=policy(settings),
+                rca_hyperparameters=hyperparameters,
+                **runtime_kwargs(settings),
+            )
+            rca_result = RcaResult(
+                root_causes=[
+                    RootCauseCandidate(service="email", score=1.0, root_cause_metrics=["memory_usage_bytes"])
+                ]
+            )
+
+            incidents = pipeline._upsert_rca_root_incidents(
+                rca_result,
+                [],
+                [
+                    metric("email", "memory_usage_bytes", [100_000_000.0] * 30 + [95_000_000.0] * 15),
+                    metric("email", "oom_events_total", [0.0] * 44 + [1.0]),
+                ],
+            )
+            notifications = store.pending_notifications_for(incidents)
+            store.close()
+
+        self.assertEqual([incident.service for incident in incidents], ["email"])
         self.assertEqual(notifications[0].summary, "rca_root_cause on memory_usage_bytes")
 
     def test_pipeline_filters_rca_cpu_root_by_tail_threshold(self):

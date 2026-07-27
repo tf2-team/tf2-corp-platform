@@ -298,7 +298,7 @@
     {
       "id": "ops02_monitoring_loss",
       "type": "no-data",
-      "enabled": true,
+      "enabled": false,
       "signal_ids": [
         "__all_prometheus__"
       ],

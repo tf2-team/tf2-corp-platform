@@ -9,7 +9,6 @@ import logging
 import os
 from pathlib import Path
 import re
-from statistics import linear_regression
 import warnings
 
 from aiops.anomaly.stats import mean, median, rolling_robust_scores, stdev
@@ -21,7 +20,6 @@ logger = logging.getLogger(__name__)
 CUSUM_TAIL_GROUPS = {"cpu", "memory", "latency", "socket_io"}
 NORMAL_GROWTH_BREAKOUT_REASONS = (
     "reason=oom_increased",
-    "reason=memory_oom_pattern",
     "reason=memory_increased_without_traffic",
     "reason=memory_shape_mismatch",
     "reason=error_increased",
@@ -295,7 +293,6 @@ class V001AnomalyEngine:
         traffic_shape_min_spearman: float,
         traffic_shape_max_lag_buckets: int,
         traffic_explanation: dict | None,
-        memory_oom: dict[str, float | int] | None,
         detection_window_seconds: int | None,
         normal_growth_detection_window_seconds: int | None,
     ):
@@ -311,17 +308,6 @@ class V001AnomalyEngine:
         self.traffic_shape_max_lag_buckets = traffic_shape_max_lag_buckets
         self.traffic_explanation = traffic_explanation
         self.page_hinkley_min_bucket_factor = page_hinkley_min_bucket_factor
-        memory_oom = memory_oom or {}
-        self.memory_oom_pre_tail_growth_ratio = float(memory_oom["pre_tail_growth_ratio"])
-        self.memory_oom_tail_drop_ratio = float(memory_oom["tail_drop_ratio"])
-        self.memory_oom_stable_baseline_spread_ratio = float(memory_oom["stable_baseline_spread_ratio"])
-        self.memory_oom_stable_baseline_min_abs = float(memory_oom["stable_baseline_min_abs"])
-        self.memory_oom_sustained_slope_ratio = float(memory_oom["sustained_slope_ratio"])
-        self.memory_oom_sustained_slope_min_abs = float(memory_oom["sustained_slope_min_abs"])
-        self.memory_oom_min_period = int(memory_oom["min_period"])
-        self.memory_oom_max_period = int(memory_oom["max_period"])
-        self.memory_oom_min_points = int(memory_oom["min_points"])
-        self.memory_oom_detection_window_seconds = int(memory_oom["detection_window_seconds"]) or None
         self.detection_window_seconds = detection_window_seconds
         self.normal_growth_detection_window_seconds = normal_growth_detection_window_seconds
         self.thresholds = {
@@ -331,13 +317,6 @@ class V001AnomalyEngine:
         }
         self.robust_drift = RobustDriftDetector(robust_drift_threshold, min_points, robust_drift_min_baseline_points, detection_window_seconds)
         self.ewma_stl = EwmaStlDetector(ewma_alpha, ewma_z_threshold, min_points, seasonal_period, detection_window_seconds)
-        self.memory_oom_ewma_stl = EwmaStlDetector(
-            float(memory_oom["ewma_alpha"]),
-            float(memory_oom["ewma_z_threshold"]),
-            self.memory_oom_min_points,
-            int(memory_oom["seasonal_period"]),
-            self.memory_oom_detection_window_seconds,
-        )
         self.isolation_forest = ServiceIsolationForestDetector(isolation_score_threshold, min_points, detection_window_seconds, isolation_score_scale)
         self.log_templates = LogTemplateMetricBuilder(
             drain3_config_path,
@@ -457,11 +436,12 @@ class V001AnomalyEngine:
         }
         self.last_normal_growth_metrics = {
             service: metrics
-            for service, service_series in by_service.items()
+            for service, (normal, _) in decisions.items()
+            if normal
             if service not in self.last_normal_growth_breakout_metrics
             if (
                 metrics := traffic_explained_metrics(
-                    service_series,
+                    by_service[service],
                     self.normal_growth_detection_window_seconds,
                     self.min_points - 1,
                     self.traffic_shape_max_lag_buckets,
@@ -499,48 +479,6 @@ class V001AnomalyEngine:
             self.traffic_shape_min_spearman,
             self.traffic_shape_max_lag_buckets,
             self.traffic_explanation,
-            memory_oom_detector=self._memory_oom_detected,
-        )
-
-    def _memory_oom_detected(self, memory: MetricSeries) -> bool:
-        if not is_memory_metric(memory.metric) or len(memory.points) < self.memory_oom_min_points:
-            return False
-        values = [point.value for point in memory.points]
-        if max(values) <= 0:
-            return False
-        period = max(self.memory_oom_min_period, min(self.memory_oom_max_period, len(values) // 3))
-        baseline = values[: -2 * period]
-        pre_tail = values[-2 * period : -period]
-        tail = values[-max(2, period // 2) :]
-        if not baseline or not pre_tail or not tail:
-            return False
-        if not self._memory_oom_state_transition(values, period, baseline, pre_tail, tail):
-            return False
-        return self._memory_ewma_stl_tail_anomaly_count(memory) >= self.min_tail_anomaly_buckets["memory"]
-
-    def _memory_oom_state_transition(self, values: list[float], period: int, baseline: list[float], pre_tail: list[float], tail: list[float]) -> bool:
-        stable = values[: -3 * period] or baseline
-        base = median(stable)
-        baseline_spread = max(abs(value - base) for value in stable) if stable else 0.0
-        stable_baseline = baseline_spread <= max(abs(base) * self.memory_oom_stable_baseline_spread_ratio, self.memory_oom_stable_baseline_min_abs)
-        ramp = values[-3 * period : -max(2, period // 2)]
-        slope = _linear_slope(ramp)
-        sustained_growth = median(pre_tail) > median(baseline) * self.memory_oom_pre_tail_growth_ratio or slope > max(abs(base) * self.memory_oom_sustained_slope_ratio, self.memory_oom_sustained_slope_min_abs)
-        sharp_drawdown = median(tail) <= median(pre_tail) * self.memory_oom_tail_drop_ratio
-        return stable_baseline and sustained_growth and sharp_drawdown
-
-    def _memory_ewma_stl_tail_anomaly_count(self, memory: MetricSeries) -> int:
-        values = [point.value for point in memory.points]
-        residuals = self.memory_oom_ewma_stl._residuals(values)
-        period = max(self.memory_oom_min_period, min(self.memory_oom_max_period, len(values) // 3))
-        tail_window = max(2, period // 2)
-        indexes = range(max(0, len(values) - tail_window), len(values))
-        if len(values) < period + tail_window:
-            return 0
-        return sum(
-            1
-            for score, index in rolling_robust_scores(residuals, indexes, period, period)
-            if residuals[index] < median(residuals[index - period : index]) and score >= self.memory_oom_ewma_stl.z_threshold
         )
 
 def _breakout_metrics_for_reason(detail: str, series: list[MetricSeries]) -> set[str]:
@@ -557,10 +495,6 @@ def _zero_score_metrics_for_detail(detail: str) -> set[str]:
     if match := re.search(r"\bzero_metrics=([^ ]+)", detail):
         return {item for item in match.group(1).split(",") if item}
     return set()
-
-
-def _linear_slope(values: list[float]) -> float:
-    return linear_regression(range(len(values)), values).slope if len(values) >= 2 else 0.0
 
 
 def build_v001_anomaly_engine(config: dict, **overrides) -> V001AnomalyEngine:
@@ -591,7 +525,6 @@ def build_v001_anomaly_engine(config: dict, **overrides) -> V001AnomalyEngine:
         traffic_shape_min_spearman=float(anomaly["traffic_shape_min_spearman"]),
         traffic_shape_max_lag_buckets=int(anomaly["traffic_shape_max_lag_buckets"]),
         traffic_explanation=anomaly.get("traffic_explanation"),
-        memory_oom=anomaly["memory_oom"],
         detection_window_seconds=int(anomaly["detection_window_seconds"]) or None,
         normal_growth_detection_window_seconds=int(anomaly["normal_growth_detection_window_seconds"]) or None,
     )

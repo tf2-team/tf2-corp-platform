@@ -6,7 +6,6 @@ from __future__ import annotations
 import warnings
 from dataclasses import dataclass
 from statistics import median
-from typing import Callable
 
 from aiops.schemas import MetricSeries
 from aiops.shared.metrics import is_root_cause_metric
@@ -169,7 +168,6 @@ def normal_traffic_growth_decision(
     traffic_shape_min_spearman: float = 0.7,
     traffic_shape_max_lag_buckets: int = 0,
     traffic_explanation: dict | None = None,
-    memory_oom_detector: Callable[[MetricSeries], bool] | None = None,
 ) -> tuple[bool, str]:
     required_infra_groups = ("cpu", "socket_io")
     groups = ("request_rate", *required_infra_groups, "memory")
@@ -190,8 +188,6 @@ def normal_traffic_growth_decision(
             baseline, indexes = fixed_baseline_and_tail(metric, detection_window_seconds, start, values)
             if not request_increased and baseline and indexes and max(values[index] for index in indexes) > max(baseline):
                 return False, "reason=oom_increased"
-        if not request_increased and memory_oom_detector is not None and metric_group(metric.metric) == "memory" and memory_oom_detector(metric):
-            return False, "reason=memory_oom_pattern"
     memory_shape_metrics = []
     primary_direction_mismatch = False
     for metric in series:
@@ -203,8 +199,6 @@ def normal_traffic_growth_decision(
         if group == "memory" and change.significant and not request_increased and any(change.values[index] > change.baseline for index in change.indexes):
             return False, "reason=memory_increased_without_traffic"
         if group == "memory" and change.significant and change.indexes:
-            if request_increased and memory_oom_detector is not None and memory_oom_detector(metric):
-                continue
             tail_median = median(change.values[index] for index in change.indexes)
             if request_increased and tail_median < change.baseline:
                 return False, "reason=memory_shape_mismatch"

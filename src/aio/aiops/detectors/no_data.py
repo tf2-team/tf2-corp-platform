@@ -39,16 +39,18 @@ class NoDataDetector(Detector):
         for feature in features:
             if feature.signal_id not in self.required_signal_ids or feature.status != "unknown":
                 continue
+            service = feature.labels.get("service") or feature.labels.get("service_name") or self.service
+            flow = feature.labels.get("flow") or self.flow
             log_items.append(
                 f"detector={self.detector_id} signal={feature.signal_id} quality={feature.quality.value} "
-                f"service={self.service} severity={self.severity}"
+                f"service={service} severity={self.severity}"
             )
             candidates.append(
                 candidate_from_feature(
                     feature,
                     detector_id=self.detector_id,
-                    flow=self.flow,
-                    service=self.service,
+                    flow=flow,
+                    service=service,
                     severity=self.severity,
                     threshold=None,
                     reason=f"signal_{feature.quality.value}",

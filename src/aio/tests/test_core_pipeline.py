@@ -212,14 +212,53 @@ class DetectorEngineTest(unittest.TestCase):
 
     def test_no_data_detector_opens_monitoring_loss_candidate(self):
         features = FeatureBuilder().build(
-            [Observation(signal_id="checkout_cpu_millicores", value=None, unit="millicores", window="5m", quality=SignalQuality.STALE)]
+            [
+                Observation(
+                    signal_id="checkout_cpu_millicores",
+                    value=None,
+                    unit="millicores",
+                    window="5m",
+                    quality=SignalQuality.STALE,
+                    labels={"service": "checkout", "flow": "checkout"},
+                )
+            ]
         )
         candidates = DetectorEngine([no_data_detector()]).evaluate(features)
 
         self.assertEqual(candidates[0].detector_id, "ops02_monitoring_loss")
+        self.assertEqual(candidates[0].service, "checkout")
+        self.assertEqual(candidates[0].flow, "checkout")
         self.assertEqual(candidates[0].unit, "millicores")
         self.assertEqual(candidates[0].window, "5m")
-        self.assertEqual(candidates[0].flow, "monitoring")
+
+    def test_no_data_detector_uses_signal_service_instead_of_aiops_for_monitoring_loss(self):
+        features = FeatureBuilder().build(
+            [
+                Observation(
+                    signal_id="checkout_cpu_millicores",
+                    value=None,
+                    unit="millicores",
+                    window="5m",
+                    quality=SignalQuality.STALE,
+                    labels={"service": "checkout", "flow": "checkout"},
+                ),
+                Observation(
+                    signal_id="payment_cpu_millicores",
+                    value=None,
+                    unit="millicores",
+                    window="5m",
+                    quality=SignalQuality.STALE,
+                    labels={"service": "payment", "flow": "payment"},
+                ),
+            ]
+        )
+
+        candidates = DetectorEngine([no_data_detector()]).evaluate(features)
+
+        self.assertEqual(
+            [(candidate.service, candidate.signal_id) for candidate in candidates],
+            [("checkout", "checkout_cpu_millicores"), ("payment", "payment_cpu_millicores")],
+        )
 
     def test_no_data_detector_logs_one_block_for_multiple_signals(self):
         features = FeatureBuilder().build(

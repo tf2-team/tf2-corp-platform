@@ -84,7 +84,7 @@ class SettingsTest(unittest.TestCase):
         self.assertEqual(config["rca"]["anomaly"]["robust_drift_min_baseline_points"], 30)
         self.assertEqual(config["rca"]["anomaly"]["isolation_score_scale"], 10.0)
         self.assertEqual(config["rca"]["anomaly"]["page_hinkley_min_bucket_factor"], 2.0)
-        self.assertEqual(config["rca"]["anomaly"]["detection_window_seconds"], 900)
+        self.assertEqual(config["rca"]["anomaly"]["detection_window_seconds"], 3600)
         self.assertEqual(config["rca"]["anomaly"]["normal_growth_detection_window_seconds"], 1800)
         self.assertEqual(config["rca"]["anomaly"]["evidence_window_seconds"], 900)
         self.assertEqual(config["rca"]["anomaly"]["no_evidence_multiplier"], 0.5)
@@ -101,19 +101,6 @@ class SettingsTest(unittest.TestCase):
                 "weights": {"cpu": 0.45, "socket_io": 0.35, "memory": 0.2},
             },
         )
-        self.assertEqual(config["rca"]["anomaly"]["memory_oom"]["pre_tail_growth_ratio"], 1.2)
-        self.assertEqual(config["rca"]["anomaly"]["memory_oom"]["tail_drop_ratio"], 0.7)
-        self.assertEqual(config["rca"]["anomaly"]["memory_oom"]["stable_baseline_spread_ratio"], 0.05)
-        self.assertEqual(config["rca"]["anomaly"]["memory_oom"]["stable_baseline_min_abs"], 1.0)
-        self.assertEqual(config["rca"]["anomaly"]["memory_oom"]["sustained_slope_ratio"], 0.01)
-        self.assertEqual(config["rca"]["anomaly"]["memory_oom"]["sustained_slope_min_abs"], 1.0)
-        self.assertEqual(config["rca"]["anomaly"]["memory_oom"]["min_period"], 2)
-        self.assertEqual(config["rca"]["anomaly"]["memory_oom"]["max_period"], 7)
-        self.assertEqual(config["rca"]["anomaly"]["memory_oom"]["ewma_alpha"], 0.1)
-        self.assertEqual(config["rca"]["anomaly"]["memory_oom"]["ewma_z_threshold"], 4.0)
-        self.assertEqual(config["rca"]["anomaly"]["memory_oom"]["seasonal_period"], 1)
-        self.assertEqual(config["rca"]["anomaly"]["memory_oom"]["min_points"], 30)
-        self.assertEqual(config["rca"]["anomaly"]["memory_oom"]["detection_window_seconds"], 900)
         self.assertEqual(config["rca"]["anomaly"]["min_tail_anomaly_buckets"]["latency"], 3)
         self.assertEqual(config["rca"]["anomaly"]["min_tail_anomaly_buckets"]["cpu"], 3)
         self.assertEqual(config["rca"]["anomaly"]["min_relative_change_ratio"]["cpu"], 0.3)
@@ -176,7 +163,7 @@ class SettingsTest(unittest.TestCase):
                 "rrf_k": 20,
                 "drift_min_points": 30,
                 "drift_score_threshold": 4.0,
-                "detection_window_seconds": 900,
+                "detection_window_seconds": 3600,
                 "canonical_service_suffixes": [],
                 "metric_aliases": {},
                 "ranker_weights": {"graph": 0.3, "earliest_drift": 0.5, "correlation": 0.05, "downstream_coverage": 0.15},
@@ -192,7 +179,7 @@ class SettingsTest(unittest.TestCase):
         self.assertNotIn("ops01_checkout_slo", config["detectors"]["thresholds"])
         profile = load_prometheus_query_registry(Path("config/prometheus_queries.json")).collection_profiles["one_second"]
         self.assertEqual(profile.step_seconds, 1)
-        self.assertEqual(profile.lookback_seconds, 3600)
+        self.assertEqual(profile.lookback_seconds, 7200)
         self.assertGreaterEqual(
             profile.lookback_seconds // profile.detector_bucket_seconds + 1,
             config["rca"]["min_points"],
