@@ -78,6 +78,7 @@
     "sigstore": "4.1.1",
     "sharp": "$sharp",
     "lodash": "4.18.0",
-    "postcss": "8.5.18"
+    "postcss": "8.5.18",
+    "brace-expansion": "5.0.8"
   }
 }
