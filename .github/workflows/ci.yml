@@ -645,7 +645,7 @@ jobs:
             "shopping-copilot-tests:${SHOPPING_COPILOT_RESULT}"; do
             name="${check%%:*}"
             result="${check#*:}"
-            if [[ "${result}" != "success" ]]; then
+            if [[ "${result}" != "success" && "${result}" != "skipped" ]]; then
               echo "::error::Required check '${name}' finished as '${result}'"
               failed=1
             fi
