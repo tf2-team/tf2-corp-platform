@@ -9,6 +9,7 @@ from statistics import median
 from typing import Callable
 
 from aiops.schemas import MetricSeries
+from aiops.shared.metrics import is_root_cause_metric
 
 
 @dataclass(frozen=True)
@@ -82,6 +83,42 @@ def cusum_tail_change(metric: MetricSeries, detection_window_seconds: int | None
         positive_buckets += int(delta > 0)
         cumulative = max(0.0, cumulative + delta)
         if positive_buckets >= min_buckets and cumulative >= limit:
+            first_changed = metric.points[index].timestamp
+            break
+    return TailChange(
+        indexes=change.indexes,
+        values=change.values,
+        baseline=change.baseline,
+        changed_buckets=change.changed_buckets,
+        first_changed_at=first_changed or change.first_changed_at,
+        significant=first_changed is not None,
+    )
+
+
+def page_hinkley_tail_change(
+    metric: MetricSeries,
+    detection_window_seconds: int | None,
+    start: int,
+    min_buckets: int,
+    min_relative: float,
+    min_absolute: float,
+    min_bucket_factor: float = 2.0,
+) -> TailChange:
+    change = evaluate_tail_change(metric, detection_window_seconds, start, min_buckets, min_relative, min_absolute)
+    if change.significant or not change.indexes:
+        return change
+    threshold = max(min_absolute, abs(change.baseline) * min_relative)
+    tolerance = threshold / max(min_bucket_factor, min_buckets)
+    cumulative = 0.0
+    minimum = 0.0
+    first_changed = None
+    positive_buckets = 0
+    for index in change.indexes:
+        delta = change.values[index] - change.baseline - tolerance
+        positive_buckets += int(delta > 0)
+        cumulative += delta
+        minimum = min(minimum, cumulative)
+        if positive_buckets >= min_buckets and cumulative - minimum >= threshold:
             first_changed = metric.points[index].timestamp
             break
     return TailChange(
@@ -185,10 +222,22 @@ def normal_traffic_growth_decision(
             if decreased >= min_tail_anomaly_buckets[group] and change.indexes and median(change.values[index] for index in change.indexes) < change.baseline:
                 return False, "reason=ready_pods_decreased"
     request = by_group["request_rate"]
+    config = traffic_explanation or {}
+    dtw_onset_threshold = float(config.get("dtw_onset_threshold", 0.1))
+    dtw_cost_scale = float(config.get("dtw_cost_scale", 2.0))
     scores = {
         group: max(
             (
-                tail_aligned_dtw_similarity(rate, metric, detection_window_seconds, start, max_warp_buckets=traffic_shape_max_lag_buckets, enforce_onset=group in required_infra_groups)
+                tail_aligned_dtw_similarity(
+                    rate,
+                    metric,
+                    detection_window_seconds,
+                    start,
+                    max_warp_buckets=traffic_shape_max_lag_buckets,
+                    enforce_onset=group in required_infra_groups,
+                    onset_threshold=dtw_onset_threshold,
+                    cost_scale=dtw_cost_scale,
+                )
                 for rate in request
                 for metric in (memory_shape_metrics if group == "memory" else by_group[group])
             ),
@@ -200,7 +249,6 @@ def normal_traffic_growth_decision(
     memory_detail = f" memory={scores['memory']:.3f}" if "memory" in scores else ""
     if primary_direction_mismatch:
         return False, f"reason=shape_mismatch direction=primary cpu={scores['cpu']:.3f} socket_io={scores['socket_io']:.3f}{memory_detail}"
-    config = traffic_explanation or {}
     weights = config.get("weights", {"cpu": 0.5, "socket_io": 0.5, "memory": 0.0})
     threshold = float(config.get("threshold", traffic_shape_min_spearman))
     min_primary = float(config.get("min_primary_shape", traffic_shape_min_spearman))
@@ -225,11 +273,14 @@ def traffic_explained_metrics(
     request = [metric for metric in series if metric_group(metric.metric) == "request_rate"]
     if not request:
         return set()
-    threshold = float((traffic_explanation or {}).get("threshold", 0.7))
+    config = traffic_explanation or {}
+    threshold = float(config.get("threshold", 0.7))
+    dtw_onset_threshold = float(config.get("dtw_onset_threshold", 0.1))
+    dtw_cost_scale = float(config.get("dtw_cost_scale", 2.0))
     return {
         metric.metric
         for metric in series
-        if metric_group(metric.metric) != "request_rate"
+        if is_root_cause_metric(metric.metric)
         and max(
             (
                 tail_aligned_dtw_similarity(
@@ -239,6 +290,8 @@ def traffic_explained_metrics(
                     start,
                     max_warp_buckets=traffic_shape_max_lag_buckets,
                     enforce_onset=metric_group(metric.metric) in {"cpu", "socket_io"},
+                    onset_threshold=dtw_onset_threshold,
+                    cost_scale=dtw_cost_scale,
                 )
                 for rate in request
             ),
@@ -248,10 +301,20 @@ def traffic_explained_metrics(
     }
 
 
-def tail_aligned_dtw_similarity(left: MetricSeries, right: MetricSeries, detection_window_seconds: int | None, start: int, max_warp_buckets: int = 0, *, enforce_onset: bool = False) -> float:
+def tail_aligned_dtw_similarity(
+    left: MetricSeries,
+    right: MetricSeries,
+    detection_window_seconds: int | None,
+    start: int,
+    max_warp_buckets: int = 0,
+    *,
+    enforce_onset: bool = False,
+    onset_threshold: float = 0.1,
+    cost_scale: float = 2.0,
+) -> float:
     tail = tail_indexes(left, detection_window_seconds, start)
     if not tail:
-        return aligned_dtw_similarity(left, right, max_warp_buckets)
+        return aligned_dtw_similarity(left, right, max_warp_buckets, enforce_onset=enforce_onset, onset_threshold=onset_threshold, cost_scale=cost_scale)
     first = max(0, tail.start - max(1, max_warp_buckets + 1))
     indexes = set(range(first, tail.stop))
     return aligned_dtw_similarity(
@@ -259,10 +322,20 @@ def tail_aligned_dtw_similarity(left: MetricSeries, right: MetricSeries, detecti
         right,
         max_warp_buckets,
         enforce_onset=enforce_onset,
+        onset_threshold=onset_threshold,
+        cost_scale=cost_scale,
     )
 
 
-def aligned_dtw_similarity(left: MetricSeries, right: MetricSeries, max_warp_buckets: int = 0, *, enforce_onset: bool = False) -> float:
+def aligned_dtw_similarity(
+    left: MetricSeries,
+    right: MetricSeries,
+    max_warp_buckets: int = 0,
+    *,
+    enforce_onset: bool = False,
+    onset_threshold: float = 0.1,
+    cost_scale: float = 2.0,
+) -> float:
     from scipy.spatial import distance
 
     pairs = _aligned_pairs(left, right)
@@ -273,8 +346,10 @@ def aligned_dtw_similarity(left: MetricSeries, right: MetricSeries, max_warp_buc
     if not any(left_values) or not any(right_values):
         return 0.0
     if enforce_onset:
-        left_first = next(index for index, value in enumerate(left_values) if value > 0.1)
-        right_first = next(index for index, value in enumerate(right_values) if value > 0.1)
+        left_first = next((index for index, value in enumerate(left_values) if value > onset_threshold), None)
+        right_first = next((index for index, value in enumerate(right_values) if value > onset_threshold), None)
+        if left_first is None or right_first is None:
+            return 0.0
         if abs(left_first - right_first) > max(0, max_warp_buckets):
             return 0.0
     window = max(0, max_warp_buckets)
@@ -289,7 +364,7 @@ def aligned_dtw_similarity(left: MetricSeries, right: MetricSeries, max_warp_buc
             current[right_index] = cost + min(previous[right_index], current[right_index - 1], previous[right_index - 1])
         previous = current
     cost = previous[-1] / max(len(left_values), len(right_values))
-    return 1.0 / (1.0 + 2.0 * cost)
+    return 1.0 / (1.0 + cost_scale * cost)
 
 
 def tail_aligned_spearman(left: MetricSeries, right: MetricSeries, detection_window_seconds: int | None, start: int, right_lag_buckets: int = 0) -> float:

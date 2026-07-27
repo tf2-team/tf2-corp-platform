@@ -329,7 +329,7 @@ class AiopsPipeline:
             return True
         if self.topology_graph is None or not self.topology_graph.contains(service) or not self.topology_graph.contains(other):
             return False
-        return other in self.topology_graph.neighborhood(service, max_hops)
+        return self.topology_graph.has_dependency_path(service, other, max_hops) or self.topology_graph.has_dependency_path(other, service, max_hops)
 
     def _run_v001_rca(self, metric_series: list[MetricSeries], incidents: list[Incident] | None = None) -> RcaResult:
         detector_series = prepare_detector_series(metric_series)
@@ -621,8 +621,10 @@ def _combined_rca_hyperparameters(config: dict) -> dict:
         "min_tail_anomaly_buckets": anomaly["min_tail_anomaly_buckets"],
         "min_relative_change_ratio": anomaly["min_relative_change_ratio"],
         "min_absolute_change": anomaly["min_absolute_change"],
+        "page_hinkley_min_bucket_factor": anomaly["page_hinkley_min_bucket_factor"],
         "traffic_shape_min_spearman": anomaly["traffic_shape_min_spearman"],
         "traffic_shape_max_lag_buckets": anomaly["traffic_shape_max_lag_buckets"],
+        "topology_max_hops": config.get("topology_max_hops", 2),
     }
 
 

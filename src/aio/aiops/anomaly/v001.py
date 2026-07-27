@@ -15,7 +15,7 @@ import warnings
 from aiops.anomaly.stats import mean, median, rolling_robust_scores, stdev
 from aiops.schemas import AnomalyFinding, MetricSeries
 from aiops.shared.metrics import is_error_metric, is_memory_metric, is_oom_metric
-from aiops.shared.tail import cusum_tail_change, evaluate_tail_change, fixed_baseline_and_tail, metric_group, normal_traffic_growth_decision, traffic_explained_metrics
+from aiops.shared.tail import cusum_tail_change, evaluate_tail_change, fixed_baseline_and_tail, metric_group, normal_traffic_growth_decision, page_hinkley_tail_change, traffic_explained_metrics
 
 logger = logging.getLogger(__name__)
 CUSUM_TAIL_GROUPS = {"cpu", "memory", "latency", "socket_io"}
@@ -115,10 +115,11 @@ class RobustDriftDetector:
 
 
 class ServiceIsolationForestDetector:
-    def __init__(self, score_threshold: float, min_points: int, detection_window_seconds: int | None = None):
+    def __init__(self, score_threshold: float, min_points: int, detection_window_seconds: int | None = None, score_scale: float = 10.0):
         self.score_threshold = score_threshold
         self.min_points = min_points
         self.detection_window_seconds = detection_window_seconds
+        self.score_scale = score_scale
 
     def evaluate(self, series: list[MetricSeries]) -> list[AnomalyFinding]:
         by_service: dict[str, list[MetricSeries]] = defaultdict(list)
@@ -144,7 +145,7 @@ class ServiceIsolationForestDetector:
             rows = self._normalized_rows(rows, tail_indexes[0])
             baseline_rows = rows[: tail_indexes[0]]
             tail_rows = [rows[index] for index in tail_indexes]
-            scored = [(score * 10.0, index) for score, index in zip(self._scores(baseline_rows, tail_rows), tail_indexes)]
+            scored = [(score * self.score_scale, index) for score, index in zip(self._scores(baseline_rows, tail_rows), tail_indexes)]
             service_score, service_index = max(scored, default=(0.0, 0))
             if service_score < self.score_threshold:
                 continue
@@ -286,6 +287,8 @@ class V001AnomalyEngine:
         single_algorithm_min_normalized_score: float,
         robust_drift_threshold: float,
         robust_drift_min_baseline_points: int,
+        isolation_score_scale: float,
+        page_hinkley_min_bucket_factor: float,
         min_tail_anomaly_buckets: dict[str, int],
         min_relative_change_ratio: dict[str, float],
         min_absolute_change: dict[str, float],
@@ -307,9 +310,14 @@ class V001AnomalyEngine:
         self.traffic_shape_min_spearman = traffic_shape_min_spearman
         self.traffic_shape_max_lag_buckets = traffic_shape_max_lag_buckets
         self.traffic_explanation = traffic_explanation
+        self.page_hinkley_min_bucket_factor = page_hinkley_min_bucket_factor
         memory_oom = memory_oom or {}
         self.memory_oom_pre_tail_growth_ratio = float(memory_oom["pre_tail_growth_ratio"])
         self.memory_oom_tail_drop_ratio = float(memory_oom["tail_drop_ratio"])
+        self.memory_oom_stable_baseline_spread_ratio = float(memory_oom["stable_baseline_spread_ratio"])
+        self.memory_oom_stable_baseline_min_abs = float(memory_oom["stable_baseline_min_abs"])
+        self.memory_oom_sustained_slope_ratio = float(memory_oom["sustained_slope_ratio"])
+        self.memory_oom_sustained_slope_min_abs = float(memory_oom["sustained_slope_min_abs"])
         self.memory_oom_min_period = int(memory_oom["min_period"])
         self.memory_oom_max_period = int(memory_oom["max_period"])
         self.memory_oom_min_points = int(memory_oom["min_points"])
@@ -330,7 +338,7 @@ class V001AnomalyEngine:
             int(memory_oom["seasonal_period"]),
             self.memory_oom_detection_window_seconds,
         )
-        self.isolation_forest = ServiceIsolationForestDetector(isolation_score_threshold, min_points, detection_window_seconds)
+        self.isolation_forest = ServiceIsolationForestDetector(isolation_score_threshold, min_points, detection_window_seconds, isolation_score_scale)
         self.log_templates = LogTemplateMetricBuilder(
             drain3_config_path,
             log_bucket_seconds,
@@ -378,14 +386,25 @@ class V001AnomalyEngine:
         )
         return change.significant or (
             group in CUSUM_TAIL_GROUPS
-            and cusum_tail_change(
-                metric,
-                self.detection_window_seconds,
-                self.min_points - 1,
-                self.min_tail_anomaly_buckets[group],
-                self.min_relative_change_ratio[group],
-                self.min_absolute_change[group],
-            ).significant
+            and (
+                cusum_tail_change(
+                    metric,
+                    self.detection_window_seconds,
+                    self.min_points - 1,
+                    self.min_tail_anomaly_buckets[group],
+                    self.min_relative_change_ratio[group],
+                    self.min_absolute_change[group],
+                ).significant
+                or page_hinkley_tail_change(
+                    metric,
+                    self.detection_window_seconds,
+                    self.min_points - 1,
+                    self.min_tail_anomaly_buckets[group],
+                    self.min_relative_change_ratio[group],
+                    self.min_absolute_change[group],
+                    self.page_hinkley_min_bucket_factor,
+                ).significant
+            )
         )
 
     def _correlated_log_findings(self, log_findings: list[AnomalyFinding], metric_findings: list[AnomalyFinding]) -> list[AnomalyFinding]:
@@ -503,10 +522,10 @@ class V001AnomalyEngine:
         stable = values[: -3 * period] or baseline
         base = median(stable)
         baseline_spread = max(abs(value - base) for value in stable) if stable else 0.0
-        stable_baseline = baseline_spread <= max(abs(base) * 0.05, 1.0)
+        stable_baseline = baseline_spread <= max(abs(base) * self.memory_oom_stable_baseline_spread_ratio, self.memory_oom_stable_baseline_min_abs)
         ramp = values[-3 * period : -max(2, period // 2)]
         slope = _linear_slope(ramp)
-        sustained_growth = median(pre_tail) > median(baseline) * self.memory_oom_pre_tail_growth_ratio or slope > max(abs(base) * 0.01, 1.0)
+        sustained_growth = median(pre_tail) > median(baseline) * self.memory_oom_pre_tail_growth_ratio or slope > max(abs(base) * self.memory_oom_sustained_slope_ratio, self.memory_oom_sustained_slope_min_abs)
         sharp_drawdown = median(tail) <= median(pre_tail) * self.memory_oom_tail_drop_ratio
         return stable_baseline and sustained_growth and sharp_drawdown
 
@@ -564,6 +583,8 @@ def build_v001_anomaly_engine(config: dict, **overrides) -> V001AnomalyEngine:
         single_algorithm_min_normalized_score=float(anomaly["single_algorithm_min_normalized_score"]),
         robust_drift_threshold=float(anomaly["robust_drift_threshold"]),
         robust_drift_min_baseline_points=int(anomaly["robust_drift_min_baseline_points"]),
+        isolation_score_scale=float(anomaly["isolation_score_scale"]),
+        page_hinkley_min_bucket_factor=float(anomaly["page_hinkley_min_bucket_factor"]),
         min_tail_anomaly_buckets={key: int(value) for key, value in anomaly["min_tail_anomaly_buckets"].items()},
         min_relative_change_ratio={key: float(value) for key, value in anomaly["min_relative_change_ratio"].items()},
         min_absolute_change={key: float(value) for key, value in anomaly["min_absolute_change"].items()},

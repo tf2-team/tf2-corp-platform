@@ -124,13 +124,13 @@ class Enricher:
                 traces = self.jaeger.search_traces(service, limit=self.corroboration_trace_limit, start=(end - window_seconds) * 1_000_000, end=end * 1_000_000).get("data", [])
                 update["available_sources"].add("trace")
                 failures = [
-                    (int(span.get("startTime", end * 1_000_000)) // 1_000_000, trace, span)
+                    (_span_depth(trace, span), int(span.get("startTime", end * 1_000_000)) // 1_000_000, trace, span)
                     for trace in traces
                     for span in trace.get("spans", [])
                     if _span_is_corroborating_failure(span, window_seconds, self.corroboration_trace_max_request_seconds)
                 ]
                 if failures:
-                    timestamp, trace, span = min(failures, key=lambda item: item[0])
+                    _, timestamp, trace, span = min(failures, key=lambda item: (item[0], item[1]))
                     trace_id = str(trace.get("traceID", "unknown"))
                     update.update(
                         trace_failure=True,
@@ -143,7 +143,9 @@ class Enricher:
                         trace_duration_ms=float(span.get("duration", 0)) / 1000,
                     )
                     if self.opensearch is not None:
-                        update.update(self._trace_log_failure(trace_id, timestamp, window_seconds))
+                        trace_log = self._trace_log_failure(trace_id, timestamp, window_seconds)
+                        if trace_log.get("log_failure") or not update.get("log_failure"):
+                            update.update(trace_log)
             except Exception:
                 pass
         return TelemetryCorroboration(**update)
@@ -315,6 +317,21 @@ def _span_failure_status(span: dict) -> str:
 def _span_service(trace: dict, span: dict) -> str:
     process_id = span.get("processID")
     return trace.get("processes", {}).get(process_id, {}).get("serviceName", "unknown")
+
+
+def _span_depth(trace: dict, span: dict) -> int:
+    parents = {
+        item.get("spanID"): next((ref.get("spanID") for ref in item.get("references", []) if ref.get("spanID")), None)
+        for item in trace.get("spans", [])
+    }
+    depth = 0
+    parent = parents.get(span.get("spanID"))
+    seen = set()
+    while parent and parent not in seen:
+        seen.add(parent)
+        depth += 1
+        parent = parents.get(parent)
+    return depth
 
 
 def _hit_text(hit: dict, limit: int) -> str:

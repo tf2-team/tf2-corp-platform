@@ -122,6 +122,8 @@
       "single_algorithm_min_normalized_score": 2.0,
       "robust_drift_threshold": 4.0,
       "robust_drift_min_baseline_points": 30,
+      "isolation_score_scale": 10.0,
+      "page_hinkley_min_bucket_factor": 2.0,
       "detection_window_seconds": 900,
       "normal_growth_detection_window_seconds": 1800,
       "evidence_window_seconds": 900,
@@ -132,6 +134,10 @@
       "memory_oom": {
         "pre_tail_growth_ratio": 1.2,
         "tail_drop_ratio": 0.7,
+        "stable_baseline_spread_ratio": 0.05,
+        "stable_baseline_min_abs": 1.0,
+        "sustained_slope_ratio": 0.01,
+        "sustained_slope_min_abs": 1.0,
         "min_period": 2,
         "max_period": 7,
         "ewma_alpha": 0.1,
@@ -181,6 +187,8 @@
       "traffic_explanation": {
         "threshold": 0.65,
         "min_primary_shape": 0.55,
+        "dtw_onset_threshold": 0.1,
+        "dtw_cost_scale": 2.0,
         "weights": {
           "cpu": 0.45,
           "socket_io": 0.35,
@@ -191,7 +199,9 @@
     "graph": {
       "damping": 0.85,
       "pagerank_weight": 0.7,
-      "timestamp_weight": 0.3
+      "timestamp_weight": 0.3,
+      "pagerank_max_iter": 100,
+      "pagerank_tolerance": 1.0e-8
     },
     "combined": {
       "rrf_k": 20,
@@ -203,7 +213,8 @@
       "ranker_weights": {
         "graph": 0.3,
         "earliest_drift": 0.5,
-        "correlation": 0.05
+        "correlation": 0.05,
+        "downstream_coverage": 0.15
       }
     }
   }

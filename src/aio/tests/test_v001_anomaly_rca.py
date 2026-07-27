@@ -18,7 +18,7 @@ from aiops.rca.graph import GraphTraversalRca
 from aiops.rca import V001RcaEngine
 from aiops.schemas import AnomalyFinding, MetricPoint, MetricSeries, PipelineResult, PipelineRunRequest, RcaResult, RootCauseCandidate, RuntimeConfig, TelemetryCorroboration
 from aiops.shared.series import prepare_detector_series
-from aiops.shared.tail import aligned_spearman, cusum_tail_change, evaluate_tail_change, fixed_baseline_and_tail, median3, metric_group, normal_traffic_growth_decision, point_changed, tail_aligned_dtw_similarity
+from aiops.shared.tail import aligned_spearman, cusum_tail_change, evaluate_tail_change, fixed_baseline_and_tail, median3, metric_group, normal_traffic_growth_decision, page_hinkley_tail_change, point_changed, tail_aligned_dtw_similarity
 from scipy.stats import ConstantInputWarning
 
 
@@ -65,8 +65,10 @@ def rca_engine(config: RuntimeConfig, **combined_overrides) -> V001RcaEngine:
         "min_tail_anomaly_buckets": hyperparameters["anomaly"]["min_tail_anomaly_buckets"],
         "min_relative_change_ratio": hyperparameters["anomaly"]["min_relative_change_ratio"],
         "min_absolute_change": hyperparameters["anomaly"]["min_absolute_change"],
+        "page_hinkley_min_bucket_factor": hyperparameters["anomaly"]["page_hinkley_min_bucket_factor"],
         "traffic_shape_min_spearman": hyperparameters["anomaly"]["traffic_shape_min_spearman"],
         "traffic_shape_max_lag_buckets": hyperparameters["anomaly"]["traffic_shape_max_lag_buckets"],
+        "topology_max_hops": load_hyperparameters(Path("config/hyperparameters.json"))["correlation"]["topology_max_hops"],
         **combined_overrides,
     }
     return V001RcaEngine(config, hyperparameters["graph"], combined)
@@ -188,6 +190,12 @@ class V001AnomalyRcaTest(unittest.TestCase):
 
         self.assertFalse(evaluate_tail_change(series, 900, 29, 3, 0.3, 10.0).significant)
         self.assertTrue(cusum_tail_change(series, 900, 29, 3, 0.3, 10.0).significant)
+
+    def test_page_hinkley_tail_change_detects_creeping_latency_drift(self):
+        series = minute_metric("payment", "p95_latency_5m", [1.0] * 30 + [1.04 + index * 0.01 for index in range(15)])
+
+        self.assertFalse(evaluate_tail_change(series, 900, 29, 3, 0.25, 0.05).significant)
+        self.assertTrue(page_hinkley_tail_change(series, 900, 29, 3, 0.25, 0.05).significant)
 
     def test_socket_io_metric_uses_socket_io_thresholds(self):
         self.assertEqual(metric_group("socket_io_bytes_per_second"), "socket_io")
@@ -1102,6 +1110,17 @@ class V001AnomalyRcaTest(unittest.TestCase):
         result = rca_engine(runtime_config).rank(findings, [], top_k=5)
 
         self.assertEqual([root.service for root in result.root_causes], ["payment"])
+
+    def test_rca_scores_downstream_coverage_for_early_dependency_root(self):
+        runtime_config = load_runtime_config(Path("config/runtime.json"))
+        findings = [
+            AnomalyFinding(algorithm="weighted_sum", service="payment", metric="cpu_millicores", signal_id="payment_cpu_millicores", score=1.0, timestamp=900),
+            AnomalyFinding(algorithm="weighted_sum", service="checkout", metric="cpu_millicores", signal_id="checkout_cpu_millicores", score=0.8, timestamp=1000),
+        ]
+
+        result = rca_engine(runtime_config).rank(findings, [], top_k=5)
+
+        self.assertTrue(any("downstream_coverage_score=1.000" in item for item in result.root_causes[0].evidence))
 
     def test_rca_drops_tiny_disk_drift(self):
         runtime_config = load_runtime_config(Path("config/runtime.json"))

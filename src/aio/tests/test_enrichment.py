@@ -212,6 +212,35 @@ class EnricherTest(unittest.TestCase):
         self.assertEqual(query["query"]["bool"]["filter"][0]["range"]["@timestamp"], {"gte": "1970-01-01T00:01:40Z", "lte": "1970-01-01T00:16:40Z"})
         self.assertIn("exception", str(query).lower())
 
+    def test_corroboration_prefers_root_most_failed_span(self):
+        jaeger = FakeJaeger()
+        jaeger.search_traces = lambda service, limit=20, start=None, end=None: {
+            "data": [
+                {
+                    "traceID": "trace-tree",
+                    "processes": {"p1": {"serviceName": "checkout"}, "p2": {"serviceName": "payment"}},
+                    "spans": [
+                        {"spanID": "root", "processID": "p1", "operationName": "checkout", "startTime": 950_000_000, "tags": [{"key": "error", "value": True}]},
+                        {
+                            "spanID": "child",
+                            "processID": "p2",
+                            "operationName": "charge",
+                            "startTime": 900_000_000,
+                            "duration": 12_000,
+                            "tags": [{"key": "otel.status_code", "value": "ERROR"}],
+                            "references": [{"spanID": "root"}],
+                        },
+                    ],
+                }
+            ]
+        }
+
+        result = Enricher(jaeger=jaeger).corroborate([self.finding()], window_seconds=900)["checkout"]
+
+        self.assertEqual(result.trace_root_service, "checkout")
+        self.assertEqual(result.trace_operation, "checkout")
+        self.assertEqual(result.trace_failure_timestamp, 950)
+
     def test_latency_only_trace_is_available_but_not_failure(self):
         jaeger = FakeJaeger()
         jaeger.search_traces = lambda service, limit=20, start=None, end=None: {

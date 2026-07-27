@@ -82,6 +82,8 @@ class SettingsTest(unittest.TestCase):
         self.assertEqual(config["rca"]["anomaly"]["single_algorithm_min_normalized_score"], 2.0)
         self.assertEqual(config["rca"]["anomaly"]["robust_drift_threshold"], 4.0)
         self.assertEqual(config["rca"]["anomaly"]["robust_drift_min_baseline_points"], 30)
+        self.assertEqual(config["rca"]["anomaly"]["isolation_score_scale"], 10.0)
+        self.assertEqual(config["rca"]["anomaly"]["page_hinkley_min_bucket_factor"], 2.0)
         self.assertEqual(config["rca"]["anomaly"]["detection_window_seconds"], 900)
         self.assertEqual(config["rca"]["anomaly"]["normal_growth_detection_window_seconds"], 1800)
         self.assertEqual(config["rca"]["anomaly"]["evidence_window_seconds"], 900)
@@ -94,11 +96,17 @@ class SettingsTest(unittest.TestCase):
             {
                 "threshold": 0.65,
                 "min_primary_shape": 0.55,
+                "dtw_onset_threshold": 0.1,
+                "dtw_cost_scale": 2.0,
                 "weights": {"cpu": 0.45, "socket_io": 0.35, "memory": 0.2},
             },
         )
         self.assertEqual(config["rca"]["anomaly"]["memory_oom"]["pre_tail_growth_ratio"], 1.2)
         self.assertEqual(config["rca"]["anomaly"]["memory_oom"]["tail_drop_ratio"], 0.7)
+        self.assertEqual(config["rca"]["anomaly"]["memory_oom"]["stable_baseline_spread_ratio"], 0.05)
+        self.assertEqual(config["rca"]["anomaly"]["memory_oom"]["stable_baseline_min_abs"], 1.0)
+        self.assertEqual(config["rca"]["anomaly"]["memory_oom"]["sustained_slope_ratio"], 0.01)
+        self.assertEqual(config["rca"]["anomaly"]["memory_oom"]["sustained_slope_min_abs"], 1.0)
         self.assertEqual(config["rca"]["anomaly"]["memory_oom"]["min_period"], 2)
         self.assertEqual(config["rca"]["anomaly"]["memory_oom"]["max_period"], 7)
         self.assertEqual(config["rca"]["anomaly"]["memory_oom"]["ewma_alpha"], 0.1)
@@ -121,6 +129,8 @@ class SettingsTest(unittest.TestCase):
         self.assertEqual(config["rca"]["graph"]["damping"], 0.85)
         self.assertEqual(config["rca"]["graph"]["pagerank_weight"], 0.7)
         self.assertEqual(config["rca"]["graph"]["timestamp_weight"], 0.3)
+        self.assertEqual(config["rca"]["graph"]["pagerank_max_iter"], 100)
+        self.assertEqual(config["rca"]["graph"]["pagerank_tolerance"], 1.0e-8)
         self.assertEqual(config["correlation"]["suppress_window_seconds"], 300)
         self.assertEqual(config["incident"]["count_reset_seconds"], 300)
         self.assertEqual(config["incident"]["notification_cooldown_seconds"], 300)
@@ -169,7 +179,7 @@ class SettingsTest(unittest.TestCase):
                 "detection_window_seconds": 900,
                 "canonical_service_suffixes": [],
                 "metric_aliases": {},
-                "ranker_weights": {"graph": 0.3, "earliest_drift": 0.5, "correlation": 0.05},
+                "ranker_weights": {"graph": 0.3, "earliest_drift": 0.5, "correlation": 0.05, "downstream_coverage": 0.15},
             },
         )
         self.assertEqual(config["remediation"]["similarity_weights"]["service"], 0.35)

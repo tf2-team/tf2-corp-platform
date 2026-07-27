@@ -14,12 +14,16 @@ class GraphTraversalRca:
         damping: float,
         pagerank_weight: float,
         timestamp_weight: float,
+        pagerank_max_iter: int = 100,
+        pagerank_tolerance: float = 1.0e-8,
         topology_graph: TopologyGraph | None = None,
     ):
         self.topology_graph = topology_graph or TopologyGraph(config)
         self.damping = damping
         self.pagerank_weight = pagerank_weight
         self.timestamp_weight = timestamp_weight
+        self.pagerank_max_iter = pagerank_max_iter
+        self.pagerank_tolerance = pagerank_tolerance
 
     def rank_services(self, findings: list[AnomalyFinding]) -> dict[str, float]:
         seed_scores: dict[str, float] = {}
@@ -32,7 +36,7 @@ class GraphTraversalRca:
         if not seed_scores:
             return {}
 
-        pagerank = self.topology_graph.personalized_pagerank(seed_scores, self.damping)
+        pagerank = self.topology_graph.personalized_pagerank(seed_scores, self.damping, self.pagerank_max_iter, self.pagerank_tolerance)
         timestamp_scores = self._timestamp_scores(timestamps)
         max_seed = max(seed_scores.values())
         combined = {

@@ -9,7 +9,7 @@ from aiops.anomaly.stats import robust_score
 from aiops.rca.graph import GraphTraversalRca
 from aiops.schemas import AnomalyFinding, MetricSeries, RcaResult, RootCauseCandidate, RuntimeConfig, TelemetryCorroboration
 from aiops.shared.metrics import is_root_cause_metric, metric_priority
-from aiops.shared.tail import cusum_tail_change, evaluate_tail_change, fixed_baseline_and_tail, metric_group, tail_aligned_spearman
+from aiops.shared.tail import cusum_tail_change, evaluate_tail_change, fixed_baseline_and_tail, metric_group, page_hinkley_tail_change, tail_aligned_spearman
 from aiops.topology import TopologyGraph
 
 CUSUM_TAIL_GROUPS = {"cpu", "memory", "latency", "socket_io"}
@@ -33,8 +33,10 @@ class V001RcaEngine:
         self.min_tail_anomaly_buckets = {key: int(value) for key, value in combined_hyperparameters["min_tail_anomaly_buckets"].items()}
         self.min_relative_change_ratio = {key: float(value) for key, value in combined_hyperparameters["min_relative_change_ratio"].items()}
         self.min_absolute_change = {key: float(value) for key, value in combined_hyperparameters["min_absolute_change"].items()}
+        self.page_hinkley_min_bucket_factor = float(combined_hyperparameters["page_hinkley_min_bucket_factor"])
         self.traffic_shape_min_spearman = float(combined_hyperparameters["traffic_shape_min_spearman"])
         self.traffic_shape_max_lag_buckets = int(combined_hyperparameters["traffic_shape_max_lag_buckets"])
+        self.topology_max_hops = int(combined_hyperparameters["topology_max_hops"])
         self.canonical_service_suffixes = tuple(combined_hyperparameters["canonical_service_suffixes"])
         self.metric_aliases = combined_hyperparameters["metric_aliases"]
         self.graph = GraphTraversalRca(
@@ -42,6 +44,8 @@ class V001RcaEngine:
             damping=graph_hyperparameters["damping"],
             pagerank_weight=graph_hyperparameters["pagerank_weight"],
             timestamp_weight=graph_hyperparameters["timestamp_weight"],
+            pagerank_max_iter=int(graph_hyperparameters["pagerank_max_iter"]),
+            pagerank_tolerance=float(graph_hyperparameters["pagerank_tolerance"]),
             topology_graph=self.topology_graph,
         )
 
@@ -90,11 +94,13 @@ class V001RcaEngine:
         graph_scores = self.graph.rank_services(root_findings)
         earliest_scores = self._earliest_drift_scores(rca_series)
         correlation_scores = self._correlation_scores(rca_series, findings, series)
+        downstream_coverage_scores = self._downstream_coverage_scores(root_findings)
         service_scores = self._weighted_rrf(
             {
                 "graph": graph_scores,
                 "earliest_drift": earliest_scores,
                 "correlation": correlation_scores,
+                "downstream_coverage": downstream_coverage_scores,
             }
         )
         anomaly_services = {finding.service for finding in root_findings if finding.service != "global"}
@@ -141,6 +147,7 @@ class V001RcaEngine:
                         f"graph_score={graph_scores.get(service, 0.0):.3f}",
                         f"earliest_drift_score={earliest_scores.get(service, 0.0):.3f}",
                         f"correlation_score={correlation_scores.get(service, 0.0):.3f}",
+                        f"downstream_coverage_score={downstream_coverage_scores.get(service, 0.0):.3f}",
                         f"weighted_rrf_score={rank_score:.3f}",
                         f"evidence_strength={evidence_strength.get(service, 0.0):.3f}",
                         *log_details.get(service, []),
@@ -152,6 +159,27 @@ class V001RcaEngine:
             if len(candidates) >= top_k:
                 break
         return RcaResult(anomalies=findings, root_causes=self._suppress_downstream_symptoms(candidates, root_findings))
+
+    def _downstream_coverage_scores(self, findings: list[AnomalyFinding]) -> dict[str, float]:
+        first_seen: dict[str, int] = {}
+        strength: dict[str, float] = {}
+        for finding in findings:
+            if finding.service == "global":
+                continue
+            first_seen[finding.service] = min(first_seen.get(finding.service, finding.timestamp), finding.timestamp)
+            strength[finding.service] = max(strength.get(finding.service, 0.0), finding.score)
+        scores = {
+            root: sum(
+                strength.get(service, 0.0)
+                for service in first_seen
+                if service != root
+                and self.topology_graph.has_dependency_path(service, root, self.topology_max_hops)
+                and first_seen[root] < first_seen[service]
+            )
+            for root in first_seen
+        }
+        maximum = max(scores.values(), default=0.0)
+        return {service: score / maximum for service, score in scores.items() if maximum and score > 0}
 
     def _trace_log_root_findings(self, root_findings: list[AnomalyFinding], corroboration: dict[str, TelemetryCorroboration]) -> list[AnomalyFinding]:
         existing = {(finding.service, finding.metric) for finding in root_findings}
@@ -206,17 +234,17 @@ class V001RcaEngine:
         for finding in findings:
             if finding.service != "global":
                 first_seen[finding.service] = min(first_seen.get(finding.service, finding.timestamp), finding.timestamp)
-        kept: list[RootCauseCandidate] = []
+        suppressed: set[str] = set()
         for candidate in candidates:
             if any(
-                self.topology_graph.has_dependency_path(candidate.service, root.service)
+                self.topology_graph.has_dependency_path(candidate.service, root.service, self.topology_max_hops)
                 and first_seen.get(root.service, 0) < first_seen.get(candidate.service, 0)
                 and root.score >= candidate.score
-                for root in kept
+                for root in candidates
+                if root.service != candidate.service
             ):
-                continue
-            kept.append(candidate)
-        return kept
+                suppressed.add(candidate.service)
+        return [candidate for candidate in candidates if candidate.service not in suppressed]
 
     def _earliest_drift_scores(self, series: list[MetricSeries]) -> dict[str, float]:
         drift_indexes: dict[str, int] = {}
@@ -271,14 +299,25 @@ class V001RcaEngine:
         )
         return change.significant or (
             group in CUSUM_TAIL_GROUPS
-            and cusum_tail_change(
-                metric,
-                self.detection_window_seconds,
-                self.drift_min_points - 1,
-                self.min_tail_anomaly_buckets[group],
-                self.min_relative_change_ratio[group],
-                self.min_absolute_change[group],
-            ).significant
+            and (
+                cusum_tail_change(
+                    metric,
+                    self.detection_window_seconds,
+                    self.drift_min_points - 1,
+                    self.min_tail_anomaly_buckets[group],
+                    self.min_relative_change_ratio[group],
+                    self.min_absolute_change[group],
+                ).significant
+                or page_hinkley_tail_change(
+                    metric,
+                    self.detection_window_seconds,
+                    self.drift_min_points - 1,
+                    self.min_tail_anomaly_buckets[group],
+                    self.min_relative_change_ratio[group],
+                    self.min_absolute_change[group],
+                    self.page_hinkley_min_bucket_factor,
+                ).significant
+            )
         )
 
     def _correlation_scores(

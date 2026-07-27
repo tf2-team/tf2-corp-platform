@@ -56,7 +56,7 @@ class TopologyGraph:
         graph = self.graph.to_undirected(as_view=True)
         return set(nx.single_source_shortest_path_length(graph, service, cutoff=max_hops))
 
-    def personalized_pagerank(self, seed_scores: dict[str, float], damping: float) -> dict[str, float]:
+    def personalized_pagerank(self, seed_scores: dict[str, float], damping: float, max_iter: int = 100, tolerance: float = 1.0e-8) -> dict[str, float]:
         if not seed_scores:
             return {}
         graph = nx.DiGraph(self.graph)
@@ -71,6 +71,6 @@ class TopologyGraph:
             alpha=damping,
             personalization=personalization,
             dangling=uniform_dangling,
-            max_iter=100,
-            tol=1.0e-8,
+            max_iter=max_iter,
+            tol=tolerance,
         )
