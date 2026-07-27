@@ -1,0 +1,70 @@
+{
+  "generated_at_utc": "2026-07-27T01:55:59.981046+00:00",
+  "infrastructure_errors": [],
+  "pass": true,
+  "run_id": "20260727T015440Z",
+  "summaries": [
+    {
+      "breaker_log_evidence": {
+        "product-reviews": {
+          "bedrock_breaker_half_open": false,
+          "bedrock_breaker_opened": false,
+          "bedrock_breaker_recovered": false,
+          "bedrock_breaker_rejected": false
+        },
+        "shopping-copilot": {
+          "bedrock_breaker_half_open": false,
+          "bedrock_breaker_opened": false,
+          "bedrock_breaker_recovered": false,
+          "bedrock_breaker_rejected": false
+        }
+      },
+      "container_ids_after": {
+        "product-reviews": "2ecb8cd90fa85fcd43e4281176fa189c3285fdd7e238e698ad6e30ff5b0b612e",
+        "shopping-copilot": "3bf76fe60d36590a710280d45d87f77cdc26b0fe96d53f7b620bbeadb1f3b52f"
+      },
+      "container_ids_before": {
+        "product-reviews": "540c9ed50218ff48a1db7ae49fd1dbfbc7b8bb360c198ee04fefb04605b4f0b1",
+        "shopping-copilot": "01b78c98129dba2a725406e9d89e8358219f83ad9b1319da5f05a21c462b12e8"
+      },
+      "fault_mode": "malformed_json",
+      "pass": true,
+      "product_id": "0PUK6V6EV0",
+      "product_name": "Solar System Color Imager",
+      "results": [
+        {
+          "checks": {
+            "fallback": true,
+            "no_tool_args_executed": true,
+            "safe_reason": true
+          },
+          "claim_source_ids": [],
+          "claims": 0,
+          "elapsed_ms": 10234.0,
+          "pass": true,
+          "reason": "LLM or dependency error: InvalidModelOutputError",
+          "status": "FALLBACK",
+          "surface": "product-reviews"
+        },
+        {
+          "checks": {
+            "fallback": true,
+            "no_tool_args_executed": true,
+            "safe_reason": true
+          },
+          "claim_source_ids": [],
+          "claims": 0,
+          "elapsed_ms": 1562.0,
+          "pass": true,
+          "pending_action_token": "",
+          "product_ids": [],
+          "products": 0,
+          "reason": "Shopping assistance is temporarily unavailable. Please try again shortly.",
+          "status": "FALLBACK",
+          "surface": "shopping-copilot"
+        }
+      ],
+      "scenario": "malformed-json"
+    }
+  ]
+}

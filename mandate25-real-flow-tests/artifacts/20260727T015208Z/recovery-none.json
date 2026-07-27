@@ -1,0 +1,64 @@
+{
+  "breaker_log_evidence": {
+    "product-reviews": {
+      "bedrock_breaker_half_open": false,
+      "bedrock_breaker_opened": false,
+      "bedrock_breaker_recovered": false,
+      "bedrock_breaker_rejected": false
+    },
+    "shopping-copilot": {
+      "bedrock_breaker_half_open": false,
+      "bedrock_breaker_opened": false,
+      "bedrock_breaker_recovered": false,
+      "bedrock_breaker_rejected": false
+    }
+  },
+  "container_ids_after": {
+    "product-reviews": "540c9ed50218ff48a1db7ae49fd1dbfbc7b8bb360c198ee04fefb04605b4f0b1",
+    "shopping-copilot": "01b78c98129dba2a725406e9d89e8358219f83ad9b1319da5f05a21c462b12e8"
+  },
+  "container_ids_before": {
+    "product-reviews": "48bd97588fe8df1bf7b890733710c6df7c5350d6bfc7187da58c7519e1239442",
+    "shopping-copilot": "25931877fa7482fb4840613968da943eaa6aca6e6e055e23697dadaeca27789b"
+  },
+  "fault_mode": "none",
+  "pass": false,
+  "product_id": "0PUK6V6EV0",
+  "product_name": "Solar System Color Imager",
+  "results": [
+    {
+      "checks": {
+        "not_fallback": false,
+        "recovery_response": false,
+        "safe_reason": true
+      },
+      "claim_source_ids": [],
+      "claims": 0,
+      "elapsed_ms": 13813.0,
+      "pass": false,
+      "reason": "LLM or dependency error: InvalidModelOutputError",
+      "status": "FALLBACK",
+      "surface": "product-reviews"
+    },
+    {
+      "checks": {
+        "not_fallback": true,
+        "recovery_response": true,
+        "safe_reason": true
+      },
+      "claim_source_ids": [],
+      "claims": 0,
+      "elapsed_ms": 4203.0,
+      "pass": true,
+      "pending_action_token": "",
+      "product_ids": [
+        "0PUK6V6EV0"
+      ],
+      "products": 1,
+      "reason": "",
+      "status": "GROUNDED",
+      "surface": "shopping-copilot"
+    }
+  ],
+  "scenario": "recovery"
+}
