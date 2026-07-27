@@ -14,3 +14,7 @@ dependencies = { file = ["requirements.in"] }
 
 [tool.setuptools.packages.find]
 include = ["aiops*"]
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["tests"]

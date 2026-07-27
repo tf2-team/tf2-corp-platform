@@ -30,8 +30,8 @@ class FakeAnomalyEngine:
             AnomalyFinding(
                 algorithm="test",
                 service="payment",
-                metric="error_ratio_5m",
-                signal_id="payment_error_ratio_5m",
+                metric="root_fault_score",
+                signal_id="payment_root_fault_score",
                 score=8.0,
                 timestamp=int(CAPTURED_AT.timestamp()),
             )
@@ -49,7 +49,7 @@ class FakeRcaEngine:
                 RootCauseCandidate(
                     service="payment",
                     score=8.0,
-                    root_cause_metrics=["error_ratio_5m"],
+                    root_cause_metrics=["root_fault_score"],
                     evidence=["test real-series bridge"],
                 )
             ][:top_k],

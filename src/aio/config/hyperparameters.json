@@ -79,6 +79,7 @@
   },
   "no_data": {
     "missing_confidence": 1.0,
+    "stale_confidence": 1.0,
     "unknown_confidence": 0.7
   },
   "qualification": {

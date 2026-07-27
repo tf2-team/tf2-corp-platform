@@ -25,9 +25,10 @@ class FakeNotificationSender:
 
 
 def observation(signal_id: str, value: float | None, quality: SignalQuality = SignalQuality.VERIFIED) -> Observation:
-    labels = {"service": "checkout"}
+    labels = {"service": signal_id.split("_", 1)[0]}
     if signal_id == "checkout_payment_error_rate_5m":
         labels["dependency"] = "payment"
+        labels["service"] = "checkout"
     window = "24h" if signal_id == "checkout_bad_ratio_24h" else "5m"
     unit = "millicores" if signal_id.endswith("_cpu_millicores") else ("seconds" if "latency" in signal_id else "ratio")
     return Observation(signal_id=signal_id, value=value, unit=unit, window=window, quality=quality, labels=labels)

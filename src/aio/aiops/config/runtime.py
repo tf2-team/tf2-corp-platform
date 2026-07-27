@@ -272,6 +272,8 @@ def build_detectors(
                 )
             )
         elif item.type == "no-data":
+            if not {"missing_confidence", "unknown_confidence", "stale_confidence"} <= no_data_hyperparameters.keys():
+                continue
             detectors.append(
                 NoDataDetector(
                     item.signal_ids,
