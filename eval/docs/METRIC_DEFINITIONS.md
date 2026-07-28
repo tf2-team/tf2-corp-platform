@@ -20,17 +20,17 @@ Mỗi metric dưới đây được thiết kế để trả lời được:
 |---|---|
 | **Metric** | `faithfulness` |
 | **Purpose** | Mỗi claim trong answer phải được chống lưng bởi source (review hoặc product description) |
-| **Unit** | Claim-level |
+| **Unit** | Claim-level khi chấm; case-level khi tổng hợp |
 | **Applies to** | Cả hai surface |
 | **Input** | `answer`, `claims[]`, `mock_reviews[]`, `mock_product_description` |
 | **Đạt khi** | Claim được judge đánh giá `SUPPORTED`: nội dung khớp với source được phép. |
 | **Fail when** | Claim `CONTRADICTED` (sai so với source) hoặc `NOT_ENOUGH_INFORMATION` (source được phép không đủ để khẳng định). |
-| **Aggregate** | `faithfulness_rate = SUPPORTED / total_claims` |
+| **Aggregate** | Với mỗi case có ít nhất một claim, tính `case_faithfulness = supported_claims / total_claims_in_case`; report lấy trung bình cộng `case_faithfulness` của các case đó. Case không có claim bị loại khỏi giá trị trung bình. |
 | **Ngưỡng cứng** | Không. Mandate không đặt ngưỡng cứng; kết quả được chấm tương đối và qua hidden cases. |
 | **Scorer** | LLM judge (semantic matching) + deterministic fabricated-number check |
 | **Why LLM** | Claim có thể paraphrase source; keyword overlap không đủ cho semantic equivalence |
 | **Calibration** | Judge phải được calibrate với ≥ 10 human-labeled cases, báo agreement |
-| **Limitations** | Judge có thể thiên vị wording; cần rubric rõ và disagree analysis |
+| **Limitations** | Judge có thể thiên vị wording; cần rubric rõ và disagree analysis. Cách macro-average này cho mỗi case trọng số như nhau, không phụ thuộc case có bao nhiêu claim. |
 
 **Grounding source mapping** (per Mandate):
 
@@ -49,15 +49,18 @@ Judge tách claim từ answer trước khi chấm. `product_fact` chỉ được
 |---|---|
 | **Metric** | `hallucination_rate` |
 | **Purpose** | Tỷ lệ claims bịa thông tin không có trong source |
-| **Unit** | Claim-level |
+| **Unit** | Claim-level khi chấm; case-level khi tổng hợp |
 | **Applies to** | Cả hai surface |
 | **Input** | `answer`, `claims[]`, `mock_reviews[]`, `mock_product_description` |
 | **Pass when** | Claim không chứa thông tin fabricated |
 | **Fail when** | Claim chứa số liệu, so sánh, hoặc sự kiện không tồn tại trong bất kỳ source nào |
-| **Aggregate** | `hallucination_rate = (CONTRADICTED + NOT_ENOUGH_INFORMATION) / total_claims` |
+| **Aggregate** | Với mỗi case có ít nhất một claim, tính `case_hallucination_rate = unsupported_claims / total_claims_in_case`; report lấy trung bình cộng `case_hallucination_rate` của các case đó. Case không có claim bị loại khỏi giá trị trung bình. |
 | **Hard bar** | **No** |
 | **Scorer** | Deterministic (fabricated-number check từ `grounding.py`) + LLM judge cho semantic hallucination |
 | **Why hybrid** | Số fabricated dễ bắt bằng regex; nhưng semantic hallucination ("pin tốt" → "pin dùng 20 giờ") cần LLM |
+
+Giống faithfulness, đây là macro-average theo case. Mỗi case có trọng số như nhau
+dù số claim khác nhau.
 
 ---
 

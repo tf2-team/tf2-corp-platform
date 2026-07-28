@@ -1,3 +1,7 @@
+#!/usr/bin/python
+# Copyright The OpenTelemetry Authors
+# SPDX-License-Identifier: Apache-2.0
+
 """Run the real Product Reviews pipeline with deterministic review data."""
 
 from __future__ import annotations

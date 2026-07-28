@@ -1,3 +1,7 @@
+#!/usr/bin/python
+# Copyright The OpenTelemetry Authors
+# SPDX-License-Identifier: Apache-2.0
+
 """Claim-level LLM judging for semantic Mandate 14 metrics."""
 
 from __future__ import annotations

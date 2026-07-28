@@ -1,3 +1,7 @@
+#!/usr/bin/python
+# Copyright The OpenTelemetry Authors
+# SPDX-License-Identifier: Apache-2.0
+
 """Run labeled datasets through the real LLM, baseline, or integrated pipeline."""
 
 from __future__ import annotations

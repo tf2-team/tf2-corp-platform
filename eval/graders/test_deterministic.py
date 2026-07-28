@@ -1,3 +1,7 @@
+#!/usr/bin/python
+# Copyright The OpenTelemetry Authors
+# SPDX-License-Identifier: Apache-2.0
+
 import unittest
 
 from graders.deterministic import grade_abstention, grade_false_block, grade_grounding_numbers, grade_multiturn_injection, grade_review_injection, grade_safety, record_cost, record_usage
