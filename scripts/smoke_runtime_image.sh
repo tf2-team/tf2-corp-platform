@@ -36,7 +36,11 @@ case "${service}" in
   accounting)
     runtimes="$(docker run --rm --entrypoint dotnet "${image}" --list-runtimes)"
     printf '%s\n' "${runtimes}"
-    printf '%s\n' "${runtimes}" | grep -Eq '^Microsoft\.NETCore\.App 9\.'
+    printf '%s\n' "${runtimes}" | grep -Eq '^Microsoft\.NETCore\.App 10\.'
+    user="$(docker inspect --format '{{.Config.User}}' "${image}")"
+    [ "${user}" = "10001:10001" ]
+    docker run --rm --entrypoint test "${image}" -f /app/Accounting.dll
+    docker run --rm --entrypoint test "${image}" -x /app/instrument.sh
     ;;
   email)
     docker run --detach --name "${name}" \
@@ -86,3 +90,5 @@ case "${service}" in
 esac
 
 echo "Runtime smoke test passed for ${service}."
+
+# Change trail: @hungxqt - 2026-07-28 - Update Accounting runtime smoke assertions for .NET 10, non-root user, and executable verification.
