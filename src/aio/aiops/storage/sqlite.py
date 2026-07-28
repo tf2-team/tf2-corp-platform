@@ -435,7 +435,7 @@ class SQLiteIncidentStore:
             return []
         placeholders = ",".join("?" for _ in incident_ids)
         rows = self._connection.execute(
-            f"SELECT notification_json FROM notification_outbox WHERE status = 'pending' AND incident_id IN ({placeholders}) ORDER BY created_at",
+            f"SELECT notification_json FROM notification_outbox WHERE status = 'pending' AND incident_id IN ({placeholders}) ORDER BY created_at, rowid",
             incident_ids,
         ).fetchall()
         return [NotificationMessage.model_validate_json(row[0]) for row in rows]
@@ -463,7 +463,7 @@ class SQLiteIncidentStore:
             SELECT notification_json
             FROM notification_outbox
             WHERE status IN ('pending', 'retry') AND next_attempt_at <= ?
-            ORDER BY next_attempt_at
+            ORDER BY next_attempt_at, rowid
             LIMIT ?
             """,
             (_now(), limit),
@@ -594,3 +594,6 @@ def _notification_has_strong_trace_log_evidence(message: NotificationMessage) ->
 
 def _default_runbooks_dir() -> Path:
     return Path(__file__).resolve().parents[2] / "runbooks"
+
+
+# Change trail: @hungxqt - 2026-07-28 - Ensure deterministic notification outbox tie-breaking by adding rowid ordering.
