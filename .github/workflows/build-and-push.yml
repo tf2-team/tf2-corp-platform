@@ -686,10 +686,7 @@ jobs:
           # and will_not_fix OS packages otherwise block every release despite rebuilds.
           ignore-unfixed: true
           severity: HIGH,CRITICAL
-          # Temporary, service-scoped exception requested by the tech lead while
-          # the AI team remediates shopping-copilot. Every baseline service remains
-          # fail-closed. Remove this exception when that image is handed back.
-          exit-code: ${{ matrix.service == 'shopping-copilot' && '0' || '1' }}
+          exit-code: "1"
 
       - name: Configure AWS credentials (OIDC)
         # aws-actions/configure-aws-credentials@v6.2.2

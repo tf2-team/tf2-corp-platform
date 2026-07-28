@@ -9,6 +9,15 @@ USER root
 ARG OTEL_JAVA_AGENT_VERSION
 
 ADD --chmod=644 https://repo1.maven.org/maven2/com/fasterxml/jackson/core/jackson-databind/2.21.4/jackson-databind-2.21.4.jar /tmp/jackson-databind-2.21.4.jar
+ADD --chmod=644 https://repo1.maven.org/maven2/com/fasterxml/jackson/core/jackson-core/2.21.4/jackson-core-2.21.4.jar /tmp/jackson-core-2.21.4.jar
+ADD --chmod=644 https://repo1.maven.org/maven2/org/eclipse/jetty/jetty-alpn-client/12.0.36/jetty-alpn-client-12.0.36.jar /tmp/jetty-alpn-client-12.0.36.jar
+ADD --chmod=644 https://repo1.maven.org/maven2/org/eclipse/jetty/jetty-client/12.0.36/jetty-client-12.0.36.jar /tmp/jetty-client-12.0.36.jar
+ADD --chmod=644 https://repo1.maven.org/maven2/org/eclipse/jetty/jetty-http/12.0.36/jetty-http-12.0.36.jar /tmp/jetty-http-12.0.36.jar
+ADD --chmod=644 https://repo1.maven.org/maven2/org/eclipse/jetty/jetty-io/12.0.36/jetty-io-12.0.36.jar /tmp/jetty-io-12.0.36.jar
+ADD --chmod=644 https://repo1.maven.org/maven2/org/eclipse/jetty/jetty-security/12.0.36/jetty-security-12.0.36.jar /tmp/jetty-security-12.0.36.jar
+ADD --chmod=644 https://repo1.maven.org/maven2/org/eclipse/jetty/jetty-server/12.0.36/jetty-server-12.0.36.jar /tmp/jetty-server-12.0.36.jar
+ADD --chmod=644 https://repo1.maven.org/maven2/org/eclipse/jetty/jetty-session/12.0.36/jetty-session-12.0.36.jar /tmp/jetty-session-12.0.36.jar
+ADD --chmod=644 https://repo1.maven.org/maven2/org/eclipse/jetty/jetty-util/12.0.36/jetty-util-12.0.36.jar /tmp/jetty-util-12.0.36.jar
 
 # Apply OS package security updates when the base is Alpine-based (Trivy OpenSSL/gnutls).
 RUN if command -v apk >/dev/null 2>&1; then \
@@ -21,9 +30,17 @@ RUN if command -v apk >/dev/null 2>&1; then \
 
 RUN find /opt/kafka/libs -name 'jackson-databind-*.jar' -delete \
     && install -m 0644 /tmp/jackson-databind-2.21.4.jar /opt/kafka/libs/ \
+    && find /opt/kafka/libs -name 'jackson-core-*.jar' -delete \
+    && install -m 0644 /tmp/jackson-core-2.21.4.jar /opt/kafka/libs/ \
+    && find /opt/kafka/libs -name 'jetty-*.jar' -delete \
+    && for artifact in jetty-alpn-client jetty-client jetty-http jetty-io jetty-security jetty-server jetty-session jetty-util; do \
+         install -m 0644 "/tmp/${artifact}-12.0.36.jar" "/opt/kafka/libs/${artifact}-12.0.36.jar"; \
+       done \
     && find /opt/kafka/libs -name 'jline-remote-*.jar' -delete \
     && find /opt/kafka/libs -name 'jline-[0-9]*.jar' -delete \
-    && rm -f /tmp/jackson-databind-2.21.4.jar
+    && rm -f /tmp/jackson-databind-2.21.4.jar \
+       /tmp/jackson-core-2.21.4.jar \
+       /tmp/jetty-*-12.0.36.jar
 
 USER appuser
 
