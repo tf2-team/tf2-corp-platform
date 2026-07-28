@@ -1,0 +1,9 @@
+{
+  "scenario_type": "normal",
+  "expected_incident": false,
+  "incident_start_ts": null,
+  "captured_at": "2026-07-26T18:47:08.768402+00:00",
+  "notes": "checkout normal baseline, flagd all off, checkout SLO healthy",
+  "source": "live_prometheus_capture",
+  "prometheus_base_url_host": "localhost:9090"
+}

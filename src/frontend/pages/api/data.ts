@@ -7,6 +7,8 @@ import AdGateway from '../../gateways/rpc/Ad.gateway';
 import { Ad, Empty } from '../../protos/demo';
 import {
   isOptionalDependencyError,
+  isOptionalDependencyCircuitOpen,
+  recordOptionalDependencyCircuitOpen,
   recordOptionalDependencyFallback,
   setDegradedDependencyHeader,
 } from '../../utils/resilience/OptionalDependency';
@@ -22,6 +24,11 @@ export const createDataHandler = (
   switch (method) {
     case 'GET': {
       const { contextKeys = [] } = query;
+      if (isOptionalDependencyCircuitOpen('ad')) {
+        recordOptionalDependencyCircuitOpen('ad');
+        setDegradedDependencyHeader(res, 'ad');
+        return res.status(200).json([]);
+      }
       try {
         const { ads: adList } = await adDependency.listAds(
           Array.isArray(contextKeys) ? contextKeys : contextKeys.split(',')

@@ -20,7 +20,9 @@ dependencies = [
   "bc-detect-secrets==1.5.43",
   "faker>=37,<38",
   "fuzzysearch>=0.7,<0.9",
-  "json-repair==0.44.1",
+  # llm-guard is installed with --no-deps; keep its runtime dependency on a
+  # release that fixes GHSA-xf7x-x43h-rpqh.
+  "json-repair==0.60.1",
   "nltk>=3.9.1,<4",
   "numpy==1.26.4",
   "openai==2.14.0",
@@ -29,12 +31,13 @@ dependencies = [
   "rank-bm25>=0.2.2",
   "sentence-transformers>=2.7.0",
   "spacy==3.8.13",
-  "regex==2024.11.6",
+  "regex==2026.7.19",
   "structlog>=24",
   "tiktoken>=0.9,<1.0",
   # Trivy HIGH/CRITICAL floors (product-reviews / shopping-copilot images)
   "torch==2.6.0",
-  "transformers==4.51.3",
+  # Fix CVE-2026-4372 and CVE-2026-5241.
+  "transformers==5.5.0",
   "cryptography==48.0.1",
   "en-core-web-lg @ https://github.com/explosion/spacy-models/releases/download/en_core_web_lg-3.8.0/en_core_web_lg-3.8.0-py3-none-any.whl",
 ]

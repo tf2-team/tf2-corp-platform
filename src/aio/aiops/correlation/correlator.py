@@ -1,0 +1,120 @@
+#!/usr/bin/python
+# Copyright The OpenTelemetry Authors
+# SPDX-License-Identifier: Apache-2.0
+from __future__ import annotations
+
+import logging
+
+from aiops.schemas import CandidateEvent, RuntimeConfig, SignalQuality
+from aiops.topology import TopologyGraph
+
+
+logger = logging.getLogger(__name__)
+
+
+class Correlator:
+    def __init__(
+        self,
+        runtime_config: RuntimeConfig | None = None,
+        window_seconds: int = 0,
+        confidence_threshold: float = 0.0,
+        weights: dict[str, float] | None = None,
+        topology_graph: TopologyGraph | None = None,
+        topology_max_hops: int = 0,
+    ):
+        self.environment = runtime_config.environment if runtime_config else "unknown"
+        self.window_seconds = window_seconds
+        self.confidence_threshold = confidence_threshold
+        self.weights = weights or {}
+        self.topology_graph = topology_graph or (TopologyGraph(runtime_config) if runtime_config else None)
+        self.topology_max_hops = topology_max_hops
+
+    def correlate(self, candidates: list[CandidateEvent]) -> list[CandidateEvent]:
+        grouped: dict[tuple[str, str, str, int], list[CandidateEvent]] = {}
+        for candidate in candidates:
+            event = candidate if candidate.environment != "unknown" else candidate.model_copy(update={"environment": self.environment})
+            bucket = event.timestamp // self.window_seconds if self.window_seconds else 0
+            grouped.setdefault((event.environment, event.flow, event.service, bucket), []).append(event)
+
+        correlated: list[CandidateEvent] = []
+        for group in grouped.values():
+            primary_signal = next((item for item in group if item.likely_dependency == "unknown"), group[0])
+            dependency, components = self._rank_dependency(group, primary_signal)
+            logger.debug(
+                "AIOPS_BLOCK correlate_group service=%s flow=%s candidates=%s primary=%s dependency=%s components=%s",
+                primary_signal.service,
+                primary_signal.flow,
+                [item.detector_id for item in group],
+                primary_signal.detector_id,
+                dependency.detector_id if dependency else None,
+                components,
+            )
+            if dependency is None:
+                correlated.append(_merge_service_group(group, primary_signal))
+                continue
+            primary = dependency or primary_signal
+            contributing = tuple(dict.fromkeys(signal for item in group for signal in _candidate_signals(item)))
+            confidence = max(dependency.confidence, sum(components.values())) if dependency else max(item.confidence for item in group)
+            confidence = max(0.0, min(1.0, confidence))
+            correlated.append(
+                primary.model_copy(
+                    update={
+                        "confidence": confidence,
+                        "contributing_signals": contributing,
+                        "severity": min(item.severity for item in group),
+                        "likely_dependency": dependency.likely_dependency if dependency else "unknown",
+                        "runbook_id": dependency.runbook_id if dependency else primary_signal.runbook_id,
+                        "correlation_components": components,
+                    }
+                )
+            )
+            correlated.extend(item for item in group if item.likely_dependency == "unknown" and item is not primary_signal)
+        return correlated
+
+    def _rank_dependency(self, group: list[CandidateEvent], primary: CandidateEvent) -> tuple[CandidateEvent | None, dict[str, float]]:
+        ranked = [
+            (candidate, self._score(candidate, primary, group))
+            for candidate in group
+            if candidate.likely_dependency != "unknown"
+        ]
+        if not ranked:
+            return None, {}
+        candidate, components = max(ranked, key=lambda item: max(item[0].confidence, sum(item[1].values())))
+        return (candidate, components) if max(candidate.confidence, sum(components.values())) >= self.confidence_threshold else (None, {})
+
+    def _score(self, candidate: CandidateEvent, primary: CandidateEvent, group: list[CandidateEvent]) -> dict[str, float]:
+        components: dict[str, float] = {}
+        if any(item.quality == SignalQuality.VERIFIED for item in group):
+            components["verified_primary_signal"] = self.weights["verified_primary_signal"]
+        if candidate.timestamp and primary.timestamp and candidate.timestamp <= primary.timestamp:
+            components["temporal_precedence"] = self.weights["temporal_precedence"]
+        topology_distance = (
+            self.topology_graph.dependency_distance(candidate.service, candidate.likely_dependency, self.topology_max_hops)
+            if self.topology_graph is not None
+            else None
+        )
+        if topology_distance is not None and topology_distance > 0:
+            components["topology_path"] = self.weights["topology_path"]
+        if {"operation", "rpc", "method", "span"} & candidate.labels.keys():
+            components["operation_specificity"] = self.weights["operation_specificity"]
+        if any(item.source in {"trace", "log", "kubernetes"} for item in candidate.evidence):
+            components["trace_log_kubernetes_corroboration"] = self.weights["trace_log_kubernetes_corroboration"]
+        if candidate.quality != SignalQuality.VERIFIED:
+            components["stale_or_missing_evidence_penalty"] = self.weights["stale_or_missing_evidence_penalty"]
+        return components
+
+
+def _merge_service_group(group: list[CandidateEvent], primary: CandidateEvent) -> CandidateEvent:
+    if len(group) == 1:
+        return primary
+    return primary.model_copy(
+        update={
+            "contributing_signals": tuple(dict.fromkeys(signal for item in group for signal in _candidate_signals(item))),
+            "severity": min(item.severity for item in group),
+            "confidence": max(item.confidence for item in group),
+        }
+    )
+
+
+def _candidate_signals(candidate: CandidateEvent) -> tuple[str, ...]:
+    return candidate.contributing_signals or (candidate.signal_id,)

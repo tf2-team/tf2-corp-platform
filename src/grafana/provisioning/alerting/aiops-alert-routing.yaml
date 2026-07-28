@@ -1,0 +1,35 @@
+# Copyright The OpenTelemetry Authors
+# SPDX-License-Identifier: Apache-2.0
+apiVersion: 1
+
+contactPoints:
+  - orgId: 1
+    name: aiops-grafana-events
+    receivers:
+      - uid: aiops-webhook
+        type: webhook
+        disableResolveMessage: false
+        settings:
+          url: http://aiops:8000/api/v1/events/grafana
+          httpMethod: POST
+          maxAlerts: "0"
+          extraHeaders:
+            X-AIOps-Grafana-Secret: $AIOPS_GRAFANA_WEBHOOK_SECRET
+
+policies:
+  - orgId: 1
+    receiver: grafana-default-email
+    group_by:
+      - grafana_folder
+      - alertname
+    group_wait: 30s
+    group_interval: 5m
+    repeat_interval: 4h
+    routes:
+      - receiver: grafana-default-email
+        object_matchers:
+          - [severity, "=~", "warning|critical|SEV1|SEV2"]
+        continue: true
+      - receiver: aiops-grafana-events
+        object_matchers:
+          - [severity, "=~", "warning|critical|SEV1|SEV2"]

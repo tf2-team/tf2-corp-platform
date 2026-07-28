@@ -1,0 +1,1232 @@
+{
+    "value":  [
+                  {
+                      "incident_id":  "inc-0b01ad3365f9",
+                      "fingerprint":  "sha256:0b01ad3365f9dd89963d546d07d5a4094a23787131761cf19e418870c96cbeda",
+                      "state":  "open",
+                      "last_seen":  "2026-07-26T14:42:26+00:00",
+                      "recovered_at":  null,
+                      "cooldown_until":  null,
+                      "severity":  "SEV1",
+                      "flow":  "checkout",
+                      "service":  "cart",
+                      "likely_dependency":  "unknown",
+                      "occurrence_count":  3,
+                      "events":  [
+                                     {
+                                         "environment":  "techx-corp-prod",
+                                         "timestamp":  1785076863,
+                                         "detector_id":  "auto_cart_latency_p95",
+                                         "flow":  "checkout",
+                                         "service":  "cart",
+                                         "severity":  "SEV1",
+                                         "signal_id":  "cart_p95_latency_5m",
+                                         "value":  2.6564441176765237,
+                                         "unit":  "seconds",
+                                         "window":  "5m",
+                                         "threshold":  1.0,
+                                         "quality":  "verified",
+                                         "reason":  "threshold_breached",
+                                         "runbook_id":  "RB-SERVICE-LATENCY",
+                                         "likely_dependency":  "unknown",
+                                         "confidence":  1.0,
+                                         "contributing_signals":  [
+                                                                      "cart_p95_latency_5m",
+                                                                      "cart_p99_latency_5m"
+                                                                  ],
+                                         "labels":  {
+                                                        "flow":  "checkout",
+                                                        "query_id":  "cart.p95_latency_5m",
+                                                        "sample_timestamp":  "1785076863.337",
+                                                        "series_count":  "1",
+                                                        "service":  "cart"
+                                                    },
+                                         "correlation_components":  {
+
+                                                                    },
+                                         "evidence":  [
+                                                          {
+                                                              "source":  "feature",
+                                                              "reference":  "cart_p95_latency_5m",
+                                                              "summary":  "5m seconds quality=verified"
+                                                          },
+                                                          {
+                                                              "source":  "feature",
+                                                              "reference":  "cart_p99_latency_5m",
+                                                              "summary":  "5m seconds quality=verified"
+                                                          },
+                                                          {
+                                                              "source":  "enrichment_failure",
+                                                              "reference":  "jaeger",
+                                                              "summary":  "HTTPStatusError"
+                                                          },
+                                                          {
+                                                              "source":  "kubernetes",
+                                                              "reference":  "techx-corp-prod/cart",
+                                                              "summary":  "pod_restarts=0 ready_pods=16/16 available_replicas=16/16 rollout=complete"
+                                                          }
+                                                      ]
+                                     },
+                                     {
+                                         "environment":  "techx-corp-prod",
+                                         "timestamp":  1785076905,
+                                         "detector_id":  "auto_cart_latency_p95",
+                                         "flow":  "checkout",
+                                         "service":  "cart",
+                                         "severity":  "SEV1",
+                                         "signal_id":  "cart_p95_latency_5m",
+                                         "value":  2.650972280104443,
+                                         "unit":  "seconds",
+                                         "window":  "5m",
+                                         "threshold":  1.0,
+                                         "quality":  "verified",
+                                         "reason":  "threshold_breached",
+                                         "runbook_id":  "RB-SERVICE-LATENCY",
+                                         "likely_dependency":  "unknown",
+                                         "confidence":  1.0,
+                                         "contributing_signals":  [
+                                                                      "cart_p95_latency_5m",
+                                                                      "cart_p99_latency_5m"
+                                                                  ],
+                                         "labels":  {
+                                                        "flow":  "checkout",
+                                                        "query_id":  "cart.p95_latency_5m",
+                                                        "sample_timestamp":  "1785076905.967",
+                                                        "series_count":  "1",
+                                                        "service":  "cart"
+                                                    },
+                                         "correlation_components":  {
+
+                                                                    },
+                                         "evidence":  [
+                                                          {
+                                                              "source":  "feature",
+                                                              "reference":  "cart_p95_latency_5m",
+                                                              "summary":  "5m seconds quality=verified"
+                                                          },
+                                                          {
+                                                              "source":  "feature",
+                                                              "reference":  "cart_p99_latency_5m",
+                                                              "summary":  "5m seconds quality=verified"
+                                                          },
+                                                          {
+                                                              "source":  "enrichment_failure",
+                                                              "reference":  "jaeger",
+                                                              "summary":  "HTTPStatusError"
+                                                          },
+                                                          {
+                                                              "source":  "kubernetes",
+                                                              "reference":  "techx-corp-prod/cart",
+                                                              "summary":  "pod_restarts=0 ready_pods=16/16 available_replicas=16/16 rollout=complete"
+                                                          }
+                                                      ]
+                                     },
+                                     {
+                                         "environment":  "techx-corp-prod",
+                                         "timestamp":  1785076946,
+                                         "detector_id":  "auto_cart_latency_p95",
+                                         "flow":  "checkout",
+                                         "service":  "cart",
+                                         "severity":  "SEV1",
+                                         "signal_id":  "cart_p95_latency_5m",
+                                         "value":  2.630513744491581,
+                                         "unit":  "seconds",
+                                         "window":  "5m",
+                                         "threshold":  1.0,
+                                         "quality":  "verified",
+                                         "reason":  "threshold_breached",
+                                         "runbook_id":  "RB-SERVICE-LATENCY",
+                                         "likely_dependency":  "unknown",
+                                         "confidence":  1.0,
+                                         "contributing_signals":  [
+                                                                      "cart_p95_latency_5m",
+                                                                      "cart_p99_latency_5m"
+                                                                  ],
+                                         "labels":  {
+                                                        "flow":  "checkout",
+                                                        "query_id":  "cart.p95_latency_5m",
+                                                        "sample_timestamp":  "1785076946.126",
+                                                        "series_count":  "1",
+                                                        "service":  "cart"
+                                                    },
+                                         "correlation_components":  {
+
+                                                                    },
+                                         "evidence":  [
+                                                          {
+                                                              "source":  "feature",
+                                                              "reference":  "cart_p95_latency_5m",
+                                                              "summary":  "5m seconds quality=verified"
+                                                          },
+                                                          {
+                                                              "source":  "feature",
+                                                              "reference":  "cart_p99_latency_5m",
+                                                              "summary":  "5m seconds quality=verified"
+                                                          },
+                                                          {
+                                                              "source":  "enrichment_failure",
+                                                              "reference":  "jaeger",
+                                                              "summary":  "HTTPStatusError"
+                                                          },
+                                                          {
+                                                              "source":  "kubernetes",
+                                                              "reference":  "techx-corp-prod/cart",
+                                                              "summary":  "pod_restarts=0 ready_pods=16/16 available_replicas=16/16 rollout=complete"
+                                                          }
+                                                      ]
+                                     }
+                                 ]
+                  },
+                  {
+                      "incident_id":  "inc-44f78c013a44",
+                      "fingerprint":  "sha256:44f78c013a446dd52b0b0ff92367b3c16ddbc726ecdda3ca2cc1460cfe5f14cd",
+                      "state":  "open",
+                      "last_seen":  "2026-07-26T14:42:26+00:00",
+                      "recovered_at":  null,
+                      "cooldown_until":  "2026-07-26T14:44:28.264511+00:00",
+                      "severity":  "SEV1",
+                      "flow":  "web",
+                      "service":  "frontend",
+                      "likely_dependency":  "unknown",
+                      "occurrence_count":  2,
+                      "events":  [
+                                     {
+                                         "environment":  "techx-corp-prod",
+                                         "timestamp":  1785076906,
+                                         "detector_id":  "auto_frontend_latency_p99",
+                                         "flow":  "web",
+                                         "service":  "frontend",
+                                         "severity":  "SEV1",
+                                         "signal_id":  "frontend_p99_latency_5m",
+                                         "value":  7.6773255813953245,
+                                         "unit":  "seconds",
+                                         "window":  "5m",
+                                         "threshold":  1.0,
+                                         "quality":  "verified",
+                                         "reason":  "threshold_breached",
+                                         "runbook_id":  "RB-SERVICE-LATENCY",
+                                         "likely_dependency":  "unknown",
+                                         "confidence":  1.0,
+                                         "contributing_signals":  [
+                                                                      "frontend_p99_latency_5m"
+                                                                  ],
+                                         "labels":  {
+                                                        "flow":  "web",
+                                                        "query_id":  "frontend.p99_latency_5m",
+                                                        "sample_timestamp":  "1785076906.409",
+                                                        "series_count":  "1",
+                                                        "service":  "frontend"
+                                                    },
+                                         "correlation_components":  {
+
+                                                                    },
+                                         "evidence":  [
+                                                          {
+                                                              "source":  "feature",
+                                                              "reference":  "frontend_p99_latency_5m",
+                                                              "summary":  "5m seconds quality=verified"
+                                                          },
+                                                          {
+                                                              "source":  "enrichment_failure",
+                                                              "reference":  "jaeger",
+                                                              "summary":  "HTTPStatusError"
+                                                          },
+                                                          {
+                                                              "source":  "kubernetes",
+                                                              "reference":  "techx-corp-prod/frontend",
+                                                              "summary":  "pod_restarts=0 ready_pods=28/28 available_replicas=24/24 rollout=complete"
+                                                          }
+                                                      ]
+                                     },
+                                     {
+                                         "environment":  "techx-corp-prod",
+                                         "timestamp":  1785076946,
+                                         "detector_id":  "auto_frontend_latency_p99",
+                                         "flow":  "web",
+                                         "service":  "frontend",
+                                         "severity":  "SEV1",
+                                         "signal_id":  "frontend_p99_latency_5m",
+                                         "value":  7.2568536685074445,
+                                         "unit":  "seconds",
+                                         "window":  "5m",
+                                         "threshold":  1.0,
+                                         "quality":  "verified",
+                                         "reason":  "threshold_breached",
+                                         "runbook_id":  "RB-SERVICE-LATENCY",
+                                         "likely_dependency":  "unknown",
+                                         "confidence":  1.0,
+                                         "contributing_signals":  [
+                                                                      "frontend_p99_latency_5m"
+                                                                  ],
+                                         "labels":  {
+                                                        "flow":  "web",
+                                                        "query_id":  "frontend.p99_latency_5m",
+                                                        "sample_timestamp":  "1785076946.609",
+                                                        "series_count":  "1",
+                                                        "service":  "frontend"
+                                                    },
+                                         "correlation_components":  {
+
+                                                                    },
+                                         "evidence":  [
+                                                          {
+                                                              "source":  "feature",
+                                                              "reference":  "frontend_p99_latency_5m",
+                                                              "summary":  "5m seconds quality=verified"
+                                                          },
+                                                          {
+                                                              "source":  "enrichment_failure",
+                                                              "reference":  "jaeger",
+                                                              "summary":  "HTTPStatusError"
+                                                          },
+                                                          {
+                                                              "source":  "kubernetes",
+                                                              "reference":  "techx-corp-prod/frontend",
+                                                              "summary":  "pod_restarts=0 ready_pods=28/28 available_replicas=24/24 rollout=complete"
+                                                          }
+                                                      ]
+                                     }
+                                 ]
+                  },
+                  {
+                      "incident_id":  "inc-533e7f658c8f",
+                      "fingerprint":  "sha256:533e7f658c8f3b83754c6db20386b0388b681b8f7dc3c5138581e0f6b3b6276c",
+                      "state":  "open",
+                      "last_seen":  "2026-07-26T14:40:21+00:00",
+                      "recovered_at":  null,
+                      "cooldown_until":  "2026-07-26T14:43:15.305844+00:00",
+                      "severity":  "SEV1",
+                      "flow":  "checkout",
+                      "service":  "cart",
+                      "likely_dependency":  "unknown",
+                      "occurrence_count":  4,
+                      "events":  [
+                                     {
+                                         "environment":  "techx-corp-prod",
+                                         "timestamp":  1785076700,
+                                         "detector_id":  "auto_cart_error_rate",
+                                         "flow":  "checkout",
+                                         "service":  "cart",
+                                         "severity":  "SEV1",
+                                         "signal_id":  "cart_error_rate_5m",
+                                         "value":  0.14516758200314103,
+                                         "unit":  "ratio",
+                                         "window":  "5m",
+                                         "threshold":  0.005,
+                                         "quality":  "verified",
+                                         "reason":  "threshold_breached",
+                                         "runbook_id":  "RB-SERVICE-ERROR-RATE",
+                                         "likely_dependency":  "unknown",
+                                         "confidence":  1.0,
+                                         "contributing_signals":  [
+                                                                      "cart_error_rate_5m",
+                                                                      "cart_p95_latency_5m",
+                                                                      "cart_p99_latency_5m"
+                                                                  ],
+                                         "labels":  {
+                                                        "flow":  "checkout",
+                                                        "query_id":  "cart.error_rate_5m",
+                                                        "sample_timestamp":  "1785076700.947",
+                                                        "series_count":  "1",
+                                                        "service":  "cart"
+                                                    },
+                                         "correlation_components":  {
+
+                                                                    },
+                                         "evidence":  [
+                                                          {
+                                                              "source":  "feature",
+                                                              "reference":  "cart_error_rate_5m",
+                                                              "summary":  "5m ratio quality=verified"
+                                                          },
+                                                          {
+                                                              "source":  "feature",
+                                                              "reference":  "cart_p95_latency_5m",
+                                                              "summary":  "5m seconds quality=verified"
+                                                          },
+                                                          {
+                                                              "source":  "feature",
+                                                              "reference":  "cart_p99_latency_5m",
+                                                              "summary":  "5m seconds quality=verified"
+                                                          },
+                                                          {
+                                                              "source":  "enrichment_failure",
+                                                              "reference":  "jaeger",
+                                                              "summary":  "HTTPStatusError"
+                                                          },
+                                                          {
+                                                              "source":  "kubernetes",
+                                                              "reference":  "techx-corp-prod/cart",
+                                                              "summary":  "pod_restarts=0 ready_pods=16/16 available_replicas=16/16 rollout=complete"
+                                                          }
+                                                      ]
+                                     },
+                                     {
+                                         "environment":  "techx-corp-prod",
+                                         "timestamp":  1785076739,
+                                         "detector_id":  "auto_cart_error_rate",
+                                         "flow":  "checkout",
+                                         "service":  "cart",
+                                         "severity":  "SEV1",
+                                         "signal_id":  "cart_error_rate_5m",
+                                         "value":  0.11306736679643771,
+                                         "unit":  "ratio",
+                                         "window":  "5m",
+                                         "threshold":  0.005,
+                                         "quality":  "verified",
+                                         "reason":  "threshold_breached",
+                                         "runbook_id":  "RB-SERVICE-ERROR-RATE",
+                                         "likely_dependency":  "unknown",
+                                         "confidence":  1.0,
+                                         "contributing_signals":  [
+                                                                      "cart_error_rate_5m",
+                                                                      "cart_p95_latency_5m",
+                                                                      "cart_p99_latency_5m"
+                                                                  ],
+                                         "labels":  {
+                                                        "flow":  "checkout",
+                                                        "query_id":  "cart.error_rate_5m",
+                                                        "sample_timestamp":  "1785076739.927",
+                                                        "series_count":  "1",
+                                                        "service":  "cart"
+                                                    },
+                                         "correlation_components":  {
+
+                                                                    },
+                                         "evidence":  [
+                                                          {
+                                                              "source":  "feature",
+                                                              "reference":  "cart_error_rate_5m",
+                                                              "summary":  "5m ratio quality=verified"
+                                                          },
+                                                          {
+                                                              "source":  "feature",
+                                                              "reference":  "cart_p95_latency_5m",
+                                                              "summary":  "5m seconds quality=verified"
+                                                          },
+                                                          {
+                                                              "source":  "feature",
+                                                              "reference":  "cart_p99_latency_5m",
+                                                              "summary":  "5m seconds quality=verified"
+                                                          },
+                                                          {
+                                                              "source":  "enrichment_failure",
+                                                              "reference":  "jaeger",
+                                                              "summary":  "HTTPStatusError"
+                                                          },
+                                                          {
+                                                              "source":  "kubernetes",
+                                                              "reference":  "techx-corp-prod/cart",
+                                                              "summary":  "pod_restarts=0 ready_pods=16/16 available_replicas=16/16 rollout=complete"
+                                                          }
+                                                      ]
+                                     },
+                                     {
+                                         "environment":  "techx-corp-prod",
+                                         "timestamp":  1785076780,
+                                         "detector_id":  "auto_cart_error_rate",
+                                         "flow":  "checkout",
+                                         "service":  "cart",
+                                         "severity":  "SEV1",
+                                         "signal_id":  "cart_error_rate_5m",
+                                         "value":  0.07624428194706813,
+                                         "unit":  "ratio",
+                                         "window":  "5m",
+                                         "threshold":  0.005,
+                                         "quality":  "verified",
+                                         "reason":  "threshold_breached",
+                                         "runbook_id":  "RB-SERVICE-ERROR-RATE",
+                                         "likely_dependency":  "unknown",
+                                         "confidence":  1.0,
+                                         "contributing_signals":  [
+                                                                      "cart_error_rate_5m",
+                                                                      "cart_p95_latency_5m",
+                                                                      "cart_p99_latency_5m"
+                                                                  ],
+                                         "labels":  {
+                                                        "flow":  "checkout",
+                                                        "query_id":  "cart.error_rate_5m",
+                                                        "sample_timestamp":  "1785076780.71",
+                                                        "series_count":  "1",
+                                                        "service":  "cart"
+                                                    },
+                                         "correlation_components":  {
+
+                                                                    },
+                                         "evidence":  [
+                                                          {
+                                                              "source":  "feature",
+                                                              "reference":  "cart_error_rate_5m",
+                                                              "summary":  "5m ratio quality=verified"
+                                                          },
+                                                          {
+                                                              "source":  "feature",
+                                                              "reference":  "cart_p95_latency_5m",
+                                                              "summary":  "5m seconds quality=verified"
+                                                          },
+                                                          {
+                                                              "source":  "feature",
+                                                              "reference":  "cart_p99_latency_5m",
+                                                              "summary":  "5m seconds quality=verified"
+                                                          },
+                                                          {
+                                                              "source":  "enrichment_failure",
+                                                              "reference":  "jaeger",
+                                                              "summary":  "HTTPStatusError"
+                                                          },
+                                                          {
+                                                              "source":  "kubernetes",
+                                                              "reference":  "techx-corp-prod/cart",
+                                                              "summary":  "pod_restarts=0 ready_pods=16/16 available_replicas=16/16 rollout=complete"
+                                                          }
+                                                      ]
+                                     },
+                                     {
+                                         "environment":  "techx-corp-prod",
+                                         "timestamp":  1785076821,
+                                         "detector_id":  "auto_cart_error_rate",
+                                         "flow":  "checkout",
+                                         "service":  "cart",
+                                         "severity":  "SEV1",
+                                         "signal_id":  "cart_error_rate_5m",
+                                         "value":  0.03515429558371763,
+                                         "unit":  "ratio",
+                                         "window":  "5m",
+                                         "threshold":  0.005,
+                                         "quality":  "verified",
+                                         "reason":  "threshold_breached",
+                                         "runbook_id":  "RB-SERVICE-ERROR-RATE",
+                                         "likely_dependency":  "unknown",
+                                         "confidence":  1.0,
+                                         "contributing_signals":  [
+                                                                      "cart_error_rate_5m",
+                                                                      "cart_p95_latency_5m",
+                                                                      "cart_p99_latency_5m"
+                                                                  ],
+                                         "labels":  {
+                                                        "flow":  "checkout",
+                                                        "query_id":  "cart.error_rate_5m",
+                                                        "sample_timestamp":  "1785076821.338",
+                                                        "series_count":  "1",
+                                                        "service":  "cart"
+                                                    },
+                                         "correlation_components":  {
+
+                                                                    },
+                                         "evidence":  [
+                                                          {
+                                                              "source":  "feature",
+                                                              "reference":  "cart_error_rate_5m",
+                                                              "summary":  "5m ratio quality=verified"
+                                                          },
+                                                          {
+                                                              "source":  "feature",
+                                                              "reference":  "cart_p95_latency_5m",
+                                                              "summary":  "5m seconds quality=verified"
+                                                          },
+                                                          {
+                                                              "source":  "feature",
+                                                              "reference":  "cart_p99_latency_5m",
+                                                              "summary":  "5m seconds quality=verified"
+                                                          },
+                                                          {
+                                                              "source":  "enrichment_failure",
+                                                              "reference":  "jaeger",
+                                                              "summary":  "HTTPStatusError"
+                                                          },
+                                                          {
+                                                              "source":  "kubernetes",
+                                                              "reference":  "techx-corp-prod/cart",
+                                                              "summary":  "pod_restarts=0 ready_pods=16/16 available_replicas=16/16 rollout=complete"
+                                                          }
+                                                      ]
+                                     }
+                                 ]
+                  },
+                  {
+                      "incident_id":  "inc-776a0b29097d",
+                      "fingerprint":  "sha256:776a0b29097dfb52ed1adcabe9260bee42a350274b79172b7306f07056063fea",
+                      "state":  "open",
+                      "last_seen":  "2026-07-26T14:42:26+00:00",
+                      "recovered_at":  null,
+                      "cooldown_until":  "2026-07-26T14:44:28.262509+00:00",
+                      "severity":  "SEV1",
+                      "flow":  "edge",
+                      "service":  "frontend-proxy",
+                      "likely_dependency":  "unknown",
+                      "occurrence_count":  5,
+                      "events":  [
+                                     {
+                                         "environment":  "techx-corp-prod",
+                                         "timestamp":  1785076780,
+                                         "detector_id":  "auto_frontend_proxy_latency_p99",
+                                         "flow":  "edge",
+                                         "service":  "frontend-proxy",
+                                         "severity":  "SEV1",
+                                         "signal_id":  "frontend_proxy_p99_latency_5m",
+                                         "value":  8.183783556542728,
+                                         "unit":  "seconds",
+                                         "window":  "5m",
+                                         "threshold":  1.5,
+                                         "quality":  "verified",
+                                         "reason":  "threshold_breached",
+                                         "runbook_id":  "RB-SERVICE-LATENCY",
+                                         "likely_dependency":  "unknown",
+                                         "confidence":  1.0,
+                                         "contributing_signals":  [
+                                                                      "frontend_proxy_p99_latency_5m"
+                                                                  ],
+                                         "labels":  {
+                                                        "flow":  "edge",
+                                                        "query_id":  "frontend-proxy.p99_latency_5m",
+                                                        "sample_timestamp":  "1785076780.619",
+                                                        "series_count":  "1",
+                                                        "service":  "frontend-proxy"
+                                                    },
+                                         "correlation_components":  {
+
+                                                                    },
+                                         "evidence":  [
+                                                          {
+                                                              "source":  "feature",
+                                                              "reference":  "frontend_proxy_p99_latency_5m",
+                                                              "summary":  "5m seconds quality=verified"
+                                                          },
+                                                          {
+                                                              "source":  "enrichment_failure",
+                                                              "reference":  "jaeger",
+                                                              "summary":  "HTTPStatusError"
+                                                          },
+                                                          {
+                                                              "source":  "kubernetes",
+                                                              "reference":  "techx-corp-prod/frontend-proxy",
+                                                              "summary":  "pod_restarts=0 ready_pods=4/4 available_replicas=4/4 rollout=complete"
+                                                          }
+                                                      ]
+                                     },
+                                     {
+                                         "environment":  "techx-corp-prod",
+                                         "timestamp":  1785076821,
+                                         "detector_id":  "auto_frontend_proxy_latency_p99",
+                                         "flow":  "edge",
+                                         "service":  "frontend-proxy",
+                                         "severity":  "SEV1",
+                                         "signal_id":  "frontend_proxy_p99_latency_5m",
+                                         "value":  8.183783556542728,
+                                         "unit":  "seconds",
+                                         "window":  "5m",
+                                         "threshold":  1.5,
+                                         "quality":  "verified",
+                                         "reason":  "threshold_breached",
+                                         "runbook_id":  "RB-SERVICE-LATENCY",
+                                         "likely_dependency":  "unknown",
+                                         "confidence":  1.0,
+                                         "contributing_signals":  [
+                                                                      "frontend_proxy_p99_latency_5m"
+                                                                  ],
+                                         "labels":  {
+                                                        "flow":  "edge",
+                                                        "query_id":  "frontend-proxy.p99_latency_5m",
+                                                        "sample_timestamp":  "1785076821.311",
+                                                        "series_count":  "1",
+                                                        "service":  "frontend-proxy"
+                                                    },
+                                         "correlation_components":  {
+
+                                                                    },
+                                         "evidence":  [
+                                                          {
+                                                              "source":  "feature",
+                                                              "reference":  "frontend_proxy_p99_latency_5m",
+                                                              "summary":  "5m seconds quality=verified"
+                                                          },
+                                                          {
+                                                              "source":  "enrichment_failure",
+                                                              "reference":  "jaeger",
+                                                              "summary":  "HTTPStatusError"
+                                                          },
+                                                          {
+                                                              "source":  "kubernetes",
+                                                              "reference":  "techx-corp-prod/frontend-proxy",
+                                                              "summary":  "pod_restarts=0 ready_pods=4/4 available_replicas=4/4 rollout=complete"
+                                                          }
+                                                      ]
+                                     },
+                                     {
+                                         "environment":  "techx-corp-prod",
+                                         "timestamp":  1785076863,
+                                         "detector_id":  "auto_frontend_proxy_latency_p99",
+                                         "flow":  "edge",
+                                         "service":  "frontend-proxy",
+                                         "severity":  "SEV1",
+                                         "signal_id":  "frontend_proxy_p99_latency_5m",
+                                         "value":  7.8452123669370835,
+                                         "unit":  "seconds",
+                                         "window":  "5m",
+                                         "threshold":  1.5,
+                                         "quality":  "verified",
+                                         "reason":  "threshold_breached",
+                                         "runbook_id":  "RB-SERVICE-LATENCY",
+                                         "likely_dependency":  "unknown",
+                                         "confidence":  1.0,
+                                         "contributing_signals":  [
+                                                                      "frontend_proxy_p99_latency_5m"
+                                                                  ],
+                                         "labels":  {
+                                                        "flow":  "edge",
+                                                        "query_id":  "frontend-proxy.p99_latency_5m",
+                                                        "sample_timestamp":  "1785076863.392",
+                                                        "series_count":  "1",
+                                                        "service":  "frontend-proxy"
+                                                    },
+                                         "correlation_components":  {
+
+                                                                    },
+                                         "evidence":  [
+                                                          {
+                                                              "source":  "feature",
+                                                              "reference":  "frontend_proxy_p99_latency_5m",
+                                                              "summary":  "5m seconds quality=verified"
+                                                          },
+                                                          {
+                                                              "source":  "enrichment_failure",
+                                                              "reference":  "jaeger",
+                                                              "summary":  "HTTPStatusError"
+                                                          },
+                                                          {
+                                                              "source":  "kubernetes",
+                                                              "reference":  "techx-corp-prod/frontend-proxy",
+                                                              "summary":  "pod_restarts=0 ready_pods=4/4 available_replicas=4/4 rollout=complete"
+                                                          }
+                                                      ]
+                                     },
+                                     {
+                                         "environment":  "techx-corp-prod",
+                                         "timestamp":  1785076906,
+                                         "detector_id":  "auto_frontend_proxy_latency_p99",
+                                         "flow":  "edge",
+                                         "service":  "frontend-proxy",
+                                         "severity":  "SEV1",
+                                         "signal_id":  "frontend_proxy_p99_latency_5m",
+                                         "value":  7.631609613386201,
+                                         "unit":  "seconds",
+                                         "window":  "5m",
+                                         "threshold":  1.5,
+                                         "quality":  "verified",
+                                         "reason":  "threshold_breached",
+                                         "runbook_id":  "RB-SERVICE-LATENCY",
+                                         "likely_dependency":  "unknown",
+                                         "confidence":  1.0,
+                                         "contributing_signals":  [
+                                                                      "frontend_proxy_p99_latency_5m"
+                                                                  ],
+                                         "labels":  {
+                                                        "flow":  "edge",
+                                                        "query_id":  "frontend-proxy.p99_latency_5m",
+                                                        "sample_timestamp":  "1785076906.047",
+                                                        "series_count":  "1",
+                                                        "service":  "frontend-proxy"
+                                                    },
+                                         "correlation_components":  {
+
+                                                                    },
+                                         "evidence":  [
+                                                          {
+                                                              "source":  "feature",
+                                                              "reference":  "frontend_proxy_p99_latency_5m",
+                                                              "summary":  "5m seconds quality=verified"
+                                                          },
+                                                          {
+                                                              "source":  "enrichment_failure",
+                                                              "reference":  "jaeger",
+                                                              "summary":  "HTTPStatusError"
+                                                          },
+                                                          {
+                                                              "source":  "kubernetes",
+                                                              "reference":  "techx-corp-prod/frontend-proxy",
+                                                              "summary":  "pod_restarts=0 ready_pods=4/4 available_replicas=4/4 rollout=complete"
+                                                          }
+                                                      ]
+                                     },
+                                     {
+                                         "environment":  "techx-corp-prod",
+                                         "timestamp":  1785076946,
+                                         "detector_id":  "auto_frontend_proxy_latency_p99",
+                                         "flow":  "edge",
+                                         "service":  "frontend-proxy",
+                                         "severity":  "SEV1",
+                                         "signal_id":  "frontend_proxy_p99_latency_5m",
+                                         "value":  7.224324987600607,
+                                         "unit":  "seconds",
+                                         "window":  "5m",
+                                         "threshold":  1.5,
+                                         "quality":  "verified",
+                                         "reason":  "threshold_breached",
+                                         "runbook_id":  "RB-SERVICE-LATENCY",
+                                         "likely_dependency":  "unknown",
+                                         "confidence":  1.0,
+                                         "contributing_signals":  [
+                                                                      "frontend_proxy_p99_latency_5m"
+                                                                  ],
+                                         "labels":  {
+                                                        "flow":  "edge",
+                                                        "query_id":  "frontend-proxy.p99_latency_5m",
+                                                        "sample_timestamp":  "1785076946.16",
+                                                        "series_count":  "1",
+                                                        "service":  "frontend-proxy"
+                                                    },
+                                         "correlation_components":  {
+
+                                                                    },
+                                         "evidence":  [
+                                                          {
+                                                              "source":  "feature",
+                                                              "reference":  "frontend_proxy_p99_latency_5m",
+                                                              "summary":  "5m seconds quality=verified"
+                                                          },
+                                                          {
+                                                              "source":  "enrichment_failure",
+                                                              "reference":  "jaeger",
+                                                              "summary":  "HTTPStatusError"
+                                                          },
+                                                          {
+                                                              "source":  "kubernetes",
+                                                              "reference":  "techx-corp-prod/frontend-proxy",
+                                                              "summary":  "pod_restarts=0 ready_pods=4/4 available_replicas=4/4 rollout=complete"
+                                                          }
+                                                      ]
+                                     }
+                                 ]
+                  },
+                  {
+                      "incident_id":  "inc-8cd6d19cc778",
+                      "fingerprint":  "sha256:8cd6d19cc7785dd3f56a23837d375b5cfb8d46304e238e326bbb8fdb48f782bb",
+                      "state":  "open",
+                      "last_seen":  "2026-07-26T14:28:01+00:00",
+                      "recovered_at":  null,
+                      "cooldown_until":  "2026-07-26T14:43:15.311349+00:00",
+                      "severity":  "SEV1",
+                      "flow":  "checkout",
+                      "service":  "checkout",
+                      "likely_dependency":  "unknown",
+                      "occurrence_count":  1,
+                      "events":  [
+                                     {
+                                         "environment":  "techx-corp-prod",
+                                         "timestamp":  1785076081,
+                                         "detector_id":  "auto_checkout_latency_p99",
+                                         "flow":  "checkout",
+                                         "service":  "checkout",
+                                         "severity":  "SEV1",
+                                         "signal_id":  "checkout_p99_latency_5m",
+                                         "value":  4.116838748579979,
+                                         "unit":  "seconds",
+                                         "window":  "5m",
+                                         "threshold":  2.0,
+                                         "quality":  "verified",
+                                         "reason":  "threshold_breached",
+                                         "runbook_id":  "RB-CHECKOUT-LATENCY",
+                                         "likely_dependency":  "unknown",
+                                         "confidence":  1.0,
+                                         "contributing_signals":  [
+                                                                      "checkout_p99_latency_5m"
+                                                                  ],
+                                         "labels":  {
+                                                        "flow":  "checkout",
+                                                        "query_id":  "checkout.p99_latency_5m",
+                                                        "sample_timestamp":  "1785076081.647",
+                                                        "series_count":  "1",
+                                                        "service":  "checkout"
+                                                    },
+                                         "correlation_components":  {
+
+                                                                    },
+                                         "evidence":  [
+                                                          {
+                                                              "source":  "feature",
+                                                              "reference":  "checkout_p99_latency_5m",
+                                                              "summary":  "5m seconds quality=verified"
+                                                          },
+                                                          {
+                                                              "source":  "enrichment_failure",
+                                                              "reference":  "jaeger",
+                                                              "summary":  "HTTPStatusError"
+                                                          },
+                                                          {
+                                                              "source":  "kubernetes",
+                                                              "reference":  "techx-corp-prod/checkout",
+                                                              "summary":  "pod_restarts=0 ready_pods=10/10 available_replicas=10/10 rollout=complete"
+                                                          }
+                                                      ]
+                                     }
+                                 ]
+                  },
+                  {
+                      "incident_id":  "inc-97d2a7043a2b",
+                      "fingerprint":  "sha256:97d2a7043a2bf36fd4832ce0e1f757e1e1af1493e66bb0c0ff8a0f2f18d47f50",
+                      "state":  "open",
+                      "last_seen":  "2026-07-26T14:42:30+00:00",
+                      "recovered_at":  null,
+                      "cooldown_until":  null,
+                      "severity":  "SEV1",
+                      "flow":  "checkout",
+                      "service":  "checkout",
+                      "likely_dependency":  "unknown",
+                      "occurrence_count":  4,
+                      "events":  [
+                                     {
+                                         "environment":  "techx-corp-prod",
+                                         "timestamp":  1785076828,
+                                         "detector_id":  "auto_checkout_latency_p95",
+                                         "flow":  "checkout",
+                                         "service":  "checkout",
+                                         "severity":  "SEV1",
+                                         "signal_id":  "checkout_p95_latency_5m",
+                                         "value":  10.0,
+                                         "unit":  "seconds",
+                                         "window":  "5m",
+                                         "threshold":  2.0,
+                                         "quality":  "verified",
+                                         "reason":  "threshold_breached",
+                                         "runbook_id":  "RB-CHECKOUT-LATENCY",
+                                         "likely_dependency":  "unknown",
+                                         "confidence":  1.0,
+                                         "contributing_signals":  [
+                                                                      "checkout_p95_latency_5m",
+                                                                      "checkout_p99_latency_5m"
+                                                                  ],
+                                         "labels":  {
+                                                        "flow":  "checkout",
+                                                        "query_id":  "checkout.p95_latency_5m",
+                                                        "sample_timestamp":  "1785076828.228",
+                                                        "series_count":  "1",
+                                                        "service":  "checkout"
+                                                    },
+                                         "correlation_components":  {
+
+                                                                    },
+                                         "evidence":  [
+                                                          {
+                                                              "source":  "feature",
+                                                              "reference":  "checkout_p95_latency_5m",
+                                                              "summary":  "5m seconds quality=verified"
+                                                          },
+                                                          {
+                                                              "source":  "feature",
+                                                              "reference":  "checkout_p99_latency_5m",
+                                                              "summary":  "5m seconds quality=verified"
+                                                          },
+                                                          {
+                                                              "source":  "enrichment_failure",
+                                                              "reference":  "jaeger",
+                                                              "summary":  "HTTPStatusError"
+                                                          },
+                                                          {
+                                                              "source":  "kubernetes",
+                                                              "reference":  "techx-corp-prod/checkout",
+                                                              "summary":  "pod_restarts=0 ready_pods=10/10 available_replicas=10/10 rollout=complete"
+                                                          }
+                                                      ]
+                                     },
+                                     {
+                                         "environment":  "techx-corp-prod",
+                                         "timestamp":  1785076869,
+                                         "detector_id":  "auto_checkout_latency_p95",
+                                         "flow":  "checkout",
+                                         "service":  "checkout",
+                                         "severity":  "SEV1",
+                                         "signal_id":  "checkout_p95_latency_5m",
+                                         "value":  10.0,
+                                         "unit":  "seconds",
+                                         "window":  "5m",
+                                         "threshold":  2.0,
+                                         "quality":  "verified",
+                                         "reason":  "threshold_breached",
+                                         "runbook_id":  "RB-CHECKOUT-LATENCY",
+                                         "likely_dependency":  "unknown",
+                                         "confidence":  1.0,
+                                         "contributing_signals":  [
+                                                                      "checkout_p95_latency_5m",
+                                                                      "checkout_p99_latency_5m"
+                                                                  ],
+                                         "labels":  {
+                                                        "flow":  "checkout",
+                                                        "query_id":  "checkout.p95_latency_5m",
+                                                        "sample_timestamp":  "1785076869.404",
+                                                        "series_count":  "1",
+                                                        "service":  "checkout"
+                                                    },
+                                         "correlation_components":  {
+
+                                                                    },
+                                         "evidence":  [
+                                                          {
+                                                              "source":  "feature",
+                                                              "reference":  "checkout_p95_latency_5m",
+                                                              "summary":  "5m seconds quality=verified"
+                                                          },
+                                                          {
+                                                              "source":  "feature",
+                                                              "reference":  "checkout_p99_latency_5m",
+                                                              "summary":  "5m seconds quality=verified"
+                                                          },
+                                                          {
+                                                              "source":  "enrichment_failure",
+                                                              "reference":  "jaeger",
+                                                              "summary":  "HTTPStatusError"
+                                                          },
+                                                          {
+                                                              "source":  "kubernetes",
+                                                              "reference":  "techx-corp-prod/checkout",
+                                                              "summary":  "pod_restarts=0 ready_pods=10/10 available_replicas=10/10 rollout=complete"
+                                                          }
+                                                      ]
+                                     },
+                                     {
+                                         "environment":  "techx-corp-prod",
+                                         "timestamp":  1785076909,
+                                         "detector_id":  "auto_checkout_latency_p95",
+                                         "flow":  "checkout",
+                                         "service":  "checkout",
+                                         "severity":  "SEV1",
+                                         "signal_id":  "checkout_p95_latency_5m",
+                                         "value":  10.0,
+                                         "unit":  "seconds",
+                                         "window":  "5m",
+                                         "threshold":  2.0,
+                                         "quality":  "verified",
+                                         "reason":  "threshold_breached",
+                                         "runbook_id":  "RB-CHECKOUT-LATENCY",
+                                         "likely_dependency":  "unknown",
+                                         "confidence":  1.0,
+                                         "contributing_signals":  [
+                                                                      "checkout_p95_latency_5m",
+                                                                      "checkout_p99_latency_5m"
+                                                                  ],
+                                         "labels":  {
+                                                        "flow":  "checkout",
+                                                        "query_id":  "checkout.p95_latency_5m",
+                                                        "sample_timestamp":  "1785076909.925",
+                                                        "series_count":  "1",
+                                                        "service":  "checkout"
+                                                    },
+                                         "correlation_components":  {
+
+                                                                    },
+                                         "evidence":  [
+                                                          {
+                                                              "source":  "feature",
+                                                              "reference":  "checkout_p95_latency_5m",
+                                                              "summary":  "5m seconds quality=verified"
+                                                          },
+                                                          {
+                                                              "source":  "feature",
+                                                              "reference":  "checkout_p99_latency_5m",
+                                                              "summary":  "5m seconds quality=verified"
+                                                          },
+                                                          {
+                                                              "source":  "enrichment_failure",
+                                                              "reference":  "jaeger",
+                                                              "summary":  "HTTPStatusError"
+                                                          },
+                                                          {
+                                                              "source":  "kubernetes",
+                                                              "reference":  "techx-corp-prod/checkout",
+                                                              "summary":  "pod_restarts=0 ready_pods=10/10 available_replicas=10/10 rollout=complete"
+                                                          }
+                                                      ]
+                                     },
+                                     {
+                                         "environment":  "techx-corp-prod",
+                                         "timestamp":  1785076950,
+                                         "detector_id":  "auto_checkout_latency_p95",
+                                         "flow":  "checkout",
+                                         "service":  "checkout",
+                                         "severity":  "SEV1",
+                                         "signal_id":  "checkout_p95_latency_5m",
+                                         "value":  10.0,
+                                         "unit":  "seconds",
+                                         "window":  "5m",
+                                         "threshold":  2.0,
+                                         "quality":  "verified",
+                                         "reason":  "threshold_breached",
+                                         "runbook_id":  "RB-CHECKOUT-LATENCY",
+                                         "likely_dependency":  "unknown",
+                                         "confidence":  1.0,
+                                         "contributing_signals":  [
+                                                                      "checkout_p95_latency_5m",
+                                                                      "checkout_p99_latency_5m"
+                                                                  ],
+                                         "labels":  {
+                                                        "flow":  "checkout",
+                                                        "query_id":  "checkout.p95_latency_5m",
+                                                        "sample_timestamp":  "1785076950.08",
+                                                        "series_count":  "1",
+                                                        "service":  "checkout"
+                                                    },
+                                         "correlation_components":  {
+
+                                                                    },
+                                         "evidence":  [
+                                                          {
+                                                              "source":  "feature",
+                                                              "reference":  "checkout_p95_latency_5m",
+                                                              "summary":  "5m seconds quality=verified"
+                                                          },
+                                                          {
+                                                              "source":  "feature",
+                                                              "reference":  "checkout_p99_latency_5m",
+                                                              "summary":  "5m seconds quality=verified"
+                                                          },
+                                                          {
+                                                              "source":  "enrichment_failure",
+                                                              "reference":  "jaeger",
+                                                              "summary":  "HTTPStatusError"
+                                                          },
+                                                          {
+                                                              "source":  "kubernetes",
+                                                              "reference":  "techx-corp-prod/checkout",
+                                                              "summary":  "pod_restarts=0 ready_pods=10/10 available_replicas=10/10 rollout=complete"
+                                                          }
+                                                      ]
+                                     }
+                                 ]
+                  },
+                  {
+                      "incident_id":  "inc-b3d92ea50475",
+                      "fingerprint":  "sha256:b3d92ea50475d2079ca2cc0d5fae1b9248ff67d6f7bff9060483a26752897678",
+                      "state":  "open",
+                      "last_seen":  "2026-07-26T14:39:46+00:00",
+                      "recovered_at":  null,
+                      "cooldown_until":  null,
+                      "severity":  "SEV1",
+                      "flow":  "checkout",
+                      "service":  "checkout",
+                      "likely_dependency":  "unknown",
+                      "occurrence_count":  2,
+                      "events":  [
+                                     {
+                                         "environment":  "techx-corp-prod",
+                                         "timestamp":  1785076745,
+                                         "detector_id":  "auto_checkout_error_rate",
+                                         "flow":  "checkout",
+                                         "service":  "checkout",
+                                         "severity":  "SEV1",
+                                         "signal_id":  "checkout_error_rate_5m",
+                                         "value":  0.21586839014813058,
+                                         "unit":  "ratio",
+                                         "window":  "5m",
+                                         "threshold":  0.05,
+                                         "quality":  "verified",
+                                         "reason":  "threshold_breached",
+                                         "runbook_id":  "RB-SERVICE-ERROR-RATE",
+                                         "likely_dependency":  "unknown",
+                                         "confidence":  1.0,
+                                         "contributing_signals":  [
+                                                                      "checkout_error_rate_5m",
+                                                                      "checkout_p95_latency_5m",
+                                                                      "checkout_p99_latency_5m"
+                                                                  ],
+                                         "labels":  {
+                                                        "flow":  "checkout",
+                                                        "query_id":  "checkout.error_rate_5m",
+                                                        "sample_timestamp":  "1785076745.325",
+                                                        "series_count":  "1",
+                                                        "service":  "checkout"
+                                                    },
+                                         "correlation_components":  {
+
+                                                                    },
+                                         "evidence":  [
+                                                          {
+                                                              "source":  "feature",
+                                                              "reference":  "checkout_error_rate_5m",
+                                                              "summary":  "5m ratio quality=verified"
+                                                          },
+                                                          {
+                                                              "source":  "feature",
+                                                              "reference":  "checkout_p95_latency_5m",
+                                                              "summary":  "5m seconds quality=verified"
+                                                          },
+                                                          {
+                                                              "source":  "feature",
+                                                              "reference":  "checkout_p99_latency_5m",
+                                                              "summary":  "5m seconds quality=verified"
+                                                          },
+                                                          {
+                                                              "source":  "enrichment_failure",
+                                                              "reference":  "jaeger",
+                                                              "summary":  "HTTPStatusError"
+                                                          },
+                                                          {
+                                                              "source":  "kubernetes",
+                                                              "reference":  "techx-corp-prod/checkout",
+                                                              "summary":  "pod_restarts=0 ready_pods=10/10 available_replicas=10/10 rollout=complete"
+                                                          }
+                                                      ]
+                                     },
+                                     {
+                                         "environment":  "techx-corp-prod",
+                                         "timestamp":  1785076786,
+                                         "detector_id":  "auto_checkout_error_rate",
+                                         "flow":  "checkout",
+                                         "service":  "checkout",
+                                         "severity":  "SEV1",
+                                         "signal_id":  "checkout_error_rate_5m",
+                                         "value":  0.1623376599942797,
+                                         "unit":  "ratio",
+                                         "window":  "5m",
+                                         "threshold":  0.05,
+                                         "quality":  "verified",
+                                         "reason":  "threshold_breached",
+                                         "runbook_id":  "RB-SERVICE-ERROR-RATE",
+                                         "likely_dependency":  "unknown",
+                                         "confidence":  1.0,
+                                         "contributing_signals":  [
+                                                                      "checkout_error_rate_5m",
+                                                                      "checkout_p95_latency_5m",
+                                                                      "checkout_p99_latency_5m"
+                                                                  ],
+                                         "labels":  {
+                                                        "flow":  "checkout",
+                                                        "query_id":  "checkout.error_rate_5m",
+                                                        "sample_timestamp":  "1785076786.113",
+                                                        "series_count":  "1",
+                                                        "service":  "checkout"
+                                                    },
+                                         "correlation_components":  {
+
+                                                                    },
+                                         "evidence":  [
+                                                          {
+                                                              "source":  "feature",
+                                                              "reference":  "checkout_error_rate_5m",
+                                                              "summary":  "5m ratio quality=verified"
+                                                          },
+                                                          {
+                                                              "source":  "feature",
+                                                              "reference":  "checkout_p95_latency_5m",
+                                                              "summary":  "5m seconds quality=verified"
+                                                          },
+                                                          {
+                                                              "source":  "feature",
+                                                              "reference":  "checkout_p99_latency_5m",
+                                                              "summary":  "5m seconds quality=verified"
+                                                          },
+                                                          {
+                                                              "source":  "enrichment_failure",
+                                                              "reference":  "jaeger",
+                                                              "summary":  "HTTPStatusError"
+                                                          },
+                                                          {
+                                                              "source":  "kubernetes",
+                                                              "reference":  "techx-corp-prod/checkout",
+                                                              "summary":  "pod_restarts=0 ready_pods=10/10 available_replicas=10/10 rollout=complete"
+                                                          }
+                                                      ]
+                                     }
+                                 ]
+                  }
+              ],
+    "Count":  12
+}

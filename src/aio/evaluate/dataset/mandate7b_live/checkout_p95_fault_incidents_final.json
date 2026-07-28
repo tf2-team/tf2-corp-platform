@@ -1,0 +1,1318 @@
+{
+    "value":  [
+                  {
+                      "incident_id":  "inc-533e7f658c8f",
+                      "fingerprint":  "sha256:533e7f658c8f3b83754c6db20386b0388b681b8f7dc3c5138581e0f6b3b6276c",
+                      "state":  "open",
+                      "last_seen":  "2026-07-26T16:15:05+00:00",
+                      "recovered_at":  null,
+                      "cooldown_until":  "2026-07-26T16:20:57.708236+00:00",
+                      "severity":  "SEV1",
+                      "flow":  "checkout",
+                      "service":  "cart",
+                      "likely_dependency":  "unknown",
+                      "occurrence_count":  7,
+                      "events":  [
+                                     {
+                                         "environment":  "techx-corp-prod",
+                                         "timestamp":  1785082245,
+                                         "detector_id":  "auto_cart_error_rate",
+                                         "flow":  "checkout",
+                                         "service":  "cart",
+                                         "severity":  "SEV1",
+                                         "signal_id":  "cart_error_rate_5m",
+                                         "value":  0.25121391363759465,
+                                         "unit":  "ratio",
+                                         "window":  "5m",
+                                         "threshold":  0.005,
+                                         "quality":  "verified",
+                                         "reason":  "threshold_breached",
+                                         "runbook_id":  "RB-SERVICE-ERROR-RATE",
+                                         "likely_dependency":  "unknown",
+                                         "confidence":  1.0,
+                                         "contributing_signals":  [
+                                                                      "cart_error_rate_5m",
+                                                                      "cart_p95_latency_5m",
+                                                                      "cart_p99_latency_5m"
+                                                                  ],
+                                         "labels":  {
+                                                        "flow":  "checkout",
+                                                        "query_id":  "cart.error_rate_5m",
+                                                        "sample_timestamp":  "1785082245.363",
+                                                        "series_count":  "1",
+                                                        "service":  "cart"
+                                                    },
+                                         "correlation_components":  {
+
+                                                                    },
+                                         "evidence":  [
+                                                          {
+                                                              "source":  "feature",
+                                                              "reference":  "cart_error_rate_5m",
+                                                              "summary":  "5m ratio quality=verified"
+                                                          },
+                                                          {
+                                                              "source":  "feature",
+                                                              "reference":  "cart_p95_latency_5m",
+                                                              "summary":  "5m seconds quality=verified"
+                                                          },
+                                                          {
+                                                              "source":  "feature",
+                                                              "reference":  "cart_p99_latency_5m",
+                                                              "summary":  "5m seconds quality=verified"
+                                                          },
+                                                          {
+                                                              "source":  "trace",
+                                                              "reference":  "http://localhost:16686/jaeger/ui/trace/548d408f698145add4e4abd0c612669d",
+                                                              "summary":  "frontend-proxy/router frontend egress duration=4600 error_span=False"
+                                                          },
+                                                          {
+                                                              "source":  "log",
+                                                              "reference":  "otel-logs-*:bounded-search",
+                                                              "summary":  "count=10000 excerpts=[\u0027User viewing cart\u0027, \u0027User viewing cart\u0027, \u0027User viewing cart\u0027]"
+                                                          },
+                                                          {
+                                                              "source":  "kubernetes",
+                                                              "reference":  "techx-corp-prod/cart",
+                                                              "summary":  "pod_restarts=0 ready_pods=16/16 available_replicas=16/16 rollout=complete"
+                                                          }
+                                                      ]
+                                     },
+                                     {
+                                         "environment":  "techx-corp-prod",
+                                         "timestamp":  1785082288,
+                                         "detector_id":  "auto_cart_error_rate",
+                                         "flow":  "checkout",
+                                         "service":  "cart",
+                                         "severity":  "SEV1",
+                                         "signal_id":  "cart_error_rate_5m",
+                                         "value":  0.22143064227316264,
+                                         "unit":  "ratio",
+                                         "window":  "5m",
+                                         "threshold":  0.005,
+                                         "quality":  "verified",
+                                         "reason":  "threshold_breached",
+                                         "runbook_id":  "RB-SERVICE-ERROR-RATE",
+                                         "likely_dependency":  "unknown",
+                                         "confidence":  1.0,
+                                         "contributing_signals":  [
+                                                                      "cart_error_rate_5m",
+                                                                      "cart_p95_latency_5m",
+                                                                      "cart_p99_latency_5m"
+                                                                  ],
+                                         "labels":  {
+                                                        "flow":  "checkout",
+                                                        "query_id":  "cart.error_rate_5m",
+                                                        "sample_timestamp":  "1785082288.01",
+                                                        "series_count":  "1",
+                                                        "service":  "cart"
+                                                    },
+                                         "correlation_components":  {
+
+                                                                    },
+                                         "evidence":  [
+                                                          {
+                                                              "source":  "feature",
+                                                              "reference":  "cart_error_rate_5m",
+                                                              "summary":  "5m ratio quality=verified"
+                                                          },
+                                                          {
+                                                              "source":  "feature",
+                                                              "reference":  "cart_p95_latency_5m",
+                                                              "summary":  "5m seconds quality=verified"
+                                                          },
+                                                          {
+                                                              "source":  "feature",
+                                                              "reference":  "cart_p99_latency_5m",
+                                                              "summary":  "5m seconds quality=verified"
+                                                          },
+                                                          {
+                                                              "source":  "trace",
+                                                              "reference":  "http://localhost:16686/jaeger/ui/trace/29b829b09c5490419e2369d8582a270f",
+                                                              "summary":  "frontend-proxy/router frontend egress duration=4760 error_span=False"
+                                                          },
+                                                          {
+                                                              "source":  "log",
+                                                              "reference":  "otel-logs-*:bounded-search",
+                                                              "summary":  "count=10000 excerpts=[\u0027User viewing cart\u0027, \u0027User viewing cart\u0027, \u0027User viewing cart\u0027]"
+                                                          },
+                                                          {
+                                                              "source":  "kubernetes",
+                                                              "reference":  "techx-corp-prod/cart",
+                                                              "summary":  "pod_restarts=0 ready_pods=16/16 available_replicas=16/16 rollout=complete"
+                                                          }
+                                                      ]
+                                     },
+                                     {
+                                         "environment":  "techx-corp-prod",
+                                         "timestamp":  1785082330,
+                                         "detector_id":  "auto_cart_error_rate",
+                                         "flow":  "checkout",
+                                         "service":  "cart",
+                                         "severity":  "SEV1",
+                                         "signal_id":  "cart_error_rate_5m",
+                                         "value":  0.19063721322223243,
+                                         "unit":  "ratio",
+                                         "window":  "5m",
+                                         "threshold":  0.005,
+                                         "quality":  "verified",
+                                         "reason":  "threshold_breached",
+                                         "runbook_id":  "RB-SERVICE-ERROR-RATE",
+                                         "likely_dependency":  "unknown",
+                                         "confidence":  1.0,
+                                         "contributing_signals":  [
+                                                                      "cart_error_rate_5m",
+                                                                      "cart_p95_latency_5m",
+                                                                      "cart_p99_latency_5m"
+                                                                  ],
+                                         "labels":  {
+                                                        "flow":  "checkout",
+                                                        "query_id":  "cart.error_rate_5m",
+                                                        "sample_timestamp":  "1785082330.726",
+                                                        "series_count":  "1",
+                                                        "service":  "cart"
+                                                    },
+                                         "correlation_components":  {
+
+                                                                    },
+                                         "evidence":  [
+                                                          {
+                                                              "source":  "feature",
+                                                              "reference":  "cart_error_rate_5m",
+                                                              "summary":  "5m ratio quality=verified"
+                                                          },
+                                                          {
+                                                              "source":  "feature",
+                                                              "reference":  "cart_p95_latency_5m",
+                                                              "summary":  "5m seconds quality=verified"
+                                                          },
+                                                          {
+                                                              "source":  "feature",
+                                                              "reference":  "cart_p99_latency_5m",
+                                                              "summary":  "5m seconds quality=verified"
+                                                          },
+                                                          {
+                                                              "source":  "trace",
+                                                              "reference":  "http://localhost:16686/jaeger/ui/trace/7cf283c0f3c681485665f2f1cf27a9b5",
+                                                              "summary":  "frontend/oteldemo.ProductCatalogService/GetProduct duration=2461 error_span=False"
+                                                          },
+                                                          {
+                                                              "source":  "log",
+                                                              "reference":  "otel-logs-*:bounded-search",
+                                                              "summary":  "count=10000 excerpts=[\u0027User viewing cart\u0027, \u0027User viewing cart\u0027, \u0027User viewing cart\u0027]"
+                                                          },
+                                                          {
+                                                              "source":  "kubernetes",
+                                                              "reference":  "techx-corp-prod/cart",
+                                                              "summary":  "pod_restarts=0 ready_pods=16/16 available_replicas=16/16 rollout=complete"
+                                                          }
+                                                      ]
+                                     },
+                                     {
+                                         "environment":  "techx-corp-prod",
+                                         "timestamp":  1785082373,
+                                         "detector_id":  "auto_cart_error_rate",
+                                         "flow":  "checkout",
+                                         "service":  "cart",
+                                         "severity":  "SEV1",
+                                         "signal_id":  "cart_error_rate_5m",
+                                         "value":  0.1548078049188936,
+                                         "unit":  "ratio",
+                                         "window":  "5m",
+                                         "threshold":  0.005,
+                                         "quality":  "verified",
+                                         "reason":  "threshold_breached",
+                                         "runbook_id":  "RB-SERVICE-ERROR-RATE",
+                                         "likely_dependency":  "unknown",
+                                         "confidence":  1.0,
+                                         "contributing_signals":  [
+                                                                      "cart_error_rate_5m",
+                                                                      "cart_p95_latency_5m",
+                                                                      "cart_p99_latency_5m"
+                                                                  ],
+                                         "labels":  {
+                                                        "flow":  "checkout",
+                                                        "query_id":  "cart.error_rate_5m",
+                                                        "sample_timestamp":  "1785082373.032",
+                                                        "series_count":  "1",
+                                                        "service":  "cart"
+                                                    },
+                                         "correlation_components":  {
+
+                                                                    },
+                                         "evidence":  [
+                                                          {
+                                                              "source":  "feature",
+                                                              "reference":  "cart_error_rate_5m",
+                                                              "summary":  "5m ratio quality=verified"
+                                                          },
+                                                          {
+                                                              "source":  "feature",
+                                                              "reference":  "cart_p95_latency_5m",
+                                                              "summary":  "5m seconds quality=verified"
+                                                          },
+                                                          {
+                                                              "source":  "feature",
+                                                              "reference":  "cart_p99_latency_5m",
+                                                              "summary":  "5m seconds quality=verified"
+                                                          },
+                                                          {
+                                                              "source":  "trace",
+                                                              "reference":  "http://localhost:16686/jaeger/ui/trace/6c76ec21dae61186103a150a4fa5bafd",
+                                                              "summary":  "frontend-proxy/router frontend egress duration=4922 error_span=False"
+                                                          },
+                                                          {
+                                                              "source":  "log",
+                                                              "reference":  "otel-logs-*:bounded-search",
+                                                              "summary":  "count=10000 excerpts=[\u0027User viewing cart\u0027, \u0027User viewing cart\u0027, \u0027User viewing cart\u0027]"
+                                                          },
+                                                          {
+                                                              "source":  "kubernetes",
+                                                              "reference":  "techx-corp-prod/cart",
+                                                              "summary":  "pod_restarts=0 ready_pods=16/16 available_replicas=16/16 rollout=complete"
+                                                          }
+                                                      ]
+                                     },
+                                     {
+                                         "environment":  "techx-corp-prod",
+                                         "timestamp":  1785082418,
+                                         "detector_id":  "auto_cart_error_rate",
+                                         "flow":  "checkout",
+                                         "service":  "cart",
+                                         "severity":  "SEV1",
+                                         "signal_id":  "cart_error_rate_5m",
+                                         "value":  0.11737371350453084,
+                                         "unit":  "ratio",
+                                         "window":  "5m",
+                                         "threshold":  0.005,
+                                         "quality":  "verified",
+                                         "reason":  "threshold_breached",
+                                         "runbook_id":  "RB-SERVICE-ERROR-RATE",
+                                         "likely_dependency":  "unknown",
+                                         "confidence":  1.0,
+                                         "contributing_signals":  [
+                                                                      "cart_error_rate_5m",
+                                                                      "cart_p95_latency_5m",
+                                                                      "cart_p99_latency_5m"
+                                                                  ],
+                                         "labels":  {
+                                                        "flow":  "checkout",
+                                                        "query_id":  "cart.error_rate_5m",
+                                                        "sample_timestamp":  "1785082418.678",
+                                                        "series_count":  "1",
+                                                        "service":  "cart"
+                                                    },
+                                         "correlation_components":  {
+
+                                                                    },
+                                         "evidence":  [
+                                                          {
+                                                              "source":  "feature",
+                                                              "reference":  "cart_error_rate_5m",
+                                                              "summary":  "5m ratio quality=verified"
+                                                          },
+                                                          {
+                                                              "source":  "feature",
+                                                              "reference":  "cart_p95_latency_5m",
+                                                              "summary":  "5m seconds quality=verified"
+                                                          },
+                                                          {
+                                                              "source":  "feature",
+                                                              "reference":  "cart_p99_latency_5m",
+                                                              "summary":  "5m seconds quality=verified"
+                                                          },
+                                                          {
+                                                              "source":  "trace",
+                                                              "reference":  "http://localhost:16686/jaeger/ui/trace/fa4e2837a99df7f3502a17406ae06130",
+                                                              "summary":  "frontend-proxy/router frontend egress duration=5325 error_span=False"
+                                                          },
+                                                          {
+                                                              "source":  "log",
+                                                              "reference":  "otel-logs-*:bounded-search",
+                                                              "summary":  "count=10000 excerpts=[\u0027User viewing cart\u0027, \u0027User viewing cart\u0027, \u0027User viewing cart\u0027]"
+                                                          },
+                                                          {
+                                                              "source":  "kubernetes",
+                                                              "reference":  "techx-corp-prod/cart",
+                                                              "summary":  "pod_restarts=0 ready_pods=16/16 available_replicas=16/16 rollout=complete"
+                                                          }
+                                                      ]
+                                     },
+                                     {
+                                         "environment":  "techx-corp-prod",
+                                         "timestamp":  1785082461,
+                                         "detector_id":  "auto_cart_error_rate",
+                                         "flow":  "checkout",
+                                         "service":  "cart",
+                                         "severity":  "SEV1",
+                                         "signal_id":  "cart_error_rate_5m",
+                                         "value":  0.0805343475294138,
+                                         "unit":  "ratio",
+                                         "window":  "5m",
+                                         "threshold":  0.005,
+                                         "quality":  "verified",
+                                         "reason":  "threshold_breached",
+                                         "runbook_id":  "RB-SERVICE-ERROR-RATE",
+                                         "likely_dependency":  "unknown",
+                                         "confidence":  1.0,
+                                         "contributing_signals":  [
+                                                                      "cart_error_rate_5m",
+                                                                      "cart_p95_latency_5m",
+                                                                      "cart_p99_latency_5m"
+                                                                  ],
+                                         "labels":  {
+                                                        "flow":  "checkout",
+                                                        "query_id":  "cart.error_rate_5m",
+                                                        "sample_timestamp":  "1785082461.019",
+                                                        "series_count":  "1",
+                                                        "service":  "cart"
+                                                    },
+                                         "correlation_components":  {
+
+                                                                    },
+                                         "evidence":  [
+                                                          {
+                                                              "source":  "feature",
+                                                              "reference":  "cart_error_rate_5m",
+                                                              "summary":  "5m ratio quality=verified"
+                                                          },
+                                                          {
+                                                              "source":  "feature",
+                                                              "reference":  "cart_p95_latency_5m",
+                                                              "summary":  "5m seconds quality=verified"
+                                                          },
+                                                          {
+                                                              "source":  "feature",
+                                                              "reference":  "cart_p99_latency_5m",
+                                                              "summary":  "5m seconds quality=verified"
+                                                          },
+                                                          {
+                                                              "source":  "trace",
+                                                              "reference":  "http://localhost:16686/jaeger/ui/trace/591dbe499940833cc4b86c9335322aa4",
+                                                              "summary":  "frontend-proxy/router frontend egress duration=6132 error_span=False"
+                                                          },
+                                                          {
+                                                              "source":  "log",
+                                                              "reference":  "otel-logs-*:bounded-search",
+                                                              "summary":  "count=10000 excerpts=[\u0027User viewing cart\u0027, \u0027User viewing cart\u0027, \u0027User viewing cart\u0027]"
+                                                          },
+                                                          {
+                                                              "source":  "kubernetes",
+                                                              "reference":  "techx-corp-prod/cart",
+                                                              "summary":  "pod_restarts=0 ready_pods=16/16 available_replicas=16/16 rollout=complete"
+                                                          }
+                                                      ]
+                                     },
+                                     {
+                                         "environment":  "techx-corp-prod",
+                                         "timestamp":  1785082505,
+                                         "detector_id":  "auto_cart_error_rate",
+                                         "flow":  "checkout",
+                                         "service":  "cart",
+                                         "severity":  "SEV1",
+                                         "signal_id":  "cart_error_rate_5m",
+                                         "value":  0.03851949653569696,
+                                         "unit":  "ratio",
+                                         "window":  "5m",
+                                         "threshold":  0.005,
+                                         "quality":  "verified",
+                                         "reason":  "threshold_breached",
+                                         "runbook_id":  "RB-SERVICE-ERROR-RATE",
+                                         "likely_dependency":  "unknown",
+                                         "confidence":  1.0,
+                                         "contributing_signals":  [
+                                                                      "cart_error_rate_5m",
+                                                                      "cart_p95_latency_5m",
+                                                                      "cart_p99_latency_5m"
+                                                                  ],
+                                         "labels":  {
+                                                        "flow":  "checkout",
+                                                        "query_id":  "cart.error_rate_5m",
+                                                        "sample_timestamp":  "1785082505.861",
+                                                        "series_count":  "1",
+                                                        "service":  "cart"
+                                                    },
+                                         "correlation_components":  {
+
+                                                                    },
+                                         "evidence":  [
+                                                          {
+                                                              "source":  "feature",
+                                                              "reference":  "cart_error_rate_5m",
+                                                              "summary":  "5m ratio quality=verified"
+                                                          },
+                                                          {
+                                                              "source":  "feature",
+                                                              "reference":  "cart_p95_latency_5m",
+                                                              "summary":  "5m seconds quality=verified"
+                                                          },
+                                                          {
+                                                              "source":  "feature",
+                                                              "reference":  "cart_p99_latency_5m",
+                                                              "summary":  "5m seconds quality=verified"
+                                                          },
+                                                          {
+                                                              "source":  "trace",
+                                                              "reference":  "http://localhost:16686/jaeger/ui/trace/8c780b251234248e25f931e8dc8e9772",
+                                                              "summary":  "cart/POST /grpc.health.v1.Health/Check duration=4549 error_span=False"
+                                                          },
+                                                          {
+                                                              "source":  "log",
+                                                              "reference":  "otel-logs-*:bounded-search",
+                                                              "summary":  "count=10000 excerpts=[\u0027User viewing cart\u0027, \u0027User viewing cart\u0027, \u0027User viewing cart\u0027]"
+                                                          },
+                                                          {
+                                                              "source":  "kubernetes",
+                                                              "reference":  "techx-corp-prod/cart",
+                                                              "summary":  "pod_restarts=0 ready_pods=16/16 available_replicas=16/16 rollout=complete"
+                                                          }
+                                                      ]
+                                     }
+                                 ]
+                  },
+                  {
+                      "incident_id":  "inc-62f7141fb6b6",
+                      "fingerprint":  "sha256:62f7141fb6b6831898abbe14f4d017535692936bd86ae4f43040434b92a7bfe4",
+                      "state":  "open",
+                      "last_seen":  "2026-07-26T16:15:38.346717+00:00",
+                      "recovered_at":  null,
+                      "cooldown_until":  "2026-07-26T16:18:24.882363+00:00",
+                      "severity":  "SEV1",
+                      "flow":  "checkout",
+                      "service":  "cart",
+                      "likely_dependency":  "unknown",
+                      "occurrence_count":  15,
+                      "events":  [
+                                     {
+                                         "environment":  "unknown",
+                                         "timestamp":  0,
+                                         "detector_id":  "rca_root_cause",
+                                         "flow":  "checkout",
+                                         "service":  "cart",
+                                         "severity":  "SEV2",
+                                         "signal_id":  "cpu_millicores",
+                                         "value":  0.8200000000000001,
+                                         "unit":  "score",
+                                         "window":  "rca",
+                                         "threshold":  0.8,
+                                         "quality":  "fallback-only",
+                                         "reason":  "rca_root_cause",
+                                         "runbook_id":  "RB-SERVICE-RESOURCE",
+                                         "likely_dependency":  "unknown",
+                                         "confidence":  0.8200000000000001,
+                                         "contributing_signals":  [
+                                                                      "cpu_millicores"
+                                                                  ],
+                                         "labels":  {
+
+                                                    },
+                                         "correlation_components":  {
+
+                                                                    },
+                                         "evidence":  [
+
+                                                      ]
+                                     },
+                                     {
+                                         "environment":  "unknown",
+                                         "timestamp":  0,
+                                         "detector_id":  "rca_root_cause",
+                                         "flow":  "checkout",
+                                         "service":  "cart",
+                                         "severity":  "SEV2",
+                                         "signal_id":  "cpu_millicores",
+                                         "value":  0.8682367149758453,
+                                         "unit":  "score",
+                                         "window":  "rca",
+                                         "threshold":  0.8,
+                                         "quality":  "fallback-only",
+                                         "reason":  "rca_root_cause",
+                                         "runbook_id":  "RB-SERVICE-RESOURCE",
+                                         "likely_dependency":  "unknown",
+                                         "confidence":  0.8682367149758453,
+                                         "contributing_signals":  [
+                                                                      "cpu_millicores"
+                                                                  ],
+                                         "labels":  {
+
+                                                    },
+                                         "correlation_components":  {
+
+                                                                    },
+                                         "evidence":  [
+
+                                                      ]
+                                     },
+                                     {
+                                         "environment":  "unknown",
+                                         "timestamp":  0,
+                                         "detector_id":  "rca_root_cause",
+                                         "flow":  "checkout",
+                                         "service":  "cart",
+                                         "severity":  "SEV1",
+                                         "signal_id":  "cpu_millicores",
+                                         "value":  0.8462833099579242,
+                                         "unit":  "score",
+                                         "window":  "rca",
+                                         "threshold":  0.8,
+                                         "quality":  "fallback-only",
+                                         "reason":  "rca_root_cause",
+                                         "runbook_id":  "RB-SERVICE-RESOURCE",
+                                         "likely_dependency":  "unknown",
+                                         "confidence":  0.8462833099579242,
+                                         "contributing_signals":  [
+                                                                      "cpu_millicores"
+                                                                  ],
+                                         "labels":  {
+
+                                                    },
+                                         "correlation_components":  {
+
+                                                                    },
+                                         "evidence":  [
+
+                                                      ]
+                                     },
+                                     {
+                                         "environment":  "unknown",
+                                         "timestamp":  0,
+                                         "detector_id":  "rca_root_cause",
+                                         "flow":  "checkout",
+                                         "service":  "cart",
+                                         "severity":  "SEV1",
+                                         "signal_id":  "cpu_millicores",
+                                         "value":  0.8574342458400428,
+                                         "unit":  "score",
+                                         "window":  "rca",
+                                         "threshold":  0.8,
+                                         "quality":  "fallback-only",
+                                         "reason":  "rca_root_cause",
+                                         "runbook_id":  "RB-SERVICE-RESOURCE",
+                                         "likely_dependency":  "unknown",
+                                         "confidence":  0.8574342458400428,
+                                         "contributing_signals":  [
+                                                                      "cpu_millicores"
+                                                                  ],
+                                         "labels":  {
+
+                                                    },
+                                         "correlation_components":  {
+
+                                                                    },
+                                         "evidence":  [
+
+                                                      ]
+                                     },
+                                     {
+                                         "environment":  "unknown",
+                                         "timestamp":  0,
+                                         "detector_id":  "rca_root_cause",
+                                         "flow":  "checkout",
+                                         "service":  "cart",
+                                         "severity":  "SEV1",
+                                         "signal_id":  "cpu_millicores",
+                                         "value":  0.8574342458400428,
+                                         "unit":  "score",
+                                         "window":  "rca",
+                                         "threshold":  0.8,
+                                         "quality":  "fallback-only",
+                                         "reason":  "rca_root_cause",
+                                         "runbook_id":  "RB-SERVICE-RESOURCE",
+                                         "likely_dependency":  "unknown",
+                                         "confidence":  0.8574342458400428,
+                                         "contributing_signals":  [
+                                                                      "cpu_millicores"
+                                                                  ],
+                                         "labels":  {
+
+                                                    },
+                                         "correlation_components":  {
+
+                                                                    },
+                                         "evidence":  [
+
+                                                      ]
+                                     },
+                                     {
+                                         "environment":  "unknown",
+                                         "timestamp":  0,
+                                         "detector_id":  "rca_root_cause",
+                                         "flow":  "checkout",
+                                         "service":  "cart",
+                                         "severity":  "SEV1",
+                                         "signal_id":  "cpu_millicores",
+                                         "value":  0.8724637681159421,
+                                         "unit":  "score",
+                                         "window":  "rca",
+                                         "threshold":  0.8,
+                                         "quality":  "fallback-only",
+                                         "reason":  "rca_root_cause",
+                                         "runbook_id":  "RB-SERVICE-RESOURCE",
+                                         "likely_dependency":  "unknown",
+                                         "confidence":  0.8724637681159421,
+                                         "contributing_signals":  [
+                                                                      "cpu_millicores"
+                                                                  ],
+                                         "labels":  {
+
+                                                    },
+                                         "correlation_components":  {
+
+                                                                    },
+                                         "evidence":  [
+
+                                                      ]
+                                     },
+                                     {
+                                         "environment":  "unknown",
+                                         "timestamp":  0,
+                                         "detector_id":  "rca_root_cause",
+                                         "flow":  "checkout",
+                                         "service":  "cart",
+                                         "severity":  "SEV1",
+                                         "signal_id":  "cpu_millicores",
+                                         "value":  0.8643939393939395,
+                                         "unit":  "score",
+                                         "window":  "rca",
+                                         "threshold":  0.8,
+                                         "quality":  "fallback-only",
+                                         "reason":  "rca_root_cause",
+                                         "runbook_id":  "RB-SERVICE-RESOURCE",
+                                         "likely_dependency":  "unknown",
+                                         "confidence":  0.8643939393939395,
+                                         "contributing_signals":  [
+                                                                      "cpu_millicores",
+                                                                      "socket_io_bytes_per_second"
+                                                                  ],
+                                         "labels":  {
+
+                                                    },
+                                         "correlation_components":  {
+
+                                                                    },
+                                         "evidence":  [
+
+                                                      ]
+                                     },
+                                     {
+                                         "environment":  "unknown",
+                                         "timestamp":  0,
+                                         "detector_id":  "rca_root_cause",
+                                         "flow":  "checkout",
+                                         "service":  "cart",
+                                         "severity":  "SEV1",
+                                         "signal_id":  "cpu_millicores",
+                                         "value":  0.8597826086956523,
+                                         "unit":  "score",
+                                         "window":  "rca",
+                                         "threshold":  0.8,
+                                         "quality":  "fallback-only",
+                                         "reason":  "rca_root_cause",
+                                         "runbook_id":  "RB-SERVICE-RESOURCE",
+                                         "likely_dependency":  "unknown",
+                                         "confidence":  0.8597826086956523,
+                                         "contributing_signals":  [
+                                                                      "cpu_millicores",
+                                                                      "socket_io_bytes_per_second"
+                                                                  ],
+                                         "labels":  {
+
+                                                    },
+                                         "correlation_components":  {
+
+                                                                    },
+                                         "evidence":  [
+
+                                                      ]
+                                     },
+                                     {
+                                         "environment":  "unknown",
+                                         "timestamp":  0,
+                                         "detector_id":  "rca_root_cause",
+                                         "flow":  "checkout",
+                                         "service":  "cart",
+                                         "severity":  "SEV1",
+                                         "signal_id":  "cpu_millicores",
+                                         "value":  0.888888888888889,
+                                         "unit":  "score",
+                                         "window":  "rca",
+                                         "threshold":  0.8,
+                                         "quality":  "fallback-only",
+                                         "reason":  "rca_root_cause",
+                                         "runbook_id":  "RB-SERVICE-RESOURCE",
+                                         "likely_dependency":  "unknown",
+                                         "confidence":  0.888888888888889,
+                                         "contributing_signals":  [
+                                                                      "cpu_millicores",
+                                                                      "socket_io_bytes_per_second"
+                                                                  ],
+                                         "labels":  {
+
+                                                    },
+                                         "correlation_components":  {
+
+                                                                    },
+                                         "evidence":  [
+
+                                                      ]
+                                     },
+                                     {
+                                         "environment":  "unknown",
+                                         "timestamp":  0,
+                                         "detector_id":  "rca_root_cause",
+                                         "flow":  "checkout",
+                                         "service":  "cart",
+                                         "severity":  "SEV1",
+                                         "signal_id":  "cpu_millicores",
+                                         "value":  0.888888888888889,
+                                         "unit":  "score",
+                                         "window":  "rca",
+                                         "threshold":  0.8,
+                                         "quality":  "fallback-only",
+                                         "reason":  "rca_root_cause",
+                                         "runbook_id":  "RB-SERVICE-RESOURCE",
+                                         "likely_dependency":  "unknown",
+                                         "confidence":  0.888888888888889,
+                                         "contributing_signals":  [
+                                                                      "cpu_millicores",
+                                                                      "socket_io_bytes_per_second"
+                                                                  ],
+                                         "labels":  {
+
+                                                    },
+                                         "correlation_components":  {
+
+                                                                    },
+                                         "evidence":  [
+
+                                                      ]
+                                     },
+                                     {
+                                         "environment":  "unknown",
+                                         "timestamp":  0,
+                                         "detector_id":  "rca_root_cause",
+                                         "flow":  "checkout",
+                                         "service":  "cart",
+                                         "severity":  "SEV1",
+                                         "signal_id":  "cpu_millicores",
+                                         "value":  0.888888888888889,
+                                         "unit":  "score",
+                                         "window":  "rca",
+                                         "threshold":  0.8,
+                                         "quality":  "fallback-only",
+                                         "reason":  "rca_root_cause",
+                                         "runbook_id":  "RB-SERVICE-RESOURCE",
+                                         "likely_dependency":  "unknown",
+                                         "confidence":  0.888888888888889,
+                                         "contributing_signals":  [
+                                                                      "cpu_millicores",
+                                                                      "socket_io_bytes_per_second"
+                                                                  ],
+                                         "labels":  {
+
+                                                    },
+                                         "correlation_components":  {
+
+                                                                    },
+                                         "evidence":  [
+
+                                                      ]
+                                     },
+                                     {
+                                         "environment":  "unknown",
+                                         "timestamp":  0,
+                                         "detector_id":  "rca_root_cause",
+                                         "flow":  "checkout",
+                                         "service":  "cart",
+                                         "severity":  "SEV1",
+                                         "signal_id":  "cpu_millicores",
+                                         "value":  0.8772222222222222,
+                                         "unit":  "score",
+                                         "window":  "rca",
+                                         "threshold":  0.8,
+                                         "quality":  "fallback-only",
+                                         "reason":  "rca_root_cause",
+                                         "runbook_id":  "RB-SERVICE-RESOURCE",
+                                         "likely_dependency":  "unknown",
+                                         "confidence":  0.8772222222222222,
+                                         "contributing_signals":  [
+                                                                      "cpu_millicores",
+                                                                      "socket_io_bytes_per_second"
+                                                                  ],
+                                         "labels":  {
+
+                                                    },
+                                         "correlation_components":  {
+
+                                                                    },
+                                         "evidence":  [
+
+                                                      ]
+                                     },
+                                     {
+                                         "environment":  "unknown",
+                                         "timestamp":  0,
+                                         "detector_id":  "rca_root_cause",
+                                         "flow":  "checkout",
+                                         "service":  "cart",
+                                         "severity":  "SEV1",
+                                         "signal_id":  "cpu_millicores",
+                                         "value":  0.8772222222222222,
+                                         "unit":  "score",
+                                         "window":  "rca",
+                                         "threshold":  0.8,
+                                         "quality":  "fallback-only",
+                                         "reason":  "rca_root_cause",
+                                         "runbook_id":  "RB-SERVICE-RESOURCE",
+                                         "likely_dependency":  "unknown",
+                                         "confidence":  0.8772222222222222,
+                                         "contributing_signals":  [
+                                                                      "cpu_millicores",
+                                                                      "socket_io_bytes_per_second"
+                                                                  ],
+                                         "labels":  {
+
+                                                    },
+                                         "correlation_components":  {
+
+                                                                    },
+                                         "evidence":  [
+
+                                                      ]
+                                     },
+                                     {
+                                         "environment":  "unknown",
+                                         "timestamp":  0,
+                                         "detector_id":  "rca_root_cause",
+                                         "flow":  "checkout",
+                                         "service":  "cart",
+                                         "severity":  "SEV1",
+                                         "signal_id":  "cpu_millicores",
+                                         "value":  0.8772222222222222,
+                                         "unit":  "score",
+                                         "window":  "rca",
+                                         "threshold":  0.8,
+                                         "quality":  "fallback-only",
+                                         "reason":  "rca_root_cause",
+                                         "runbook_id":  "RB-SERVICE-RESOURCE",
+                                         "likely_dependency":  "unknown",
+                                         "confidence":  0.8772222222222222,
+                                         "contributing_signals":  [
+                                                                      "cpu_millicores",
+                                                                      "socket_io_bytes_per_second"
+                                                                  ],
+                                         "labels":  {
+
+                                                    },
+                                         "correlation_components":  {
+
+                                                                    },
+                                         "evidence":  [
+
+                                                      ]
+                                     },
+                                     {
+                                         "environment":  "unknown",
+                                         "timestamp":  0,
+                                         "detector_id":  "rca_root_cause",
+                                         "flow":  "checkout",
+                                         "service":  "cart",
+                                         "severity":  "SEV1",
+                                         "signal_id":  "cpu_millicores",
+                                         "value":  0.8772222222222222,
+                                         "unit":  "score",
+                                         "window":  "rca",
+                                         "threshold":  0.8,
+                                         "quality":  "fallback-only",
+                                         "reason":  "rca_root_cause",
+                                         "runbook_id":  "RB-SERVICE-RESOURCE",
+                                         "likely_dependency":  "unknown",
+                                         "confidence":  0.8772222222222222,
+                                         "contributing_signals":  [
+                                                                      "cpu_millicores",
+                                                                      "socket_io_bytes_per_second"
+                                                                  ],
+                                         "labels":  {
+
+                                                    },
+                                         "correlation_components":  {
+
+                                                                    },
+                                         "evidence":  [
+
+                                                      ]
+                                     }
+                                 ]
+                  },
+                  {
+                      "incident_id":  "inc-97d2a7043a2b",
+                      "fingerprint":  "sha256:97d2a7043a2bf36fd4832ce0e1f757e1e1af1493e66bb0c0ff8a0f2f18d47f50",
+                      "state":  "open",
+                      "last_seen":  "2026-07-26T16:15:12+00:00",
+                      "recovered_at":  null,
+                      "cooldown_until":  "2026-07-26T16:21:34.854321+00:00",
+                      "severity":  "SEV1",
+                      "flow":  "checkout",
+                      "service":  "checkout",
+                      "likely_dependency":  "unknown",
+                      "occurrence_count":  6,
+                      "events":  [
+                                     {
+                                         "environment":  "techx-corp-prod",
+                                         "timestamp":  1785082292,
+                                         "detector_id":  "auto_checkout_latency_p95",
+                                         "flow":  "checkout",
+                                         "service":  "checkout",
+                                         "severity":  "SEV1",
+                                         "signal_id":  "checkout_p95_latency_5m",
+                                         "value":  10.0,
+                                         "unit":  "seconds",
+                                         "window":  "5m",
+                                         "threshold":  2.0,
+                                         "quality":  "verified",
+                                         "reason":  "threshold_breached",
+                                         "runbook_id":  "RB-CHECKOUT-LATENCY",
+                                         "likely_dependency":  "unknown",
+                                         "confidence":  1.0,
+                                         "contributing_signals":  [
+                                                                      "checkout_p95_latency_5m",
+                                                                      "checkout_p99_latency_5m"
+                                                                  ],
+                                         "labels":  {
+                                                        "flow":  "checkout",
+                                                        "query_id":  "checkout.p95_latency_5m",
+                                                        "sample_timestamp":  "1785082292.006",
+                                                        "series_count":  "1",
+                                                        "service":  "checkout"
+                                                    },
+                                         "correlation_components":  {
+
+                                                                    },
+                                         "evidence":  [
+                                                          {
+                                                              "source":  "feature",
+                                                              "reference":  "checkout_p95_latency_5m",
+                                                              "summary":  "5m seconds quality=verified"
+                                                          },
+                                                          {
+                                                              "source":  "feature",
+                                                              "reference":  "checkout_p99_latency_5m",
+                                                              "summary":  "5m seconds quality=verified"
+                                                          },
+                                                          {
+                                                              "source":  "trace",
+                                                              "reference":  "http://localhost:16686/jaeger/ui/trace/5c84586771d225b58016046993c1f07a",
+                                                              "summary":  "checkout/publish orders duration=4528 error_span=False"
+                                                          },
+                                                          {
+                                                              "source":  "log",
+                                                              "reference":  "otel-logs-*:bounded-search",
+                                                              "summary":  "count=2410 excerpts=[\u0027Checkout outbox reconciliation pass failed\u0027, \u0027Checkout completed for user 79a14743-d3fc-4597-8132-3f1f8c81a4e3\u0027, \u0027Checkout completed for user c748d4f7-3acf-4b93-ad86-978d202f8222\u0027]"
+                                                          },
+                                                          {
+                                                              "source":  "kubernetes",
+                                                              "reference":  "techx-corp-prod/checkout",
+                                                              "summary":  "pod_restarts=0 ready_pods=10/10 available_replicas=10/10 rollout=complete"
+                                                          }
+                                                      ]
+                                     },
+                                     {
+                                         "environment":  "techx-corp-prod",
+                                         "timestamp":  1785082334,
+                                         "detector_id":  "auto_checkout_latency_p95",
+                                         "flow":  "checkout",
+                                         "service":  "checkout",
+                                         "severity":  "SEV1",
+                                         "signal_id":  "checkout_p95_latency_5m",
+                                         "value":  10.0,
+                                         "unit":  "seconds",
+                                         "window":  "5m",
+                                         "threshold":  2.0,
+                                         "quality":  "verified",
+                                         "reason":  "threshold_breached",
+                                         "runbook_id":  "RB-CHECKOUT-LATENCY",
+                                         "likely_dependency":  "unknown",
+                                         "confidence":  1.0,
+                                         "contributing_signals":  [
+                                                                      "checkout_p95_latency_5m",
+                                                                      "checkout_p99_latency_5m"
+                                                                  ],
+                                         "labels":  {
+                                                        "flow":  "checkout",
+                                                        "query_id":  "checkout.p95_latency_5m",
+                                                        "sample_timestamp":  "1785082334.797",
+                                                        "series_count":  "1",
+                                                        "service":  "checkout"
+                                                    },
+                                         "correlation_components":  {
+
+                                                                    },
+                                         "evidence":  [
+                                                          {
+                                                              "source":  "feature",
+                                                              "reference":  "checkout_p95_latency_5m",
+                                                              "summary":  "5m seconds quality=verified"
+                                                          },
+                                                          {
+                                                              "source":  "feature",
+                                                              "reference":  "checkout_p99_latency_5m",
+                                                              "summary":  "5m seconds quality=verified"
+                                                          },
+                                                          {
+                                                              "source":  "trace",
+                                                              "reference":  "http://localhost:16686/jaeger/ui/trace/1b9b8bf097e71550147b4a6f649811b5",
+                                                              "summary":  "checkout/publish orders duration=5778 error_span=False"
+                                                          },
+                                                          {
+                                                              "source":  "log",
+                                                              "reference":  "otel-logs-*:bounded-search",
+                                                              "summary":  "count=2462 excerpts=[\u0027Checkout outbox reconciliation pass failed\u0027, \u0027Checkout completed for user 04a1fb89-4761-41f0-bbdd-5cdaf91a2ca6\u0027, \u0027Checkout completed for user 25b2b899-511f-4db7-8b7b-160776613a50\u0027]"
+                                                          },
+                                                          {
+                                                              "source":  "kubernetes",
+                                                              "reference":  "techx-corp-prod/checkout",
+                                                              "summary":  "pod_restarts=0 ready_pods=10/10 available_replicas=10/10 rollout=complete"
+                                                          }
+                                                      ]
+                                     },
+                                     {
+                                         "environment":  "techx-corp-prod",
+                                         "timestamp":  1785082377,
+                                         "detector_id":  "auto_checkout_latency_p95",
+                                         "flow":  "checkout",
+                                         "service":  "checkout",
+                                         "severity":  "SEV1",
+                                         "signal_id":  "checkout_p95_latency_5m",
+                                         "value":  10.0,
+                                         "unit":  "seconds",
+                                         "window":  "5m",
+                                         "threshold":  2.0,
+                                         "quality":  "verified",
+                                         "reason":  "threshold_breached",
+                                         "runbook_id":  "RB-CHECKOUT-LATENCY",
+                                         "likely_dependency":  "unknown",
+                                         "confidence":  1.0,
+                                         "contributing_signals":  [
+                                                                      "checkout_p95_latency_5m",
+                                                                      "checkout_p99_latency_5m"
+                                                                  ],
+                                         "labels":  {
+                                                        "flow":  "checkout",
+                                                        "query_id":  "checkout.p95_latency_5m",
+                                                        "sample_timestamp":  "1785082377.966",
+                                                        "series_count":  "1",
+                                                        "service":  "checkout"
+                                                    },
+                                         "correlation_components":  {
+
+                                                                    },
+                                         "evidence":  [
+                                                          {
+                                                              "source":  "feature",
+                                                              "reference":  "checkout_p95_latency_5m",
+                                                              "summary":  "5m seconds quality=verified"
+                                                          },
+                                                          {
+                                                              "source":  "feature",
+                                                              "reference":  "checkout_p99_latency_5m",
+                                                              "summary":  "5m seconds quality=verified"
+                                                          },
+                                                          {
+                                                              "source":  "trace",
+                                                              "reference":  "http://localhost:16686/jaeger/ui/trace/59d6cf894f7246eb436fb359ca12502d",
+                                                              "summary":  "checkout/publish orders duration=28816 error_span=False"
+                                                          },
+                                                          {
+                                                              "source":  "log",
+                                                              "reference":  "otel-logs-*:bounded-search",
+                                                              "summary":  "count=2559 excerpts=[\u0027Checkout outbox reconciliation pass failed\u0027, \u0027Checkout completed for user 04a1fb89-4761-41f0-bbdd-5cdaf91a2ca6\u0027, \u0027Checkout completed for user 25b2b899-511f-4db7-8b7b-160776613a50\u0027]"
+                                                          },
+                                                          {
+                                                              "source":  "kubernetes",
+                                                              "reference":  "techx-corp-prod/checkout",
+                                                              "summary":  "pod_restarts=0 ready_pods=10/10 available_replicas=10/10 rollout=complete"
+                                                          }
+                                                      ]
+                                     },
+                                     {
+                                         "environment":  "techx-corp-prod",
+                                         "timestamp":  1785082422,
+                                         "detector_id":  "auto_checkout_latency_p95",
+                                         "flow":  "checkout",
+                                         "service":  "checkout",
+                                         "severity":  "SEV1",
+                                         "signal_id":  "checkout_p95_latency_5m",
+                                         "value":  10.0,
+                                         "unit":  "seconds",
+                                         "window":  "5m",
+                                         "threshold":  2.0,
+                                         "quality":  "verified",
+                                         "reason":  "threshold_breached",
+                                         "runbook_id":  "RB-CHECKOUT-LATENCY",
+                                         "likely_dependency":  "unknown",
+                                         "confidence":  1.0,
+                                         "contributing_signals":  [
+                                                                      "checkout_p95_latency_5m",
+                                                                      "checkout_p99_latency_5m"
+                                                                  ],
+                                         "labels":  {
+                                                        "flow":  "checkout",
+                                                        "query_id":  "checkout.p95_latency_5m",
+                                                        "sample_timestamp":  "1785082422.672",
+                                                        "series_count":  "1",
+                                                        "service":  "checkout"
+                                                    },
+                                         "correlation_components":  {
+
+                                                                    },
+                                         "evidence":  [
+                                                          {
+                                                              "source":  "feature",
+                                                              "reference":  "checkout_p95_latency_5m",
+                                                              "summary":  "5m seconds quality=verified"
+                                                          },
+                                                          {
+                                                              "source":  "feature",
+                                                              "reference":  "checkout_p99_latency_5m",
+                                                              "summary":  "5m seconds quality=verified"
+                                                          },
+                                                          {
+                                                              "source":  "trace",
+                                                              "reference":  "http://localhost:16686/jaeger/ui/trace/79db532b825278933df5772ec1d70b3e",
+                                                              "summary":  "checkout/publish orders duration=15851 error_span=False"
+                                                          },
+                                                          {
+                                                              "source":  "log",
+                                                              "reference":  "otel-logs-*:bounded-search",
+                                                              "summary":  "count=2557 excerpts=[\u0027Checkout outbox reconciliation pass failed\u0027, \u0027Checkout completed for user 2f72c813-3fd8-446c-a32a-58f6ad36aa12\u0027, \u0027Checkout completed for user 53bdb36f-1a2c-41b0-a8ee-f55274291e72\u0027]"
+                                                          },
+                                                          {
+                                                              "source":  "kubernetes",
+                                                              "reference":  "techx-corp-prod/checkout",
+                                                              "summary":  "pod_restarts=0 ready_pods=10/10 available_replicas=10/10 rollout=complete"
+                                                          }
+                                                      ]
+                                     },
+                                     {
+                                         "environment":  "techx-corp-prod",
+                                         "timestamp":  1785082466,
+                                         "detector_id":  "auto_checkout_latency_p95",
+                                         "flow":  "checkout",
+                                         "service":  "checkout",
+                                         "severity":  "SEV1",
+                                         "signal_id":  "checkout_p95_latency_5m",
+                                         "value":  10.0,
+                                         "unit":  "seconds",
+                                         "window":  "5m",
+                                         "threshold":  2.0,
+                                         "quality":  "verified",
+                                         "reason":  "threshold_breached",
+                                         "runbook_id":  "RB-CHECKOUT-LATENCY",
+                                         "likely_dependency":  "unknown",
+                                         "confidence":  1.0,
+                                         "contributing_signals":  [
+                                                                      "checkout_p95_latency_5m",
+                                                                      "checkout_p99_latency_5m"
+                                                                  ],
+                                         "labels":  {
+                                                        "flow":  "checkout",
+                                                        "query_id":  "checkout.p95_latency_5m",
+                                                        "sample_timestamp":  "1785082466.833",
+                                                        "series_count":  "1",
+                                                        "service":  "checkout"
+                                                    },
+                                         "correlation_components":  {
+
+                                                                    },
+                                         "evidence":  [
+                                                          {
+                                                              "source":  "feature",
+                                                              "reference":  "checkout_p95_latency_5m",
+                                                              "summary":  "5m seconds quality=verified"
+                                                          },
+                                                          {
+                                                              "source":  "feature",
+                                                              "reference":  "checkout_p99_latency_5m",
+                                                              "summary":  "5m seconds quality=verified"
+                                                          },
+                                                          {
+                                                              "source":  "trace",
+                                                              "reference":  "http://localhost:16686/jaeger/ui/trace/1ac2bc01ce9fadcbdc4949bc00836a41",
+                                                              "summary":  "checkout/publish orders duration=4461 error_span=False"
+                                                          },
+                                                          {
+                                                              "source":  "log",
+                                                              "reference":  "otel-logs-*:bounded-search",
+                                                              "summary":  "count=2551 excerpts=[\u0027Checkout outbox reconciliation pass failed\u0027, \u0027Checkout completed for user 66a54010-99a9-4025-8c47-084ff33665f5\u0027, \u0027Checkout completed for user 2da50f56-6e3f-49bc-95fb-6a226ca2962a\u0027]"
+                                                          },
+                                                          {
+                                                              "source":  "kubernetes",
+                                                              "reference":  "techx-corp-prod/checkout",
+                                                              "summary":  "pod_restarts=0 ready_pods=10/10 available_replicas=10/10 rollout=complete"
+                                                          }
+                                                      ]
+                                     },
+                                     {
+                                         "environment":  "techx-corp-prod",
+                                         "timestamp":  1785082512,
+                                         "detector_id":  "auto_checkout_latency_p95",
+                                         "flow":  "checkout",
+                                         "service":  "checkout",
+                                         "severity":  "SEV1",
+                                         "signal_id":  "checkout_p95_latency_5m",
+                                         "value":  10.0,
+                                         "unit":  "seconds",
+                                         "window":  "5m",
+                                         "threshold":  2.0,
+                                         "quality":  "verified",
+                                         "reason":  "threshold_breached",
+                                         "runbook_id":  "RB-CHECKOUT-LATENCY",
+                                         "likely_dependency":  "unknown",
+                                         "confidence":  1.0,
+                                         "contributing_signals":  [
+                                                                      "checkout_p95_latency_5m",
+                                                                      "checkout_p99_latency_5m"
+                                                                  ],
+                                         "labels":  {
+                                                        "flow":  "checkout",
+                                                        "query_id":  "checkout.p95_latency_5m",
+                                                        "sample_timestamp":  "1785082512.223",
+                                                        "series_count":  "1",
+                                                        "service":  "checkout"
+                                                    },
+                                         "correlation_components":  {
+
+                                                                    },
+                                         "evidence":  [
+                                                          {
+                                                              "source":  "feature",
+                                                              "reference":  "checkout_p95_latency_5m",
+                                                              "summary":  "5m seconds quality=verified"
+                                                          },
+                                                          {
+                                                              "source":  "feature",
+                                                              "reference":  "checkout_p99_latency_5m",
+                                                              "summary":  "5m seconds quality=verified"
+                                                          },
+                                                          {
+                                                              "source":  "trace",
+                                                              "reference":  "http://localhost:16686/jaeger/ui/trace/bd7a62fbdba34ffc88d9cc7ad677f6ce",
+                                                              "summary":  "checkout/publish orders duration=4646 error_span=False"
+                                                          },
+                                                          {
+                                                              "source":  "log",
+                                                              "reference":  "otel-logs-*:bounded-search",
+                                                              "summary":  "count=2570 excerpts=[\u0027Checkout outbox reconciliation pass failed\u0027, \u0027Checkout completed for user c6722dac-f10e-4812-953a-bd417cc79a5d\u0027, \u0027Checkout completed for user f21c1574-7b23-4106-a247-ec2d1a0a51fa\u0027]"
+                                                          },
+                                                          {
+                                                              "source":  "kubernetes",
+                                                              "reference":  "techx-corp-prod/checkout",
+                                                              "summary":  "pod_restarts=0 ready_pods=10/10 available_replicas=10/10 rollout=complete"
+                                                          }
+                                                      ]
+                                     }
+                                 ]
+                  }
+              ],
+    "Count":  5
+}

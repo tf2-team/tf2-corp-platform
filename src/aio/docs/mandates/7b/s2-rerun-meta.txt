@@ -1,0 +1,18 @@
+# Cart scenario RE-RUN meta
+fault_start_unix_utc: 1785076022
+flag: local-cartFailure=on
+note: images prefixed s2-rerun-* are from the second run; earlier s2-* may be from first run
+
+detector_fire_seen_local: 2026-07-26 21:30:34.139 +07
+detector: auto_cart_error_rate
+signal: cart_error_rate_5m
+value: 0.1516
+threshold: 0.005
+severity: SEV2
+fault_start_unix: 1785076022
+note: if this is not first cycle, check rca-history.jsonl line 1 for true first fire
+
+fault_disabled_local: 2026-07-26 21:41:48.975 +07:00
+flag: local-cartFailure=off
+recovery: Cart/Checkout Success Rate 100%
+

@@ -1,0 +1,10 @@
+{
+  "scenario_type": "real_incident",
+  "expected_incident": true,
+  "incident_start_ts": 1784871103,
+  "captured_at": null,
+  "notes": "local-paymentFailure escalate 50/75/100%; ops01_checkout_slo_burn_rate; inc-ca09d8e8a247",
+  "source": "live_run_state",
+  "state_store": "state/7b/s3-burn-rate/aiops.sqlite3",
+  "incident_id": "inc-ca09d8e8a247"
+}
