@@ -12,9 +12,6 @@ opentelemetry-exporter-otlp-proto-grpc==1.39.1
 # LLM orchestration
 boto3==1.38.46
 langgraph==1.2.9
-json-repair==0.60.1
-transformers==5.5.0
-regex==2026.7.19
 
 
 # Valkey (for pending cart action tokens)
