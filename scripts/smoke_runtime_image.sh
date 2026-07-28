@@ -33,6 +33,11 @@ wait_for_http() {
 }
 
 case "${service}" in
+  accounting)
+    runtimes="$(docker run --rm --entrypoint dotnet "${image}" --list-runtimes)"
+    printf '%s\n' "${runtimes}"
+    printf '%s\n' "${runtimes}" | grep -Eq '^Microsoft\.NETCore\.App 9\.'
+    ;;
   email)
     docker run --detach --name "${name}" \
       --env APP_ENV=production --env EMAIL_PORT=8080 \
