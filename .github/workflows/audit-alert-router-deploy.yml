@@ -1,3 +1,6 @@
+# Copyright The OpenTelemetry Authors
+# SPDX-License-Identifier: Apache-2.0
+
 name: Deploy Audit Alert Router Lambda
 
 on:
@@ -39,4 +42,4 @@ jobs:
             --function-name techx-audit-alert-router \
             --zip-file fileb:///tmp/function.zip
 
-# Change trail: @hungxqt - 2026-07-28 - Add production-protected deploy workflow for techx-audit-alert-router Lambda.
+# Change trail: @hungxqt - 2026-07-28 - Fix missing license header.

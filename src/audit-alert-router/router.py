@@ -1,3 +1,4 @@
+#!/usr/bin/python
 # Copyright The OpenTelemetry Authors
 # SPDX-License-Identifier: Apache-2.0
 
@@ -102,4 +103,4 @@ def handler(event: Dict[str, Any], context: Any = None) -> Dict[str, List[Dict[s
 
     return {"batchItemFailures": failed_items}
 
-# Change trail: @hungxqt - 2026-07-28 - Add audit alert router Lambda handler with Discord webhook delivery and partial batch failure support.
+# Change trail: @hungxqt - 2026-07-28 - Fix missing license header.

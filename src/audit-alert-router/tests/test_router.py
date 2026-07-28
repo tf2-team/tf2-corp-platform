@@ -1,3 +1,4 @@
+#!/usr/bin/python
 # Copyright The OpenTelemetry Authors
 # SPDX-License-Identifier: Apache-2.0
 
@@ -124,4 +125,4 @@ class TestAuditAlertRouter(unittest.TestCase):
 if __name__ == "__main__":
     unittest.main()
 
-# Change trail: @hungxqt - 2026-07-28 - Add unit tests for audit alert router (2xx, malformed, errors, truncation, mixed batch).
+# Change trail: @hungxqt - 2026-07-28 - Fix missing license header.
