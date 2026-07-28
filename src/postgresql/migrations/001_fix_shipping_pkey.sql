@@ -1,3 +1,6 @@
+-- Copyright The OpenTelemetry Authors
+-- SPDX-License-Identifier: Apache-2.0
+
 -- Migration: 001_fix_shipping_pkey
 -- Date: 2026-07-28
 -- Author: CDO-03 / TF2 (Người 2 - Mandate 21)
