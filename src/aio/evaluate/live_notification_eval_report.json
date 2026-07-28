@@ -53,54 +53,90 @@
       "root_causes": [
         {
           "service": "product-catalog",
-          "score": 0.17949338285818628,
+          "score": 0.2304273711027343,
           "root_cause_metrics": [
             "cpu_millicores"
           ],
           "evidence": [
-            "graph_score=0.632",
+            "graph_score=1.000",
             "earliest_drift_score=0.025",
-            "correlation_score=0.575",
+            "shape_correlation_score=0.575",
             "downstream_coverage_score=0.000",
             "weighted_rrf_score=0.922",
             "evidence_strength=1.000",
-            "support_score=0.195",
+            "support_score=0.250",
             "cpu_millicores anomaly_score=1.800"
-          ]
+          ],
+          "evidence_scores": {
+            "graph": 1.0,
+            "earliest_drift": 0.025000000000000022,
+            "shape_correlation": 0.5750620113524173,
+            "downstream_coverage": 0.0,
+            "weighted_rrf": 0.9216751918158568,
+            "evidence_strength": 1.0,
+            "support": 0.2500093017028626
+          },
+          "metric_scores": {
+            "cpu_millicores": 1.8
+          }
         },
         {
           "service": "frontend-proxy",
-          "score": 0.15299780128574433,
+          "score": 0.20074395886121713,
           "root_cause_metrics": [
             "cpu_millicores"
           ],
           "evidence": [
-            "graph_score=0.596",
+            "graph_score=0.944",
             "earliest_drift_score=0.025",
-            "correlation_score=0.427",
+            "shape_correlation_score=0.427",
             "downstream_coverage_score=0.000",
             "weighted_rrf_score=0.915",
             "evidence_strength=1.000",
-            "support_score=0.167",
+            "support_score=0.219",
             "cpu_millicores anomaly_score=1.800"
-          ]
+          ],
+          "evidence_scores": {
+            "graph": 0.9444176797531363,
+            "earliest_drift": 0.025000000000000022,
+            "shape_correlation": 0.42678888458577546,
+            "downstream_coverage": 0.0,
+            "weighted_rrf": 0.9148387096774193,
+            "evidence_strength": 1.0,
+            "support": 0.21943098465083677
+          },
+          "metric_scores": {
+            "cpu_millicores": 1.8
+          }
         },
         {
           "service": "frontend",
-          "score": 0.13779555174638156,
+          "score": 0.18519417937331287,
           "root_cause_metrics": [
             "cpu_millicores"
           ],
           "evidence": [
-            "graph_score=0.609",
+            "graph_score=0.965",
             "earliest_drift_score=0.025",
-            "correlation_score=0.332",
+            "shape_correlation_score=0.332",
             "downstream_coverage_score=0.000",
             "weighted_rrf_score=0.889",
             "evidence_strength=1.000",
-            "support_score=0.155",
+            "support_score=0.208",
             "cpu_millicores anomaly_score=1.600"
-          ]
+          ],
+          "evidence_scores": {
+            "graph": 0.9647525478441212,
+            "earliest_drift": 0.025000000000000022,
+            "shape_correlation": 0.3323050578825757,
+            "downstream_coverage": 0.0,
+            "weighted_rrf": 0.8890374331550802,
+            "evidence_strength": 1.0,
+            "support": 0.20830864085900455
+          },
+          "metric_scores": {
+            "cpu_millicores": 1.6
+          }
         }
       ],
       "expected_root_service": null,
@@ -117,81 +153,118 @@
       "scenario_type": "masking",
       "expected_incident": true,
       "predicted_notification": true,
-      "notification_count": 4,
+      "notification_count": 3,
       "skipped": null,
       "notification_titles": [
         "checkout incident",
         "checkout incident",
-        "RCA root cause: payment",
         "RCA root cause: accounting"
       ],
       "notification_services": [
         "cart",
         "checkout",
-        "payment",
         "accounting"
       ],
       "root_causes": [
         {
           "service": "payment",
-          "score": 0.5120912823895905,
+          "score": 0.5217029369064552,
           "root_cause_metrics": [
             "memory_usage_bytes",
             "cpu_millicores"
           ],
           "evidence": [
-            "graph_score=0.891",
+            "graph_score=0.961",
             "earliest_drift_score=0.311",
-            "correlation_score=0.817",
+            "shape_correlation_score=0.817",
             "downstream_coverage_score=0.889",
             "weighted_rrf_score=0.914",
             "evidence_strength=1.000",
-            "support_score=0.561",
+            "support_score=0.571",
             "memory_usage_bytes anomaly_score=2.800",
             "cpu_millicores anomaly_score=1.600"
-          ]
+          ],
+          "evidence_scores": {
+            "graph": 0.9608258943778736,
+            "earliest_drift": 0.31092436974789917,
+            "shape_correlation": 0.8173256106774112,
+            "downstream_coverage": 0.888888888888889,
+            "weighted_rrf": 0.913562252964427,
+            "evidence_strength": 1.0,
+            "support": 0.5710644624529706
+          },
+          "metric_scores": {
+            "memory_usage_bytes": 2.8,
+            "cpu_millicores": 1.6
+          }
         },
         {
           "service": "quote",
-          "score": 0.4676622269688438,
+          "score": 0.4765427012439225,
           "root_cause_metrics": [
             "memory_usage_bytes"
           ],
           "evidence": [
-            "graph_score=0.927",
+            "graph_score=1.000",
             "earliest_drift_score=0.311",
-            "correlation_score=0.777",
+            "shape_correlation_score=0.777",
             "downstream_coverage_score=1.000",
             "weighted_rrf_score=0.811",
             "evidence_strength=1.000",
-            "support_score=0.577",
+            "support_score=0.588",
             "memory_usage_bytes anomaly_score=1.600"
-          ]
+          ],
+          "evidence_scores": {
+            "graph": 1.0,
+            "earliest_drift": 0.31092436974789917,
+            "shape_correlation": 0.7772699228760557,
+            "downstream_coverage": 1.0,
+            "weighted_rrf": 0.8109999999999999,
+            "evidence_strength": 1.0,
+            "support": 0.5875988917927528
+          },
+          "metric_scores": {
+            "memory_usage_bytes": 1.6
+          }
         },
         {
           "service": "accounting",
-          "score": 0.3055607892913352,
+          "score": 0.31038581569866025,
           "root_cause_metrics": [
             "memory_usage_bytes",
             "cpu_millicores",
             "socket_io_bytes_per_second"
           ],
           "evidence": [
-            "graph_score=0.550",
+            "graph_score=0.594",
             "earliest_drift_score=0.420",
-            "correlation_score=0.654",
+            "shape_correlation_score=0.654",
             "downstream_coverage_score=0.000",
             "weighted_rrf_score=0.742",
             "evidence_strength=1.000",
-            "support_score=0.412",
+            "support_score=0.418",
             "memory_usage_bytes anomaly_score=1.800",
             "cpu_millicores anomaly_score=1.600",
             "socket_io_bytes_per_second anomaly_score=1.600"
-          ]
+          ],
+          "evidence_scores": {
+            "graph": 0.5936619660502348,
+            "earliest_drift": 0.4201680672268907,
+            "shape_correlation": 0.6535463806408358,
+            "downstream_coverage": 0.0,
+            "weighted_rrf": 0.7422413793103448,
+            "evidence_strength": 1.0,
+            "support": 0.4181736889784505
+          },
+          "metric_scores": {
+            "memory_usage_bytes": 1.8,
+            "cpu_millicores": 1.6,
+            "socket_io_bytes_per_second": 1.6
+          }
         },
         {
           "service": "frontend",
-          "score": 0.23178169576522248,
+          "score": 0.23269461126591043,
           "root_cause_metrics": [
             "memory_usage_bytes",
             "cpu_millicores",
@@ -199,37 +272,65 @@
             "workload_ready_pods"
           ],
           "evidence": [
-            "graph_score=0.108",
+            "graph_score=0.116",
             "earliest_drift_score=0.311",
-            "correlation_score=0.908",
+            "shape_correlation_score=0.908",
             "downstream_coverage_score=0.000",
             "weighted_rrf_score=0.717",
             "evidence_strength=1.000",
-            "support_score=0.323",
+            "support_score=0.325",
             "memory_usage_bytes anomaly_score=2.600",
             "cpu_millicores anomaly_score=1.600",
             "socket_io_bytes_per_second anomaly_score=1.800",
             "workload_ready_pods anomaly_score=1.600"
-          ]
+          ],
+          "evidence_scores": {
+            "graph": 0.11633537457144948,
+            "earliest_drift": 0.31092436974789917,
+            "shape_correlation": 0.9082780363524158,
+            "downstream_coverage": 0.0,
+            "weighted_rrf": 0.7166440217391304,
+            "evidence_strength": 1.0,
+            "support": 0.3247004149999243
+          },
+          "metric_scores": {
+            "memory_usage_bytes": 2.6,
+            "cpu_millicores": 1.6,
+            "socket_io_bytes_per_second": 1.8,
+            "workload_ready_pods": 1.6
+          }
         },
         {
           "service": "recommendation",
-          "score": 0.2568626736360355,
+          "score": 0.26216927077404045,
           "root_cause_metrics": [
             "memory_usage_bytes",
             "cpu_millicores"
           ],
           "evidence": [
-            "graph_score=0.650",
+            "graph_score=0.701",
             "earliest_drift_score=0.311",
-            "correlation_score=0.688",
+            "shape_correlation_score=0.688",
             "downstream_coverage_score=0.000",
             "weighted_rrf_score=0.691",
             "evidence_strength=1.000",
-            "support_score=0.372",
+            "support_score=0.379",
             "memory_usage_bytes anomaly_score=1.800",
             "cpu_millicores anomaly_score=1.600"
-          ]
+          ],
+          "evidence_scores": {
+            "graph": 0.701161444614666,
+            "earliest_drift": 0.31092436974789917,
+            "shape_correlation": 0.6875432831479693,
+            "downstream_coverage": 0.0,
+            "weighted_rrf": 0.6911666666666666,
+            "evidence_strength": 1.0,
+            "support": 0.3793141125257398
+          },
+          "metric_scores": {
+            "memory_usage_bytes": 1.8,
+            "cpu_millicores": 1.6
+          }
         }
       ],
       "expected_root_service": "cart",
@@ -276,91 +377,124 @@
       "root_causes": [
         {
           "service": "frontend",
-          "score": 0.17703203125052347,
+          "score": 0.21602451683570453,
           "root_cause_metrics": [
             "cpu_millicores",
             "memory_usage_bytes"
           ],
           "evidence": [
-            "graph_score=0.501",
+            "graph_score=0.807",
             "earliest_drift_score=0.044",
-            "correlation_score=0.488",
+            "shape_correlation_score=0.488",
             "downstream_coverage_score=0.235",
             "weighted_rrf_score=0.851",
             "evidence_strength=1.000",
-            "support_score=0.208",
+            "support_score=0.254",
             "cpu_millicores anomaly_score=1.600",
             "memory_usage_bytes anomaly_score=1.000"
-          ]
+          ],
+          "evidence_scores": {
+            "graph": 0.8066947431300553,
+            "earliest_drift": 0.044117647058823484,
+            "shape_correlation": 0.4884273569246426,
+            "downstream_coverage": 0.23529411764705882,
+            "weighted_rrf": 0.8510694249649368,
+            "evidence_strength": 1.0,
+            "support": 0.2538271385376164
+          },
+          "metric_scores": {
+            "cpu_millicores": 1.6,
+            "memory_usage_bytes": 1.0
+          }
         },
         {
           "service": "product-catalog",
-          "score": 0.13364489440853167,
+          "score": 0.16865899514040344,
           "root_cause_metrics": [
             "cpu_millicores"
           ],
           "evidence": [
-            "graph_score=0.511",
+            "graph_score=0.823",
             "earliest_drift_score=0.044",
-            "correlation_score=0.516",
+            "shape_correlation_score=0.516",
             "downstream_coverage_score=0.000",
             "weighted_rrf_score=0.749",
             "evidence_strength=1.000",
-            "support_score=0.178",
+            "support_score=0.225",
             "cpu_millicores anomaly_score=1.600"
-          ]
+          ],
+          "evidence_scores": {
+            "graph": 0.8231512937801433,
+            "earliest_drift": 0.044117647058823484,
+            "shape_correlation": 0.5163638053722494,
+            "downstream_coverage": 0.0,
+            "weighted_rrf": 0.7489565217391305,
+            "evidence_strength": 1.0,
+            "support": 0.2251919707552118
+          },
+          "metric_scores": {
+            "cpu_millicores": 1.6
+          }
         },
         {
           "service": "payment",
-          "score": 0.09206553246622329,
+          "score": 0.09480852957145275,
           "root_cause_metrics": [
             "cpu_millicores"
           ],
           "evidence": [
-            "graph_score=0.040",
+            "graph_score=0.065",
             "earliest_drift_score=0.015",
-            "correlation_score=0.491",
+            "shape_correlation_score=0.491",
             "downstream_coverage_score=0.235",
             "weighted_rrf_score=0.748",
             "evidence_strength=1.000",
-            "support_score=0.123",
+            "support_score=0.127",
             "cpu_millicores anomaly_score=1.800"
-          ]
+          ],
+          "evidence_scores": {
+            "graph": 0.0645522663454681,
+            "earliest_drift": 0.014705882352941124,
+            "shape_correlation": 0.49102250933707403,
+            "downstream_coverage": 0.23529411764705882,
+            "weighted_rrf": 0.7481818181818183,
+            "evidence_strength": 1.0,
+            "support": 0.12671856929355774
+          },
+          "metric_scores": {
+            "cpu_millicores": 1.8
+          }
         },
         {
           "service": "recommendation",
-          "score": 0.10926875476356687,
+          "score": 0.13517542844066596,
           "root_cause_metrics": [
             "memory_usage_bytes"
           ],
           "evidence": [
-            "graph_score=0.426",
+            "graph_score=0.685",
             "earliest_drift_score=0.044",
-            "correlation_score=0.507",
+            "shape_correlation_score=0.507",
             "downstream_coverage_score=0.000",
             "weighted_rrf_score=0.666",
             "evidence_strength=1.000",
-            "support_score=0.164",
+            "support_score=0.203",
             "memory_usage_bytes anomaly_score=1.800",
             "cpu_millicores anomaly_score=1.600"
-          ]
-        },
-        {
-          "service": "postgresql",
-          "score": 0.09717394646309939,
-          "root_cause_metrics": [
-            "active_connections"
           ],
-          "evidence": [
-            "graph_score=0.621",
-            "earliest_drift_score=0.000",
-            "correlation_score=0.061",
-            "downstream_coverage_score=1.000",
-            "weighted_rrf_score=0.385",
-            "evidence_strength=1.000",
-            "support_score=0.252",
-            "active_connections anomaly_score=1.000"
-          ]
+          "evidence_scores": {
+            "graph": 0.6850110974333835,
+            "earliest_drift": 0.044117647058823484,
+            "shape_correlation": 0.5065399993247394,
+            "downstream_coverage": 0.0,
+            "weighted_rrf": 0.6658974358974359,
+            "evidence_strength": 1.0,
+            "support": 0.20299737039607135
+          },
+          "metric_scores": {
+            "memory_usage_bytes": 1.8,
+            "cpu_millicores": 1.6
+          }
         }
       ],
       "expected_root_service": "payment",
@@ -410,113 +544,174 @@
       "scenario_type": "real_incident",
       "expected_incident": true,
       "predicted_notification": true,
-      "notification_count": 5,
+      "notification_count": 4,
       "skipped": null,
       "notification_titles": [
         "web incident",
         "checkout incident",
         "edge incident",
-        "checkout incident",
-        "RCA root cause: recommendation"
+        "checkout incident"
       ],
       "notification_services": [
         "frontend",
         "cart",
         "frontend-proxy",
-        "checkout",
-        "recommendation"
+        "checkout"
       ],
       "root_causes": [
         {
           "service": "recommendation",
-          "score": 0.46780356816712476,
+          "score": 0.5186137934026899,
           "root_cause_metrics": [
             "memory_usage_bytes"
           ],
           "evidence": [
-            "graph_score=0.504",
+            "graph_score=0.856",
             "earliest_drift_score=0.327",
-            "correlation_score=0.856",
+            "shape_correlation_score=0.856",
             "downstream_coverage_score=0.680",
             "weighted_rrf_score=0.962",
             "evidence_strength=1.000",
-            "support_score=0.486",
+            "support_score=0.539",
             "memory_usage_bytes anomaly_score=1.800"
-          ]
+          ],
+          "evidence_scores": {
+            "graph": 0.8562050205504845,
+            "earliest_drift": 0.327433628318584,
+            "shape_correlation": 0.8558441722641118,
+            "downstream_coverage": 0.68,
+            "weighted_rrf": 0.9623636363636363,
+            "evidence_strength": 1.0,
+            "support": 0.5388958744974106
+          },
+          "metric_scores": {
+            "memory_usage_bytes": 1.8
+          }
         },
         {
           "service": "product-reviews",
-          "score": 0.2666511735251591,
+          "score": 0.2948740788340178,
           "root_cause_metrics": [
             "memory_usage_bytes",
             "socket_io_bytes_per_second"
           ],
           "evidence": [
-            "graph_score=0.308",
+            "graph_score=0.523",
             "earliest_drift_score=0.062",
-            "correlation_score=0.816",
+            "shape_correlation_score=0.816",
             "downstream_coverage_score=0.680",
             "weighted_rrf_score=0.875",
             "evidence_strength=1.000",
-            "support_score=0.305",
+            "support_score=0.337",
             "memory_usage_bytes anomaly_score=1.600",
             "socket_io_bytes_per_second anomaly_score=1.800"
-          ]
+          ],
+          "evidence_scores": {
+            "graph": 0.5227968844585482,
+            "earliest_drift": 0.06194690265486724,
+            "shape_correlation": 0.8155525617296983,
+            "downstream_coverage": 0.68,
+            "weighted_rrf": 0.8754565217391305,
+            "evidence_strength": 1.0,
+            "support": 0.3368232133884139
+          },
+          "metric_scores": {
+            "memory_usage_bytes": 1.6,
+            "socket_io_bytes_per_second": 1.8
+          }
         },
         {
           "service": "currency",
-          "score": 0.30910880468391483,
+          "score": 0.3618100585304773,
           "root_cause_metrics": [
             "memory_usage_bytes"
           ],
           "evidence": [
-            "graph_score=0.589",
+            "graph_score=1.000",
             "earliest_drift_score=0.062",
-            "correlation_score=0.595",
+            "shape_correlation_score=0.595",
             "downstream_coverage_score=1.000",
             "weighted_rrf_score=0.855",
             "evidence_strength=1.000",
-            "support_score=0.362",
+            "support_score=0.423",
             "memory_usage_bytes anomaly_score=1.800"
-          ]
+          ],
+          "evidence_scores": {
+            "graph": 1.0,
+            "earliest_drift": 0.06194690265486724,
+            "shape_correlation": 0.595157452106456,
+            "downstream_coverage": 1.0,
+            "weighted_rrf": 0.8546470588235293,
+            "evidence_strength": 1.0,
+            "support": 0.42334441427614533
+          },
+          "metric_scores": {
+            "memory_usage_bytes": 1.8
+          }
         },
         {
           "service": "cart",
-          "score": 0.22293865131650337,
+          "score": 0.22733490966834896,
           "root_cause_metrics": [
             "cpu_millicores",
             "memory_usage_bytes",
             "socket_io_bytes_per_second"
           ],
           "evidence": [
-            "graph_score=0.051",
+            "graph_score=0.086",
             "earliest_drift_score=0.062",
-            "correlation_score=0.841",
+            "shape_correlation_score=0.841",
             "downstream_coverage_score=0.680",
             "weighted_rrf_score=0.826",
             "evidence_strength=1.000",
-            "support_score=0.270",
+            "support_score=0.275",
             "cpu_millicores anomaly_score=1.600",
             "memory_usage_bytes anomaly_score=1.600",
             "socket_io_bytes_per_second anomaly_score=1.600"
-          ]
+          ],
+          "evidence_scores": {
+            "graph": 0.0863134490523671,
+            "earliest_drift": 0.06194690265486724,
+            "shape_correlation": 0.8414136092444229,
+            "downstream_coverage": 0.68,
+            "weighted_rrf": 0.8259820123775242,
+            "evidence_strength": 1.0,
+            "support": 0.27522985520469545
+          },
+          "metric_scores": {
+            "cpu_millicores": 1.6,
+            "memory_usage_bytes": 1.6,
+            "socket_io_bytes_per_second": 1.6
+          }
         },
         {
           "service": "product-catalog",
-          "score": 0.1817545572550202,
+          "score": 0.2060045651710202,
           "root_cause_metrics": [
             "memory_usage_bytes"
           ],
           "evidence": [
-            "graph_score=0.299",
+            "graph_score=0.508",
             "earliest_drift_score=0.053",
-            "correlation_score=0.712",
+            "shape_correlation_score=0.712",
             "downstream_coverage_score=0.360",
             "weighted_rrf_score=0.774",
             "evidence_strength=1.000",
-            "support_score=0.235",
+            "support_score=0.266",
             "memory_usage_bytes anomaly_score=1.800"
-          ]
+          ],
+          "evidence_scores": {
+            "graph": 0.508397779855727,
+            "earliest_drift": 0.053097345132743334,
+            "shape_correlation": 0.7123744050766789,
+            "downstream_coverage": 0.36,
+            "weighted_rrf": 0.7735245358090186,
+            "evidence_strength": 1.0,
+            "support": 0.2663193675628697
+          },
+          "metric_scores": {
+            "memory_usage_bytes": 1.8
+          }
         }
       ],
       "expected_root_service": "cart",
@@ -540,96 +735,160 @@
       "root_causes": [
         {
           "service": "checkout",
-          "score": 0.26044128810028055,
+          "score": 0.2836570582670172,
           "root_cause_metrics": [
             "cpu_millicores",
             "memory_usage_bytes"
           ],
           "evidence": [
-            "graph_score=0.228",
+            "graph_score=0.395",
             "earliest_drift_score=0.116",
-            "correlation_score=0.746",
+            "shape_correlation_score=0.746",
             "downstream_coverage_score=0.471",
             "weighted_rrf_score=0.928",
             "evidence_strength=1.000",
-            "support_score=0.281",
+            "support_score=0.306",
             "cpu_millicores anomaly_score=1.600",
             "memory_usage_bytes anomaly_score=1.000"
-          ]
+          ],
+          "evidence_scores": {
+            "graph": 0.3947183578652434,
+            "earliest_drift": 0.1159420289855072,
+            "shape_correlation": 0.746452449663179,
+            "downstream_coverage": 0.47058823529411764,
+            "weighted_rrf": 0.9284038461538461,
+            "evidence_strength": 1.0,
+            "support": 0.30553197236540997
+          },
+          "metric_scores": {
+            "cpu_millicores": 1.6,
+            "memory_usage_bytes": 1.0
+          }
         },
         {
           "service": "product-reviews",
-          "score": 0.34758033245967906,
+          "score": 0.3931546768933621,
           "root_cause_metrics": [
             "memory_usage_bytes",
             "socket_io_bytes_per_second"
           ],
           "evidence": [
-            "graph_score=0.470",
+            "graph_score=0.813",
             "earliest_drift_score=0.116",
-            "correlation_score=0.724",
+            "shape_correlation_score=0.724",
             "downstream_coverage_score=1.000",
             "weighted_rrf_score=0.885",
             "evidence_strength=1.000",
-            "support_score=0.393",
+            "support_score=0.444",
             "memory_usage_bytes anomaly_score=1.000",
             "socket_io_bytes_per_second anomaly_score=1.600"
-          ]
+          ],
+          "evidence_scores": {
+            "graph": 0.8129812972667446,
+            "earliest_drift": 0.1159420289855072,
+            "shape_correlation": 0.7239395122770753,
+            "downstream_coverage": 1.0,
+            "weighted_rrf": 0.8848731884057971,
+            "evidence_strength": 1.0,
+            "support": 0.444306237373602
+          },
+          "metric_scores": {
+            "memory_usage_bytes": 1.0,
+            "socket_io_bytes_per_second": 1.6
+          }
         },
         {
           "service": "product-catalog",
-          "score": 0.26621853181327515,
+          "score": 0.30724123869361875,
           "root_cause_metrics": [
             "memory_usage_bytes"
           ],
           "evidence": [
-            "graph_score=0.431",
+            "graph_score=0.747",
             "earliest_drift_score=0.116",
-            "correlation_score=0.720",
+            "shape_correlation_score=0.720",
             "downstream_coverage_score=0.471",
             "weighted_rrf_score=0.867",
             "evidence_strength=1.000",
-            "support_score=0.307",
+            "support_score=0.354",
             "memory_usage_bytes anomaly_score=1.000"
-          ]
+          ],
+          "evidence_scores": {
+            "graph": 0.7468053628210208,
+            "earliest_drift": 0.1159420289855072,
+            "shape_correlation": 0.71975925768413,
+            "downstream_coverage": 0.47058823529411764,
+            "weighted_rrf": 0.8670777591973243,
+            "evidence_strength": 1.0,
+            "support": 0.35434104431191926
+          },
+          "metric_scores": {
+            "memory_usage_bytes": 1.0
+          }
         },
         {
           "service": "recommendation",
-          "score": 0.3438889994651971,
+          "score": 0.39861242811313924,
           "root_cause_metrics": [
             "memory_usage_bytes"
           ],
           "evidence": [
-            "graph_score=0.578",
+            "graph_score=1.000",
             "earliest_drift_score=0.116",
-            "correlation_score=0.651",
+            "shape_correlation_score=0.651",
             "downstream_coverage_score=1.000",
             "weighted_rrf_score=0.864",
             "evidence_strength=1.000",
-            "support_score=0.398",
+            "support_score=0.461",
             "memory_usage_bytes anomaly_score=1.000"
-          ]
+          ],
+          "evidence_scores": {
+            "graph": 1.0,
+            "earliest_drift": 0.1159420289855072,
+            "shape_correlation": 0.6512956107879427,
+            "downstream_coverage": 1.0,
+            "weighted_rrf": 0.8638025078369906,
+            "evidence_strength": 1.0,
+            "support": 0.4614624575602204
+          },
+          "metric_scores": {
+            "memory_usage_bytes": 1.0
+          }
         },
         {
           "service": "cart",
-          "score": 0.22636160956637877,
+          "score": 0.236537509182794,
           "root_cause_metrics": [
             "cpu_millicores",
             "memory_usage_bytes",
             "socket_io_bytes_per_second"
           ],
           "evidence": [
-            "graph_score=0.115",
+            "graph_score=0.199",
             "earliest_drift_score=0.116",
-            "correlation_score=0.855",
+            "shape_correlation_score=0.855",
             "downstream_coverage_score=0.471",
             "weighted_rrf_score=0.809",
             "evidence_strength=1.000",
-            "support_score=0.280",
+            "support_score=0.292",
             "cpu_millicores anomaly_score=1.600",
             "memory_usage_bytes anomaly_score=1.000",
             "socket_io_bytes_per_second anomaly_score=1.600"
-          ]
+          ],
+          "evidence_scores": {
+            "graph": 0.19860252457781266,
+            "earliest_drift": 0.1159420289855072,
+            "shape_correlation": 0.8554412561587675,
+            "downstream_coverage": 0.47058823529411764,
+            "weighted_rrf": 0.8087777777777777,
+            "evidence_strength": 1.0,
+            "support": 0.2924629183466336
+          },
+          "metric_scores": {
+            "cpu_millicores": 1.6,
+            "memory_usage_bytes": 1.0,
+            "socket_io_bytes_per_second": 1.6
+          }
         }
       ],
       "expected_root_service": null,
@@ -649,83 +908,132 @@
       "notification_count": 1,
       "skipped": null,
       "notification_titles": [
-        "RCA root cause: product-catalog"
+        "RCA root cause: checkout"
       ],
       "notification_services": [
-        "product-catalog"
+        "checkout"
       ],
       "root_causes": [
         {
           "service": "product-catalog",
-          "score": 0.2768489529973104,
+          "score": 0.3034751982755839,
           "root_cause_metrics": [
             "memory_usage_bytes"
           ],
           "evidence": [
-            "graph_score=0.296",
+            "graph_score=0.496",
             "earliest_drift_score=0.086",
-            "correlation_score=0.466",
+            "shape_correlation_score=0.466",
             "downstream_coverage_score=1.000",
             "weighted_rrf_score=0.888",
             "evidence_strength=1.000",
-            "support_score=0.312",
+            "support_score=0.342",
             "memory_usage_bytes anomaly_score=1.800"
-          ]
+          ],
+          "evidence_scores": {
+            "graph": 0.4963402659675916,
+            "earliest_drift": 0.08620689655172409,
+            "shape_correlation": 0.4659029509976222,
+            "downstream_coverage": 1.0,
+            "weighted_rrf": 0.8880027900488259,
+            "evidence_strength": 1.0,
+            "support": 0.34175027564823035
+          },
+          "metric_scores": {
+            "memory_usage_bytes": 1.8
+          }
         },
         {
           "service": "checkout",
-          "score": 0.28022391827263693,
+          "score": 0.331573275862069,
           "root_cause_metrics": [
-            "memory_usage_bytes",
-            "workload_ready_pods"
+            "memory_usage_bytes"
           ],
           "evidence": [
-            "graph_score=0.597",
+            "graph_score=1.000",
             "earliest_drift_score=0.164",
-            "correlation_score=1.000",
+            "shape_correlation_score=1.000",
             "downstream_coverage_score=0.000",
             "weighted_rrf_score=0.850",
             "evidence_strength=1.000",
-            "support_score=0.330",
+            "support_score=0.390",
             "memory_usage_bytes anomaly_score=1.800",
             "workload_ready_pods anomaly_score=1.000"
-          ]
+          ],
+          "evidence_scores": {
+            "graph": 1.0,
+            "earliest_drift": 0.1637931034482759,
+            "shape_correlation": 1.0,
+            "downstream_coverage": 0.0,
+            "weighted_rrf": 0.85,
+            "evidence_strength": 1.0,
+            "support": 0.3900862068965517
+          },
+          "metric_scores": {
+            "memory_usage_bytes": 1.8,
+            "workload_ready_pods": 1.0
+          }
         },
         {
           "service": "recommendation",
-          "score": 0.03163505373719197,
+          "score": 0.03783710128534299,
           "root_cause_metrics": [
             "cpu_millicores"
           ],
           "evidence": [
-            "graph_score=0.250",
+            "graph_score=0.418",
             "earliest_drift_score=0.000",
-            "correlation_score=0.609",
+            "shape_correlation_score=0.609",
             "downstream_coverage_score=0.000",
             "weighted_rrf_score=0.246",
             "evidence_strength=1.000",
-            "support_score=0.129",
+            "support_score=0.154",
             "cpu_millicores anomaly_score=1.600"
-          ]
+          ],
+          "evidence_scores": {
+            "graph": 0.4180526097901129,
+            "earliest_drift": 0.0,
+            "shape_correlation": 0.6091084222539968,
+            "downstream_coverage": 0.0,
+            "weighted_rrf": 0.24557721139430283,
+            "evidence_strength": 1.0,
+            "support": 0.15407415480661646
+          },
+          "metric_scores": {
+            "cpu_millicores": 1.6
+          }
         },
         {
           "service": "cart",
-          "score": 0.023686762510976348,
+          "score": 0.024875955114542863,
           "root_cause_metrics": [
-            "memory_usage_bytes",
-            "cpu_millicores"
+            "cpu_millicores",
+            "memory_usage_bytes"
           ],
           "evidence": [
-            "graph_score=0.051",
+            "graph_score=0.086",
             "earliest_drift_score=0.000",
-            "correlation_score=0.638",
+            "shape_correlation_score=0.638",
             "downstream_coverage_score=0.000",
             "weighted_rrf_score=0.229",
             "evidence_strength=1.000",
-            "support_score=0.103",
-            "memory_usage_bytes anomaly_score=1.000",
-            "cpu_millicores anomaly_score=1.000"
-          ]
+            "support_score=0.109",
+            "cpu_millicores anomaly_score=1.000",
+            "memory_usage_bytes anomaly_score=1.000"
+          ],
+          "evidence_scores": {
+            "graph": 0.08589831854010316,
+            "earliest_drift": 0.0,
+            "shape_correlation": 0.6377658302465984,
+            "downstream_coverage": 0.0,
+            "weighted_rrf": 0.22916666666666663,
+            "evidence_strength": 1.0,
+            "support": 0.10854962231800523
+          },
+          "metric_scores": {
+            "cpu_millicores": 1.0,
+            "memory_usage_bytes": 1.0
+          }
         }
       ],
       "expected_root_service": "checkout",
@@ -759,107 +1067,165 @@
       "scenario_type": "real_incident",
       "expected_incident": true,
       "predicted_notification": true,
-      "notification_count": 4,
+      "notification_count": 3,
       "skipped": null,
       "notification_titles": [
         "checkout incident",
         "edge incident",
-        "checkout incident",
-        "RCA root cause: shopping-copilot"
+        "checkout incident"
       ],
       "notification_services": [
         "cart",
         "frontend-proxy",
-        "checkout",
-        "shopping-copilot"
+        "checkout"
       ],
       "root_causes": [
         {
           "service": "shopping-copilot",
-          "score": 0.41562245843022017,
+          "score": 0.4199948750722809,
           "root_cause_metrics": [
             "memory_usage_bytes"
           ],
           "evidence": [
-            "graph_score=0.719",
+            "graph_score=0.750",
             "earliest_drift_score=0.434",
-            "correlation_score=0.621",
+            "shape_correlation_score=0.621",
             "downstream_coverage_score=0.000",
             "weighted_rrf_score=0.945",
             "evidence_strength=1.000",
-            "support_score=0.440",
+            "support_score=0.444",
             "memory_usage_bytes anomaly_score=1.800"
-          ]
+          ],
+          "evidence_scores": {
+            "graph": 0.7502826531580574,
+            "earliest_drift": 0.4336283185840708,
+            "shape_correlation": 0.6212977227928385,
+            "downstream_coverage": 0.0,
+            "weighted_rrf": 0.9454390451832907,
+            "evidence_strength": 1.0,
+            "support": 0.44423263161387333
+          },
+          "metric_scores": {
+            "memory_usage_bytes": 1.8
+          }
         },
         {
           "service": "frontend",
-          "score": 0.2571340887446306,
+          "score": 0.262624941733624,
           "root_cause_metrics": [
             "memory_usage_bytes"
           ],
           "evidence": [
-            "graph_score=0.959",
+            "graph_score=1.000",
             "earliest_drift_score=0.097",
-            "correlation_score=0.609",
+            "shape_correlation_score=0.609",
             "downstream_coverage_score=0.000",
             "weighted_rrf_score=0.891",
             "evidence_strength=1.000",
-            "support_score=0.289",
+            "support_score=0.295",
             "memory_usage_bytes anomaly_score=2.800"
-          ]
+          ],
+          "evidence_scores": {
+            "graph": 1.0,
+            "earliest_drift": 0.09734513274336287,
+            "shape_correlation": 0.6085449682048941,
+            "downstream_coverage": 0.0,
+            "weighted_rrf": 0.8907928388746803,
+            "evidence_strength": 1.0,
+            "support": 0.29482156823958366
+          },
+          "metric_scores": {
+            "memory_usage_bytes": 2.8
+          }
         },
         {
           "service": "recommendation",
-          "score": 0.19085802926719828,
+          "score": 0.19388607943918287,
           "root_cause_metrics": [
-            "memory_usage_bytes",
-            "cpu_millicores"
+            "memory_usage_bytes"
           ],
           "evidence": [
-            "graph_score=0.565",
+            "graph_score=0.589",
             "earliest_drift_score=0.097",
-            "correlation_score=0.604",
+            "shape_correlation_score=0.604",
             "downstream_coverage_score=0.000",
             "weighted_rrf_score=0.834",
             "evidence_strength=1.000",
-            "support_score=0.229",
+            "support_score=0.232",
             "memory_usage_bytes anomaly_score=1.800",
             "cpu_millicores anomaly_score=1.600"
-          ]
+          ],
+          "evidence_scores": {
+            "graph": 0.5890560817684586,
+            "earliest_drift": 0.09734513274336287,
+            "shape_correlation": 0.6039416292585921,
+            "downstream_coverage": 0.0,
+            "weighted_rrf": 0.8339563567362428,
+            "evidence_strength": 1.0,
+            "support": 0.23248947966290717
+          },
+          "metric_scores": {
+            "memory_usage_bytes": 1.8,
+            "cpu_millicores": 1.6
+          }
         },
         {
           "service": "currency",
-          "score": 0.20821961488738597,
+          "score": 0.21255600033739805,
           "root_cause_metrics": [
             "memory_usage_bytes"
           ],
           "evidence": [
-            "graph_score=0.822",
+            "graph_score=0.857",
             "earliest_drift_score=0.097",
-            "correlation_score=0.512",
+            "shape_correlation_score=0.512",
             "downstream_coverage_score=0.000",
             "weighted_rrf_score=0.821",
             "evidence_strength=1.000",
-            "support_score=0.254",
+            "support_score=0.259",
             "memory_usage_bytes anomaly_score=1.600"
-          ]
+          ],
+          "evidence_scores": {
+            "graph": 0.8569091260221644,
+            "earliest_drift": 0.09734513274336287,
+            "shape_correlation": 0.5122036602572869,
+            "downstream_coverage": 0.0,
+            "weighted_rrf": 0.8209751494180559,
+            "evidence_strength": 1.0,
+            "support": 0.25890674095076727
+          },
+          "metric_scores": {
+            "memory_usage_bytes": 1.6
+          }
         },
         {
           "service": "product-catalog",
-          "score": 0.19686561086206122,
+          "score": 0.2002971108589083,
           "root_cause_metrics": [
             "memory_usage_bytes"
           ],
           "evidence": [
-            "graph_score=0.661",
+            "graph_score=0.689",
             "earliest_drift_score=0.062",
-            "correlation_score=0.736",
+            "shape_correlation_score=0.736",
             "downstream_coverage_score=0.000",
             "weighted_rrf_score=0.808",
             "evidence_strength=1.000",
-            "support_score=0.244",
+            "support_score=0.248",
             "memory_usage_bytes anomaly_score=1.000"
-          ]
+          ],
+          "evidence_scores": {
+            "graph": 0.6888524326033781,
+            "earliest_drift": 0.06194690265486724,
+            "shape_correlation": 0.7363082231703902,
+            "downstream_coverage": 0.0,
+            "weighted_rrf": 0.8081550802139037,
+            "evidence_strength": 1.0,
+            "support": 0.24784489482624222
+          },
+          "metric_scores": {
+            "memory_usage_bytes": 1.0
+          }
         }
       ],
       "expected_root_service": "cart",
