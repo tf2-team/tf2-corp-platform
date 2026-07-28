@@ -1,5 +1,8 @@
 #!/usr/bin/python
 
+# Copyright The OpenTelemetry Authors
+# SPDX-License-Identifier: Apache-2.0
+
 """Small first pass that builds Mem0 context and tool access policy."""
 
 import os

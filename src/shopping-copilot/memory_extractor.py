@@ -1,3 +1,8 @@
+#!/usr/bin/python
+
+# Copyright The OpenTelemetry Authors
+# SPDX-License-Identifier: Apache-2.0
+
 """Structured extraction of semantic shopping memory from one safe user turn."""
 
 from __future__ import annotations

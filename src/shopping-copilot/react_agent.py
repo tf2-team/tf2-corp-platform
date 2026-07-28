@@ -1,5 +1,8 @@
 #!/usr/bin/python
 
+# Copyright The OpenTelemetry Authors
+# SPDX-License-Identifier: Apache-2.0
+
 """Small provider-neutral ReAct loop with strictly validated shopping tools."""
 
 import json

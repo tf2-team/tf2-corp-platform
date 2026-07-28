@@ -1,3 +1,8 @@
+#!/usr/bin/python
+
+# Copyright The OpenTelemetry Authors
+# SPDX-License-Identifier: Apache-2.0
+
 """Small Valkey-backed store for isolated Shopping Copilot conversations.
 
 The store deliberately keeps only bounded routing context. Product details are

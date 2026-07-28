@@ -1,3 +1,8 @@
+#!/usr/bin/python
+
+# Copyright The OpenTelemetry Authors
+# SPDX-License-Identifier: Apache-2.0
+
 """Fail-open REST client for the self-hosted Mem0 service."""
 
 from __future__ import annotations

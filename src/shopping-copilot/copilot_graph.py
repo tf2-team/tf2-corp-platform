@@ -1,5 +1,8 @@
 #!/usr/bin/python
 
+# Copyright The OpenTelemetry Authors
+# SPDX-License-Identifier: Apache-2.0
+
 """Bounded ReAct orchestration for Shopping Copilot.
 
 Guardrails and memory storage stay deterministic. The agent decides whether a
