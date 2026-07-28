@@ -69,6 +69,22 @@ class FastApiAppTest(unittest.TestCase):
 
         self.assertEqual(raised.exception.status_code, 503)
 
+    def test_readiness_requires_explicit_live_self_heal_approval(self):
+        settings = Settings().model_copy(
+            update={
+                "self_heal_enabled": True,
+                "policy_mode": "live-approved",
+                "live_executor_url": "http://aiops-live-executor:8080",
+                "self_heal_approval_id": "",
+                "grafana_webhook_secret": "configured",
+            }
+        )
+
+        with self.assertRaises(HTTPException) as raised:
+            readiness(settings)
+
+        self.assertEqual(raised.exception.status_code, 503)
+
     def test_template_settings_do_not_enable_external_enrichment_clients(self):
         settings = Settings().model_copy(
             update={

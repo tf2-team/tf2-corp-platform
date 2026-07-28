@@ -8,6 +8,7 @@ import json
 import sqlite3
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
+from uuid import uuid4
 
 from aiops.incidents import incident_fingerprint
 from aiops.notifications import NotificationBuilder, is_slo_notification
@@ -105,6 +106,30 @@ class SQLiteIncidentStore:
             )
             """
         )
+        self._connection.execute(
+            """
+            CREATE TABLE IF NOT EXISTS self_heal_workflows (
+                incident_id TEXT PRIMARY KEY,
+                execution_id TEXT,
+                status TEXT NOT NULL,
+                workflow_json TEXT NOT NULL,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL
+            )
+            """
+        )
+        self._connection.execute(
+            """
+            CREATE TABLE IF NOT EXISTS self_heal_audit_events (
+                event_id TEXT PRIMARY KEY,
+                incident_id TEXT NOT NULL,
+                execution_id TEXT,
+                event_type TEXT NOT NULL,
+                payload_json TEXT NOT NULL,
+                created_at TEXT NOT NULL
+            )
+            """
+        )
         self._ensure_event_columns()
         self._ensure_active_root_columns()
 
@@ -133,6 +158,9 @@ class SQLiteIncidentStore:
             )
         else:
             incident = Incident.model_validate_json(row[0])
+            if incident.state == "recovered":
+                incident.state = "open"
+                incident.recovered_at = None
             if self._count_window_expired(incident, candidate):
                 incident.occurrence_count = 1
                 incident.events = [candidate]
@@ -423,6 +451,123 @@ class SQLiteIncidentStore:
     def list_incidents(self) -> list[Incident]:
         rows = self._connection.execute("SELECT incident_json FROM incidents ORDER BY fingerprint").fetchall()
         return [Incident.model_validate_json(row[0]) for row in rows]
+
+    def save_self_heal_workflow(self, workflow: dict) -> None:
+        now = _now()
+        with self._connection:
+            self._connection.execute(
+                """
+                INSERT INTO self_heal_workflows (
+                    incident_id, execution_id, status, workflow_json, created_at, updated_at
+                )
+                VALUES (?, ?, ?, ?, ?, ?)
+                ON CONFLICT(incident_id) DO UPDATE SET
+                    execution_id = excluded.execution_id,
+                    status = excluded.status,
+                    workflow_json = excluded.workflow_json,
+                    updated_at = excluded.updated_at
+                """,
+                (
+                    workflow["incident_id"],
+                    workflow.get("execution_id"),
+                    workflow["status"],
+                    json.dumps(workflow, sort_keys=True),
+                    now,
+                    now,
+                ),
+            )
+
+    def active_self_heal_workflows(self) -> list[dict]:
+        rows = self._connection.execute(
+            """
+            SELECT workflow_json
+            FROM self_heal_workflows
+            WHERE status IN ('verifying', 'rollback_pending')
+            ORDER BY created_at
+            """
+        ).fetchall()
+        return [json.loads(row[0]) for row in rows]
+
+    def self_heal_workflow(self, incident_id: str) -> dict | None:
+        row = self._connection.execute(
+            "SELECT workflow_json FROM self_heal_workflows WHERE incident_id = ?",
+            (incident_id,),
+        ).fetchone()
+        return json.loads(row[0]) if row else None
+
+    def append_self_heal_audit(
+        self,
+        event_type: str,
+        incident_id: str,
+        execution_id: str | None,
+        payload: dict,
+    ) -> None:
+        with self._connection:
+            self._connection.execute(
+                """
+                INSERT INTO self_heal_audit_events (
+                    event_id, incident_id, execution_id, event_type, payload_json, created_at
+                )
+                VALUES (?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    f"evt-{uuid4()}",
+                    incident_id,
+                    execution_id,
+                    event_type,
+                    json.dumps(payload, sort_keys=True),
+                    _now(),
+                ),
+            )
+
+    def self_heal_audit_events(self, incident_id: str) -> list[dict]:
+        rows = self._connection.execute(
+            """
+            SELECT event_id, incident_id, execution_id, event_type, payload_json, created_at
+            FROM self_heal_audit_events
+            WHERE incident_id = ?
+            ORDER BY created_at, rowid
+            """,
+            (incident_id,),
+        ).fetchall()
+        return [
+            {
+                "event_id": row[0],
+                "incident_id": row[1],
+                "execution_id": row[2],
+                "event_type": row[3],
+                "payload": json.loads(row[4]),
+                "created_at": row[5],
+            }
+            for row in rows
+        ]
+
+    def mark_incident_recovered(self, incident_id: str, recovered_at: str | None = None) -> Incident | None:
+        recovered_at = recovered_at or _now()
+        rows = self._connection.execute(
+            "SELECT fingerprint, incident_json FROM incidents"
+        ).fetchall()
+        for fingerprint, incident_json in rows:
+            incident = Incident.model_validate_json(incident_json)
+            if incident.incident_id != incident_id:
+                continue
+            incident.state = "recovered"
+            incident.recovered_at = recovered_at
+            with self._connection:
+                self._connection.execute(
+                    "UPDATE incidents SET incident_json = ? WHERE fingerprint = ?",
+                    (incident.model_dump_json(), fingerprint),
+                )
+                self._connection.execute(
+                    """
+                    UPDATE incident_events
+                    SET state = 'recovered', recovered_at = ?
+                    WHERE fingerprint = ? AND state != 'recovered'
+                    """,
+                    (recovered_at, fingerprint),
+                )
+            return incident
+        return None
 
     def pending_notifications_for(self, incidents: list[Incident]) -> list[NotificationMessage]:
         incident_ids = [incident.incident_id for incident in incidents if incident.incident_id in self._last_enqueued_incident_ids]

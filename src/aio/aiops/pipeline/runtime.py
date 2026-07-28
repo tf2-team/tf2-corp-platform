@@ -30,6 +30,7 @@ from aiops.remediation import (
     RemediationAuditLog,
     RemediationDecisionEngine,
     RemediationFeatureExtractor,
+    SelfHealOrchestrator,
 )
 from aiops.schemas import ActionCatalogItem, ActionProposal, CandidateEvent, Incident, RemediationDecision, VerificationResult
 from aiops.shared.metrics import is_memory_metric, is_oom_metric
@@ -74,6 +75,7 @@ class AiopsPipeline:
         enricher: Enricher | None = None,
         notification_sender=None,
         rca_history_path: Path | None = None,
+        self_heal: SelfHealOrchestrator | None = None,
     ):
         self.collector = collector
         self.qualification = QualificationGate(
@@ -104,6 +106,7 @@ class AiopsPipeline:
         self.remediation = remediation
         self.notification_sender = notification_sender
         self.rca_history_path = rca_history_path
+        self.self_heal = self_heal
 
     def run_once(self, metric_series: list[MetricSeries] | None = None) -> PipelineResult:
         run_number = next(_RUN_COUNTER)
@@ -123,6 +126,7 @@ class AiopsPipeline:
             len(features),
             _counts(feature.status for feature in features),
         )
+        self_heal_verification = self.self_heal.reconcile(features) if self.self_heal is not None else []
         candidates = self.detector_engine.evaluate(features)
         (logger.info if candidates else logger.debug)("AIOPS_BLOCK detect candidates=%s ids=%s", len(candidates), [candidate.detector_id for candidate in candidates])
         correlated = self.correlator.correlate(candidates)
@@ -158,6 +162,11 @@ class AiopsPipeline:
             [incident.occurrence_count for incident in deduped_incidents],
         )
         verification_results = self.verification.verify(analysis_incidents, features)
+        if self_heal_verification:
+            reconciled_ids = {result.incident_id for result in self_heal_verification}
+            verification_results = [
+                result for result in verification_results if result.incident_id not in reconciled_ids
+            ] + self_heal_verification
         logger.debug("AIOPS_BLOCK verify results=%s statuses=%s", len(verification_results), [result.status for result in verification_results])
         logger.info(
             "AIOPS_BLOCK rca anomalies=%s root_causes=%s",
@@ -177,6 +186,29 @@ class AiopsPipeline:
                 decisions.append(self.policy.evaluate(proposal))
         logger.debug("AIOPS_BLOCK policy decisions=%s results=%s suppressed=%s", len(decisions), [decision.result for decision in decisions], len(suppressed_incident_ids))
         remediation_decisions = self._run_remediation_strategy(actionable_incidents, rca_result)
+        if self.self_heal is not None and remediation_decisions:
+            decisions = [
+                PolicyDecision(
+                    allowed=decision.policy_allowed,
+                    result=decision.policy_result,
+                    reasons=decision.policy_reasons,
+                    executed=decision.would_execute,
+                )
+                for decision in remediation_decisions
+            ]
+        for decision in remediation_decisions:
+            if decision.execution_status != "verifying":
+                continue
+            verification_results = [
+                result for result in verification_results if result.incident_id != decision.incident_id
+            ]
+            verification_results.append(
+                VerificationResult(
+                    incident_id=decision.incident_id,
+                    status="inconclusive",
+                    reason="awaiting_fresh_post_action_telemetry",
+                )
+            )
         logger.debug(
             "AIOPS_BLOCK remediation decisions=%s selected=%s",
             len(remediation_decisions),
@@ -557,12 +589,29 @@ class AiopsPipeline:
             features = extractor.extract(incident, rca_result)
             decision = decider.decide(incident.incident_id, features, retriever.top_matches(features, records), actions)
             decision = self._apply_remediation_policy(decision, actions)
+            action = actions.get(decision.selected_action)
+            if self.self_heal is not None and decision.policy_allowed and action is not None:
+                root_cause = next(
+                    (root for root in rca_result.root_causes if root.service == action.target),
+                    rca_result.root_causes[0] if rca_result.root_causes else None,
+                )
+                execution = self.self_heal.start(incident, action, root_cause)
+                decision = decision.model_copy(
+                    update={
+                        "would_execute": bool(execution["executed"]),
+                        "execution_id": execution.get("execution_id"),
+                        "execution_status": execution["status"],
+                        "execution_reasons": execution.get("reasons", []),
+                        "decision": "executed" if execution["executed"] else decision.decision,
+                    }
+                )
             logger.info(
-                "AIOPS_BLOCK remediation_decide incident=%s action=%s decision=%s policy=%s reasons=%s policy_reasons=%s",
+                "AIOPS_BLOCK remediation_decide incident=%s action=%s decision=%s policy=%s execution=%s reasons=%s policy_reasons=%s",
                 incident.incident_id,
                 decision.selected_action,
                 decision.decision,
                 decision.policy_result,
+                decision.execution_status,
                 decision.reasons,
                 decision.policy_reasons,
             )

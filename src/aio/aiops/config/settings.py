@@ -88,6 +88,14 @@ class Settings(BaseSettings):
     live_executor_url: str = ""
     live_executor_token: str = ""
     live_executor_account: str = ""
+    self_heal_enabled: bool = False
+    self_heal_policy_id: str = "phase3-scale-policy-v1"
+    self_heal_policy_expires_at: str = "2026-08-31T23:59:59Z"
+    self_heal_approval_id: str = ""
+    self_heal_verification_deadline_seconds: int = 300
+    self_heal_min_fresh_samples: int = 2
+    self_heal_consecutive_passes: int = 2
+    self_heal_failure_samples: int = 2
 
     @model_validator(mode="after")
     def align_state_paths(self) -> "Settings":

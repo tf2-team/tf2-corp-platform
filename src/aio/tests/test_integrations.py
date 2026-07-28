@@ -79,6 +79,31 @@ class IntegrationClientTest(unittest.TestCase):
         self.assertIn(("GET", "/apis/apps/v1/namespaces/tf2/deployments/checkout"), calls)
         self.assertIn(("POST", "/actions"), calls)
 
+    def test_live_executor_accepts_contract_blocking_response_with_http_409(self):
+        def handler(request: httpx.Request) -> httpx.Response:
+            return httpx.Response(
+                409,
+                json={
+                    "ok": True,
+                    "allowed": False,
+                    "executed": False,
+                    "status": "blocked",
+                    "reasons": ["target_cooldown"],
+                },
+            )
+
+        client = LiveExecutorClient(
+            fixed_settings(
+                live_executor_url="https://executor.example",
+                live_executor_account="aiops-runtime",
+            ),
+            transport=httpx.MockTransport(handler),
+        )
+        response = client.execute({"request_id": "req-409"})
+
+        self.assertEqual(response["status"], "blocked")
+        self.assertEqual(response["reasons"], ["target_cooldown"])
+
     def test_opensearch_uses_basic_auth(self):
         seen: list[httpx.Request] = []
 

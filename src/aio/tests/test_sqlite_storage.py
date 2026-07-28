@@ -358,6 +358,24 @@ class SQLiteIncidentStoreTest(unittest.TestCase):
         self.assertEqual(set(json.loads(row[0])), {"checkout", "cart", "payment"})
         self.assertEqual(row[1], fixed_expiry)
 
+    def test_verified_incident_is_persisted_recovered_and_reopens_on_new_breach(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            store = SQLiteIncidentStore(Path(tmp) / "aiops.sqlite3", environment="tf2")
+            incident = store.upsert(candidate(0.02, timestamp=100))
+
+            recovered = store.mark_incident_recovered(
+                incident.incident_id,
+                "2026-07-28T12:00:00+00:00",
+            )
+            persisted = store.list_incidents()[0]
+            reopened = store.upsert(candidate(0.03, timestamp=200))
+            store.close()
+
+        self.assertEqual(recovered.state, "recovered")
+        self.assertEqual(persisted.recovered_at, "2026-07-28T12:00:00+00:00")
+        self.assertEqual(reopened.state, "open")
+        self.assertIsNone(reopened.recovered_at)
+
 
 if __name__ == "__main__":
     unittest.main()

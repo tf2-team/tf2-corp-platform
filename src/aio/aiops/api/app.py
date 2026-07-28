@@ -17,7 +17,7 @@ from fastapi import FastAPI, Header, HTTPException
 from aiops.collectors import PrometheusCollector, StaticCollector
 from aiops.config import Settings, build_detectors, load_hyperparameters, load_runtime_config
 from aiops.enrichment import Enricher
-from aiops.integrations import JaegerClient, KubernetesClient, NotificationClient, OpenSearchClient, PrometheusClient
+from aiops.integrations import JaegerClient, KubernetesClient, LiveExecutorClient, NotificationClient, OpenSearchClient, PrometheusClient
 from aiops.normalization import load_normalization_schema
 from aiops.observability.logging import configure_root_logging
 from aiops.observability import metrics_response, record_pipeline_failure, record_pipeline_success
@@ -31,6 +31,8 @@ from aiops.remediation import (
     RemediationAuditLog,
     RemediationDecisionEngine,
     RemediationFeatureExtractor,
+    SelfHealConfig,
+    SelfHealOrchestrator,
 )
 from aiops.schemas import GrafanaNormalizedEvent, GrafanaWebhookEvent, HealthResponse, Incident, PipelineResult, PipelineRunRequest
 from aiops.shared.evidence import STRONG_TRACE_MARKER
@@ -81,6 +83,17 @@ def run_live_pipeline(settings: Settings | None = None) -> PipelineResult:
 
 def run_pipeline_with_collector(collector, settings: Settings, runtime_config, metric_series=None) -> PipelineResult:
     started = time.monotonic()
+    try:
+        if settings.self_heal_enabled:
+            if settings.policy_mode != "live-approved":
+                raise RuntimeError("self-heal requires AIOPS_POLICY_MODE=live-approved")
+            if not _configured_url(settings.live_executor_url):
+                raise RuntimeError("self-heal requires a configured live executor URL")
+            if not settings.self_heal_approval_id:
+                raise RuntimeError("self-heal requires a signed approval id")
+    except Exception:
+        _close_if_supported(collector)
+        raise
     hyperparameters = load_hyperparameters(settings.hyperparameters_path)
     topology_graph = TopologyGraph(runtime_config)
     store = SQLiteIncidentStore(
@@ -97,6 +110,25 @@ def run_pipeline_with_collector(collector, settings: Settings, runtime_config, m
     )
     enricher = build_enricher(settings, runtime_config, hyperparameters["enrichment"])
     notification_sender = NotificationClient(settings) if _configured_url(settings.notification_webhook_url) else None
+    executor_client = None
+    self_heal = None
+    if settings.self_heal_enabled:
+        executor_client = LiveExecutorClient(settings)
+        self_heal = SelfHealOrchestrator(
+            executor_client,
+            store,
+            SelfHealConfig(
+                namespace=settings.environment,
+                policy_id=settings.self_heal_policy_id,
+                policy_expires_at=settings.self_heal_policy_expires_at,
+                approval_id=settings.self_heal_approval_id,
+                protected_targets=frozenset(runtime_config.policy.protected_targets),
+                verification_deadline_seconds=settings.self_heal_verification_deadline_seconds,
+                min_fresh_samples=settings.self_heal_min_fresh_samples,
+                consecutive_passes=settings.self_heal_consecutive_passes,
+                failure_samples=settings.self_heal_failure_samples,
+            ),
+        )
     pipeline = AiopsPipeline(
         collector=collector,
         detectors=build_detectors(runtime_config, hyperparameters["no_data"], hyperparameters["detectors"]),
@@ -139,6 +171,7 @@ def run_pipeline_with_collector(collector, settings: Settings, runtime_config, m
         ),
         notification_sender=notification_sender,
         rca_history_path=settings.rca_history_path,
+        self_heal=self_heal,
     )
     try:
         result = pipeline.run_once(metric_series=metric_series or [])
@@ -151,6 +184,7 @@ def run_pipeline_with_collector(collector, settings: Settings, runtime_config, m
     finally:
         store.close()
         _close_if_supported(notification_sender)
+        _close_if_supported(executor_client)
         _close_if_supported(enricher)
         _close_if_supported(collector)
 
@@ -244,6 +278,12 @@ def readiness(settings: Settings) -> HealthResponse:
             raise RuntimeError("automatic runs require Prometheus")
         if settings.auto_run_enabled and not _configured_url(settings.notification_webhook_url):
             raise RuntimeError("automatic runs require an incident notification webhook")
+        if settings.self_heal_enabled and settings.policy_mode != "live-approved":
+            raise RuntimeError("self-heal requires live-approved policy mode")
+        if settings.self_heal_enabled and not _configured_url(settings.live_executor_url):
+            raise RuntimeError("self-heal requires the live executor")
+        if settings.self_heal_enabled and not settings.self_heal_approval_id:
+            raise RuntimeError("self-heal requires an approval id")
         if not _configured_secret(settings.grafana_webhook_secret):
             raise RuntimeError("Grafana webhook secret is not configured")
         state_parent = settings.state_store_path.parent
