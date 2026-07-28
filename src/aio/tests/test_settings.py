@@ -101,12 +101,13 @@ class SettingsTest(unittest.TestCase):
                 "weights": {"cpu": 0.45, "socket_io": 0.35},
             },
         )
-        self.assertEqual(config["rca"]["anomaly"]["min_tail_anomaly_buckets"]["latency"], 3)
-        self.assertEqual(config["rca"]["anomaly"]["min_tail_anomaly_buckets"]["cpu"], 3)
+        self.assertEqual(
+            config["rca"]["anomaly"]["min_tail_anomaly_buckets"],
+            {"error": 1, "latency": 3, "cpu": 5, "memory": 8, "disk": 2, "socket_io": 5, "request_rate": 2, "default": 4},
+        )
         self.assertEqual(config["rca"]["anomaly"]["min_relative_change_ratio"]["cpu"], 0.1)
         self.assertEqual(config["rca"]["anomaly"]["min_absolute_change"]["cpu"], 10.0)
         self.assertEqual(config["rca"]["anomaly"]["min_absolute_change"]["error"], 0.005)
-        self.assertEqual(config["rca"]["anomaly"]["min_tail_anomaly_buckets"]["socket_io"], 3)
         self.assertEqual(config["rca"]["anomaly"]["min_relative_change_ratio"]["socket_io"], 0.1)
         self.assertEqual(config["rca"]["anomaly"]["min_absolute_change"]["socket_io"], 1048576.0)
         self.assertEqual(config["rca"]["anomaly"]["slow_drift"]["window_seconds"], 3600)
