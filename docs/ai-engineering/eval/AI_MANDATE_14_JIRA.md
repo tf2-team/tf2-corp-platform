@@ -27,7 +27,7 @@ Mục tiêu của implementation là biến yêu cầu này thành một quy tr�
 | `baseline` | LLM và prompt tối thiểu, không guardrail, ReAct tools, Valkey, Mem0 hoặc cart workflow. |
 | `integrated` | Pipeline mới nhất tại thời điểm chạy, gồm guardrail, grounded retrieval và tool workflow, cart policy và conversation memory khi áp dụng. |
 
-Cả hai profile đều gọi LLM thật. Dữ liệu nghiệp vụ được lấy từ snapshot cố định trong từng case để loại bỏ biến động từ database hoặc service bên ngoài. Phép so sánh vì thế đo phần giá trị do pipeline AI bổ sung.
+Cả hai profile đều gọi LLM thật và nhận cùng câu hỏi cùng dữ liệu nghiệp vụ từ snapshot cố định trong từng case. Vì vậy, khi kết quả khác nhau, nguyên nhân là pipeline integrated chứ không phải Catalog hoặc Reviews trả dữ liệu khác.
 
 Task success được chấm theo cơ chế hybrid. LLM judge đánh giá ý nghĩa của câu trả lời, nhưng case vẫn fail nếu status hoặc behavior bắt buộc không đạt. Ví dụ, một câu trả lời cần abstain nhưng có status `GROUNDED` vẫn fail. Tương tự, một thao tác cần tạo pending cart action nhưng không tạo cũng fail. Safety và các hành động ghi được chấm bằng rule deterministic từ output và tool trace.
 
@@ -66,7 +66,9 @@ Các bảng dưới đây so sánh baseline và integrated trên cùng gold case
 | Average tokens/request | 415.56 | 2,844.50 | +2,428.94 |
 | Average cost/request | $0.000640 | $0.001208 | +$0.000568 |
 
-Integrated Copilot hoàn thành đúng nhiều tác vụ hơn và xử lý thành công cả bốn injection case trong gold set. Hai failure còn lại là `copilot_unanswerable_002`, đáng ra phải abstain nhưng lại trả hướng dẫn chung, và `copilot_pii_in_question_001`, yêu cầu sanitize PII rồi tiếp tục search nhưng pipeline hiện block toàn bộ request.
+Shopping Copilot cho thấy mức cải thiện rõ nhất. Task success tăng từ 50.0% lên 88.9%, tương đương 38.9 điểm phần trăm. Faithfulness tăng từ 92.9% lên 100.0%, trong khi hallucination giảm từ 7.1% xuống 0.0%. Các guardrail cũng tạo khác biệt trực tiếp: injection handling tăng từ 50.0% lên 100.0%, PII safe tăng từ 0.0% lên 100.0% và pending-action accuracy tăng từ 0.0% lên 100.0%.
+
+Hai failure còn lại đều có nguyên nhân xác định. Ở yêu cầu không đủ thông tin để trả lời, Copilot trả hướng dẫn chung thay vì abstain. Ở yêu cầu có PII nhưng vẫn hợp lệ cho shopping, pipeline block toàn bộ request thay vì loại bỏ PII rồi tiếp tục search. Về chi phí vận hành, integrated Copilot có p95 latency 12.64 giây so với 4.98 giây ở baseline, dùng trung bình 2,844.50 token mỗi request so với 415.56 token và có average cost/request $0.001208 so với $0.000640.
 
 Kết quả chi tiết: [per-case results](../../../eval/results/integrated/copilot/per_case.jsonl), [aggregate results](../../../eval/results/integrated/copilot/aggregate.json) và [baseline comparison](../../../eval/results/integrated/copilot/comparison.txt).
 
@@ -86,13 +88,15 @@ Kết quả chi tiết: [per-case results](../../../eval/results/integrated/copi
 | Average tokens/request | 355.93 | 471.36 | +115.43 |
 | Average cost/request | $0.000570 | **$0.000288** | -$0.000282 |
 
-Integrated Summary abstain đúng khi nguồn không đủ, loại bỏ PII và vô hiệu hóa injection trong review tốt hơn baseline. Hai case `summary_hallucination_001` và `summary_hallucination_002` trả `ABSTAINED` trong khi gold kỳ vọng câu trả lời grounded. `summary_injection_review_002` có một claim được judge đánh giá là supported nhưng task success vẫn bị judge chấm incorrect. Disagreement này sẽ được đưa vào human to judge calibration.
+Review Summary cải thiện theo hướng an toàn và tiết kiệm chi phí hơn. Task success tăng từ 71.4% lên 78.6%. Faithfulness tăng từ 93.9% lên 100.0%, hallucination giảm từ 6.1% xuống 0.0%, abstention accuracy tăng từ 0.0% lên 100.0%, injection handling tăng từ 50.0% lên 100.0% và PII safe tăng từ 50.0% lên 100.0%. Average cost/request giảm từ $0.000570 xuống $0.000288, dù số token trung bình tăng từ 355.93 lên 471.36.
+
+Ba task-success failures có hai nguyên nhân. Hai câu hỏi có đủ evidence để tạo summary grounded nhưng pipeline lại abstain. Một câu trả lời khác có claim được judge đánh giá là supported, nhưng verdict task success tổng thể vẫn là incorrect. Disagreement này là đầu vào trực tiếp cho human to judge calibration. Integrated Summary có p95 latency 18.80 giây, cao hơn baseline 4.25 giây. Với 14 case, chỉ số này phản ánh request chậm nhất trong lần chạy.
 
 Kết quả chi tiết: [per-case results](../../../eval/results/integrated/summary/per_case.jsonl), [aggregate results](../../../eval/results/integrated/summary/aggregate.json) và [baseline comparison](../../../eval/results/integrated/summary/comparison.txt).
 
 ### Interpretation
 
-Kết quả nhất quán theo một hướng: integrated cải thiện correctness và safety, đồng thời đánh đổi bằng thời gian xử lý cao hơn. Với Copilot, p95 latency tăng từ 4.98 giây lên 12.64 giây và chi phí trung bình mỗi request tăng. Với Summary, p95 tăng từ 4.25 giây lên 18.80 giây nhưng chi phí trung bình mỗi request lại giảm.
+Hai bề mặt AI đều cải thiện correctness và safety sau khi tích hợp guardrail, retrieval và workflow. Copilot đạt mức tăng task success lớn hơn, nhưng dùng nhiều token và chi phí cao hơn. Summary tăng task success ít hơn, đổi lại giảm được average cost/request. Cả hai đều có latency cao hơn baseline.
 
 Nearest-rank p95 được tính theo `ceil(0.95 × N)`. Với bộ nhỏ từ 14 đến 18 case, p95 phản ánh request chậm nhất.
 
