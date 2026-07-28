@@ -51,6 +51,11 @@ static_resources:
                           redirect: { path_redirect: "/grafana/" }
                         - match: { prefix: "/grafana/" }
                           route: { cluster: grafana }
+                        # Kubecost (FinOps UI, kubecost NS). VPN / private DNS only; CloudFront must block /kubecost.
+                        - match: { path: "/kubecost" }
+                          redirect: { path_redirect: "/kubecost/" }
+                        - match: { prefix: "/kubecost/" }
+                          route: { cluster: kubecost, prefix_rewrite: "/" }
                         # Argo CD (control plane, argocd NS). Keep path prefix — server.rootpath=/argocd.
                         # VPN / private DNS only; CloudFront must block /argocd.
                         - match: { path: "/argocd" }
@@ -244,6 +249,19 @@ static_resources:
                     socket_address:
                       address: ${GRAFANA_HOST}
                       port_value: ${GRAFANA_PORT}
+    # Cross-namespace: kubecost-frontend.kubecost.svc.cluster.local.
+    - name: kubecost
+      type: STRICT_DNS
+      lb_policy: ROUND_ROBIN
+      load_assignment:
+        cluster_name: kubecost
+        endpoints:
+          - lb_endpoints:
+              - endpoint:
+                  address:
+                    socket_address:
+                      address: ${KUBECOST_HOST}
+                      port_value: ${KUBECOST_PORT}
     - name: jaeger
       type: STRICT_DNS
       lb_policy: ROUND_ROBIN

@@ -391,28 +391,8 @@ func (cs *checkout) PlaceOrder(ctx context.Context, req *pb.PlaceOrderRequest) (
 		total = money.Must(money.Sum(total, multPrice))
 	}
 
-	txID, err := cs.chargeCard(ctx, total, req.CreditCard)
-	if err != nil {
-		return nil, status.Errorf(codes.Internal, "failed to charge card: %+v", err)
-	}
-
-	span.AddEvent("charged",
-		trace.WithAttributes(attribute.String("app.payment.transaction.id", txID)))
-	logger.LogAttrs(
-		ctx,
-		slog.LevelInfo, "payment went through",
-		slog.String("transaction_id", txID),
-	)
-
-	// In pre-auth/hold, shipping is deferred until after fraud check.
 	shippingTrackingID := "PENDING_SHIPPING"
 	shippingTrackingAttribute := attribute.String("app.shipping.tracking.id", shippingTrackingID)
-	span.AddEvent("hold", trace.WithAttributes(shippingTrackingAttribute))
-
-	// EmptyCart is best-effort cleanup: cart failure must not block order completion after payment succeeds.
-	if err := cs.emptyUserCart(ctx, req.UserId); err != nil {
-		logger.Warn(fmt.Sprintf("cart cleanup failed for user %s: %+v (deferred)", req.UserId, err))
-	}
 
 	orderResult := &pb.OrderResult{
 		OrderId:            orderID.String(),
@@ -432,6 +412,59 @@ func (cs *checkout) PlaceOrder(ctx context.Context, req *pb.PlaceOrderRequest) (
 		attribute.Int("app.order.items.count", len(prep.orderItems)),
 		shippingTrackingAttribute,
 	)
+
+	var txID string
+	if cs.Outbox != nil {
+		message, marshalErr := proto.Marshal(orderResult)
+		if marshalErr != nil {
+			logger.Error("failed to encode checkout outbox event", "order_id", orderID.String(), "error", marshalErr)
+			return nil, status.Errorf(codes.Internal, "failed to encode outbox event: %+v", marshalErr)
+		}
+
+		outboxCtx, cancel := context.WithTimeout(context.Background(), 750*time.Millisecond)
+		prepOutboxErr := cs.Outbox.Prepare(outboxCtx, outbox.Event{ID: orderID.String(), Payload: message})
+		cancel()
+		if prepOutboxErr != nil {
+			logger.Error("failed to prepare outbox event", "order_id", orderID.String(), "error", prepOutboxErr)
+			return nil, status.Errorf(codes.Internal, "failed to prepare outbox event: %+v", prepOutboxErr)
+		}
+
+		txID, err = cs.chargeCard(ctx, total, req.CreditCard)
+		if err != nil {
+			rmCtx, rmCancel := context.WithTimeout(context.Background(), 750*time.Millisecond)
+			_ = cs.Outbox.RemovePrepared(rmCtx, orderID.String())
+			rmCancel()
+			return nil, status.Errorf(codes.Internal, "failed to charge card: %+v", err)
+		}
+
+		span.AddEvent("charged", trace.WithAttributes(attribute.String("app.payment.transaction.id", txID)))
+		span.AddEvent("hold", trace.WithAttributes(shippingTrackingAttribute))
+
+		traceID := span.SpanContext().TraceID().String()
+		actCtx, actCancel := context.WithTimeout(context.Background(), 750*time.Millisecond)
+		actErr := cs.Outbox.Activate(actCtx, orderID.String(), time.Now(), traceID, txID)
+		actCancel()
+		if actErr != nil {
+			logger.Error("failed to activate outbox event", "order_id", orderID.String(), "error", actErr)
+			return nil, status.Errorf(codes.Internal, "failed to activate outbox event: %+v", actErr)
+		}
+	} else {
+		txID, err = cs.chargeCard(ctx, total, req.CreditCard)
+		if err != nil {
+			return nil, status.Errorf(codes.Internal, "failed to charge card: %+v", err)
+		}
+
+		span.AddEvent("charged", trace.WithAttributes(attribute.String("app.payment.transaction.id", txID)))
+		span.AddEvent("hold", trace.WithAttributes(shippingTrackingAttribute))
+
+		if cs.kafkaBrokerSvcAddr != "" && cs.KafkaProducerClient != nil {
+			logger.Info("sending to postProcessor")
+			_ = cs.sendToPostProcessor(ctx, orderResult)
+		} else if cs.kafkaBrokerSvcAddr != "" {
+			logger.Warn("skipping order post-processing: Kafka producer is not available")
+		}
+	}
+
 	logger.LogAttrs(
 		ctx,
 		slog.LevelInfo, "order placed",
@@ -442,35 +475,15 @@ func (cs *checkout) PlaceOrder(ctx context.Context, req *pb.PlaceOrderRequest) (
 		slog.String("app.shipping.tracking.id", shippingTrackingID),
 	)
 
+	// EmptyCart is best-effort cleanup: cart failure must not block order completion after payment succeeds.
+	if err := cs.emptyUserCart(ctx, req.UserId); err != nil {
+		logger.Warn(fmt.Sprintf("cart cleanup failed for user %s: %+v (deferred)", req.UserId, err))
+	}
+
 	if err := cs.sendOrderConfirmation(ctx, req.Email, orderResult); err != nil {
 		logger.Warn(fmt.Sprintf("failed to send order confirmation for order %s: %+v", orderID.String(), err))
 	} else {
 		logger.Info(fmt.Sprintf("order confirmation email sent for order %s", orderID.String()))
-	}
-
-	// Production persists the event before returning and publishes it from a
-	// background worker. Kafka availability therefore cannot delay checkout.
-	if cs.Outbox != nil {
-		message, marshalErr := proto.Marshal(orderResult)
-		if marshalErr != nil {
-			logger.Error("failed to encode checkout outbox event", "order_id", orderID.String(), "error", marshalErr)
-		} else {
-			outboxCtx, cancel := context.WithTimeout(context.Background(), 750*time.Millisecond)
-			enqueueErr := cs.Outbox.Enqueue(outboxCtx, outbox.Event{ID: orderID.String(), Payload: message})
-			cancel()
-			if enqueueErr != nil {
-				// Payment has already succeeded, so returning an error would invite a
-				// duplicate charge. DynamoDB is Multi-AZ; surface the exceptional write
-				// failure through telemetry and the outbox alert instead.
-				logger.Error("failed to persist checkout outbox event", "order_id", orderID.String(), "error", enqueueErr)
-			}
-		}
-	} else if cs.kafkaBrokerSvcAddr != "" && cs.KafkaProducerClient != nil {
-		// Development compatibility path when no durable outbox is configured.
-		logger.Info("sending to postProcessor")
-		_ = cs.sendToPostProcessor(ctx, orderResult)
-	} else if cs.kafkaBrokerSvcAddr != "" {
-		logger.Warn("skipping order post-processing: Kafka producer is not available")
 	}
 
 	resp := &pb.PlaceOrderResponse{Order: orderResult}
@@ -1240,4 +1253,4 @@ func parseOrderCancelledBytes(data []byte) (string, string, error) {
 	return orderID, reason, nil
 }
 
-// Change trail: @hungxqt - 2026-07-17 - Remove deferred-payment containment; fail PlaceOrder on cart cleanup errors.
+// Change trail: @hungxqt - 2026-07-28 - Reorder checkout to prepare outbox before payment and activate after payment.

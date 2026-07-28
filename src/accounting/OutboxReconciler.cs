@@ -27,7 +27,14 @@ internal sealed class OutboxReconciler : IDisposable
         _table = table;
         _logger = logger;
         _publishPersistenceAck = publishPersistenceAck;
-        _dynamoDb = new AmazonDynamoDBClient();
+        var regionName = Environment.GetEnvironmentVariable("AWS_REGION")
+            ?? Environment.GetEnvironmentVariable("AWS_DEFAULT_REGION")
+            ?? "us-east-1";
+        var config = new AmazonDynamoDBConfig
+        {
+            RegionEndpoint = Amazon.RegionEndpoint.GetBySystemName(regionName)
+        };
+        _dynamoDb = new AmazonDynamoDBClient(config);
         _interval = TimeSpan.FromSeconds(ReadPositiveInt("OUTBOX_RECONCILE_INTERVAL_SECONDS", 300));
         _staleAfter = TimeSpan.FromSeconds(ReadPositiveInt("OUTBOX_PUBLISHED_STALE_SECONDS", 900));
     }
@@ -181,3 +188,6 @@ internal sealed class OutboxReconciler : IDisposable
         _dynamoDb.Dispose();
     }
 }
+
+// Change trail: @hungxqt - 2026-07-28 - Add fallback region configuration for AmazonDynamoDBClient.
+
