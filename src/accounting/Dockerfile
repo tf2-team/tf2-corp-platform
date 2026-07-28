@@ -1,14 +1,14 @@
 # Copyright The OpenTelemetry Authors
 # SPDX-License-Identifier: Apache-2.0
 
-FROM --platform=${BUILDPLATFORM} mcr.microsoft.com/dotnet/sdk:9.0@sha256:cb9d975bf57fd1b0915858d1db1184bea20f7f746f0536323fcab49673144e8c AS builder
+FROM --platform=${BUILDPLATFORM} mcr.microsoft.com/dotnet/sdk:10.0@sha256:ed034a8bf0b24ded0cbbac07e17825d8e9ebfe21e308191d0f7421eaf5ad4664 AS builder
 ARG TARGETARCH
 ARG BUILD_CONFIGURATION=Release
 WORKDIR /src
 COPY ["/src/accounting/", "Accounting/"]
 COPY ["/pb/demo.proto", "Accounting/src/protos/demo.proto"]
-RUN dotnet restore "./Accounting/Accounting.csproj" -r linux-$TARGETARCH
 WORKDIR "/src/Accounting"
+RUN dotnet restore "./Accounting.csproj" -r linux-$TARGETARCH
 
 RUN dotnet build "./Accounting.csproj" -f net10.0 -r linux-$TARGETARCH -c $BUILD_CONFIGURATION -o /app/build
 
@@ -21,7 +21,7 @@ RUN dotnet publish "./Accounting.csproj" -f net10.0 -r linux-$TARGETARCH -c $BUI
 
 # -----------------------------------------------------------------------------
 
-FROM mcr.microsoft.com/dotnet/aspnet:9.0@sha256:86085bc68dde4a8cdfd8c2342acc3bf843eade855092879a85e3f3adb56e55c7
+FROM mcr.microsoft.com/dotnet/aspnet:10.0@sha256:1fa23fc4872d95fd71c2833ebe65d7e84a43b2d51a31d119516852f13d9505a7
 USER 10001:10001
 WORKDIR /app
 COPY --from=publish /app/publish .
@@ -36,5 +36,5 @@ ENV OTEL_DOTNET_AUTO_TRACES_ADDITIONAL_SOURCES=Accounting.Consumer
 
 ENTRYPOINT ["./instrument.sh", "dotnet", "Accounting.dll"]
 
-# Change trail: @hungxqt - 2026-07-28 - Build and publish Accounting with net10.0 target framework.
+# Change trail: @hungxqt - 2026-07-28 - Align builder SDK 10.0 and aspnet 10.0 base images, and move WORKDIR for global.json resolution.
 

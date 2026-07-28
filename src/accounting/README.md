@@ -2,32 +2,34 @@
 
 This service consumes new orders from a Kafka topic.
 
-## Local Build
+## Prerequisites
 
-To build the service binary, navigate to the root directory of the project and run:
+- **.NET 10 SDK** (constrained via `src/accounting/global.json` to feature band `10.0.100` with `latestFeature` roll-forward)
 
-```sh
-make generate-protobuf
-```
+## Local Build & Test
 
-Navigate back to `src/accounting` and execute:
+To build the solution and run tests locally:
 
-```sh
-dotnet build
+```cmd
+cd /d src\accounting
+dotnet build Accounting.sln
+dotnet test Accounting.sln --configuration Release --verbosity minimal
 ```
 
 ## Docker Build
 
-From the root directory, run:
+From the repository root (`techx-corp-platform`):
 
-```sh
+```cmd
 docker compose build accounting
 ```
 
-## Bump dependencies
+## Bump Dependencies
 
-To bump all dependencies run in Package manager:
+To bump all dependencies run in Package Manager:
 
-```sh
+```cmd
 Update-Package -ProjectName Accounting
 ```
+
+<!-- Change trail: @hungxqt - 2026-07-28 - Add .NET 10 SDK prerequisites, solution build/test commands, and CMD-first presentation. -->
