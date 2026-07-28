@@ -195,6 +195,7 @@ Harness nhận JSONL bên ngoài qua `--dataset`, vì vậy cùng entry point c�
 
 ## Evidence Links
 
+- [Implementation PR: tf2-team/tf2-corp-platform#117](https://github.com/tf2-team/tf2-corp-platform/pull/117)
 - [Evaluation Standard](MANDATE-14-ai-eval-standard.md)
 - [Evaluation README](../../../eval/README.md)
 - [Metric Definitions](../../../eval/docs/METRIC_DEFINITIONS.md)
