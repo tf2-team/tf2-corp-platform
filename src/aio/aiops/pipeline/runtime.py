@@ -249,8 +249,13 @@ class AiopsPipeline:
         threshold = float(self.correlation_hyperparameters["rca_notification_min_score"])
         min_metric_score = float(self.correlation_hyperparameters["rca_notification_min_metric_score"])
         strong_shape_correlation_score = float(self.correlation_hyperparameters["rca_notification_strong_shape_correlation_score"])
-        valid_roots = [
-            root.model_copy(
+        has_slo_context = any(is_slo_notification(incident.events[-1]) for incident in incidents)
+        has_anomaly_context = bool(rca_result.anomalies)
+        valid_roots = []
+        for root in rca_result.root_causes:
+            if root.score < threshold:
+                continue
+            filtered = root.model_copy(
                 update={
                     "root_cause_metrics": [
                         metric
@@ -259,10 +264,16 @@ class AiopsPipeline:
                     ]
                 }
             )
-            for root in rca_result.root_causes
-            if root.score >= threshold and _passes_rca_notification_gate(root, min_metric_score, strong_shape_correlation_score)
-        ]
-        valid_roots = [root for root in valid_roots if root.root_cause_metrics]
+            if not filtered.root_cause_metrics:
+                continue
+            if _passes_rca_notification_gate(
+                root,
+                min_metric_score,
+                strong_shape_correlation_score,
+                has_anomaly_context or has_slo_context,
+                _root_has_oom_bypass(root, metric_series or [], self.rca_hyperparameters),
+            ):
+                valid_roots.append(filtered)
         rows = []
         for root in self._dedup_rca_root_causes(valid_roots):
             metric = root.root_cause_metrics[0]
@@ -643,11 +654,28 @@ def _tail_is_still_changed(metric: str, change, config: dict) -> bool:
     )
 
 
-def _passes_rca_notification_gate(root: RootCauseCandidate, min_metric_score: float, strong_shape_correlation_score: float) -> bool:
+def _passes_rca_notification_gate(
+    root: RootCauseCandidate,
+    min_metric_score: float,
+    strong_shape_correlation_score: float,
+    has_rca_context: bool = False,
+    oom_bypass: bool = False,
+) -> bool:
+    if has_rca_context or oom_bypass:
+        return True
     if min_metric_score <= 0:
         return True
     metric_scores = list(root.metric_scores.values())
     return not metric_scores or max(metric_scores) >= min_metric_score or root.evidence_scores.get("shape_correlation", 0.0) >= strong_shape_correlation_score
+
+
+def _root_has_oom_bypass(root: RootCauseCandidate, series: list[MetricSeries], config: dict) -> bool:
+    if not any(is_memory_metric(metric) or is_oom_metric(metric) for metric in root.root_cause_metrics):
+        return False
+    combined = config.get("combined", {})
+    detection_window_seconds = int(combined.get("detection_window_seconds", 0)) or None
+    start = int(config.get("min_points", combined.get("drift_min_points", 1))) - 1
+    return _service_oom_counter_increased(root.service, series, detection_window_seconds, start)
 
 
 def _combined_rca_hyperparameters(config: dict, topology_max_hops: int) -> dict:

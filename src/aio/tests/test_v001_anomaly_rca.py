@@ -344,7 +344,7 @@ class V001AnomalyRcaTest(unittest.TestCase):
     def test_v001_keeps_sustained_infra_change_in_tail(self):
         findings = anomaly_engine().evaluate(
             [
-                metric("payment", "cpu_millicores", [100, 100, 100, 100, 100, 100, 100, 100, 300, 300, 300]),
+                metric("payment", "cpu_millicores", [100, 100, 100, 100, 100, 100, 100, 300, 300, 300, 300, 300]),
             ]
         )
 
@@ -743,10 +743,10 @@ class V001AnomalyRcaTest(unittest.TestCase):
 
     def test_v001_pipeline_ranks_top_root_cause_service_and_metrics(self):
         series = [
-            metric("checkout", "latency", [1.0, 1.1, 1.0, 1.1, 1.0, 1.1, 1.0, 2.0, 2.1, 2.0]),
-            metric("payment", "latency", [1.0, 1.1, 1.0, 1.1, 1.0, 1.1, 1.0, 20.0, 21.0, 22.0]),
-            metric("payment", "error", [0.0, 0.1, 0.0, 0.1, 0.0, 0.1, 0.0, 9.0, 10.0, 11.0]),
-            metric("payment", "cpu_millicores", [100, 110, 100, 110, 100, 110, 100, 900, 950, 1000]),
+            metric("checkout", "latency", [1.0, 1.1, 1.0, 1.1, 1.0, 1.1, 1.0, 2.0, 2.1, 2.0, 2.1, 2.0]),
+            metric("payment", "latency", [1.0, 1.1, 1.0, 1.1, 1.0, 1.1, 1.0, 20.0, 21.0, 22.0, 23.0, 24.0]),
+            metric("payment", "error", [0.0, 0.1, 0.0, 0.1, 0.0, 0.1, 0.0, 9.0, 10.0, 11.0, 12.0, 13.0]),
+            metric("payment", "cpu_millicores", [100, 110, 100, 110, 100, 110, 100, 900, 950, 1000, 1050, 1100]),
         ]
         runtime_config = load_runtime_config(Path("config/runtime.json"))
         findings = anomaly_engine(ewma_z_threshold=0.5).evaluate(series)
