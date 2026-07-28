@@ -10,14 +10,14 @@ COPY ["/pb/demo.proto", "Accounting/src/protos/demo.proto"]
 RUN dotnet restore "./Accounting/Accounting.csproj" -r linux-$TARGETARCH
 WORKDIR "/src/Accounting"
 
-RUN dotnet build "./Accounting.csproj" -f net10.0 -r linux-$TARGETARCH -c $BUILD_CONFIGURATION -o /app/build
+RUN dotnet build "./Accounting.csproj" -r linux-$TARGETARCH -c $BUILD_CONFIGURATION -o /app/build
 
 # -----------------------------------------------------------------------------
 
 FROM builder AS publish
 ARG TARGETARCH
 ARG BUILD_CONFIGURATION=Release
-RUN dotnet publish "./Accounting.csproj" -f net10.0 -r linux-$TARGETARCH -c $BUILD_CONFIGURATION -o /app/publish /p:UseAppHost=false
+RUN dotnet publish "./Accounting.csproj" -r linux-$TARGETARCH -c $BUILD_CONFIGURATION -o /app/publish /p:UseAppHost=false
 
 # -----------------------------------------------------------------------------
 
@@ -35,6 +35,3 @@ RUN test -x /app/instrument.sh
 ENV OTEL_DOTNET_AUTO_TRACES_ADDITIONAL_SOURCES=Accounting.Consumer
 
 ENTRYPOINT ["./instrument.sh", "dotnet", "Accounting.dll"]
-
-# Change trail: @hungxqt - 2026-07-28 - Build and publish Accounting with net10.0 target framework.
-
