@@ -410,10 +410,7 @@ jobs:
           # and will_not_fix OS packages otherwise block every PR despite rebuilds.
           ignore-unfixed: true
           severity: HIGH,CRITICAL
-          # Temporary, service-scoped exception requested by the tech lead while
-          # the AI team remediates shopping-copilot. Every baseline service remains
-          # fail-closed. Remove this exception when that image is handed back.
-          exit-code: ${{ matrix.service == 'shopping-copilot' && '0' || '1' }}
+          exit-code: "1"
 
       - name: Job summary
         if: always()
