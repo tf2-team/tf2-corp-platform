@@ -24,6 +24,8 @@
     "rca_notification_min_score": 0.24,
     "rca_notification_min_metric_score": 1.8,
     "rca_notification_strong_shape_correlation_score": 0.95,
+    "rca_notification_require_current_tail_change": true,
+    "rca_notification_allow_default_metric_without_series": true,
     "suppress_breakout_multiplier": 1.5,
     "suppress_window_seconds": 300,
     "weights": {

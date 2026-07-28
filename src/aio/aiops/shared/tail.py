@@ -133,8 +133,10 @@ def page_hinkley_tail_change(
 def slow_drift_tail_change(metric: MetricSeries, detection_window_seconds: int | None, start: int, config: dict | None) -> TailChange:
     params = _slow_drift_params(metric, config)
     values = tuple(point.value for point in metric.points)
-    indexes = tuple(tail_indexes(metric, int(params.get("window_seconds", detection_window_seconds or 0)) or detection_window_seconds, 0))
-    if not params or len(indexes) < int(params.get("min_points", 6)):
+    if not params:
+        return TailChange((), values, 0.0, 0, None, False)
+    indexes = tuple(tail_indexes(metric, int(params["window_seconds"]) or detection_window_seconds, 0))
+    if len(indexes) < int(params["min_points"]):
         return TailChange(indexes, values, 0.0, 0, None, False)
     xs = [metric.points[index].timestamp for index in indexes]
     ys = [values[index] for index in indexes]
@@ -150,8 +152,8 @@ def slow_drift_tail_change(metric: MetricSeries, detection_window_seconds: int |
     positive_ratio = sum(delta > 0 for delta in deltas) / len(deltas) if deltas else 0.0
     projected_change = direction * slope * span
     significant = (
-        projected_change >= float(params.get("min_total_change", 0.0))
-        and positive_ratio >= float(params.get("positive_bucket_ratio", config.get("positive_bucket_ratio", 0.65)))
+        projected_change >= float(params["min_total_change"])
+        and positive_ratio >= float(params["positive_bucket_ratio"])
     )
     return TailChange(
         indexes=indexes,
@@ -227,15 +229,15 @@ def normal_traffic_growth_decision(
     request_direction = 1 if request_increased else -1 if request_decreased else 0
     request = by_group["request_rate"]
     config = traffic_explanation or {}
-    threshold = float(config.get("threshold", 0.7))
-    min_primary = float(config.get("min_primary_shape", threshold))
-    dtw_onset_threshold = float(config.get("dtw_onset_threshold", 0.1))
-    dtw_cost_scale = float(config.get("dtw_cost_scale", 2.0))
+    threshold = float(config["threshold"])
+    min_primary = float(config["min_primary_shape"])
+    dtw_onset_threshold = float(config["dtw_onset_threshold"])
+    dtw_cost_scale = float(config["dtw_cost_scale"])
     for metric in series:
         if "oom_events_total" in metric.metric:
             values = [point.value for point in metric.points]
             baseline, indexes = fixed_baseline_and_tail(metric, detection_window_seconds, start, values)
-            if not request_increased and baseline and indexes and max(values[index] for index in indexes) > max(baseline):
+            if baseline and indexes and max(values[index] for index in indexes) > max(baseline):
                 return False, "reason=oom_increased"
     primary_direction_mismatch = False
     for metric in series:
@@ -272,10 +274,10 @@ def normal_traffic_growth_decision(
     }
     if primary_direction_mismatch:
         return False, f"reason=shape_mismatch direction=primary cpu={scores['cpu']:.3f} socket_io={scores['socket_io']:.3f}"
-    weights = config.get("weights", {"cpu": 0.5, "socket_io": 0.5})
+    weights = config["weights"]
     positive = {group: score for group, score in scores.items() if score > 0}
-    weight_sum = sum(float(weights.get(group, 0.0)) for group in positive)
-    traffic_score = sum(score * float(weights.get(group, 0.0)) for group, score in positive.items()) / weight_sum if weight_sum else 0.0
+    weight_sum = sum(float(weights[group]) for group in positive)
+    traffic_score = sum(score * float(weights[group]) for group, score in positive.items()) / weight_sum if weight_sum else 0.0
     primary_score = max(scores["cpu"], scores["socket_io"])
     if traffic_score >= threshold and primary_score >= min_primary:
         return True, f"reason=traffic_explained score={traffic_score:.3f} primary={primary_score:.3f} cpu={scores['cpu']:.3f} socket_io={scores['socket_io']:.3f}"
@@ -295,9 +297,9 @@ def traffic_explained_metrics(
     if not request:
         return set()
     config = traffic_explanation or {}
-    threshold = float(config.get("threshold", 0.7))
-    dtw_onset_threshold = float(config.get("dtw_onset_threshold", 0.1))
-    dtw_cost_scale = float(config.get("dtw_cost_scale", 2.0))
+    threshold = float(config["threshold"])
+    dtw_onset_threshold = float(config["dtw_onset_threshold"])
+    dtw_cost_scale = float(config["dtw_cost_scale"])
     return {
         metric.metric
         for metric in series

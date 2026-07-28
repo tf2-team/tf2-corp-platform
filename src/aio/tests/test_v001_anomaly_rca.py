@@ -40,6 +40,9 @@ def minute_metric(service: str, name: str, values: list[float]) -> MetricSeries:
     )
 
 
+TRAFFIC_EXPLANATION = {"threshold": 0.65, "min_primary_shape": 0.55, "dtw_onset_threshold": 0.1, "dtw_cost_scale": 2.0, "weights": {"cpu": 0.45, "socket_io": 0.35}}
+
+
 def rca_hyperparameters(**overrides):
     config = load_hyperparameters(Path("config/hyperparameters.json"))["rca"]
     return {**config, **overrides}
@@ -85,6 +88,7 @@ class V001AnomalyRcaTest(unittest.TestCase):
             "min_tail_anomaly_buckets": {"request_rate": 3, "cpu": 3, "socket_io": 3, "error": 1, "default": 2},
             "min_relative_change_ratio": {"request_rate": 0.5, "cpu": 0.3, "socket_io": 0.5, "error": 0.0, "default": 0.3},
             "min_absolute_change": {"request_rate": 5.0, "cpu": 100.0, "socket_io": 1_048_576.0, "error": 0.005, "default": 1.0},
+            "traffic_explanation": TRAFFIC_EXPLANATION,
         }
         series = [minute_metric("checkout", metric, [0.0] * 45) for metric in ("request_rate_5m", "cpu_millicores", "socket_io_bytes_per_second")]
 
@@ -102,6 +106,7 @@ class V001AnomalyRcaTest(unittest.TestCase):
             "min_tail_anomaly_buckets": {"request_rate": 3, "cpu": 3, "memory": 3, "socket_io": 3, "error": 1, "default": 2},
             "min_relative_change_ratio": {"request_rate": 0.5, "cpu": 0.3, "memory": 0.3, "socket_io": 0.5, "error": 0.0, "default": 0.3},
             "min_absolute_change": {"request_rate": 5.0, "cpu": 10.0, "memory": 10.0, "socket_io": 10.0, "error": 0.005, "default": 1.0},
+            "traffic_explanation": TRAFFIC_EXPLANATION,
         }
         values = [10] * 30 + list(range(30, 45))
         series = [
@@ -121,6 +126,7 @@ class V001AnomalyRcaTest(unittest.TestCase):
             "min_tail_anomaly_buckets": {"request_rate": 3, "cpu": 3, "memory": 3, "socket_io": 3, "error": 1, "default": 2},
             "min_relative_change_ratio": {"request_rate": 0.5, "cpu": 0.3, "memory": 0.3, "socket_io": 0.5, "error": 0.0, "default": 0.3},
             "min_absolute_change": {"request_rate": 5.0, "cpu": 10.0, "memory": 10.0, "socket_io": 10.0, "error": 0.005, "default": 1.0},
+            "traffic_explanation": TRAFFIC_EXPLANATION,
         }
         request_tail = [30, 10, 50, 10, 20, 10, 45, 10, 15, 10, 35, 10, 25, 10, 40]
         infra_tail = [100, 100, *[100 + 10 * value for value in request_tail[:-2]]]
@@ -152,6 +158,7 @@ class V001AnomalyRcaTest(unittest.TestCase):
             "min_tail_anomaly_buckets": {"request_rate": 3, "cpu": 3, "memory": 3, "socket_io": 3, "error": 1, "default": 2},
             "min_relative_change_ratio": {"request_rate": 0.5, "cpu": 0.3, "memory": 0.3, "socket_io": 0.5, "error": 0.0, "default": 0.3},
             "min_absolute_change": {"request_rate": 5.0, "cpu": 10.0, "memory": 10.0, "socket_io": 10.0, "error": 0.005, "default": 1.0},
+            "traffic_explanation": TRAFFIC_EXPLANATION,
         }
         values = [10] * 30 + list(range(30, 45))
         required = [
@@ -515,7 +522,7 @@ class V001AnomalyRcaTest(unittest.TestCase):
         self.assertEqual(engine._filter_normal_traffic_growth(series), series)
         self.assertEqual(engine.last_normal_growth_breakout_metrics, {"checkout": {"error_rate_5m"}})
 
-    def test_oom_increase_does_not_break_normal_growth_when_request_increases(self):
+    def test_oom_increase_breaks_out_even_when_request_increases(self):
         engine = anomaly_engine()
         series = [
             minute_metric("checkout", "request_rate_5m", [10] * 30 + [30] * 15),
@@ -525,7 +532,13 @@ class V001AnomalyRcaTest(unittest.TestCase):
         ]
 
         self.assertEqual(engine._filter_normal_traffic_growth(series), series)
-        self.assertEqual(engine.last_normal_growth_services, {"checkout"})
+        self.assertEqual(engine.last_normal_growth_breakout_metrics, {"checkout": {"oom_events_total"}})
+
+    def test_oom_counter_increase_passes_prefilter(self):
+        engine = anomaly_engine()
+        series = minute_metric("checkout", "oom_events_total", [0] * 44 + [1])
+
+        self.assertTrue(engine._has_significant_tail_change(series))
 
     def test_normal_growth_gate_uses_separate_detection_window(self):
         engine = anomaly_engine()
@@ -853,7 +866,7 @@ class V001AnomalyRcaTest(unittest.TestCase):
             metric("payment", "cpu_millicores", [1, 2, 3, 4, 5, 6]),
         ]
 
-        result = rca_engine(runtime_config, ranker_weights={"graph": 0.0, "earliest_drift": 0.0, "shape_correlation": 1.0}).rank(findings, series, top_k=5)
+        result = rca_engine(runtime_config, ranker_weights={"graph": 0.0, "earliest_drift": 0.0, "shape_correlation": 1.0, "downstream_coverage": 0.0}).rank(findings, series, top_k=5)
         payment = next(candidate for candidate in result.root_causes if candidate.service == "payment")
 
         self.assertIn("shape_correlation_score=1.000", payment.evidence)
@@ -893,7 +906,7 @@ class V001AnomalyRcaTest(unittest.TestCase):
             metric("cart", "cpu_millicores", [0, 1, 0, 1, 0, 1]),
         ]
 
-        result = rca_engine(runtime_config, ranker_weights={"graph": 0.0, "earliest_drift": 0.0, "shape_correlation": 1.0}).rank(findings, series, top_k=5)
+        result = rca_engine(runtime_config, ranker_weights={"graph": 0.0, "earliest_drift": 0.0, "shape_correlation": 1.0, "downstream_coverage": 0.0}).rank(findings, series, top_k=5)
         evidence = {candidate.service: candidate.evidence for candidate in result.root_causes}
 
         self.assertIn("shape_correlation_score=1.000", evidence["payment"])
@@ -912,7 +925,7 @@ class V001AnomalyRcaTest(unittest.TestCase):
             metric("payment", "error_rate_5m", [0, 10, 0, 10, 0, 10]),
         ]
 
-        result = rca_engine(runtime_config, ranker_weights={"graph": 0.0, "earliest_drift": 0.0, "shape_correlation": 1.0}).rank(findings, series, top_k=5)
+        result = rca_engine(runtime_config, ranker_weights={"graph": 0.0, "earliest_drift": 0.0, "shape_correlation": 1.0, "downstream_coverage": 0.0}).rank(findings, series, top_k=5)
 
         self.assertEqual(result.root_causes[0].service, "checkout")
 

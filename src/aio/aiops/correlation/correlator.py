@@ -20,7 +20,7 @@ class Correlator:
         confidence_threshold: float = 0.0,
         weights: dict[str, float] | None = None,
         topology_graph: TopologyGraph | None = None,
-        topology_max_hops: int = 2,
+        topology_max_hops: int = 0,
     ):
         self.environment = runtime_config.environment if runtime_config else "unknown"
         self.window_seconds = window_seconds
@@ -85,22 +85,22 @@ class Correlator:
     def _score(self, candidate: CandidateEvent, primary: CandidateEvent, group: list[CandidateEvent]) -> dict[str, float]:
         components: dict[str, float] = {}
         if any(item.quality == SignalQuality.VERIFIED for item in group):
-            components["verified_primary_signal"] = self.weights.get("verified_primary_signal", 0.0)
+            components["verified_primary_signal"] = self.weights["verified_primary_signal"]
         if candidate.timestamp and primary.timestamp and candidate.timestamp <= primary.timestamp:
-            components["temporal_precedence"] = self.weights.get("temporal_precedence", 0.0)
+            components["temporal_precedence"] = self.weights["temporal_precedence"]
         topology_distance = (
             self.topology_graph.dependency_distance(candidate.service, candidate.likely_dependency, self.topology_max_hops)
             if self.topology_graph is not None
             else None
         )
         if topology_distance is not None and topology_distance > 0:
-            components["topology_path"] = self.weights.get("topology_path", 0.0)
+            components["topology_path"] = self.weights["topology_path"]
         if {"operation", "rpc", "method", "span"} & candidate.labels.keys():
-            components["operation_specificity"] = self.weights.get("operation_specificity", 0.0)
+            components["operation_specificity"] = self.weights["operation_specificity"]
         if any(item.source in {"trace", "log", "kubernetes"} for item in candidate.evidence):
-            components["trace_log_kubernetes_corroboration"] = self.weights.get("trace_log_kubernetes_corroboration", 0.0)
+            components["trace_log_kubernetes_corroboration"] = self.weights["trace_log_kubernetes_corroboration"]
         if candidate.quality != SignalQuality.VERIFIED:
-            components["stale_or_missing_evidence_penalty"] = self.weights.get("stale_or_missing_evidence_penalty", 0.0)
+            components["stale_or_missing_evidence_penalty"] = self.weights["stale_or_missing_evidence_penalty"]
         return components
 
 

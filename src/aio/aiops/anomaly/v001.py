@@ -350,6 +350,10 @@ class V001AnomalyEngine:
         return [*metric_findings, *log_findings]
 
     def _has_significant_tail_change(self, metric: MetricSeries) -> bool:
+        if is_oom_metric(metric.metric):
+            values = [point.value for point in metric.points]
+            baseline, indexes = fixed_baseline_and_tail(metric, self.detection_window_seconds, self.min_points - 1, values)
+            return bool(baseline and indexes and max(values[index] for index in indexes) > max(baseline))
         group = metric_group(metric.metric)
         change = evaluate_tail_change(
             metric,
@@ -547,9 +551,9 @@ def build_v001_anomaly_engine(config: dict, **overrides) -> V001AnomalyEngine:
         min_tail_anomaly_buckets={key: int(value) for key, value in anomaly["min_tail_anomaly_buckets"].items()},
         min_relative_change_ratio={key: float(value) for key, value in anomaly["min_relative_change_ratio"].items()},
         min_absolute_change={key: float(value) for key, value in anomaly["min_absolute_change"].items()},
-        slow_drift=anomaly.get("slow_drift"),
+        slow_drift=anomaly["slow_drift"],
         traffic_shape_max_lag_buckets=int(anomaly["traffic_shape_max_lag_buckets"]),
-        traffic_explanation=anomaly.get("traffic_explanation"),
+        traffic_explanation=anomaly["traffic_explanation"],
         detection_window_seconds=int(anomaly["detection_window_seconds"]) or None,
         normal_growth_detection_window_seconds=int(anomaly["normal_growth_detection_window_seconds"]) or None,
     )

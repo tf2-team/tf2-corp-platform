@@ -825,6 +825,37 @@ class RuntimePipelineTest(unittest.TestCase):
         self.assertIn("Metric: memory_usage_bytes", notifications[0].summary)
         self.assertIn("Runbook: RB-SERVICE-RESOURCE", notifications[0].summary)
 
+    def test_pipeline_filters_recovered_memory_spike_without_oom(self):
+        settings = Settings()
+        hyperparameters = load_hyperparameters(settings.hyperparameters_path)["rca"]
+
+        with TemporaryDirectory() as tmp:
+            store = SQLiteIncidentStore(Path(tmp) / "aiops.sqlite3", environment=settings.environment)
+            pipeline = AiopsPipeline(
+                collector=StaticCollector([]),
+                detectors=[],
+                store=store,
+                policy=policy(settings),
+                rca_hyperparameters=hyperparameters,
+                **runtime_kwargs(settings),
+            )
+            rca_result = RcaResult(
+                root_causes=[
+                    RootCauseCandidate(service="ad", score=1.0, root_cause_metrics=["memory_usage_bytes"])
+                ]
+            )
+
+            incidents = pipeline._upsert_rca_root_incidents(
+                rca_result,
+                [],
+                [
+                    metric("ad", "memory_usage_bytes", [500_000_000.0] * 30 + [960_000_000.0] * 5 + [477_000_000.0] * 10),
+                ],
+            )
+            store.close()
+
+        self.assertEqual(incidents, [])
+
     def test_pipeline_notifies_memory_root_when_oom_counter_increases(self):
         settings = Settings()
         hyperparameters = load_hyperparameters(settings.hyperparameters_path)["rca"]
@@ -895,6 +926,38 @@ class RuntimePipelineTest(unittest.TestCase):
         self.assertEqual([incident.service for incident in notified], ["recommendation"])
         self.assertIn("Root: recommendation", notifications[0].summary)
         self.assertIn("Metric: cpu_millicores", notifications[0].summary)
+
+    def test_pipeline_filters_recovered_cpu_and_socket_spikes(self):
+        settings = Settings()
+        hyperparameters = load_hyperparameters(settings.hyperparameters_path)["rca"]
+
+        with TemporaryDirectory() as tmp:
+            store = SQLiteIncidentStore(Path(tmp) / "aiops.sqlite3", environment=settings.environment)
+            pipeline = AiopsPipeline(
+                collector=StaticCollector([]),
+                detectors=[],
+                store=store,
+                policy=policy(settings),
+                rca_hyperparameters=hyperparameters,
+                **runtime_kwargs(settings),
+            )
+            rca_result = RcaResult(
+                root_causes=[
+                    RootCauseCandidate(service="ad", score=1.0, root_cause_metrics=["cpu_millicores", "socket_io_bytes_per_second"])
+                ]
+            )
+
+            incidents = pipeline._upsert_rca_root_incidents(
+                rca_result,
+                [],
+                [
+                    metric("ad", "cpu_millicores", [5.0] * 30 + [60.0] * 5 + [6.0] * 10),
+                    metric("ad", "socket_io_bytes_per_second", [1_000_000.0] * 30 + [8_000_000.0] * 5 + [1_100_000.0] * 10),
+                ],
+            )
+            store.close()
+
+        self.assertEqual(incidents, [])
 
     def test_pipeline_filters_rca_root_by_metric_evidence_strength(self):
         settings = Settings()
@@ -1208,7 +1271,8 @@ class RuntimePipelineTest(unittest.TestCase):
     def test_pipeline_extracts_log_evidence_for_v001_rca(self):
         settings = Settings()
         with TemporaryDirectory() as tmp:
-            hyperparameters = load_hyperparameters(settings.hyperparameters_path)["rca"]
+            all_hyperparameters = load_hyperparameters(settings.hyperparameters_path)
+            hyperparameters = all_hyperparameters["rca"]
             hyperparameters = {
                 **hyperparameters,
                 "min_points": 8,
@@ -1220,6 +1284,7 @@ class RuntimePipelineTest(unittest.TestCase):
                 store=SQLiteIncidentStore(Path(tmp) / "aiops.sqlite3", environment=settings.environment),
                 policy=policy(settings),
                 rca_hyperparameters=hyperparameters,
+                correlation_hyperparameters=all_hyperparameters["correlation"],
                 runtime_config=load_runtime_config(settings.runtime_config_path),
             )
             incident = Incident(

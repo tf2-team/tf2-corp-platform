@@ -373,20 +373,20 @@ class V001RcaEngine:
 
     def _weighted_rank_scores(self, rankers: dict[str, dict[str, float]]) -> tuple[dict[str, float], dict[str, float]]:
         scores: dict[str, float] = defaultdict(float)
-        max_possible = sum(self.ranker_weights.get(name, 0.0) / (self.rrf_k + 1) for name, values in rankers.items() if values)
+        max_possible = sum(self.ranker_weights[name] / (self.rrf_k + 1) for name, values in rankers.items() if values)
         if not max_possible:
             return {}, {}
         for name, values in rankers.items():
-            weight = self.ranker_weights.get(name, 0.0)
+            weight = self.ranker_weights[name]
             for rank, (service, _) in enumerate(sorted(values.items(), key=lambda item: item[1], reverse=True), start=1):
                 scores[service] += weight / (self.rrf_k + rank)
         rrf_scores = {service: score / max_possible for service, score in scores.items()}
         services = {service for values in rankers.values() for service in values}
-        total = sum(self.ranker_weights.get(name, 0.0) for name in rankers)
+        total = sum(self.ranker_weights[name] for name in rankers)
         if not total:
             return rrf_scores, {}
         support_scores = {
-            service: sum(self.ranker_weights.get(name, 0.0) * max(0.0, min(1.0, values.get(service, 0.0))) for name, values in rankers.items()) / total
+            service: sum(self.ranker_weights[name] * max(0.0, min(1.0, values.get(service, 0.0))) for name, values in rankers.items()) / total
             for service in services
         }
         return rrf_scores, support_scores

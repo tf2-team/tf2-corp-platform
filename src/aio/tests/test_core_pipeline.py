@@ -360,7 +360,7 @@ class DetectorEngineTest(unittest.TestCase):
         )
 
         hyperparameters = load_hyperparameters(Path("config/hyperparameters.json"))
-        options = {key: hyperparameters["correlation"][key] for key in ("window_seconds", "confidence_threshold", "weights")}
+        options = {key: hyperparameters["correlation"][key] for key in ("window_seconds", "confidence_threshold", "weights", "topology_max_hops")}
         candidates = Correlator(load_runtime_config(Path("config/runtime.json")), **options).correlate([primary, dependency])
 
         self.assertEqual(len(candidates), 1)
@@ -405,7 +405,9 @@ class DetectorEngineTest(unittest.TestCase):
             }
         )
 
-        candidates = Correlator(load_runtime_config(Path("config/runtime.json"))).correlate([slo, latency])
+        hyperparameters = load_hyperparameters(Path("config/hyperparameters.json"))
+        options = {key: hyperparameters["correlation"][key] for key in ("window_seconds", "confidence_threshold", "weights", "topology_max_hops")}
+        candidates = Correlator(load_runtime_config(Path("config/runtime.json")), **options).correlate([slo, latency])
 
         self.assertEqual([candidate.service for candidate in candidates], ["checkout"])
         self.assertEqual(candidates[0].contributing_signals, ("checkout_bad_ratio_24h", "checkout_p95_latency_5m"))

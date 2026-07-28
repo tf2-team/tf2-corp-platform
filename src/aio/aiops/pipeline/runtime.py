@@ -32,9 +32,9 @@ from aiops.remediation import (
     RemediationFeatureExtractor,
 )
 from aiops.schemas import ActionCatalogItem, ActionProposal, CandidateEvent, Incident, RemediationDecision, VerificationResult
-from aiops.shared.metrics import is_busy_infra_metric, is_memory_metric, is_oom_metric
+from aiops.shared.metrics import is_memory_metric, is_oom_metric
 from aiops.shared.series import prepare_detector_series
-from aiops.shared.tail import evaluate_tail_change, fixed_baseline_and_tail, metric_group
+from aiops.shared.tail import evaluate_tail_change, fixed_baseline_and_tail, metric_group, point_changed
 from aiops.topology import TopologyGraph
 from aiops.verification import VerificationEngine
 from aiops.pipeline.analysis import (
@@ -247,8 +247,8 @@ class AiopsPipeline:
             return []
         severity = min((incident.severity for incident in incidents), default="SEV2")
         threshold = float(self.correlation_hyperparameters["rca_notification_min_score"])
-        min_metric_score = float(self.correlation_hyperparameters.get("rca_notification_min_metric_score", 0.0))
-        strong_shape_correlation_score = float(self.correlation_hyperparameters.get("rca_notification_strong_shape_correlation_score", 1.1))
+        min_metric_score = float(self.correlation_hyperparameters["rca_notification_min_metric_score"])
+        strong_shape_correlation_score = float(self.correlation_hyperparameters["rca_notification_strong_shape_correlation_score"])
         valid_roots = [
             root.model_copy(
                 update={
@@ -294,20 +294,21 @@ class AiopsPipeline:
     def _rca_root_metric_can_notify(self, service: str, metric: str, metric_series: list[MetricSeries]) -> bool:
         if not is_root_cause_metric(metric):
             return False
-        if not is_busy_infra_metric(metric):
-            return True
         config = self.rca_hyperparameters.get("anomaly", {})
         combined = self.rca_hyperparameters.get("combined", {})
         detection_window_seconds = int(combined.get("detection_window_seconds", 0)) or None
         start = int(self.rca_hyperparameters.get("min_points", combined.get("drift_min_points", 1))) - 1
-        if is_memory_metric(metric) and _service_oom_counter_increased(service, metric_series, detection_window_seconds, start):
+        if (is_memory_metric(metric) or is_oom_metric(metric)) and _service_oom_counter_increased(service, metric_series, detection_window_seconds, start):
             return True
         match = next((item for item in metric_series if item.service == service and item.metric == metric), None)
         if match is None:
-            return False
+            return bool(self.correlation_hyperparameters["rca_notification_allow_default_metric_without_series"]) and metric_group(metric) == "default"
         if not all(key in config for key in ("min_tail_anomaly_buckets", "min_relative_change_ratio", "min_absolute_change")):
             return False
-        return _metric_tail_change_significant(match, detection_window_seconds, start, config)
+        change = _metric_tail_change(match, detection_window_seconds, start, config)
+        if not bool(self.correlation_hyperparameters["rca_notification_require_current_tail_change"]):
+            return change.significant
+        return change.significant and _tail_is_still_changed(metric, change, config)
 
     def _dedup_rca_root_causes(self, root_causes: list[RootCauseCandidate]) -> list[RootCauseCandidate]:
         kept: list[RootCauseCandidate] = []
@@ -367,7 +368,7 @@ class AiopsPipeline:
         rca_engine = V001RcaEngine(
             self.runtime_config,
             config["graph"],
-            _combined_rca_hyperparameters(config),
+            _combined_rca_hyperparameters(config, int(self.correlation_hyperparameters["topology_max_hops"])),
             topology_graph=self.topology_graph,
         )
         breakout_metrics = getattr(anomaly_engine, "last_normal_growth_breakout_metrics", {})
@@ -626,6 +627,10 @@ def _service_oom_counter_increased(service: str, series: list[MetricSeries], det
 
 
 def _metric_tail_change_significant(metric: MetricSeries, detection_window_seconds: int | None, start: int, config: dict) -> bool:
+    return _metric_tail_change(metric, detection_window_seconds, start, config).significant
+
+
+def _metric_tail_change(metric: MetricSeries, detection_window_seconds: int | None, start: int, config: dict):
     group = metric_group(metric.metric)
     return evaluate_tail_change(
         metric,
@@ -634,7 +639,19 @@ def _metric_tail_change_significant(metric: MetricSeries, detection_window_secon
         int(config["min_tail_anomaly_buckets"][group]),
         float(config["min_relative_change_ratio"][group]),
         float(config["min_absolute_change"][group]),
-    ).significant
+    )
+
+
+def _tail_is_still_changed(metric: str, change, config: dict) -> bool:
+    if not change.indexes:
+        return False
+    group = metric_group(metric)
+    return point_changed(
+        change.values[change.indexes[-1]],
+        change.baseline,
+        float(config["min_relative_change_ratio"][group]),
+        float(config["min_absolute_change"][group]),
+    )
 
 
 def _has_strong_notification_evidence(root: RootCauseCandidate, min_metric_score: float, strong_shape_correlation_score: float) -> bool:
@@ -644,7 +661,7 @@ def _has_strong_notification_evidence(root: RootCauseCandidate, min_metric_score
     return not metric_scores or max(metric_scores) >= min_metric_score or root.evidence_scores.get("shape_correlation", 0.0) >= strong_shape_correlation_score
 
 
-def _combined_rca_hyperparameters(config: dict) -> dict:
+def _combined_rca_hyperparameters(config: dict, topology_max_hops: int) -> dict:
     anomaly = config["anomaly"]
     return {
         **config["combined"],
@@ -654,7 +671,7 @@ def _combined_rca_hyperparameters(config: dict) -> dict:
         "slow_drift": anomaly.get("slow_drift", {}),
         "page_hinkley_min_bucket_factor": anomaly["page_hinkley_min_bucket_factor"],
         "traffic_shape_max_lag_buckets": anomaly["traffic_shape_max_lag_buckets"],
-        "topology_max_hops": config.get("topology_max_hops", 2),
+        "topology_max_hops": topology_max_hops,
     }
 
 

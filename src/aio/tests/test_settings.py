@@ -160,6 +160,8 @@ class SettingsTest(unittest.TestCase):
         self.assertEqual(config["correlation"]["rca_notification_min_score"], 0.24)
         self.assertEqual(config["correlation"]["rca_notification_min_metric_score"], 1.8)
         self.assertEqual(config["correlation"]["rca_notification_strong_shape_correlation_score"], 0.95)
+        self.assertTrue(config["correlation"]["rca_notification_require_current_tail_change"])
+        self.assertTrue(config["correlation"]["rca_notification_allow_default_metric_without_series"])
         self.assertEqual(config["correlation"]["topology_max_hops"], 2)
         self.assertEqual(
             config["rca"]["combined"],
