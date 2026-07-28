@@ -43,7 +43,7 @@ dependencies {
     constraints {
         implementation("com.fasterxml.jackson.core:jackson-databind:$jacksonVersion")
     }
-    implementation(enforcedPlatform("io.netty:netty-bom:4.1.135.Final"))
+    implementation(enforcedPlatform("io.netty:netty-bom:4.1.136.Final"))
     implementation(enforcedPlatform("com.fasterxml.jackson:jackson-bom:$jacksonVersion"))
     implementation("com.google.protobuf:protobuf-java:${protobufVersion}")
     testImplementation(kotlin("test"))

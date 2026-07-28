@@ -34,8 +34,10 @@
   },
   "overrides": {
     "@grpc/grpc-js": "1.12.7",
+    "@opentelemetry/propagator-jaeger": "2.9.0",
     "protobufjs": "7.6.1",
-    "fast-uri": "3.1.2",
+    "brace-expansion": "5.0.8",
+    "fast-uri": "4.1.1",
     "picomatch": "4.0.4",
     "sigstore": "4.1.1",
     "lodash": "4.18.0"

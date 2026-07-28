@@ -24,7 +24,7 @@ psycopg-pool==3.2.6
 pydantic==2.10.4
 python-dotenv==1.2.2
 python-jose==3.5.0
-pyasn1==0.6.3
+pyasn1==0.6.4
 pytz==2025.1
 qdrant-client==1.13.2
 slowapi==0.1.9
