@@ -8,7 +8,7 @@
 from enum import Enum
 from typing import Literal, Optional
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 AllowedCategory = Literal[
     "telescopes", "accessories", "travel", "binoculars", "flashlights",
@@ -39,7 +39,14 @@ class CatalogSearchInput(CopilotContractModel):
 class ProductInput(CopilotContractModel):
     """Validated product reference for detail, review, and cart tools."""
 
-    product_id: str = Field(min_length=1, max_length=100)
+    product_id: str = Field(default="", max_length=100)
+    product_name: str = Field(default="", max_length=200)
+
+    @model_validator(mode="after")
+    def require_reference(self):
+        if not self.product_id and not self.product_name:
+            raise ValueError("product_id or product_name is required")
+        return self
 
 
 class ReviewQuestionInput(ProductInput):
@@ -56,6 +63,7 @@ class RetrievalHint(CopilotContractModel):
     is_follow_up: bool = False
     semantic_query: str = Field(default="", max_length=500)
     tool_access: Literal["none", "shopping"] = "none"
+    policy_action: Literal["allow", "block"] = "allow"
 
 
 class MemoryCandidate(CopilotContractModel):

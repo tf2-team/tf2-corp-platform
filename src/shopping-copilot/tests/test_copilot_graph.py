@@ -14,12 +14,16 @@ def _deps():
     return CopilotDeps(MagicMock(), MagicMock(), MagicMock(), MagicMock())
 
 
-def _stub_turn_context(monkeypatch, tool_access="none"):
+def _stub_turn_context(monkeypatch, tool_access="none", policy_action="allow"):
     import copilot_graph
     monkeypatch.setattr(
         copilot_graph.memory_retrieval,
         "parse_retrieval_hint",
-        lambda *_: RetrievalHint(semantic_query="budget", tool_access=tool_access),
+        lambda *_: RetrievalHint(
+            semantic_query="budget",
+            tool_access=tool_access,
+            policy_action=policy_action,
+        ),
     )
 
 
@@ -46,6 +50,22 @@ def test_agent_can_answer_without_catalog(monkeypatch):
     assert seen["tool_access"] == "none"
     assert state["catalog_results"] == []
     deps.catalog_stub.SearchProducts.assert_not_called()
+
+
+def test_out_of_scope_policy_blocks_before_agent(monkeypatch):
+    import copilot_graph
+
+    _stub_turn_context(monkeypatch, policy_action="block")
+    monkeypatch.setattr(
+        copilot_graph,
+        "run_react_agent",
+        lambda *_: (_ for _ in ()).throw(AssertionError("agent must not run")),
+    )
+
+    state = run_copilot("Solve 2 + 2 for me.", _deps())
+
+    assert state["status"] == CopilotStatus.BLOCKED
+    assert "shopping" in state["reason"]
 
 
 def test_agent_failure_falls_back(monkeypatch):

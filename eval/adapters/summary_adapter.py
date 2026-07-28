@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 import sys
 import time
 from pathlib import Path
@@ -17,7 +18,10 @@ for _path in (_ROOT / "src" / "ai-common", _ROOT / "src" / "product-reviews"):
 
 def run_summary_case(case: dict) -> dict:
     """Call the configured real LLM pipeline while replacing only source data."""
-    import product_reviews_server as service
+    with patch.dict(os.environ, {
+        "DB_CONNECTION_STRING": os.environ.get("DB_CONNECTION_STRING", "postgresql://eval:eval@localhost/eval"),
+    }):
+        import product_reviews_server as service
 
     case_input = case["input"]
     reviews = [
@@ -26,6 +30,7 @@ def run_summary_case(case: dict) -> dict:
     ]
     service.tracer = MagicMock()
     service.tracer.start_as_current_span.return_value.__enter__.return_value = MagicMock()
+    service.logger = MagicMock()
     service.product_review_svc_metrics = {"app_ai_assistant_counter": MagicMock()}
     service.valkey_client = None
     calls = []

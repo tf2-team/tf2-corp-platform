@@ -19,6 +19,7 @@ dependencies = [
   "python-json-logger==4.0.0",
   "simplejson==3.20.2",
   "techx-ai-common",
+  "tqdm>=4.69,<5",
   "valkey==6.1.0",
 ]
 

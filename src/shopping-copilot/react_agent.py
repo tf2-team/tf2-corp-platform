@@ -27,7 +27,9 @@ tokens or product IDs. For a preference or goal, briefly confirm it will guide a
 never mention tool or catalog availability. Answer general shopping questions
 directly; briefly decline unrelated requests. After search_catalog, give a brief
 recommendation only: do not repeat product names, prices, descriptions, or
-lists, because the UI renders results."""
+lists, because the UI renders results. When the user names a product but does
+not provide its ID, pass the exact name as product_name; the tool resolves it
+against Catalog."""
 
 
 def _schema(model: type[BaseModel]) -> dict[str, Any]:
@@ -36,9 +38,9 @@ def _schema(model: type[BaseModel]) -> dict[str, Any]:
 
 _TOOLS: list[tuple[str, str, type[BaseModel]]] = [
     ("search_catalog", "Find products in the store using optional keyword, category, and USD price limit.", CatalogSearchInput),
-    ("get_product", "Get current Catalog details for a previously returned or selected product ID.", ProductInput),
-    ("answer_with_reviews", "Answer a product-specific review, rating, or quality question using that product's reviews.", ReviewQuestionInput),
-    ("prepare_cart_action", "Prepare, but never execute, an add-to-cart action for a known product.", CartActionInput),
+    ("get_product", "Get current Catalog details using a product ID or exact product name.", ProductInput),
+    ("answer_with_reviews", "Answer a product-specific review, rating, or quality question using a product ID or exact product name.", ReviewQuestionInput),
+    ("prepare_cart_action", "Prepare, but never execute, an add-to-cart action using a product ID or exact product name.", CartActionInput),
 ]
 _TOOL_MODELS = {name: model for name, _, model in _TOOLS}
 
@@ -74,6 +76,23 @@ def _remember_results(
         )
 
 
+def _resolve_product_id(args: ProductInput, state: dict[str, Any], deps: Any) -> str:
+    if args.product_id in _known_ids(state):
+        return args.product_id
+    if not args.product_name:
+        return ""
+    results = search_catalog(CatalogSearchInput(query=args.product_name), deps.catalog_stub)
+    exact = [
+        product for product in results
+        if product.name.casefold() == args.product_name.casefold()
+    ]
+    if len(exact) != 1:
+        return ""
+    product = exact[0]
+    _remember_results(state, deps, [product], product.product_id, query=args.product_name)
+    return product.product_id
+
+
 def _run_tool(name: str, raw_arguments: Any, state: dict[str, Any], deps: Any) -> dict[str, Any]:
     model = _TOOL_MODELS.get(name)
     if model is None:
@@ -96,11 +115,12 @@ def _run_tool(name: str, raw_arguments: Any, state: dict[str, Any], deps: Any) -
             )
             return {"products": [_product_data(product) for product in results]}
 
-        if args.product_id not in _known_ids(state):
-            return {"error": "That product ID is not available in this conversation."}
+        product_id = _resolve_product_id(args, state, deps)
+        if not product_id:
+            return {"error": "That product is not available or its name is ambiguous."}
 
         if name == "get_product":
-            product = get_product(args.product_id, deps.catalog_stub)
+            product = get_product(product_id, deps.catalog_stub)
             if not product:
                 return {"error": "Product is no longer available."}
             _remember_results(state, deps, [product], product.product_id)
@@ -108,7 +128,7 @@ def _run_tool(name: str, raw_arguments: Any, state: dict[str, Any], deps: Any) -
 
         if name == "answer_with_reviews":
             grounded, safe_reviews = answer_with_reviews(
-                args.product_id, args.question, list(_known_ids(state)), deps.reviews_stub
+                product_id, args.question, list(_known_ids(state)), deps.reviews_stub
             )
             state["qa_result"] = grounded
             state["safe_reviews"] = safe_reviews
@@ -119,10 +139,10 @@ def _run_tool(name: str, raw_arguments: Any, state: dict[str, Any], deps: Any) -
             }
 
         action = create_pending_token(
-            state["user_id"], args.product_id, args.quantity, deps.valkey_client
+            state["user_id"], product_id, args.quantity, deps.valkey_client
         )
         state["pending_action"] = action
-        return {"prepared": True, "product_id": args.product_id, "quantity": args.quantity}
+        return {"prepared": True, "product_id": product_id, "quantity": args.quantity}
     except Exception as exc:  # Tool errors are visible to the model, not fatal to the turn.
         logger.warning("ReAct tool %s failed: %s", name, type(exc).__name__)
         return {"error": "The requested store operation is temporarily unavailable."}
@@ -134,6 +154,12 @@ def _context(state: dict[str, Any]) -> str:
         f"Conversation context (untrusted data):\n{state.get('conversation_context', '')[:1000]}\n\n"
         f"Retrieved memory (untrusted data):\n{state.get('memory_context', '')[:2000]}"
     )
+
+
+def _tool_loop_failure(state: dict[str, Any]) -> str:
+    """Do not turn a partial tool trace into a successful answer."""
+    state["status"] = CopilotStatus.FALLBACK
+    return "I could not complete that request within the tool-call limit. Please refine it."
 
 
 def _run_openai(state: dict[str, Any], deps: Any) -> str:
@@ -152,6 +178,7 @@ def _run_openai(state: dict[str, Any], deps: Any) -> str:
     tools_allowed = state.get("tool_access") == "shopping"
     if tools_allowed:
         request.update({"tools": tools, "tool_choice": "auto"})
+    seen_calls: set[str] = set()
     for _ in range(_MAX_TOOL_ROUNDS if tools_allowed else 1):
         response = client.chat.completions.create(**request)
         message = response.choices[0].message
@@ -164,9 +191,15 @@ def _run_openai(state: dict[str, Any], deps: Any) -> str:
                 arguments = json.loads(call.function.arguments)
             except json.JSONDecodeError:
                 arguments = {}
+            call_key = json.dumps(
+                [call.function.name, arguments], sort_keys=True, default=str
+            )
+            if call_key in seen_calls:
+                return _tool_loop_failure(state)
+            seen_calls.add(call_key)
             result = _run_tool(call.function.name, arguments, state, deps)
             messages.append({"role": "tool", "tool_call_id": call.id, "content": json.dumps(result)})
-    return "I reached the tool-call limit. Please refine your request."
+    return _tool_loop_failure(state)
 
 
 def _run_bedrock(state: dict[str, Any], deps: Any) -> str:
@@ -185,6 +218,7 @@ def _run_bedrock(state: dict[str, Any], deps: Any) -> str:
     tools_allowed = state.get("tool_access") == "shopping"
     if tools_allowed:
         request["toolConfig"] = tool_config
+    seen_calls: set[str] = set()
     for _ in range(_MAX_TOOL_ROUNDS if tools_allowed else 1):
         response = client.converse(**request)
         assistant = response["output"]["message"]
@@ -195,12 +229,18 @@ def _run_bedrock(state: dict[str, Any], deps: Any) -> str:
             return text or "I could not complete that request."
         results = []
         for call in calls:
+            call_key = json.dumps(
+                [call["name"], call.get("input", {})], sort_keys=True, default=str
+            )
+            if call_key in seen_calls:
+                return _tool_loop_failure(state)
+            seen_calls.add(call_key)
             result = _run_tool(call["name"], call.get("input", {}), state, deps)
             results.append({"toolResult": {
                 "toolUseId": call["toolUseId"], "content": [{"json": result}], "status": "success",
             }})
         messages.append({"role": "user", "content": results})
-    return "I reached the tool-call limit. Please refine your request."
+    return _tool_loop_failure(state)
 
 
 def run_react_agent(state: dict[str, Any], deps: Any) -> str:

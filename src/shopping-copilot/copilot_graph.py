@@ -112,6 +112,17 @@ def make_nodes(deps: CopilotDeps):
         try:
             hint = memory_retrieval.parse_retrieval_hint(state["safe_message"], state.get("conversation_context", ""))
             next_state = {**state, "retrieval_hint": hint, "tool_access": hint.tool_access}
+            if hint.policy_action == "block":
+                return {
+                    **next_state,
+                    "status": CopilotStatus.BLOCKED,
+                    "tool_access": "none",
+                    "reason": (
+                        "I can only help with safe shopping requests, product "
+                        "discovery, reviews, and cart preparation."
+                    ),
+                    "error": "POLICY_BLOCKED",
+                }
             if not mem0_client.read_enabled() or not state.get("conversation_id"):
                 return next_state
             memories = mem0_client.search(hint.semantic_query or state["safe_message"], state["conversation_id"])
@@ -196,7 +207,7 @@ def build_graph(deps: CopilotDeps) -> StateGraph:
     builder.add_edge(START, "input_guardrail")
     builder.add_conditional_edges("input_guardrail", _should_stop, {"stop": "build_response", "continue": "conversation_state"})
     builder.add_edge("conversation_state", "turn_context")
-    builder.add_edge("turn_context", "agent")
+    builder.add_conditional_edges("turn_context", _should_stop, {"stop": "build_response", "continue": "agent"})
     builder.add_edge("agent", "build_response")
     builder.add_edge("build_response", "memory_write")
     builder.add_edge("memory_write", END)

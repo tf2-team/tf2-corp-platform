@@ -29,3 +29,17 @@ def test_output_blocks_detected_sensitive_data(monkeypatch):
     result = guardrails.scan_output("Contact a customer by email.")
 
     assert result.action == GuardrailAction.BLOCK
+
+
+def test_input_preserves_product_names_but_redacts_contact_details(monkeypatch):
+    analyzer = MagicMock()
+    anonymizer = MagicMock()
+    analyzer.analyze.return_value = []
+    anonymizer.anonymize.side_effect = lambda **kwargs: type(
+        "Result", (), {"text": kwargs["text"]}
+    )()
+    monkeypatch.setattr(guardrails, "_get_presidio_engines", lambda: (analyzer, anonymizer))
+
+    assert guardrails.redact_pii("Roof Binoculars") == "Roof Binoculars"
+    assert "LOCATION" not in analyzer.analyze.call_args.kwargs["entities"]
+    assert "[REDACTED]" in guardrails.redact_pii("Email me at user@example.com")

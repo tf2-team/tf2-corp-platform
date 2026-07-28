@@ -2076,6 +2076,7 @@ dependencies = [
     { name = "python-json-logger" },
     { name = "simplejson" },
     { name = "techx-ai-common" },
+    { name = "tqdm" },
     { name = "valkey" },
 ]
 
@@ -2096,6 +2097,7 @@ requires-dist = [
     { name = "python-json-logger", specifier = "==4.0.0" },
     { name = "simplejson", specifier = "==3.20.2" },
     { name = "techx-ai-common", editable = "../src/ai-common" },
+    { name = "tqdm", specifier = ">=4.69,<5" },
     { name = "valkey", specifier = "==6.1.0" },
 ]
 
