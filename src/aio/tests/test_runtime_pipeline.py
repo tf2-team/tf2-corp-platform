@@ -1001,6 +1001,76 @@ class RuntimePipelineTest(unittest.TestCase):
 
         self.assertEqual([incident.service for incident in incidents], ["currency"])
 
+    def test_pipeline_notifies_anomaly_only_rca_root_with_low_metric_score(self):
+        settings = Settings()
+        hyperparameters = load_hyperparameters(settings.hyperparameters_path)
+
+        with TemporaryDirectory() as tmp:
+            store = SQLiteIncidentStore(Path(tmp) / "aiops.sqlite3", environment=settings.environment)
+            pipeline = AiopsPipeline(
+                collector=StaticCollector([]),
+                detectors=[],
+                store=store,
+                policy=policy(settings),
+                rca_hyperparameters=hyperparameters["rca"],
+                **runtime_kwargs(settings),
+            )
+
+            incidents = pipeline._upsert_rca_root_incidents(
+                RcaResult(
+                    anomalies=[AnomalyFinding(algorithm="weighted_sum", service="ad", metric="cpu_millicores", signal_id="ad_cpu_millicores", score=1.0, timestamp=44)],
+                    root_causes=[
+                        RootCauseCandidate(
+                            service="ad",
+                            score=0.9,
+                            root_cause_metrics=["cpu_millicores"],
+                            metric_scores={"cpu_millicores": 1.0},
+                        )
+                    ],
+                ),
+                [],
+                [cpu_ramp_metric("ad")],
+            )
+            store.close()
+
+        self.assertEqual([incident.service for incident in incidents], ["ad"])
+
+    def test_pipeline_oom_bypasses_metric_evidence_gate_without_slo(self):
+        settings = Settings()
+        hyperparameters = load_hyperparameters(settings.hyperparameters_path)
+
+        with TemporaryDirectory() as tmp:
+            store = SQLiteIncidentStore(Path(tmp) / "aiops.sqlite3", environment=settings.environment)
+            pipeline = AiopsPipeline(
+                collector=StaticCollector([]),
+                detectors=[],
+                store=store,
+                policy=policy(settings),
+                rca_hyperparameters=hyperparameters["rca"],
+                **runtime_kwargs(settings),
+            )
+
+            incidents = pipeline._upsert_rca_root_incidents(
+                RcaResult(
+                    root_causes=[
+                        RootCauseCandidate(
+                            service="email",
+                            score=0.9,
+                            root_cause_metrics=["memory_usage_bytes"],
+                            metric_scores={"memory_usage_bytes": 0.1},
+                        )
+                    ],
+                ),
+                [],
+                [
+                    metric("email", "memory_usage_bytes", [100_000_000.0] * 30 + [95_000_000.0] * 15),
+                    metric("email", "oom_events_total", [0.0] * 44 + [1.0]),
+                ],
+            )
+            store.close()
+
+        self.assertEqual([incident.service for incident in incidents], ["email"])
+
     def test_pipeline_flushes_notification_outbox_to_sender(self):
         settings = Settings()
         sender = FakeNotificationSender()

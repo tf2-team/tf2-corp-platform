@@ -1,8 +1,8 @@
 {
   "incident": {
-    "count_reset_seconds": 300,
-    "notification_cooldown_seconds": 300,
-    "rca_dedup_seconds": 300,
+    "count_reset_seconds": 900,
+    "notification_cooldown_seconds": 900,
+    "rca_dedup_seconds": 900,
     "slo_dedup_seconds": 900,
     "notification_retry_base_seconds": 60,
     "notification_retry_max_seconds": 3600,
@@ -27,7 +27,7 @@
     "rca_notification_require_current_tail_change": true,
     "rca_notification_allow_default_metric_without_series": true,
     "suppress_breakout_multiplier": 1.5,
-    "suppress_window_seconds": 300,
+    "suppress_window_seconds": 900,
     "weights": {
       "verified_primary_signal": 0.25,
       "temporal_precedence": 0.2,
@@ -138,7 +138,7 @@
       "dual_evidence_bonus": 0.3,
       "drain3_config_path": "config/drain3.ini",
       "log_bucket_seconds": 60,
-      "log_correlation_window_seconds": 120,
+      "log_correlation_window_seconds": 300,
       "log_history_buckets": 45,
       "log_min_nonzero_buckets": 3,
       "log_max_templates_per_service": 20,
