@@ -1,0 +1,9 @@
+{
+  "scenario_type": "real_incident",
+  "expected_incident": true,
+  "incident_start_ts": 1785076022,
+  "captured_at": "2026-07-26T14:33:14.908999+00:00",
+  "notes": "flagd local-cartFailure=on",
+  "source": "live_prometheus_capture",
+  "prometheus_base_url_host": "localhost:9090"
+}

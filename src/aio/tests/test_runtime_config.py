@@ -1,0 +1,321 @@
+#!/usr/bin/python
+# Copyright The OpenTelemetry Authors
+# SPDX-License-Identifier: Apache-2.0
+import json
+import re
+import tempfile
+import unittest
+from pathlib import Path
+
+from pydantic import ValidationError
+
+from aiops.config import build_detectors, load_hyperparameters, load_prometheus_query_registry, load_runtime_config
+from aiops.config import Settings
+from aiops.schemas import RuntimeConfig
+
+
+class RuntimeConfigTest(unittest.TestCase):
+    def test_can_disable_automatic_detector_generation_for_isolated_runs(self):
+        with tempfile.TemporaryDirectory() as directory:
+            runtime_path = Path(directory) / "runtime.json"
+            runtime = json.loads(Path("config/runtime.json").read_text(encoding="utf-8"))
+            runtime["auto_detector_generation_enabled"] = False
+            runtime["detectors"] = [
+                detector
+                for detector in runtime["detectors"]
+                if detector["id"] == "ops01_checkout_slo_burn_rate"
+            ]
+            runtime["detectors"][0]["enabled"] = True
+            runtime_path.write_text(json.dumps(runtime), encoding="utf-8")
+
+            config = load_runtime_config(runtime_path, Path("config/prometheus_queries.json"))
+            hyperparameters = load_hyperparameters(Settings().hyperparameters_path)
+            detectors = build_detectors(
+                config,
+                hyperparameters["no_data"],
+                hyperparameters["detectors"],
+            )
+
+            self.assertEqual(
+                [detector.detector_id for detector in detectors],
+                ["ops01_checkout_slo_burn_rate"],
+            )
+
+    def test_loads_runtime_json_and_builds_detectors(self):
+        config = load_runtime_config(Path("config/runtime.json"))
+        hyperparameters = load_hyperparameters(Settings().hyperparameters_path)
+        detectors = build_detectors(config, hyperparameters["no_data"], hyperparameters["detectors"])
+
+        self.assertEqual(config.topology.services[0].name, "checkout")
+        self.assertEqual(next(signal for signal in config.signals if signal.id == "checkout_bad_ratio_24h").feature_role, "official_slo")
+        self.assertEqual(next(signal for signal in config.signals if signal.id == "checkout_payment_error_rate_5m").feature_role, "dependency_signal")
+        detector_ids = {detector.detector_id for detector in detectors}
+        self.assertIn("auto_checkout_latency_p95", detector_ids)
+        self.assertIn("auto_checkout_latency_p99", detector_ids)
+        self.assertTrue({detector.id for detector in config.detectors if detector.id.startswith("auto_")} <= detector_ids)
+
+    def test_checkout_burn_rate_signal_and_detector_use_official_error_budget(self):
+        config = load_runtime_config(Path("config/runtime.json"))
+        hyperparameters = load_hyperparameters(Settings().hyperparameters_path)
+        detectors = build_detectors(config, hyperparameters["no_data"], hyperparameters["detectors"])
+
+        signal = next(item for item in config.signals if item.id == "checkout_error_budget_burn_rate_24h")
+        detector = next(item for item in detectors if item.detector_id == "ops01_checkout_slo_burn_rate")
+        query = config.prometheus_queries[signal.query_id]
+
+        self.assertEqual(signal.feature_role, "official_slo")
+        self.assertEqual(signal.window, "24h")
+        self.assertEqual(signal.unit, "burn_rate")
+        self.assertIn('rpc_method="PlaceOrder"', query)
+        self.assertIn("/ 0.01", query)
+        self.assertEqual(detector.signal_id, signal.id)
+        self.assertEqual(detector.threshold, 1.0)
+        self.assertEqual(detector.severity, "SEV1")
+        self.assertEqual(detector.runbook_id, "RB-CHECKOUT-SLO")
+
+    def test_each_service_error_rate_signal_has_burn_rate_slo(self):
+        config = load_runtime_config(Path("config/runtime.json"))
+        hyperparameters = load_hyperparameters(Settings().hyperparameters_path)
+        detectors = build_detectors(config, hyperparameters["no_data"], hyperparameters["detectors"])
+        error_rate_services = {signal.service for signal in config.signals if signal.query_id.endswith(".error_rate_5m")}
+        burn_rate_signals = {signal.service: signal for signal in config.signals if signal.unit == "burn_rate"}
+        detector_signal_ids = {detector.signal_id for detector in detectors if getattr(detector, "signal_id", "").endswith("_error_budget_burn_rate_24h")}
+
+        self.assertEqual(set(burn_rate_signals), error_rate_services)
+        self.assertTrue({signal.id for signal in burn_rate_signals.values()} <= detector_signal_ids)
+        self.assertEqual(
+            next(detector.threshold for detector in detectors if detector.detector_id == "auto_payment_burn_rate"),
+            hyperparameters["detectors"]["default_burn_rate_slo"],
+        )
+
+    def test_each_service_error_rate_signal_has_auto_detector(self):
+        config = load_runtime_config(Path("config/runtime.json"))
+        hyperparameters = load_hyperparameters(Settings().hyperparameters_path)
+        detectors = build_detectors(config, hyperparameters["no_data"], hyperparameters["detectors"])
+        signal_ids = {signal.id for signal in config.signals if signal.query_id.endswith(".error_rate_5m")}
+        auto_detectors = [detector for detector in config.detectors if detector.id.startswith("auto_") and detector.id.endswith("_error_rate")]
+        detector_signal_ids = {detector.signal_id for detector in auto_detectors}
+
+        self.assertEqual(detector_signal_ids, signal_ids)
+        self.assertTrue(all(detector.enabled for detector in auto_detectors))
+        self.assertEqual(
+            next(detector.threshold for detector in detectors if detector.detector_id == "auto_shopping_copilot_error_rate"),
+            hyperparameters["detectors"]["default_error_rate"],
+        )
+
+    def test_each_service_latency_signal_has_configured_slo_detector(self):
+        config = load_runtime_config(Path("config/runtime.json"))
+        hyperparameters = load_hyperparameters(Settings().hyperparameters_path)
+        detectors = build_detectors(config, hyperparameters["no_data"], hyperparameters["detectors"])
+        signal_ids = {signal.id for signal in config.signals if any(signal.query_id.endswith(f".p{percentile}_latency_5m") for percentile in (95, 99))}
+        latency_detectors = [detector for detector in detectors if detector.detector_id.endswith(("_latency_p95", "_latency_p99"))]
+        configured_thresholds = hyperparameters["detectors"]["latency_slo_overrides"]
+
+        self.assertEqual({detector.signal_id for detector in latency_detectors}, signal_ids)
+        self.assertEqual({detector.service for detector in latency_detectors}, {signal.service for signal in config.signals if signal.id in signal_ids})
+        self.assertEqual(len(latency_detectors), len(signal_ids))
+        self.assertEqual(
+            {detector.runbook_id for detector in latency_detectors if detector.service == "checkout"},
+            {"RB-CHECKOUT-LATENCY"},
+        )
+        thresholds = {detector.service: detector.threshold for detector in latency_detectors}
+        self.assertEqual(thresholds["shopping-copilot"], hyperparameters["detectors"]["default_latency_slo"])
+        self.assertEqual(thresholds["cart"], 1)
+        self.assertEqual(thresholds["frontend"], 1)
+        self.assertEqual(thresholds["recommendation"], 1.0)
+        self.assertEqual(thresholds["payment"], 1.5)
+        self.assertEqual(thresholds["shipping"], 1.0)
+        self.assertEqual(thresholds["accounting"], 1.0)
+
+    def test_detector_hyperparameters_point_at_loaded_detectors(self):
+        raw = json.loads(Path("config/runtime.json").read_text(encoding="utf-8"))
+        config = load_runtime_config(Path("config/runtime.json"))
+        hyperparameters = load_hyperparameters(Settings().hyperparameters_path)["detectors"]
+        detector_ids = {detector.id for detector in config.detectors}
+        latency_services = {detector.service for detector in config.detectors if detector.id.endswith(("_latency_p95", "_latency_p99"))}
+
+        self.assertFalse(any(detector["id"].startswith("auto_") for detector in raw["detectors"]))
+        self.assertFalse({detector["id"] for detector in raw["detectors"] if not detector.get("enabled", True)})
+        self.assertFalse(set(hyperparameters["thresholds"]) - detector_ids)
+        self.assertFalse(set(hyperparameters["latency_slo_overrides"]) - latency_services)
+
+    def test_prometheus_services_expand_generated_metrics(self):
+        raw = json.loads(Path("config/runtime.json").read_text(encoding="utf-8"))
+        config = load_runtime_config(Path("config/runtime.json"))
+
+        self.assertNotIn("prometheus_queries", raw)
+        self.assertNotIn("prometheus_services", raw)
+        self.assertEqual(raw["signals"], [])
+        self.assertIn("checkout.p95_latency_5m", config.prometheus_queries)
+        self.assertIn("checkout.p99_latency_5m", config.prometheus_queries)
+        self.assertIn("payment.p95_latency_5m", config.prometheus_queries)
+        self.assertIn("payment.p99_latency_5m", config.prometheus_queries)
+        self.assertIn("payment.error_rate_5m", config.prometheus_queries)
+        self.assertIn("payment.request_rate_5m", config.prometheus_queries)
+        self.assertIn("payment.cpu_millicores", config.prometheus_queries)
+        self.assertIn("payment.memory_usage_bytes", config.prometheus_queries)
+        self.assertIn("payment.disk_io_bytes_per_second", config.prometheus_queries)
+        self.assertIn("payment.socket_io_bytes_per_second", config.prometheus_queries)
+        self.assertIn("payment.workload_ready_pods", config.prometheus_queries)
+        self.assertIn('service_name="payment"', config.prometheus_queries["payment.error_rate_5m"])
+        self.assertIn('service_name="payment"', config.prometheus_queries["payment.p95_latency_5m"])
+        self.assertIn("traces_span_metrics_duration_milliseconds_bucket", config.prometheus_queries["payment.p95_latency_5m"])
+        self.assertIn("traces_span_metrics_duration_milliseconds_count", config.prometheus_queries["payment.p95_latency_5m"])
+        self.assertNotIn("vector(0)", config.prometheus_queries["payment.p95_latency_5m"])
+        self.assertNotIn("vector(0)", config.prometheus_queries["checkout.p95_latency_5m"])
+        self.assertTrue(all("vector(0)" not in query for query in config.prometheus_queries.values()))
+        self.assertIn("traces_span_metrics_calls_total", config.prometheus_queries["payment.request_rate_5m"])
+        self.assertIn('container="payment"', config.prometheus_queries["payment.memory_usage_bytes"])
+        self.assertNotIn("target_info", config.prometheus_queries["payment.memory_usage_bytes"])
+        self.assertNotIn("system_memory_usage_bytes", config.prometheus_queries["payment.memory_usage_bytes"])
+        self.assertIn("http_server_request_duration_seconds_count", config.prometheus_queries["cart.request_rate_5m"])
+        self.assertIn("traces_span_metrics_calls_total", config.prometheus_queries["cart.error_rate_5m"])
+        self.assertIn("traces_span_metrics_calls_total", config.prometheus_queries["checkout.payment_error_rate.5m"])
+        self.assertIn('span_name=~".*PaymentService/Charge"', config.prometheus_queries["checkout.payment_error_rate.5m"])
+        self.assertIn("0.000000001", config.prometheus_queries["checkout.payment_error_rate.5m"])
+        self.assertIn("kafka_consumer_records_lag", config.prometheus_queries["kafka.consumer_lag"])
+        self.assertIn("kafka_consumer_group_lag", config.prometheus_queries["kafka.consumer_lag"])
+        self.assertIn("db_client_connection_count", config.prometheus_queries["postgresql.active_connections"])
+        self.assertIn("postgresql_commits", config.prometheus_queries["postgresql.request_rate_5m"])
+        self.assertIn("aws_rds_cpu", config.prometheus_queries["postgresql.cpu_percentage"])
+        self.assertIn("/ 100", config.prometheus_queries["postgresql.cpu_percentage"])
+        self.assertIn("aws_rds_network", config.prometheus_queries["postgresql.socket_io_bytes_per_second"])
+        self.assertIn("kafka_partition_current_offset", config.prometheus_queries["kafka.request_rate_5m"])
+        self.assertIn("aws_kafka_cpu", config.prometheus_queries["kafka.cpu_percentage"])
+        self.assertIn("/ 100", config.prometheus_queries["kafka.cpu_percentage"])
+        self.assertIn("aws_kafka_bytes", config.prometheus_queries["kafka.socket_io_bytes_per_second"])
+        self.assertIn("redis_commands_per_second", config.prometheus_queries["valkey_cart.request_rate_5m"])
+        self.assertIn("aws_elasticache_engine_cpu", config.prometheus_queries["valkey_cart.cpu_percentage"])
+        self.assertIn("/ 100", config.prometheus_queries["valkey_cart.cpu_percentage"])
+        self.assertIn("aws_elasticache_network_bytes", config.prometheus_queries["valkey_cart.socket_io_bytes_per_second"])
+        signal_units = {signal.id: signal.unit for signal in config.signals}
+        self.assertEqual(signal_units["postgresql_cpu_percentage"], "ratio")
+        self.assertEqual(signal_units["kafka_cpu_percentage"], "ratio")
+        self.assertEqual(signal_units["valkey_cart_cpu_percentage"], "ratio")
+        self.assertIn("otelcol_receiver_accepted", config.prometheus_queries["otel_collector.request_rate_5m"])
+        self.assertIn("otelcol_receiver_accepted_spans_total", config.prometheus_queries["otel_collector.request_rate_5m"])
+        self.assertIn("otelcol_receiver_accepted_metric_points_total", config.prometheus_queries["otel_collector.request_rate_5m"])
+        self.assertIn("otelcol_receiver_accepted_log_records_total", config.prometheus_queries["otel_collector.request_rate_5m"])
+        self.assertIn('pod=~"otel-collector-.*"', config.prometheus_queries["otel_collector.cpu_millicores"])
+        self.assertIn('pod=~"otel-collector-.*"', config.prometheus_queries["otel_collector.socket_io_bytes_per_second"])
+        self.assertIn("db_client_connection_count", config.prometheus_queries["product_catalog.db_pool_utilization"])
+        self.assertIn("db_client_connection_max", config.prometheus_queries["product_catalog.db_pool_utilization"])
+        self.assertTrue(
+            {
+                "payment_p95_latency_5m",
+                "payment_error_rate_5m",
+                "payment_request_rate_5m",
+                "payment_cpu_millicores",
+                "payment_memory_usage_bytes",
+                "payment_disk_io_bytes_per_second",
+                "payment_socket_io_bytes_per_second",
+                "payment_workload_ready_pods",
+            }.issubset({signal.id for signal in config.signals})
+        )
+        self.assertEqual([signal.id for signal in config.signals].count("product_catalog_cpu_millicores"), 1)
+
+    def test_no_data_detector_covers_required_prometheus_signals(self):
+        config = load_runtime_config(Path("config/runtime.json"))
+        prometheus_signal_ids = {
+            signal.id
+            for signal in config.signals
+            if signal.source == "prometheus" and config.prometheus_query_specs[signal.query_id].required_for_monitoring
+        }
+        no_data_signal_ids = {
+            signal_id
+            for detector in config.detectors
+            if detector.type == "no-data"
+            for signal_id in detector.signal_ids
+        }
+
+        self.assertEqual(no_data_signal_ids, prometheus_signal_ids)
+        self.assertFalse(
+            {
+                signal.id
+                for signal in config.signals
+                if signal.source == "prometheus"
+                and (
+                    signal.feature_role in {"official_slo", "dependency_signal"}
+                    or signal.id.endswith(("_p95_latency_5m", "_p99_latency_5m", "_error_rate_5m", "_request_rate_5m"))
+                )
+            }
+            & no_data_signal_ids
+        )
+
+    def test_registry_owns_one_second_collection_contract(self):
+        registry = load_prometheus_query_registry(Path("config/prometheus_queries.json"))
+        profile = registry.collection_profiles["one_second"]
+
+        self.assertEqual(profile.step_seconds, 1)
+        self.assertEqual(profile.required_source_resolution_seconds, 1)
+        self.assertEqual(profile.detector_bucket_seconds, 30)
+        self.assertEqual(profile.lookback_seconds, 3600)
+        self.assertEqual(profile.lookback_seconds // profile.detector_bucket_seconds, 120)
+        self.assertEqual(registry.result_defaults.on_empty, "missing")
+
+    def test_template_can_override_default_empty_result_policy(self):
+        raw = json.loads(Path("config/prometheus_queries.json").read_text(encoding="utf-8"))
+        raw["templates"]["red.grpc.p95_latency"]["result"] = {"on_empty": "zero"}
+
+        with tempfile.TemporaryDirectory() as tmp:
+            registry_path = Path(tmp) / "prometheus_queries.json"
+            registry_path.write_text(json.dumps(raw), encoding="utf-8")
+            config = load_runtime_config(Path("config/runtime.json"), registry_path)
+
+        self.assertIn("vector(0)", config.prometheus_queries["checkout.p95_latency_5m"])
+        self.assertNotIn("vector(0)", config.prometheus_queries["checkout.error_rate_5m"])
+
+    def test_enabled_detector_runbooks_have_canonical_files(self):
+        config = load_runtime_config(Path("config/runtime.json"))
+        runbook_ids = {detector.runbook_id for detector in config.detectors if detector.enabled}
+
+        self.assertTrue(runbook_ids.issubset({path.stem for path in Path("runbooks").glob("*.md")}))
+
+    def test_service_runbook_map_covers_key_services(self):
+        runbook_map = json.loads(Path("runbooks/service_runbook_map.json").read_text(encoding="utf-8"))
+
+        self.assertIn("RB-KAFKA-PIPELINE", runbook_map["runbooks"])
+        self.assertIn("RB-DATASTORE-POSTGRESQL", runbook_map["services"]["postgresql"])
+        self.assertIn("RB-CHECKOUT-SLO", runbook_map["services"]["checkout"])
+        self.assertIn("RB-AI-DEPENDENCY", runbook_map["services"]["shopping-copilot"])
+
+    def test_rejects_detector_with_unknown_signal(self):
+        config = json.loads(Path("config/runtime.json").read_text(encoding="utf-8"))
+        config["detectors"][0]["signal_id"] = "missing_signal"
+
+        with self.assertRaises(ValidationError):
+            RuntimeConfig.model_validate(config)
+
+    def test_rejects_duplicate_topology_services(self):
+        config = json.loads(Path("config/runtime.json").read_text(encoding="utf-8"))
+        config["topology"]["services"].append(config["topology"]["services"][0])
+
+        with self.assertRaisesRegex(ValidationError, "duplicate topology services"):
+            RuntimeConfig.model_validate(config)
+
+    def test_rejects_duplicate_and_self_dependencies(self):
+        config = json.loads(Path("config/runtime.json").read_text(encoding="utf-8"))
+        config["topology"]["services"][0]["dependencies"].append("cart")
+        with self.assertRaisesRegex(ValidationError, "duplicate dependencies for checkout"):
+            RuntimeConfig.model_validate(config)
+
+        config = json.loads(Path("config/runtime.json").read_text(encoding="utf-8"))
+        config["topology"]["services"][0]["dependencies"].append("checkout")
+        with self.assertRaisesRegex(ValidationError, "self dependency for checkout"):
+            RuntimeConfig.model_validate(config)
+
+    def test_api_markdown_json_schemas_are_parseable(self):
+        text = Path("docs/các API cần kết nối.md").read_text(encoding="utf-8")
+        blocks = re.findall(r"```json[^\n]*\n(.*?)\n```", text, re.S)
+
+        self.assertEqual(len(blocks), 18)
+        for block in blocks:
+            schema = json.loads(block)
+            self.assertIn("$schema", schema)
+            self.assertIn("$id", schema)
+            self.assertEqual(schema.get("type"), "object")
+            self.assertIsInstance(schema.get("required", []), list)
+
+
+if __name__ == "__main__":
+    unittest.main()

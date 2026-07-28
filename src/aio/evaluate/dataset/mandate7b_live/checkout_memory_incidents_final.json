@@ -1,0 +1,1040 @@
+{
+    "value":  [
+                  {
+                      "incident_id":  "inc-788d322c0b2f",
+                      "fingerprint":  "sha256:788d322c0b2f3b392e39ace895b3674be39d8494d0b8ba5f5388671f4a62d8e9",
+                      "state":  "open",
+                      "last_seen":  "2026-07-26T15:19:58.654143+00:00",
+                      "recovered_at":  null,
+                      "cooldown_until":  "2026-07-26T15:23:21.516914+00:00",
+                      "severity":  "SEV2",
+                      "flow":  "checkout",
+                      "service":  "checkout",
+                      "likely_dependency":  "unknown",
+                      "occurrence_count":  34,
+                      "events":  [
+                                     {
+                                         "environment":  "unknown",
+                                         "timestamp":  0,
+                                         "detector_id":  "rca_root_cause",
+                                         "flow":  "checkout",
+                                         "service":  "checkout",
+                                         "severity":  "SEV2",
+                                         "signal_id":  "memory_usage_bytes",
+                                         "value":  0.9,
+                                         "unit":  "score",
+                                         "window":  "rca",
+                                         "threshold":  0.8,
+                                         "quality":  "fallback-only",
+                                         "reason":  "rca_root_cause",
+                                         "runbook_id":  "RB-SERVICE-RESOURCE",
+                                         "likely_dependency":  "unknown",
+                                         "confidence":  0.9,
+                                         "contributing_signals":  [
+                                                                      "memory_usage_bytes"
+                                                                  ],
+                                         "labels":  {
+
+                                                    },
+                                         "correlation_components":  {
+
+                                                                    },
+                                         "evidence":  [
+
+                                                      ]
+                                     },
+                                     {
+                                         "environment":  "unknown",
+                                         "timestamp":  0,
+                                         "detector_id":  "rca_root_cause",
+                                         "flow":  "checkout",
+                                         "service":  "checkout",
+                                         "severity":  "SEV2",
+                                         "signal_id":  "memory_usage_bytes",
+                                         "value":  0.9,
+                                         "unit":  "score",
+                                         "window":  "rca",
+                                         "threshold":  0.8,
+                                         "quality":  "fallback-only",
+                                         "reason":  "rca_root_cause",
+                                         "runbook_id":  "RB-SERVICE-RESOURCE",
+                                         "likely_dependency":  "unknown",
+                                         "confidence":  0.9,
+                                         "contributing_signals":  [
+                                                                      "memory_usage_bytes"
+                                                                  ],
+                                         "labels":  {
+
+                                                    },
+                                         "correlation_components":  {
+
+                                                                    },
+                                         "evidence":  [
+
+                                                      ]
+                                     },
+                                     {
+                                         "environment":  "unknown",
+                                         "timestamp":  0,
+                                         "detector_id":  "rca_root_cause",
+                                         "flow":  "checkout",
+                                         "service":  "checkout",
+                                         "severity":  "SEV2",
+                                         "signal_id":  "memory_usage_bytes",
+                                         "value":  0.9,
+                                         "unit":  "score",
+                                         "window":  "rca",
+                                         "threshold":  0.8,
+                                         "quality":  "fallback-only",
+                                         "reason":  "rca_root_cause",
+                                         "runbook_id":  "RB-SERVICE-RESOURCE",
+                                         "likely_dependency":  "unknown",
+                                         "confidence":  0.9,
+                                         "contributing_signals":  [
+                                                                      "memory_usage_bytes"
+                                                                  ],
+                                         "labels":  {
+
+                                                    },
+                                         "correlation_components":  {
+
+                                                                    },
+                                         "evidence":  [
+
+                                                      ]
+                                     },
+                                     {
+                                         "environment":  "unknown",
+                                         "timestamp":  0,
+                                         "detector_id":  "rca_root_cause",
+                                         "flow":  "checkout",
+                                         "service":  "checkout",
+                                         "severity":  "SEV2",
+                                         "signal_id":  "memory_usage_bytes",
+                                         "value":  0.9,
+                                         "unit":  "score",
+                                         "window":  "rca",
+                                         "threshold":  0.8,
+                                         "quality":  "fallback-only",
+                                         "reason":  "rca_root_cause",
+                                         "runbook_id":  "RB-SERVICE-RESOURCE",
+                                         "likely_dependency":  "unknown",
+                                         "confidence":  0.9,
+                                         "contributing_signals":  [
+                                                                      "memory_usage_bytes"
+                                                                  ],
+                                         "labels":  {
+
+                                                    },
+                                         "correlation_components":  {
+
+                                                                    },
+                                         "evidence":  [
+
+                                                      ]
+                                     },
+                                     {
+                                         "environment":  "unknown",
+                                         "timestamp":  0,
+                                         "detector_id":  "rca_root_cause",
+                                         "flow":  "checkout",
+                                         "service":  "checkout",
+                                         "severity":  "SEV2",
+                                         "signal_id":  "memory_usage_bytes",
+                                         "value":  0.9,
+                                         "unit":  "score",
+                                         "window":  "rca",
+                                         "threshold":  0.8,
+                                         "quality":  "fallback-only",
+                                         "reason":  "rca_root_cause",
+                                         "runbook_id":  "RB-SERVICE-RESOURCE",
+                                         "likely_dependency":  "unknown",
+                                         "confidence":  0.9,
+                                         "contributing_signals":  [
+                                                                      "memory_usage_bytes"
+                                                                  ],
+                                         "labels":  {
+
+                                                    },
+                                         "correlation_components":  {
+
+                                                                    },
+                                         "evidence":  [
+
+                                                      ]
+                                     },
+                                     {
+                                         "environment":  "unknown",
+                                         "timestamp":  0,
+                                         "detector_id":  "rca_root_cause",
+                                         "flow":  "checkout",
+                                         "service":  "checkout",
+                                         "severity":  "SEV2",
+                                         "signal_id":  "memory_usage_bytes",
+                                         "value":  0.9,
+                                         "unit":  "score",
+                                         "window":  "rca",
+                                         "threshold":  0.8,
+                                         "quality":  "fallback-only",
+                                         "reason":  "rca_root_cause",
+                                         "runbook_id":  "RB-SERVICE-RESOURCE",
+                                         "likely_dependency":  "unknown",
+                                         "confidence":  0.9,
+                                         "contributing_signals":  [
+                                                                      "memory_usage_bytes"
+                                                                  ],
+                                         "labels":  {
+
+                                                    },
+                                         "correlation_components":  {
+
+                                                                    },
+                                         "evidence":  [
+
+                                                      ]
+                                     },
+                                     {
+                                         "environment":  "unknown",
+                                         "timestamp":  0,
+                                         "detector_id":  "rca_root_cause",
+                                         "flow":  "checkout",
+                                         "service":  "checkout",
+                                         "severity":  "SEV2",
+                                         "signal_id":  "memory_usage_bytes",
+                                         "value":  0.9,
+                                         "unit":  "score",
+                                         "window":  "rca",
+                                         "threshold":  0.8,
+                                         "quality":  "fallback-only",
+                                         "reason":  "rca_root_cause",
+                                         "runbook_id":  "RB-SERVICE-RESOURCE",
+                                         "likely_dependency":  "unknown",
+                                         "confidence":  0.9,
+                                         "contributing_signals":  [
+                                                                      "memory_usage_bytes"
+                                                                  ],
+                                         "labels":  {
+
+                                                    },
+                                         "correlation_components":  {
+
+                                                                    },
+                                         "evidence":  [
+
+                                                      ]
+                                     },
+                                     {
+                                         "environment":  "unknown",
+                                         "timestamp":  0,
+                                         "detector_id":  "rca_root_cause",
+                                         "flow":  "checkout",
+                                         "service":  "checkout",
+                                         "severity":  "SEV2",
+                                         "signal_id":  "memory_usage_bytes",
+                                         "value":  0.9,
+                                         "unit":  "score",
+                                         "window":  "rca",
+                                         "threshold":  0.8,
+                                         "quality":  "fallback-only",
+                                         "reason":  "rca_root_cause",
+                                         "runbook_id":  "RB-SERVICE-RESOURCE",
+                                         "likely_dependency":  "unknown",
+                                         "confidence":  0.9,
+                                         "contributing_signals":  [
+                                                                      "memory_usage_bytes"
+                                                                  ],
+                                         "labels":  {
+
+                                                    },
+                                         "correlation_components":  {
+
+                                                                    },
+                                         "evidence":  [
+
+                                                      ]
+                                     },
+                                     {
+                                         "environment":  "unknown",
+                                         "timestamp":  0,
+                                         "detector_id":  "rca_root_cause",
+                                         "flow":  "checkout",
+                                         "service":  "checkout",
+                                         "severity":  "SEV2",
+                                         "signal_id":  "memory_usage_bytes",
+                                         "value":  0.9,
+                                         "unit":  "score",
+                                         "window":  "rca",
+                                         "threshold":  0.8,
+                                         "quality":  "fallback-only",
+                                         "reason":  "rca_root_cause",
+                                         "runbook_id":  "RB-SERVICE-RESOURCE",
+                                         "likely_dependency":  "unknown",
+                                         "confidence":  0.9,
+                                         "contributing_signals":  [
+                                                                      "memory_usage_bytes"
+                                                                  ],
+                                         "labels":  {
+
+                                                    },
+                                         "correlation_components":  {
+
+                                                                    },
+                                         "evidence":  [
+
+                                                      ]
+                                     },
+                                     {
+                                         "environment":  "unknown",
+                                         "timestamp":  0,
+                                         "detector_id":  "rca_root_cause",
+                                         "flow":  "checkout",
+                                         "service":  "checkout",
+                                         "severity":  "SEV2",
+                                         "signal_id":  "memory_usage_bytes",
+                                         "value":  0.9,
+                                         "unit":  "score",
+                                         "window":  "rca",
+                                         "threshold":  0.8,
+                                         "quality":  "fallback-only",
+                                         "reason":  "rca_root_cause",
+                                         "runbook_id":  "RB-SERVICE-RESOURCE",
+                                         "likely_dependency":  "unknown",
+                                         "confidence":  0.9,
+                                         "contributing_signals":  [
+                                                                      "memory_usage_bytes"
+                                                                  ],
+                                         "labels":  {
+
+                                                    },
+                                         "correlation_components":  {
+
+                                                                    },
+                                         "evidence":  [
+
+                                                      ]
+                                     },
+                                     {
+                                         "environment":  "unknown",
+                                         "timestamp":  0,
+                                         "detector_id":  "rca_root_cause",
+                                         "flow":  "checkout",
+                                         "service":  "checkout",
+                                         "severity":  "SEV2",
+                                         "signal_id":  "memory_usage_bytes",
+                                         "value":  0.9,
+                                         "unit":  "score",
+                                         "window":  "rca",
+                                         "threshold":  0.8,
+                                         "quality":  "fallback-only",
+                                         "reason":  "rca_root_cause",
+                                         "runbook_id":  "RB-SERVICE-RESOURCE",
+                                         "likely_dependency":  "unknown",
+                                         "confidence":  0.9,
+                                         "contributing_signals":  [
+                                                                      "memory_usage_bytes"
+                                                                  ],
+                                         "labels":  {
+
+                                                    },
+                                         "correlation_components":  {
+
+                                                                    },
+                                         "evidence":  [
+
+                                                      ]
+                                     },
+                                     {
+                                         "environment":  "unknown",
+                                         "timestamp":  0,
+                                         "detector_id":  "rca_root_cause",
+                                         "flow":  "checkout",
+                                         "service":  "checkout",
+                                         "severity":  "SEV2",
+                                         "signal_id":  "memory_usage_bytes",
+                                         "value":  0.9,
+                                         "unit":  "score",
+                                         "window":  "rca",
+                                         "threshold":  0.8,
+                                         "quality":  "fallback-only",
+                                         "reason":  "rca_root_cause",
+                                         "runbook_id":  "RB-SERVICE-RESOURCE",
+                                         "likely_dependency":  "unknown",
+                                         "confidence":  0.9,
+                                         "contributing_signals":  [
+                                                                      "memory_usage_bytes"
+                                                                  ],
+                                         "labels":  {
+
+                                                    },
+                                         "correlation_components":  {
+
+                                                                    },
+                                         "evidence":  [
+
+                                                      ]
+                                     },
+                                     {
+                                         "environment":  "unknown",
+                                         "timestamp":  0,
+                                         "detector_id":  "rca_root_cause",
+                                         "flow":  "checkout",
+                                         "service":  "checkout",
+                                         "severity":  "SEV2",
+                                         "signal_id":  "memory_usage_bytes",
+                                         "value":  0.9,
+                                         "unit":  "score",
+                                         "window":  "rca",
+                                         "threshold":  0.8,
+                                         "quality":  "fallback-only",
+                                         "reason":  "rca_root_cause",
+                                         "runbook_id":  "RB-SERVICE-RESOURCE",
+                                         "likely_dependency":  "unknown",
+                                         "confidence":  0.9,
+                                         "contributing_signals":  [
+                                                                      "memory_usage_bytes"
+                                                                  ],
+                                         "labels":  {
+
+                                                    },
+                                         "correlation_components":  {
+
+                                                                    },
+                                         "evidence":  [
+
+                                                      ]
+                                     },
+                                     {
+                                         "environment":  "unknown",
+                                         "timestamp":  0,
+                                         "detector_id":  "rca_root_cause",
+                                         "flow":  "checkout",
+                                         "service":  "checkout",
+                                         "severity":  "SEV2",
+                                         "signal_id":  "memory_usage_bytes",
+                                         "value":  0.9,
+                                         "unit":  "score",
+                                         "window":  "rca",
+                                         "threshold":  0.8,
+                                         "quality":  "fallback-only",
+                                         "reason":  "rca_root_cause",
+                                         "runbook_id":  "RB-SERVICE-RESOURCE",
+                                         "likely_dependency":  "unknown",
+                                         "confidence":  0.9,
+                                         "contributing_signals":  [
+                                                                      "memory_usage_bytes"
+                                                                  ],
+                                         "labels":  {
+
+                                                    },
+                                         "correlation_components":  {
+
+                                                                    },
+                                         "evidence":  [
+
+                                                      ]
+                                     },
+                                     {
+                                         "environment":  "unknown",
+                                         "timestamp":  0,
+                                         "detector_id":  "rca_root_cause",
+                                         "flow":  "checkout",
+                                         "service":  "checkout",
+                                         "severity":  "SEV2",
+                                         "signal_id":  "memory_usage_bytes",
+                                         "value":  0.9,
+                                         "unit":  "score",
+                                         "window":  "rca",
+                                         "threshold":  0.8,
+                                         "quality":  "fallback-only",
+                                         "reason":  "rca_root_cause",
+                                         "runbook_id":  "RB-SERVICE-RESOURCE",
+                                         "likely_dependency":  "unknown",
+                                         "confidence":  0.9,
+                                         "contributing_signals":  [
+                                                                      "memory_usage_bytes"
+                                                                  ],
+                                         "labels":  {
+
+                                                    },
+                                         "correlation_components":  {
+
+                                                                    },
+                                         "evidence":  [
+
+                                                      ]
+                                     },
+                                     {
+                                         "environment":  "unknown",
+                                         "timestamp":  0,
+                                         "detector_id":  "rca_root_cause",
+                                         "flow":  "checkout",
+                                         "service":  "checkout",
+                                         "severity":  "SEV2",
+                                         "signal_id":  "memory_usage_bytes",
+                                         "value":  0.9,
+                                         "unit":  "score",
+                                         "window":  "rca",
+                                         "threshold":  0.8,
+                                         "quality":  "fallback-only",
+                                         "reason":  "rca_root_cause",
+                                         "runbook_id":  "RB-SERVICE-RESOURCE",
+                                         "likely_dependency":  "unknown",
+                                         "confidence":  0.9,
+                                         "contributing_signals":  [
+                                                                      "memory_usage_bytes"
+                                                                  ],
+                                         "labels":  {
+
+                                                    },
+                                         "correlation_components":  {
+
+                                                                    },
+                                         "evidence":  [
+
+                                                      ]
+                                     },
+                                     {
+                                         "environment":  "unknown",
+                                         "timestamp":  0,
+                                         "detector_id":  "rca_root_cause",
+                                         "flow":  "checkout",
+                                         "service":  "checkout",
+                                         "severity":  "SEV2",
+                                         "signal_id":  "memory_usage_bytes",
+                                         "value":  0.9,
+                                         "unit":  "score",
+                                         "window":  "rca",
+                                         "threshold":  0.8,
+                                         "quality":  "fallback-only",
+                                         "reason":  "rca_root_cause",
+                                         "runbook_id":  "RB-SERVICE-RESOURCE",
+                                         "likely_dependency":  "unknown",
+                                         "confidence":  0.9,
+                                         "contributing_signals":  [
+                                                                      "memory_usage_bytes"
+                                                                  ],
+                                         "labels":  {
+
+                                                    },
+                                         "correlation_components":  {
+
+                                                                    },
+                                         "evidence":  [
+
+                                                      ]
+                                     },
+                                     {
+                                         "environment":  "unknown",
+                                         "timestamp":  0,
+                                         "detector_id":  "rca_root_cause",
+                                         "flow":  "checkout",
+                                         "service":  "checkout",
+                                         "severity":  "SEV2",
+                                         "signal_id":  "memory_usage_bytes",
+                                         "value":  0.9,
+                                         "unit":  "score",
+                                         "window":  "rca",
+                                         "threshold":  0.8,
+                                         "quality":  "fallback-only",
+                                         "reason":  "rca_root_cause",
+                                         "runbook_id":  "RB-SERVICE-RESOURCE",
+                                         "likely_dependency":  "unknown",
+                                         "confidence":  0.9,
+                                         "contributing_signals":  [
+                                                                      "memory_usage_bytes"
+                                                                  ],
+                                         "labels":  {
+
+                                                    },
+                                         "correlation_components":  {
+
+                                                                    },
+                                         "evidence":  [
+
+                                                      ]
+                                     },
+                                     {
+                                         "environment":  "unknown",
+                                         "timestamp":  0,
+                                         "detector_id":  "rca_root_cause",
+                                         "flow":  "checkout",
+                                         "service":  "checkout",
+                                         "severity":  "SEV2",
+                                         "signal_id":  "memory_usage_bytes",
+                                         "value":  0.9,
+                                         "unit":  "score",
+                                         "window":  "rca",
+                                         "threshold":  0.8,
+                                         "quality":  "fallback-only",
+                                         "reason":  "rca_root_cause",
+                                         "runbook_id":  "RB-SERVICE-RESOURCE",
+                                         "likely_dependency":  "unknown",
+                                         "confidence":  0.9,
+                                         "contributing_signals":  [
+                                                                      "memory_usage_bytes"
+                                                                  ],
+                                         "labels":  {
+
+                                                    },
+                                         "correlation_components":  {
+
+                                                                    },
+                                         "evidence":  [
+
+                                                      ]
+                                     },
+                                     {
+                                         "environment":  "unknown",
+                                         "timestamp":  0,
+                                         "detector_id":  "rca_root_cause",
+                                         "flow":  "checkout",
+                                         "service":  "checkout",
+                                         "severity":  "SEV2",
+                                         "signal_id":  "memory_usage_bytes",
+                                         "value":  0.9,
+                                         "unit":  "score",
+                                         "window":  "rca",
+                                         "threshold":  0.8,
+                                         "quality":  "fallback-only",
+                                         "reason":  "rca_root_cause",
+                                         "runbook_id":  "RB-SERVICE-RESOURCE",
+                                         "likely_dependency":  "unknown",
+                                         "confidence":  0.9,
+                                         "contributing_signals":  [
+                                                                      "memory_usage_bytes"
+                                                                  ],
+                                         "labels":  {
+
+                                                    },
+                                         "correlation_components":  {
+
+                                                                    },
+                                         "evidence":  [
+
+                                                      ]
+                                     },
+                                     {
+                                         "environment":  "unknown",
+                                         "timestamp":  0,
+                                         "detector_id":  "rca_root_cause",
+                                         "flow":  "checkout",
+                                         "service":  "checkout",
+                                         "severity":  "SEV2",
+                                         "signal_id":  "memory_usage_bytes",
+                                         "value":  0.8954545454545454,
+                                         "unit":  "score",
+                                         "window":  "rca",
+                                         "threshold":  0.8,
+                                         "quality":  "fallback-only",
+                                         "reason":  "rca_root_cause",
+                                         "runbook_id":  "RB-SERVICE-RESOURCE",
+                                         "likely_dependency":  "unknown",
+                                         "confidence":  0.8954545454545454,
+                                         "contributing_signals":  [
+                                                                      "memory_usage_bytes"
+                                                                  ],
+                                         "labels":  {
+
+                                                    },
+                                         "correlation_components":  {
+
+                                                                    },
+                                         "evidence":  [
+
+                                                      ]
+                                     },
+                                     {
+                                         "environment":  "unknown",
+                                         "timestamp":  0,
+                                         "detector_id":  "rca_root_cause",
+                                         "flow":  "checkout",
+                                         "service":  "checkout",
+                                         "severity":  "SEV2",
+                                         "signal_id":  "memory_usage_bytes",
+                                         "value":  0.8954545454545454,
+                                         "unit":  "score",
+                                         "window":  "rca",
+                                         "threshold":  0.8,
+                                         "quality":  "fallback-only",
+                                         "reason":  "rca_root_cause",
+                                         "runbook_id":  "RB-SERVICE-RESOURCE",
+                                         "likely_dependency":  "unknown",
+                                         "confidence":  0.8954545454545454,
+                                         "contributing_signals":  [
+                                                                      "memory_usage_bytes"
+                                                                  ],
+                                         "labels":  {
+
+                                                    },
+                                         "correlation_components":  {
+
+                                                                    },
+                                         "evidence":  [
+
+                                                      ]
+                                     },
+                                     {
+                                         "environment":  "unknown",
+                                         "timestamp":  0,
+                                         "detector_id":  "rca_root_cause",
+                                         "flow":  "checkout",
+                                         "service":  "checkout",
+                                         "severity":  "SEV2",
+                                         "signal_id":  "memory_usage_bytes",
+                                         "value":  0.8954545454545454,
+                                         "unit":  "score",
+                                         "window":  "rca",
+                                         "threshold":  0.8,
+                                         "quality":  "fallback-only",
+                                         "reason":  "rca_root_cause",
+                                         "runbook_id":  "RB-SERVICE-RESOURCE",
+                                         "likely_dependency":  "unknown",
+                                         "confidence":  0.8954545454545454,
+                                         "contributing_signals":  [
+                                                                      "memory_usage_bytes"
+                                                                  ],
+                                         "labels":  {
+
+                                                    },
+                                         "correlation_components":  {
+
+                                                                    },
+                                         "evidence":  [
+
+                                                      ]
+                                     },
+                                     {
+                                         "environment":  "unknown",
+                                         "timestamp":  0,
+                                         "detector_id":  "rca_root_cause",
+                                         "flow":  "checkout",
+                                         "service":  "checkout",
+                                         "severity":  "SEV2",
+                                         "signal_id":  "memory_usage_bytes",
+                                         "value":  0.8954545454545454,
+                                         "unit":  "score",
+                                         "window":  "rca",
+                                         "threshold":  0.8,
+                                         "quality":  "fallback-only",
+                                         "reason":  "rca_root_cause",
+                                         "runbook_id":  "RB-SERVICE-RESOURCE",
+                                         "likely_dependency":  "unknown",
+                                         "confidence":  0.8954545454545454,
+                                         "contributing_signals":  [
+                                                                      "memory_usage_bytes"
+                                                                  ],
+                                         "labels":  {
+
+                                                    },
+                                         "correlation_components":  {
+
+                                                                    },
+                                         "evidence":  [
+
+                                                      ]
+                                     },
+                                     {
+                                         "environment":  "unknown",
+                                         "timestamp":  0,
+                                         "detector_id":  "rca_root_cause",
+                                         "flow":  "checkout",
+                                         "service":  "checkout",
+                                         "severity":  "SEV2",
+                                         "signal_id":  "memory_usage_bytes",
+                                         "value":  0.8954545454545454,
+                                         "unit":  "score",
+                                         "window":  "rca",
+                                         "threshold":  0.8,
+                                         "quality":  "fallback-only",
+                                         "reason":  "rca_root_cause",
+                                         "runbook_id":  "RB-SERVICE-RESOURCE",
+                                         "likely_dependency":  "unknown",
+                                         "confidence":  0.8954545454545454,
+                                         "contributing_signals":  [
+                                                                      "memory_usage_bytes"
+                                                                  ],
+                                         "labels":  {
+
+                                                    },
+                                         "correlation_components":  {
+
+                                                                    },
+                                         "evidence":  [
+
+                                                      ]
+                                     },
+                                     {
+                                         "environment":  "unknown",
+                                         "timestamp":  0,
+                                         "detector_id":  "rca_root_cause",
+                                         "flow":  "checkout",
+                                         "service":  "checkout",
+                                         "severity":  "SEV2",
+                                         "signal_id":  "memory_usage_bytes",
+                                         "value":  0.8954545454545454,
+                                         "unit":  "score",
+                                         "window":  "rca",
+                                         "threshold":  0.8,
+                                         "quality":  "fallback-only",
+                                         "reason":  "rca_root_cause",
+                                         "runbook_id":  "RB-SERVICE-RESOURCE",
+                                         "likely_dependency":  "unknown",
+                                         "confidence":  0.8954545454545454,
+                                         "contributing_signals":  [
+                                                                      "memory_usage_bytes"
+                                                                  ],
+                                         "labels":  {
+
+                                                    },
+                                         "correlation_components":  {
+
+                                                                    },
+                                         "evidence":  [
+
+                                                      ]
+                                     },
+                                     {
+                                         "environment":  "unknown",
+                                         "timestamp":  0,
+                                         "detector_id":  "rca_root_cause",
+                                         "flow":  "checkout",
+                                         "service":  "checkout",
+                                         "severity":  "SEV2",
+                                         "signal_id":  "memory_usage_bytes",
+                                         "value":  0.8913043478260869,
+                                         "unit":  "score",
+                                         "window":  "rca",
+                                         "threshold":  0.8,
+                                         "quality":  "fallback-only",
+                                         "reason":  "rca_root_cause",
+                                         "runbook_id":  "RB-SERVICE-RESOURCE",
+                                         "likely_dependency":  "unknown",
+                                         "confidence":  0.8913043478260869,
+                                         "contributing_signals":  [
+                                                                      "memory_usage_bytes"
+                                                                  ],
+                                         "labels":  {
+
+                                                    },
+                                         "correlation_components":  {
+
+                                                                    },
+                                         "evidence":  [
+
+                                                      ]
+                                     },
+                                     {
+                                         "environment":  "unknown",
+                                         "timestamp":  0,
+                                         "detector_id":  "rca_root_cause",
+                                         "flow":  "checkout",
+                                         "service":  "checkout",
+                                         "severity":  "SEV2",
+                                         "signal_id":  "memory_usage_bytes",
+                                         "value":  0.8913043478260869,
+                                         "unit":  "score",
+                                         "window":  "rca",
+                                         "threshold":  0.8,
+                                         "quality":  "fallback-only",
+                                         "reason":  "rca_root_cause",
+                                         "runbook_id":  "RB-SERVICE-RESOURCE",
+                                         "likely_dependency":  "unknown",
+                                         "confidence":  0.8913043478260869,
+                                         "contributing_signals":  [
+                                                                      "memory_usage_bytes"
+                                                                  ],
+                                         "labels":  {
+
+                                                    },
+                                         "correlation_components":  {
+
+                                                                    },
+                                         "evidence":  [
+
+                                                      ]
+                                     },
+                                     {
+                                         "environment":  "unknown",
+                                         "timestamp":  0,
+                                         "detector_id":  "rca_root_cause",
+                                         "flow":  "checkout",
+                                         "service":  "checkout",
+                                         "severity":  "SEV2",
+                                         "signal_id":  "memory_usage_bytes",
+                                         "value":  0.8913043478260869,
+                                         "unit":  "score",
+                                         "window":  "rca",
+                                         "threshold":  0.8,
+                                         "quality":  "fallback-only",
+                                         "reason":  "rca_root_cause",
+                                         "runbook_id":  "RB-SERVICE-RESOURCE",
+                                         "likely_dependency":  "unknown",
+                                         "confidence":  0.8913043478260869,
+                                         "contributing_signals":  [
+                                                                      "memory_usage_bytes"
+                                                                  ],
+                                         "labels":  {
+
+                                                    },
+                                         "correlation_components":  {
+
+                                                                    },
+                                         "evidence":  [
+
+                                                      ]
+                                     },
+                                     {
+                                         "environment":  "unknown",
+                                         "timestamp":  0,
+                                         "detector_id":  "rca_root_cause",
+                                         "flow":  "checkout",
+                                         "service":  "checkout",
+                                         "severity":  "SEV2",
+                                         "signal_id":  "memory_usage_bytes",
+                                         "value":  0.8913043478260869,
+                                         "unit":  "score",
+                                         "window":  "rca",
+                                         "threshold":  0.8,
+                                         "quality":  "fallback-only",
+                                         "reason":  "rca_root_cause",
+                                         "runbook_id":  "RB-SERVICE-RESOURCE",
+                                         "likely_dependency":  "unknown",
+                                         "confidence":  0.8913043478260869,
+                                         "contributing_signals":  [
+                                                                      "memory_usage_bytes"
+                                                                  ],
+                                         "labels":  {
+
+                                                    },
+                                         "correlation_components":  {
+
+                                                                    },
+                                         "evidence":  [
+
+                                                      ]
+                                     },
+                                     {
+                                         "environment":  "unknown",
+                                         "timestamp":  0,
+                                         "detector_id":  "rca_root_cause",
+                                         "flow":  "checkout",
+                                         "service":  "checkout",
+                                         "severity":  "SEV2",
+                                         "signal_id":  "memory_usage_bytes",
+                                         "value":  0.9,
+                                         "unit":  "score",
+                                         "window":  "rca",
+                                         "threshold":  0.8,
+                                         "quality":  "fallback-only",
+                                         "reason":  "rca_root_cause",
+                                         "runbook_id":  "RB-SERVICE-RESOURCE",
+                                         "likely_dependency":  "unknown",
+                                         "confidence":  0.9,
+                                         "contributing_signals":  [
+                                                                      "memory_usage_bytes"
+                                                                  ],
+                                         "labels":  {
+
+                                                    },
+                                         "correlation_components":  {
+
+                                                                    },
+                                         "evidence":  [
+
+                                                      ]
+                                     },
+                                     {
+                                         "environment":  "unknown",
+                                         "timestamp":  0,
+                                         "detector_id":  "rca_root_cause",
+                                         "flow":  "checkout",
+                                         "service":  "checkout",
+                                         "severity":  "SEV2",
+                                         "signal_id":  "memory_usage_bytes",
+                                         "value":  0.9,
+                                         "unit":  "score",
+                                         "window":  "rca",
+                                         "threshold":  0.8,
+                                         "quality":  "fallback-only",
+                                         "reason":  "rca_root_cause",
+                                         "runbook_id":  "RB-SERVICE-RESOURCE",
+                                         "likely_dependency":  "unknown",
+                                         "confidence":  0.9,
+                                         "contributing_signals":  [
+                                                                      "memory_usage_bytes"
+                                                                  ],
+                                         "labels":  {
+
+                                                    },
+                                         "correlation_components":  {
+
+                                                                    },
+                                         "evidence":  [
+
+                                                      ]
+                                     },
+                                     {
+                                         "environment":  "unknown",
+                                         "timestamp":  0,
+                                         "detector_id":  "rca_root_cause",
+                                         "flow":  "checkout",
+                                         "service":  "checkout",
+                                         "severity":  "SEV2",
+                                         "signal_id":  "memory_usage_bytes",
+                                         "value":  0.9,
+                                         "unit":  "score",
+                                         "window":  "rca",
+                                         "threshold":  0.8,
+                                         "quality":  "fallback-only",
+                                         "reason":  "rca_root_cause",
+                                         "runbook_id":  "RB-SERVICE-RESOURCE",
+                                         "likely_dependency":  "unknown",
+                                         "confidence":  0.9,
+                                         "contributing_signals":  [
+                                                                      "memory_usage_bytes"
+                                                                  ],
+                                         "labels":  {
+
+                                                    },
+                                         "correlation_components":  {
+
+                                                                    },
+                                         "evidence":  [
+
+                                                      ]
+                                     },
+                                     {
+                                         "environment":  "unknown",
+                                         "timestamp":  0,
+                                         "detector_id":  "rca_root_cause",
+                                         "flow":  "checkout",
+                                         "service":  "checkout",
+                                         "severity":  "SEV2",
+                                         "signal_id":  "memory_usage_bytes",
+                                         "value":  0.9,
+                                         "unit":  "score",
+                                         "window":  "rca",
+                                         "threshold":  0.8,
+                                         "quality":  "fallback-only",
+                                         "reason":  "rca_root_cause",
+                                         "runbook_id":  "RB-SERVICE-RESOURCE",
+                                         "likely_dependency":  "unknown",
+                                         "confidence":  0.9,
+                                         "contributing_signals":  [
+                                                                      "memory_usage_bytes"
+                                                                  ],
+                                         "labels":  {
+
+                                                    },
+                                         "correlation_components":  {
+
+                                                                    },
+                                         "evidence":  [
+
+                                                      ]
+                                     }
+                                 ]
+                  }
+              ],
+    "Count":  2
+}

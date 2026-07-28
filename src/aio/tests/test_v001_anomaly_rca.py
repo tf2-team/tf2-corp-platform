@@ -1,0 +1,1280 @@
+#!/usr/bin/python
+# Copyright The OpenTelemetry Authors
+# SPDX-License-Identifier: Apache-2.0
+import io
+import unittest
+import warnings
+from contextlib import redirect_stdout
+from pathlib import Path
+from tempfile import TemporaryDirectory
+
+from aiops.anomaly import V001AnomalyEngine, build_v001_anomaly_engine
+from aiops.anomaly.stats import rolling_robust_scores
+from aiops.anomaly.v001 import EwmaStlDetector, LogTemplateMetricBuilder, ServiceIsolationForestDetector
+from aiops.api.app import print_rca_result, run_static_pipeline
+from aiops.config import Settings, load_hyperparameters, load_runtime_config
+from aiops.pipeline.runtime import _log_final_root_cause_algorithm_scores
+from aiops.rca.graph import GraphTraversalRca
+from aiops.rca import V001RcaEngine
+from aiops.schemas import AnomalyFinding, MetricPoint, MetricSeries, PipelineResult, PipelineRunRequest, RcaResult, RootCauseCandidate, RuntimeConfig, TelemetryCorroboration
+from aiops.shared.series import prepare_detector_series
+from aiops.shared.tail import aligned_spearman, cusum_tail_change, evaluate_tail_change, fixed_baseline_and_tail, median3, metric_group, normal_traffic_growth_decision, page_hinkley_tail_change, point_changed, slow_drift_tail_change, tail_aligned_dtw_similarity
+from scipy.stats import ConstantInputWarning
+
+
+def metric(service: str, name: str, values: list[float]) -> MetricSeries:
+    return MetricSeries(
+        service=service,
+        metric=name,
+        signal_id=f"{service}_{name}",
+        points=[MetricPoint(timestamp=index, value=value) for index, value in enumerate(values)],
+    )
+
+
+def minute_metric(service: str, name: str, values: list[float]) -> MetricSeries:
+    return MetricSeries(
+        service=service,
+        metric=name,
+        signal_id=f"{service}_{name}",
+        points=[MetricPoint(timestamp=index * 60, value=value) for index, value in enumerate(values)],
+    )
+
+
+TRAFFIC_EXPLANATION = {"threshold": 0.65, "min_primary_shape": 0.55, "dtw_onset_threshold": 0.1, "dtw_cost_scale": 2.0, "weights": {"cpu": 0.45, "socket_io": 0.35}}
+
+
+def rca_hyperparameters(**overrides):
+    config = load_hyperparameters(Path("config/hyperparameters.json"))["rca"]
+    return {**config, **overrides}
+
+
+def anomaly_engine(**overrides) -> V001AnomalyEngine:
+    config = rca_hyperparameters()
+    min_points = overrides.pop("min_points", 8)
+    anomaly = {
+        **config["anomaly"],
+        "robust_drift_min_baseline_points": min_points,
+        "log_history_buckets": 8,
+        "log_min_nonzero_buckets": 1,
+    }
+    config = {**config, "anomaly": anomaly, "min_points": min_points, **overrides}
+    return build_v001_anomaly_engine(config)
+
+
+def rca_engine(config: RuntimeConfig, **combined_overrides) -> V001RcaEngine:
+    hyperparameters = rca_hyperparameters()
+    combined = {
+        **hyperparameters["combined"],
+        "min_tail_anomaly_buckets": hyperparameters["anomaly"]["min_tail_anomaly_buckets"],
+        "min_relative_change_ratio": hyperparameters["anomaly"]["min_relative_change_ratio"],
+        "min_absolute_change": hyperparameters["anomaly"]["min_absolute_change"],
+        "page_hinkley_min_bucket_factor": hyperparameters["anomaly"]["page_hinkley_min_bucket_factor"],
+        "traffic_shape_max_lag_buckets": hyperparameters["anomaly"]["traffic_shape_max_lag_buckets"],
+        "topology_max_hops": load_hyperparameters(Path("config/hyperparameters.json"))["correlation"]["topology_max_hops"],
+        **combined_overrides,
+    }
+    return V001RcaEngine(config, hyperparameters["graph"], combined)
+
+
+def graph_rca(config: RuntimeConfig) -> GraphTraversalRca:
+    return GraphTraversalRca(config, **rca_hyperparameters()["graph"])
+
+
+class V001AnomalyRcaTest(unittest.TestCase):
+    def test_normal_traffic_growth_constant_vectors_do_not_warn(self):
+        common = {
+            "detection_window_seconds": 900,
+            "start": 0,
+            "min_tail_anomaly_buckets": {"request_rate": 3, "cpu": 3, "socket_io": 3, "error": 1, "default": 2},
+            "min_relative_change_ratio": {"request_rate": 0.5, "cpu": 0.3, "socket_io": 0.5, "error": 0.0, "default": 0.3},
+            "min_absolute_change": {"request_rate": 5.0, "cpu": 100.0, "socket_io": 1_048_576.0, "error": 0.005, "default": 1.0},
+            "traffic_explanation": TRAFFIC_EXPLANATION,
+        }
+        series = [minute_metric("checkout", metric, [0.0] * 45) for metric in ("request_rate_5m", "cpu_millicores", "socket_io_bytes_per_second")]
+
+        with warnings.catch_warnings():
+            warnings.simplefilter("error", ConstantInputWarning)
+            normal, _ = normal_traffic_growth_decision(series, **common)
+
+        self.assertFalse(normal)
+        self.assertIn("zero_metrics=request_rate_5m,cpu_millicores,socket_io_bytes_per_second", _)
+
+    def test_normal_traffic_growth_requires_cpu_and_socket_shape_with_optional_memory(self):
+        common = {
+            "detection_window_seconds": 900,
+            "start": 29,
+            "min_tail_anomaly_buckets": {"request_rate": 3, "cpu": 3, "memory": 3, "socket_io": 3, "error": 1, "default": 2},
+            "min_relative_change_ratio": {"request_rate": 0.5, "cpu": 0.3, "memory": 0.3, "socket_io": 0.5, "error": 0.0, "default": 0.3},
+            "min_absolute_change": {"request_rate": 5.0, "cpu": 10.0, "memory": 10.0, "socket_io": 10.0, "error": 0.005, "default": 1.0},
+            "traffic_explanation": TRAFFIC_EXPLANATION,
+        }
+        values = [10] * 30 + list(range(30, 45))
+        series = [
+            minute_metric("checkout", "request_rate_5m", values),
+            minute_metric("checkout", "cpu_millicores", [100] * 30 + list(range(300, 450, 10))),
+            minute_metric("checkout", "socket_io_bytes_per_second", [1_000] * 30 + list(range(3_000, 4_500, 100))),
+        ]
+
+        normal, reason = normal_traffic_growth_decision(series, **common)
+
+        self.assertTrue(normal, reason)
+
+    def test_normal_traffic_growth_allows_delayed_infra_shape(self):
+        common = {
+            "detection_window_seconds": 900,
+            "start": 29,
+            "min_tail_anomaly_buckets": {"request_rate": 3, "cpu": 3, "memory": 3, "socket_io": 3, "error": 1, "default": 2},
+            "min_relative_change_ratio": {"request_rate": 0.5, "cpu": 0.3, "memory": 0.3, "socket_io": 0.5, "error": 0.0, "default": 0.3},
+            "min_absolute_change": {"request_rate": 5.0, "cpu": 10.0, "memory": 10.0, "socket_io": 10.0, "error": 0.005, "default": 1.0},
+            "traffic_explanation": TRAFFIC_EXPLANATION,
+        }
+        request_tail = [30, 10, 50, 10, 20, 10, 45, 10, 15, 10, 35, 10, 25, 10, 40]
+        infra_tail = [100, 100, *[100 + 10 * value for value in request_tail[:-2]]]
+        request = [10] * 30 + request_tail
+        delayed = [100] * 30 + infra_tail
+        series = [
+            minute_metric("checkout", "request_rate_5m", request),
+            minute_metric("checkout", "cpu_millicores", delayed),
+            minute_metric("checkout", "socket_io_bytes_per_second", delayed),
+        ]
+
+        self.assertFalse(normal_traffic_growth_decision(series, **common)[0])
+        normal, reason = normal_traffic_growth_decision(series, **common, traffic_shape_max_lag_buckets=2)
+
+        self.assertTrue(normal, reason)
+
+    def test_dtw_shape_requires_configured_onset_window_for_infra(self):
+        request_tail = [30, 10, 50, 10, 20, 10, 45, 10, 15, 10, 35, 10, 25, 10, 40]
+        request = minute_metric("checkout", "request_rate_5m", [10] * 30 + request_tail)
+        delayed = minute_metric("checkout", "cpu_millicores", [100] * 30 + [100, 100, *[100 + 10 * value for value in request_tail[:-2]]])
+
+        self.assertLess(tail_aligned_dtw_similarity(request, delayed, 900, 29, max_warp_buckets=0, enforce_onset=True), 0.7)
+        self.assertGreaterEqual(tail_aligned_dtw_similarity(request, delayed, 900, 29, max_warp_buckets=2, enforce_onset=True), 0.7)
+
+    def test_normal_traffic_growth_ignores_memory_shape(self):
+        common = {
+            "detection_window_seconds": 900,
+            "start": 29,
+            "min_tail_anomaly_buckets": {"request_rate": 3, "cpu": 3, "memory": 3, "socket_io": 3, "error": 1, "default": 2},
+            "min_relative_change_ratio": {"request_rate": 0.5, "cpu": 0.3, "memory": 0.3, "socket_io": 0.5, "error": 0.0, "default": 0.3},
+            "min_absolute_change": {"request_rate": 5.0, "cpu": 10.0, "memory": 10.0, "socket_io": 10.0, "error": 0.005, "default": 1.0},
+            "traffic_explanation": TRAFFIC_EXPLANATION,
+        }
+        values = [10] * 30 + list(range(30, 45))
+        required = [
+            minute_metric("checkout", "request_rate_5m", values),
+            minute_metric("checkout", "cpu_millicores", [100] * 30 + list(range(300, 450, 10))),
+            minute_metric("checkout", "socket_io_bytes_per_second", [1_000] * 30 + list(range(3_000, 4_500, 100))),
+        ]
+
+        self.assertFalse(normal_traffic_growth_decision(required[:2], **common)[0])
+        normal, reason = normal_traffic_growth_decision([*required, minute_metric("checkout", "memory_usage_bytes", list(reversed(values)))], **common)
+        self.assertTrue(normal, reason)
+
+    def test_fixed_baseline_excludes_every_detection_tail_point(self):
+        series = minute_metric("payment", "cpu_millicores", [10.0] * 45 + [20.0] * 15)
+
+        baseline, tail = fixed_baseline_and_tail(series, 900, 30, [point.value for point in series.points])
+
+        self.assertEqual(baseline, [10.0] * 45)
+        self.assertEqual(list(tail), list(range(45, 60)))
+
+    def test_cpu_millicores_metric_uses_cpu_thresholds(self):
+        self.assertEqual(metric_group("cpu_millicores"), "cpu")
+
+    def test_cpu_millicores_ignores_small_low_baseline_change(self):
+        self.assertFalse(point_changed(8.75, 8.0, min_relative=0.3, min_absolute=1.0))
+        self.assertFalse(point_changed(8.25, 8.0, min_relative=0.3, min_absolute=1.0))
+        self.assertTrue(point_changed(11.0, 8.0, min_relative=0.3, min_absolute=1.0))
+
+    def test_cusum_tail_change_detects_creeping_cpu_drift(self):
+        series = minute_metric("payment", "cpu_millicores", [100] * 30 + [108] * 15)
+
+        self.assertFalse(evaluate_tail_change(series, 900, 29, 3, 0.3, 10.0).significant)
+        self.assertTrue(cusum_tail_change(series, 900, 29, 3, 0.3, 10.0).significant)
+
+    def test_page_hinkley_tail_change_detects_creeping_latency_drift(self):
+        series = minute_metric("payment", "p95_latency_5m", [1.0] * 30 + [1.04 + index * 0.01 for index in range(15)])
+
+        self.assertFalse(evaluate_tail_change(series, 900, 29, 3, 0.25, 0.05).significant)
+        self.assertTrue(page_hinkley_tail_change(series, 900, 29, 3, 0.25, 0.05).significant)
+
+    def test_slow_drift_detects_small_sustained_memory_growth(self):
+        series = minute_metric("ad", "memory_usage_bytes", [460_000_000 + index * 100_000 for index in range(60)])
+        config = {"enabled": True, "window_seconds": 3600, "min_points": 12, "positive_bucket_ratio": 0.65, "metrics": {"memory": {"direction": "up", "min_total_change": 5_000_000}}}
+
+        self.assertFalse(evaluate_tail_change(series, 1800, 29, 2, 0.05, 10_485_760).significant)
+        self.assertTrue(slow_drift_tail_change(series, 1800, 29, config).significant)
+
+    def test_socket_io_metric_uses_socket_io_thresholds(self):
+        self.assertEqual(metric_group("socket_io_bytes_per_second"), "socket_io")
+
+    def test_detector_bucket_aggregation_matches_metric_type(self):
+        series = prepare_detector_series(
+            [
+                MetricSeries(
+                    service="payment",
+                    metric="error_rate_5m",
+                    signal_id="payment_error_rate_5m",
+                    step_seconds=1,
+                    detector_bucket_seconds=60,
+                    points=[MetricPoint(timestamp=index, value=value) for index, value in enumerate([0.1, 0.9, 0.2])],
+                ),
+                MetricSeries(
+                    service="payment",
+                    metric="cpu_millicores",
+                    signal_id="payment_cpu_millicores",
+                    step_seconds=1,
+                    detector_bucket_seconds=60,
+                    points=[MetricPoint(timestamp=index, value=value) for index, value in enumerate([10.0, 100.0, 20.0])],
+                ),
+                MetricSeries(
+                    service="payment",
+                    metric="socket_io_bytes_per_second",
+                    signal_id="payment_socket_io_bytes_per_second",
+                    step_seconds=1,
+                    detector_bucket_seconds=60,
+                    points=[MetricPoint(timestamp=index, value=value) for index, value in enumerate([10.0, 100.0, 20.0])],
+                ),
+            ]
+        )
+
+        self.assertEqual([item.points[0].value for item in series], [0.9, 130.0 / 3.0, 130.0 / 3.0])
+
+    def test_ewma_formula_does_not_emit_statsmodels_zero_sse_warning(self):
+        detector = EwmaStlDetector(alpha=0.3, z_threshold=3.0, min_points=8, seasonal_period=1)
+
+        with warnings.catch_warnings():
+            warnings.simplefilter("error", RuntimeWarning)
+            residuals = detector._residuals([1.0] * 8)
+
+        self.assertEqual(len(residuals), 8)
+
+    def test_rolling_robust_scores_use_recent_median_baseline(self):
+        score, index = rolling_robust_scores([1, 1, 100, 1, 1, 10], [5], 4, 4)[0]
+
+        self.assertEqual(index, 5)
+        self.assertGreater(score, 4.0)
+
+    def test_logs_algorithm_scores_for_final_root_cause_only(self):
+        result = RcaResult(root_causes=[RootCauseCandidate(service="checkout", score=1.0, root_cause_metrics=["latency"])])
+        findings = [
+            AnomalyFinding(algorithm="ewma_stl", service="checkout", metric="latency", signal_id="checkout_latency", score=4.0, timestamp=1),
+            AnomalyFinding(algorithm="isolation_forest", service="checkout", metric="latency", signal_id="checkout_latency", score=8.0, timestamp=1),
+            AnomalyFinding(algorithm="ewma_stl", service="payment", metric="latency", signal_id="payment_latency", score=99.0, timestamp=1),
+        ]
+
+        with self.assertLogs("aiops.pipeline.runtime", level="INFO") as logs:
+            _log_final_root_cause_algorithm_scores(result, findings)
+
+        output = "\n".join(logs.output)
+        self.assertIn("AIOPS_RCA_FINAL_ALGORITHM_SCORES", output)
+        self.assertIn("service=checkout", output)
+        self.assertIn("ewma_stl=4.000", output)
+        self.assertIn("isolation_forest=8.000", output)
+        self.assertNotIn("99.000", output)
+
+    def test_v001_detects_hidden_error_signal_that_ramps_up_slowly(self):
+        findings = anomaly_engine().evaluate(
+            [
+                metric(
+                    "payment",
+                    "error_ratio_5m",
+                    [0.001, 0.001, 0.001, 0.001, 0.001, 0.002, 0.003, 0.005, 0.008, 0.013, 0.021, 0.034],
+                )
+            ]
+        )
+
+        self.assertEqual([(finding.algorithm, finding.service, finding.metric) for finding in findings], [("weighted_sum", "payment", "error_ratio_5m")])
+        self.assertGreaterEqual(findings[0].score, rca_hyperparameters()["anomaly"]["weighted_score_threshold"])
+
+    def test_v001_emits_slow_drift_finding_when_other_tail_thresholds_do_not_fire(self):
+        config = rca_hyperparameters()
+        anomaly = {
+            **config["anomaly"],
+            "robust_drift_threshold": 99.0,
+            "log_history_buckets": 8,
+            "log_min_nonzero_buckets": 1,
+            "slow_drift": {
+                "enabled": True,
+                "window_seconds": 3600,
+                "min_points": 12,
+                "positive_bucket_ratio": 0.65,
+                "metrics": {"memory": {"direction": "up", "min_total_change": 5_000_000}},
+            },
+        }
+        engine = build_v001_anomaly_engine({**config, "anomaly": anomaly, "min_points": 30})
+
+        findings = engine.evaluate([minute_metric("ad", "memory_usage_bytes", [460_000_000 + index * 100_000 for index in range(60)])])
+
+        self.assertEqual([(finding.algorithm, finding.service, finding.metric) for finding in findings], [("weighted_sum", "ad", "memory_usage_bytes")])
+
+    def test_v001_does_not_flag_low_noise_as_hidden_error_signal(self):
+        findings = anomaly_engine().evaluate(
+            [
+                metric(
+                    "payment",
+                    "error_ratio_5m",
+                    [0.001, 0.0012, 0.0009, 0.0011, 0.001, 0.0012, 0.0008, 0.0011, 0.001, 0.0012, 0.0009, 0.001],
+                )
+            ]
+        )
+
+        self.assertEqual(findings, [])
+
+    def test_v001_only_scores_detection_tail(self):
+        engine = anomaly_engine(min_points=30)
+        old_spike = [1.0] * 45
+        old_spike[10] = 200.0
+        tail_spike = [1.0] * 45
+        tail_spike[35] = 200.0
+
+        self.assertEqual(engine.evaluate([minute_metric("payment", "error_ratio_5m", old_spike)]), [])
+        self.assertEqual([(finding.service, finding.metric) for finding in engine.evaluate([minute_metric("payment", "error_ratio_5m", tail_spike)])], [("payment", "error_ratio_5m")])
+
+    def test_v001_drops_short_infra_spike_in_tail(self):
+        findings = anomaly_engine().evaluate(
+            [
+                metric("payment", "cpu_millicores", [100, 100, 100, 100, 100, 100, 100, 100, 300, 100, 100]),
+            ]
+        )
+
+        self.assertEqual(findings, [])
+
+    def test_v001_keeps_sustained_infra_change_in_tail(self):
+        findings = anomaly_engine().evaluate(
+            [
+                metric("payment", "cpu_millicores", [100, 100, 100, 100, 100, 100, 100, 100, 300, 300, 300, 300, 300]),
+            ]
+        )
+
+        self.assertEqual([(finding.service, finding.metric) for finding in findings], [("payment", "cpu_millicores")])
+
+    def test_v001_ignores_short_drift_that_recovered_before_latest_point(self):
+        findings = anomaly_engine().evaluate(
+            [
+                metric("payment", "cpu", [1, 1, 1, 1, 1, 100, 100, 1, 1, 1]),
+            ]
+        )
+
+        self.assertEqual(findings, [])
+
+    def test_v001_skips_models_when_tail_change_is_insignificant(self):
+        engine = anomaly_engine()
+        engine.robust_drift.evaluate = lambda _: self.fail("robust drift should not run")
+        engine.ewma_stl.evaluate = lambda _: self.fail("ewma should not run")
+        engine.isolation_forest.evaluate = lambda _: self.fail("isolation forest should not run")
+
+        findings = engine.evaluate([metric("payment", "cpu", [100] * 8)])
+
+        self.assertEqual(findings, [])
+
+    def test_isolation_forest_normalizes_rows_before_scoring(self):
+        detector = ServiceIsolationForestDetector(score_threshold=4.0, min_points=8)
+        rows = detector._rows(
+            [
+                metric("checkout", "cpu", [10, 10, 10, 10, 10, 10, 10, 20]),
+                metric("checkout", "memory", [10000, 10000, 10000, 10000, 10000, 10000, 10000, 20000]),
+            ]
+        )
+
+        self.assertEqual(rows[-1], [20.0, 20000.0])
+        self.assertEqual(detector._normalized_rows(rows)[-1], [1.0, 1.0])
+
+    def test_isolation_forest_normalization_uses_baseline_range_only(self):
+        detector = ServiceIsolationForestDetector(score_threshold=4.0, min_points=2)
+
+        rows = detector._normalized_rows([[0.0, 0.0], [10.0, 10.0], [100.0, 100.0]], baseline_count=2)
+
+        self.assertEqual(rows[-1], [10.0, 10.0])
+
+    def test_isolation_forest_keeps_tail_change_after_flat_baseline(self):
+        detector = ServiceIsolationForestDetector(score_threshold=4.0, min_points=2)
+
+        rows = detector._normalized_rows([[10.0], [10.0], [20.0]], baseline_count=2)
+
+        self.assertEqual(rows[-1], [10.0])
+
+    def test_isolation_forest_aligns_tail_indexes_to_common_timestamps(self):
+        detector = ServiceIsolationForestDetector(score_threshold=1.0, min_points=4, detection_window_seconds=2)
+        first = metric("checkout", "cpu", [1, 1, 1, 1, 1, 10, 10, 10])
+        second = metric("checkout", "memory", [1, 1, 1, 1, 1, 10, 10, 10])
+        second = second.model_copy(update={"points": [point for point in second.points if point.timestamp != 2]})
+        calls = []
+
+        def scores(baseline_rows, tail_rows):
+            calls.append((len(baseline_rows), len(tail_rows)))
+            return [0.2] * len(tail_rows)
+
+        detector._scores = scores
+
+        findings = detector.evaluate([first, second])
+
+        self.assertEqual(calls, [(4, 3)])
+        self.assertEqual(findings[0].timestamp, 7)
+
+    def test_rca_correlation_ignores_non_overlapping_timestamps(self):
+        config = load_runtime_config(Path("config/runtime.json"))
+        engine = rca_engine(config)
+        left = metric("checkout", "p95_latency_5m", [1, 2, 3])
+        right = metric("payment", "cpu", [1, 2, 3]).model_copy(
+            update={"points": [MetricPoint(timestamp=1000 + index, value=value) for index, value in enumerate([1, 2, 3])]}
+        )
+
+        self.assertEqual(aligned_spearman(left, right), 0.0)
+
+    def test_rca_correlation_uses_spearman_for_monotonic_shape(self):
+        left = metric("checkout", "request_rate_5m", [1, 2, 3, 4, 5])
+        right = metric("payment", "cpu", [1, 4, 9, 16, 25])
+
+        self.assertAlmostEqual(aligned_spearman(left, right), 1.0)
+
+    def test_isolation_forest_scores_tail_with_one_model_fit(self):
+        detector = ServiceIsolationForestDetector(score_threshold=1.0, min_points=5)
+        calls = []
+
+        def scores(baseline_rows, scored_rows):
+            calls.append((len(baseline_rows), len(scored_rows)))
+            return [0.2] * len(scored_rows)
+
+        detector._scores = scores
+
+        findings = detector.evaluate(
+            [
+                metric("checkout", "cpu", [1, 1, 1, 1, 1, 10, 10, 10]),
+                metric("checkout", "memory", [1, 1, 1, 1, 1, 10, 10, 10]),
+            ]
+        )
+
+        self.assertEqual(calls, [(5, 3)])
+        self.assertEqual(findings[0].algorithm, "isolation_forest")
+
+    def test_anomaly_builder_requires_configured_log_hyperparameters(self):
+        config = rca_hyperparameters()
+        anomaly = dict(config["anomaly"])
+        del anomaly["log_bucket_seconds"]
+
+        with self.assertRaises(KeyError):
+            build_v001_anomaly_engine({**config, "anomaly": anomaly})
+
+    def test_anomaly_builder_requires_tail_significance_hyperparameters(self):
+        config = rca_hyperparameters()
+        anomaly = dict(config["anomaly"])
+        del anomaly["min_tail_anomaly_buckets"]
+
+        with self.assertRaises(KeyError):
+            build_v001_anomaly_engine({**config, "anomaly": anomaly})
+
+    def test_anomaly_builder_requires_traffic_shape_threshold(self):
+        config = rca_hyperparameters()
+        anomaly = dict(config["anomaly"])
+        anomaly["traffic_explanation"] = {key: value for key, value in anomaly["traffic_explanation"].items() if key != "threshold"}
+
+        with self.assertRaises(KeyError):
+            build_v001_anomaly_engine({**config, "anomaly": anomaly})
+
+    def test_weighted_sum_ignores_weak_single_algorithm_without_corroboration(self):
+        engine = anomaly_engine()
+
+        findings = engine._weighted_sum(
+            [AnomalyFinding(algorithm="isolation_forest", service="checkout", metric="cpu", signal_id="checkout_cpu", score=4.0, timestamp=1)]
+        )
+
+        self.assertEqual(findings, [])
+
+    def test_weighted_sum_keeps_strong_single_algorithm_detection(self):
+        engine = anomaly_engine()
+
+        findings = engine._weighted_sum(
+            [AnomalyFinding(algorithm="isolation_forest", service="checkout", metric="cpu", signal_id="checkout_cpu", score=10.0, timestamp=1)]
+        )
+
+        self.assertEqual([(finding.algorithm, finding.score) for finding in findings], [("weighted_sum", engine.weighted_score_threshold)])
+
+    def test_weighted_sum_combines_normalized_algorithm_scores(self):
+        engine = anomaly_engine()
+
+        findings = engine._weighted_sum(
+            [
+                AnomalyFinding(algorithm="isolation_forest", service="checkout", metric="cpu", signal_id="checkout_cpu", score=99.0, timestamp=1),
+                AnomalyFinding(algorithm="ewma_stl", service="checkout", metric="cpu", signal_id="checkout_cpu", score=99.0, timestamp=1),
+            ]
+        )
+
+        weights = rca_hyperparameters()["anomaly"]["algorithm_weights"]
+        self.assertEqual([(finding.algorithm, finding.score) for finding in findings], [("weighted_sum", weights["isolation_forest"] + weights["ewma_stl"])])
+
+    def test_coordinated_load_growth_is_filtered_before_anomaly_detection(self):
+        engine = anomaly_engine()
+        series = [
+            minute_metric("checkout", "request_rate_5m", [10] * 30 + [30] * 15),
+            minute_metric("checkout", "cpu_millicores", [100] * 30 + [300] * 15),
+            minute_metric("checkout", "memory_usage_bytes", [100_000_000] * 30 + [150_000_000] * 15),
+            minute_metric("checkout", "socket_io_bytes_per_second", [1_000_000] * 30 + [3_000_000] * 15),
+            minute_metric("checkout", "p95_latency_5m", [0.05] * 30 + [0.10] * 15),
+            minute_metric("checkout", "workload_ready_pods", [1] * 30 + [2] * 15),
+            minute_metric("checkout", "error_rate_5m", [0] * 45),
+        ]
+
+        self.assertEqual(engine._record_normal_traffic_growth(series), series)
+        self.assertEqual(engine.last_normal_growth_services, {"checkout"})
+        series[-1] = minute_metric("checkout", "error_rate_5m", [0] * 44 + [0.01])
+        self.assertEqual(engine._record_normal_traffic_growth(series), series)
+        self.assertEqual(engine.last_normal_growth_breakout_metrics, {"checkout": {"error_rate_5m"}})
+
+    def test_oom_increase_breaks_out_even_when_request_increases(self):
+        engine = anomaly_engine()
+        series = [
+            minute_metric("checkout", "request_rate_5m", [10] * 30 + [30] * 15),
+            minute_metric("checkout", "cpu_millicores", [100] * 30 + [300] * 15),
+            minute_metric("checkout", "socket_io_bytes_per_second", [1_000_000] * 30 + [3_000_000] * 15),
+            minute_metric("checkout", "oom_events_total", [0] * 44 + [1]),
+        ]
+
+        self.assertEqual(engine._record_normal_traffic_growth(series), series)
+        self.assertEqual(engine.last_normal_growth_breakout_metrics, {"checkout": {"oom_events_total"}})
+
+    def test_oom_counter_increase_passes_prefilter(self):
+        engine = anomaly_engine()
+        series = minute_metric("checkout", "oom_events_total", [0] * 44 + [1])
+
+        self.assertTrue(engine._has_significant_tail_change(series))
+
+    def test_normal_growth_gate_uses_separate_detection_window(self):
+        engine = anomaly_engine()
+
+        self.assertEqual(engine.detection_window_seconds, 1800)
+        self.assertEqual(engine.normal_growth_detection_window_seconds, 1800)
+
+    def test_memory_growth_without_request_growth_keeps_all_metrics(self):
+        engine = anomaly_engine()
+        series = [
+            minute_metric("checkout", "request_rate_5m", [30] * 30 + [10] * 15),
+            minute_metric("checkout", "cpu_millicores", [300] * 30 + [100] * 15),
+            minute_metric("checkout", "socket_io_bytes_per_second", [3_000_000] * 30 + [1_000_000] * 15),
+            minute_metric("checkout", "memory_usage_bytes", [100_000_000] * 30 + [200_000_000] * 15),
+        ]
+
+        self.assertEqual(engine._record_normal_traffic_growth(series), series)
+
+    def test_load_growth_allows_flat_memory_when_cpu_and_socket_increase(self):
+        engine = anomaly_engine()
+        series = [
+            minute_metric("checkout", "request_rate_5m", [10] * 30 + [30] * 15),
+            minute_metric("checkout", "cpu_millicores", [100] * 30 + [300] * 15),
+            minute_metric("checkout", "memory_usage_bytes", [100_000_000] * 45),
+            minute_metric("checkout", "socket_io_bytes_per_second", [1_000_000] * 30 + [3_000_000] * 15),
+            minute_metric("checkout", "error_rate_5m", [0] * 45),
+        ]
+
+        self.assertEqual(engine._record_normal_traffic_growth(series), series)
+        self.assertEqual(engine.last_normal_growth_services, {"checkout"})
+        series[-1] = minute_metric("checkout", "error_rate_5m", [0] * 45)
+        series[-2] = minute_metric("checkout", "workload_ready_pods", [2] * 30 + [1] * 15)
+        self.assertEqual(engine._record_normal_traffic_growth(series), series)
+
+    def test_coordinated_load_decline_is_listed_as_normal_growth(self):
+        engine = anomaly_engine()
+        series = [
+            minute_metric("checkout", "request_rate_5m", [30] * 30 + [10] * 15),
+            minute_metric("checkout", "cpu_millicores", [300] * 30 + [100] * 15),
+            minute_metric("checkout", "memory_usage_bytes", [150_000_000] * 30 + [100_000_000] * 15),
+            minute_metric("checkout", "socket_io_bytes_per_second", [3_000_000] * 30 + [1_000_000] * 15),
+            minute_metric("checkout", "p95_latency_5m", [0.10] * 30 + [0.05] * 15),
+            minute_metric("checkout", "error_rate_5m", [0] * 45),
+        ]
+
+        self.assertEqual(engine._record_normal_traffic_growth(series), series)
+        self.assertEqual(engine.last_normal_growth_services, {"checkout"})
+
+    def test_mixed_growth_and_decline_is_not_filtered(self):
+        engine = anomaly_engine()
+        series = [
+            minute_metric("checkout", "request_rate_5m", [30] * 30 + [10] * 15),
+            minute_metric("checkout", "cpu_millicores", [100] * 30 + [300] * 15),
+            minute_metric("checkout", "memory_usage_bytes", [150_000_000] * 30 + [100_000_000] * 15),
+            minute_metric("checkout", "socket_io_bytes_per_second", [3_000_000] * 30 + [1_000_000] * 15),
+            minute_metric("checkout", "p95_latency_5m", [0.10] * 30 + [0.05] * 15),
+            minute_metric("checkout", "error_rate_5m", [0] * 45),
+        ]
+
+        self.assertEqual(engine._record_normal_traffic_growth(series), series)
+
+    def test_normal_growth_allows_one_bucket_timestamp_skew(self):
+        engine = anomaly_engine()
+
+        def skewed(name: str, baseline: float, increased: float, offset: int) -> MetricSeries:
+            item = minute_metric("checkout", name, [baseline] * 30 + [increased] * 15)
+            return item.model_copy(update={"points": [point.model_copy(update={"timestamp": point.timestamp + offset}) for point in item.points]})
+
+        series = [
+            skewed("request_rate_5m", 10, 30, 0),
+            skewed("cpu_millicores", 100, 300, 10),
+            skewed("memory_usage_bytes", 100_000_000, 150_000_000, 20),
+            skewed("socket_io_bytes_per_second", 1_000_000, 3_000_000, 30),
+            skewed("p95_latency_5m", 0.05, 0.10, 40),
+            skewed("error_rate_5m", 0, 0, 0),
+        ]
+
+        self.assertEqual(engine._record_normal_traffic_growth(series), series)
+        self.assertEqual(engine.last_normal_growth_services, {"checkout"})
+
+    def test_normal_growth_allows_configured_memory_lag(self):
+        engine = anomaly_engine()
+
+        def shifted(name: str, baseline: float, increased: float, offset: int = 0) -> MetricSeries:
+            item = minute_metric("checkout", name, [baseline] * 30 + [increased] * 15)
+            return item.model_copy(update={"points": [point.model_copy(update={"timestamp": point.timestamp + offset}) for point in item.points]})
+
+        series = [
+            shifted("request_rate_5m", 10, 30),
+            shifted("cpu_millicores", 100, 300),
+            shifted("memory_usage_bytes", 100_000_000, 150_000_000, 4 * 60),
+            shifted("socket_io_bytes_per_second", 1_000_000, 3_000_000),
+            shifted("error_rate_5m", 0, 0),
+        ]
+
+        self.assertEqual(engine._record_normal_traffic_growth(series), series)
+        self.assertEqual(engine.last_normal_growth_services, {"checkout"})
+
+    def test_growth_gate_uses_median_three_smoothing(self):
+        self.assertEqual(median3([10, 100, 10]), [10, 10, 10])
+        engine = anomaly_engine()
+        series = [
+            minute_metric("checkout", "request_rate_5m", [10] * 45),
+            minute_metric("payment", "request_rate_5m", [10] * 45),
+        ]
+
+        with self.assertLogs("aiops.anomaly.v001", level="INFO") as logs:
+            self.assertEqual(engine._record_normal_traffic_growth(series), series)
+
+        self.assertIn("growth_gate_event", logs.output[0])
+        self.assertIn("service=checkout", logs.output[0])
+
+    def test_growth_gate_records_zero_score_metrics_for_monitoring_notification(self):
+        engine = anomaly_engine()
+        series = [
+            minute_metric("fraud-detection", "request_rate_5m", [10] * 30 + [30] * 15),
+            minute_metric("fraud-detection", "cpu_millicores", [0] * 45),
+            minute_metric("fraud-detection", "socket_io_bytes_per_second", [0] * 45),
+            minute_metric("fraud-detection", "error_rate_5m", [0] * 45),
+        ]
+
+        with self.assertLogs("aiops.anomaly.v001", level="WARNING") as logs:
+            engine._record_normal_traffic_growth(series)
+
+        self.assertIn("zero_metrics=", logs.output[0])
+        self.assertEqual(engine.last_normal_growth_zero_score_metrics["fraud-detection"], {"cpu_millicores", "socket_io_bytes_per_second"})
+
+    def test_growth_gate_shape_mismatch_score_zero_is_not_monitoring_loss(self):
+        """DTW score 0.000 on non-zero series must not open growth_gate_zero_vector incidents."""
+        engine = anomaly_engine()
+        series = [
+            minute_metric("product-catalog", "request_rate_5m", [10] * 30 + [40] * 15),
+            # Non-zero but uncorrelated with request-rate growth → shape score can be 0.000
+            minute_metric("product-catalog", "cpu_millicores", [100] * 45),
+            minute_metric("product-catalog", "socket_io_bytes_per_second", [1_000_000] * 45),
+            minute_metric("product-catalog", "error_rate_5m", [0] * 45),
+        ]
+
+        engine._record_normal_traffic_growth(series)
+
+        self.assertNotIn("product-catalog", engine.last_normal_growth_zero_score_metrics)
+
+    def test_growth_gate_suppresses_any_rca_metric_that_matches_request_shape(self):
+        engine = anomaly_engine()
+        values = [100] * 30 + list(range(100, 115))
+        series = [
+            minute_metric("email", "request_rate_5m", values),
+            minute_metric("email", "memory_usage_bytes", values),
+        ]
+
+        engine._record_normal_traffic_growth(series)
+
+        self.assertEqual(engine.last_normal_growth_metrics, {"email": {"memory_usage_bytes"}})
+
+    def test_staggered_load_growth_is_not_treated_as_simultaneous(self):
+        engine = anomaly_engine()
+
+        def values(baseline: float, increased: float, active: set[int]) -> list[float]:
+            return [baseline] * 30 + [increased if index in active else baseline for index in range(15)]
+
+        series = [
+            minute_metric("checkout", "request_rate_5m", values(10, 30, {0, 1, 2})),
+            minute_metric("checkout", "cpu_millicores", values(100, 300, {3, 4, 5})),
+            minute_metric("checkout", "memory_usage_bytes", values(100_000_000, 150_000_000, {6, 7, 8})),
+            minute_metric("checkout", "socket_io_bytes_per_second", values(1_000_000, 3_000_000, {9, 10, 11})),
+            minute_metric("checkout", "p95_latency_5m", values(0.05, 0.10, {12, 13, 14})),
+            minute_metric("checkout", "error_rate_5m", [0] * 45),
+        ]
+
+        self.assertEqual(engine._record_normal_traffic_growth(series), series)
+
+    def test_log_template_builder_groups_variable_log_lines_as_metric_series(self):
+        builder = LogTemplateMetricBuilder(min_nonzero_buckets=1)
+        builder.template_miner = None
+
+        series = builder.build(
+            [
+                ("checkout", 10, "payment failed order=123 status=500"),
+                ("checkout", 11, "payment failed order=456 status=500"),
+            ]
+        )
+
+        self.assertEqual(len(series), 1)
+        self.assertEqual(series[0].service, "checkout")
+        self.assertTrue(series[0].metric.startswith("log_template_count_"))
+        self.assertEqual(series[0].points[-1].value, 2.0)
+
+    def test_v001_engine_drops_log_metrics_without_metric_anomaly(self):
+        logs = [("checkout", 10, "payment failed order=123 status=500")] * 8
+
+        findings = anomaly_engine().evaluate([], logs=logs)
+
+        self.assertEqual(findings, [])
+
+    def test_v001_engine_keeps_log_metrics_near_metric_anomaly(self):
+        logs = [("checkout", 7, "payment failed order=123 status=500")] * 8
+
+        findings = anomaly_engine().evaluate([metric("checkout", "error_rate_5m", [0, 0, 0, 0, 0, 0, 0, 10])], logs=logs)
+
+        self.assertIn("error_rate_5m", [finding.metric for finding in findings])
+        self.assertTrue(any(finding.metric.startswith("log_template_count_") for finding in findings))
+
+    def test_v001_pipeline_ranks_top_root_cause_service_and_metrics(self):
+        series = [
+            metric("checkout", "latency", [1.0, 1.1, 1.0, 1.1, 1.0, 1.1, 1.0, 2.0, 2.1, 2.0, 2.1, 2.0]),
+            metric("payment", "latency", [1.0, 1.1, 1.0, 1.1, 1.0, 1.1, 1.0, 20.0, 21.0, 22.0, 23.0, 24.0]),
+            metric("payment", "error", [0.0, 0.1, 0.0, 0.1, 0.0, 0.1, 0.0, 9.0, 10.0, 11.0, 12.0, 13.0]),
+            metric("payment", "cpu_millicores", [100, 110, 100, 110, 100, 110, 100, 900, 950, 1000, 1050, 1100]),
+        ]
+        runtime_config = load_runtime_config(Path("config/runtime.json"))
+        findings = anomaly_engine(ewma_z_threshold=0.5).evaluate(series)
+        result = rca_engine(runtime_config).rank(findings, series, top_k=3)
+
+        self.assertEqual({finding.algorithm for finding in findings}, {"weighted_sum"})
+        result_anomalies = [(finding.algorithm, finding.service, finding.metric) for finding in result.anomalies]
+        self.assertTrue(all((finding.algorithm, finding.service, finding.metric) in result_anomalies for finding in findings))
+        self.assertEqual(result.root_causes[0].service, "payment")
+        self.assertEqual(result.root_causes[0].root_cause_metrics, ["cpu_millicores"])
+        self.assertFalse(any("robust_score=" in item for item in result.root_causes[0].evidence))
+        self.assertTrue(any("weighted_rrf_score=" in item for item in result.root_causes[0].evidence))
+
+    def test_rca_excludes_observability_testing_and_protected_flagd_roots(self):
+        runtime_config = load_runtime_config(Path("config/runtime.json"))
+        findings = [
+            # Higher raw scores, but not valid business root causes.
+            AnomalyFinding(algorithm="test", service="jaeger", metric="cpu", signal_id="jaeger_cpu", score=99.0, timestamp=1),
+            AnomalyFinding(algorithm="test", service="load-generator", metric="cpu", signal_id="load_generator_cpu", score=98.0, timestamp=1),
+            AnomalyFinding(algorithm="test", service="flagd", metric="cpu", signal_id="flagd_cpu", score=97.0, timestamp=1),
+            AnomalyFinding(algorithm="test", service="checkout", metric="cpu", signal_id="checkout_cpu", score=7.0, timestamp=1),
+        ]
+
+        result = rca_engine(runtime_config).rank(findings, [], top_k=5)
+
+        root_services = [candidate.service for candidate in result.root_causes]
+        self.assertEqual(root_services[0], "checkout")
+        self.assertTrue({"jaeger", "load-generator", "flagd"}.isdisjoint(root_services))
+
+    def test_rca_does_not_rank_robust_score_without_anomaly_gate(self):
+        runtime_config = load_runtime_config(Path("config/runtime.json"))
+        series = [
+            metric("ad", "cpu_millicores", [1, 1, 1, 1, 1, 1, 1, 100]),
+            metric("shipping", "cpu_millicores", [1, 1, 1, 1, 1, 1, 1, 90]),
+        ]
+
+        result = rca_engine(runtime_config).rank([], series, top_k=5)
+
+        self.assertEqual(result.root_causes, [])
+
+    def test_rca_requires_weighted_anomaly_gate_before_rankers(self):
+        runtime_config = load_runtime_config(Path("config/runtime.json"))
+        series = [
+            metric("payment", "latency", [1, 1, 1, 1, 1, 1, 1, 20]),
+            metric("checkout", "latency", [1, 1, 1, 1, 1, 1, 1, 2]),
+        ]
+
+        result = rca_engine(runtime_config).rank([], series, top_k=3)
+
+        self.assertEqual(result.root_causes, [])
+
+    def test_rca_outputs_only_services_with_metric_evidence(self):
+        runtime_config = load_runtime_config(Path("config/runtime.json"))
+        findings = [
+            AnomalyFinding(algorithm="weighted_sum", service="checkout", metric="cpu_millicores", signal_id="checkout_cpu_millicores", score=1.0, timestamp=100)
+        ]
+
+        result = rca_engine(runtime_config).rank(findings, [], top_k=5)
+
+        self.assertEqual([candidate.service for candidate in result.root_causes], ["checkout"])
+        self.assertTrue(all(candidate.root_cause_metrics for candidate in result.root_causes))
+
+    def test_rca_does_not_use_log_template_as_root_cause_metric(self):
+        runtime_config = load_runtime_config(Path("config/runtime.json"))
+        findings = [
+            AnomalyFinding(
+                algorithm="weighted_sum",
+                service="checkout",
+                metric="log_template_count_ae9e5cabb7",
+                signal_id="checkout_log_template_count_ae9e5cabb7",
+                score=1.0,
+                timestamp=100,
+            )
+        ]
+
+        result = rca_engine(runtime_config).rank(findings, [], top_k=5)
+
+        self.assertEqual(result.root_causes, [])
+
+    def test_rca_returns_top_k_root_causes(self):
+        runtime_config = load_runtime_config(Path("config/runtime.json"))
+        findings = [
+            AnomalyFinding(algorithm="weighted_sum", service="product-catalog", metric="error_rate_5m", signal_id="product_catalog_error_rate_5m", score=0.65, timestamp=1),
+            AnomalyFinding(algorithm="weighted_sum", service="product-reviews", metric="error_rate_5m", signal_id="product_reviews_error_rate_5m", score=0.64, timestamp=1),
+            AnomalyFinding(algorithm="weighted_sum", service="product-catalog", metric="cpu_millicores", signal_id="product_catalog_cpu_millicores", score=0.65, timestamp=1),
+            AnomalyFinding(algorithm="weighted_sum", service="product-reviews", metric="cpu_millicores", signal_id="product_reviews_cpu_millicores", score=0.64, timestamp=1),
+        ]
+
+        result = rca_engine(runtime_config).rank(findings, [], top_k=5)
+
+        self.assertEqual([candidate.service for candidate in result.root_causes], ["product-catalog", "product-reviews"])
+
+    def test_rca_keeps_slo_impact_signals_out_of_root_cause_metrics(self):
+        runtime_config = load_runtime_config(Path("config/runtime.json"))
+        findings = [
+            AnomalyFinding(algorithm="weighted_sum", service="checkout", metric="request_rate_5m", signal_id="checkout_request_rate_5m", score=1.0, timestamp=1),
+            AnomalyFinding(algorithm="weighted_sum", service="checkout", metric="p95_latency_5m", signal_id="checkout_p95_latency_5m", score=1.0, timestamp=1),
+            AnomalyFinding(algorithm="weighted_sum", service="checkout", metric="error_rate_5m", signal_id="checkout_error_rate_5m", score=1.0, timestamp=1),
+            AnomalyFinding(algorithm="weighted_sum", service="checkout", metric="error_budget_burn_rate_24h", signal_id="checkout_error_budget_burn_rate_24h", score=1.0, timestamp=1),
+            AnomalyFinding(algorithm="weighted_sum", service="checkout", metric="cpu_millicores", signal_id="checkout_cpu_millicores", score=0.8, timestamp=1),
+        ]
+
+        result = rca_engine(runtime_config).rank(findings, [], top_k=5)
+
+        self.assertIn("cpu_millicores", result.root_causes[0].root_cause_metrics)
+
+    def test_rca_uses_latency_slo_as_impact_series_for_correlation(self):
+        runtime_config = load_runtime_config(Path("config/runtime.json"))
+        findings = [
+            AnomalyFinding(algorithm="slo_threshold", service="checkout", metric="checkout_p95_latency_5m", signal_id="checkout_p95_latency_5m", score=1.0, timestamp=5),
+            AnomalyFinding(algorithm="weighted_sum", service="cart", metric="cpu_millicores", signal_id="cart_cpu_millicores", score=0.9, timestamp=5),
+            AnomalyFinding(algorithm="weighted_sum", service="payment", metric="cpu_millicores", signal_id="payment_cpu_millicores", score=0.8, timestamp=5),
+        ]
+        series = [
+            metric("checkout", "p95_latency_5m", [1, 2, 3, 4, 5, 6]),
+            metric("cart", "cpu_millicores", [1, 0, 1, 0, 1, 0]),
+            metric("payment", "cpu_millicores", [1, 2, 3, 4, 5, 6]),
+        ]
+
+        result = rca_engine(runtime_config, ranker_weights={"graph": 0.0, "earliest_drift": 0.0, "shape_correlation": 1.0, "downstream_coverage": 0.0}).rank(findings, series, top_k=5)
+        payment = next(candidate for candidate in result.root_causes if candidate.service == "payment")
+
+        self.assertIn("shape_correlation_score=1.000", payment.evidence)
+        self.assertNotIn("checkout_p95_latency_5m", payment.root_cause_metrics)
+
+    def test_rca_uses_significant_drift_when_only_slo_impact_exists(self):
+        runtime_config = load_runtime_config(Path("config/runtime.json"))
+        findings = [
+            AnomalyFinding(
+                algorithm="slo_threshold",
+                service="checkout",
+                metric="bad_ratio_24h",
+                signal_id="checkout_bad_ratio_24h",
+                score=1.0,
+                timestamp=44 * 60,
+            )
+        ]
+        series = [minute_metric("payment", "cpu_millicores", [10, 11] * 15 + [100] * 16)]
+
+        result = rca_engine(runtime_config).rank(findings, series, top_k=5)
+
+        self.assertEqual(result.root_causes[0].service, "payment")
+        self.assertIn("cpu_millicores", result.root_causes[0].root_cause_metrics)
+
+    def test_rca_uses_both_breached_slo_impact_series_for_correlation(self):
+        runtime_config = load_runtime_config(Path("config/runtime.json"))
+        findings = [
+            AnomalyFinding(algorithm="slo_threshold", service="checkout", metric="p95_latency_5m", signal_id="checkout_p95_latency_5m", score=1.0, timestamp=5),
+            AnomalyFinding(algorithm="slo_threshold", service="checkout", metric="error_rate_5m", signal_id="checkout_error_rate_5m", score=1.0, timestamp=5),
+            AnomalyFinding(algorithm="weighted_sum", service="payment", metric="cpu_millicores", signal_id="payment_cpu_millicores", score=0.8, timestamp=5),
+            AnomalyFinding(algorithm="weighted_sum", service="cart", metric="cpu_millicores", signal_id="cart_cpu_millicores", score=0.8, timestamp=5),
+        ]
+        series = [
+            metric("checkout", "p95_latency_5m", [1, 2, 3, 4, 5, 6]),
+            metric("checkout", "error_rate_5m", [0, 1, 0, 1, 0, 1]),
+            metric("payment", "cpu_millicores", [1, 2, 3, 4, 5, 6]),
+            metric("cart", "cpu_millicores", [0, 1, 0, 1, 0, 1]),
+        ]
+
+        result = rca_engine(runtime_config, ranker_weights={"graph": 0.0, "earliest_drift": 0.0, "shape_correlation": 1.0, "downstream_coverage": 0.0}).rank(findings, series, top_k=5)
+        evidence = {candidate.service: candidate.evidence for candidate in result.root_causes}
+
+        self.assertIn("shape_correlation_score=1.000", evidence["payment"])
+        self.assertIn("shape_correlation_score=1.000", evidence["cart"])
+
+    def test_rca_uses_only_non_impact_metrics_for_ranking(self):
+        runtime_config = load_runtime_config(Path("config/runtime.json"))
+        findings = [
+            AnomalyFinding(algorithm="weighted_sum", service="checkout", metric="request_rate_5m", signal_id="checkout_request_rate_5m", score=99.0, timestamp=5),
+            AnomalyFinding(algorithm="weighted_sum", service="checkout", metric="cpu_millicores", signal_id="checkout_cpu_millicores", score=0.1, timestamp=5),
+            AnomalyFinding(algorithm="weighted_sum", service="payment", metric="error_rate_5m", signal_id="payment_error_rate_5m", score=1.0, timestamp=5),
+        ]
+        series = [
+            metric("checkout", "request_rate_5m", [1, 1, 1, 1, 1, 10]),
+            metric("checkout", "cpu_millicores", [1, 1, 1, 1, 1, 10]),
+            metric("payment", "error_rate_5m", [0, 10, 0, 10, 0, 10]),
+        ]
+
+        result = rca_engine(runtime_config, ranker_weights={"graph": 0.0, "earliest_drift": 0.0, "shape_correlation": 1.0, "downstream_coverage": 0.0}).rank(findings, series, top_k=5)
+
+        self.assertEqual(result.root_causes[0].service, "checkout")
+
+    def test_rca_keeps_busy_infra_that_reaches_rca(self):
+        runtime_config = load_runtime_config(Path("config/runtime.json"))
+        findings = [
+            AnomalyFinding(algorithm="weighted_sum", service="checkout", metric="cpu_millicores", signal_id="checkout_cpu_millicores", score=1.0, timestamp=44 * 60)
+        ]
+        series = [
+            minute_metric("checkout", "request_rate_5m", [10] * 30 + [30] * 15),
+            minute_metric("checkout", "cpu_millicores", [100] * 30 + [300] * 15),
+            minute_metric("checkout", "memory_usage_bytes", [100_000_000] * 30 + [150_000_000] * 15),
+            minute_metric("checkout", "socket_io_bytes_per_second", [1_000_000] * 30 + [3_000_000] * 15),
+            minute_metric("checkout", "p95_latency_5m", [0.05] * 30 + [0.10] * 15),
+            minute_metric("checkout", "error_rate_5m", [0] * 45),
+        ]
+
+        result = rca_engine(runtime_config).rank(findings, series, top_k=5)
+
+        self.assertIn("cpu_millicores", result.root_causes[0].root_cause_metrics)
+
+    def test_rca_keeps_infra_when_traffic_increases_with_failure_signal(self):
+        runtime_config = load_runtime_config(Path("config/runtime.json"))
+        findings = [
+            AnomalyFinding(algorithm="weighted_sum", service="checkout", metric="cpu_millicores", signal_id="checkout_cpu_millicores", score=1.0, timestamp=5),
+            AnomalyFinding(algorithm="weighted_sum", service="checkout", metric="error_rate_5m", signal_id="checkout_error_rate_5m", score=1.0, timestamp=5),
+        ]
+        series = [
+            metric("checkout", "request_rate_5m", [1, 1, 1, 1, 1, 10]),
+            metric("checkout", "cpu_millicores", [1, 1, 1, 1, 1, 10]),
+            metric("checkout", "error_rate_5m", [0, 0, 0, 0, 0, 10]),
+        ]
+
+        result = rca_engine(runtime_config).rank(findings, series, top_k=5)
+
+        self.assertEqual(result.root_causes[0].root_cause_metrics, ["cpu_millicores"])
+
+    def test_rca_score_is_bounded_by_anomaly_evidence_strength(self):
+        runtime_config = load_runtime_config(Path("config/runtime.json"))
+        findings = [
+            AnomalyFinding(algorithm="weighted_sum", service="checkout", metric="cpu_millicores", signal_id="checkout_cpu_millicores", score=0.2, timestamp=5)
+        ]
+
+        result = rca_engine(runtime_config).rank(findings, [], top_k=5)
+
+        self.assertLessEqual(result.root_causes[0].score, 0.2)
+
+    def test_rca_score_is_bounded_by_ranker_support(self):
+        runtime_config = load_runtime_config(Path("config/runtime.json"))
+        findings = [
+            AnomalyFinding(algorithm="weighted_sum", service="accounting", metric="memory_usage_bytes", signal_id="accounting_memory_usage_bytes", score=1.0, timestamp=5)
+        ]
+
+        result = rca_engine(runtime_config).rank(findings, [], top_k=5)
+
+        self.assertLess(result.root_causes[0].score, 0.5)
+        self.assertTrue(any("support_score=" in item for item in result.root_causes[0].evidence))
+
+    def test_rca_does_not_suppress_infra_without_coordinated_normal_growth(self):
+        runtime_config = load_runtime_config(Path("config/runtime.json"))
+        findings = [
+            AnomalyFinding(algorithm="weighted_sum", service="checkout", metric="cpu_millicores", signal_id="checkout_cpu_millicores", score=1.0, timestamp=44 * 60)
+        ]
+        series = [
+            minute_metric("checkout", "request_rate_5m", [10] * 30 + [30] * 15),
+            minute_metric("checkout", "cpu_millicores", [100] * 30 + [300] * 15),
+            minute_metric("checkout", "error_rate_5m", [0] * 45),
+        ]
+
+        result = rca_engine(runtime_config).rank(findings, series, top_k=5)
+
+        self.assertEqual([candidate.service for candidate in result.root_causes], ["checkout"])
+
+    def test_trace_failure_does_not_nominate_upstream_dependency_without_metric_anomaly(self):
+        runtime_config = load_runtime_config(Path("config/runtime.json"))
+        findings = [AnomalyFinding(algorithm="weighted_sum", service="checkout", metric="cpu_millicores", signal_id="checkout_cpu_millicores", score=0.8, timestamp=1000)]
+        corroboration = {
+            "checkout": TelemetryCorroboration(
+                service="checkout",
+                available_sources={"trace"},
+                trace_failure=True,
+                trace_root_service="payment",
+                trace_failure_timestamp=900,
+                trace_reference="https://jaeger/trace/1",
+                trace_id="trace-1",
+                trace_operation="charge",
+                trace_status="ERROR",
+                trace_duration_ms=12.0,
+            )
+        }
+
+        result = rca_engine(runtime_config).rank(findings, [], top_k=5, corroboration=corroboration)
+
+        self.assertEqual(result.root_causes[0].service, "checkout")
+        self.assertNotIn("trace_failure", result.root_causes[0].root_cause_metrics)
+
+    def test_trace_with_hard_log_nominates_dependency_root(self):
+        runtime_config = load_runtime_config(Path("config/runtime.json"))
+        findings = [AnomalyFinding(algorithm="weighted_sum", service="checkout", metric="cpu_millicores", signal_id="checkout_cpu_millicores", score=0.8, timestamp=1000)]
+        corroboration = {
+            "checkout": TelemetryCorroboration(
+                service="checkout",
+                available_sources={"trace", "log"},
+                trace_failure=True,
+                trace_root_service="payment",
+                trace_failure_timestamp=900,
+                trace_reference="https://jaeger/trace/1",
+                trace_id="trace-1",
+                trace_operation="charge",
+                trace_status="ERROR",
+                log_failure=True,
+                log_classification="hard_failure",
+                log_failure_count=1,
+                log_failure_timestamp=901,
+                log_reference="otel-logs-2026.07.23/log-1",
+                log_excerpt="connection refused trace-1",
+            )
+        }
+
+        result = rca_engine(runtime_config).rank(findings, [], top_k=5, corroboration=corroboration)
+
+        self.assertEqual(result.root_causes[0].service, "payment")
+        self.assertEqual(result.root_causes[0].root_cause_metrics, ["trace_log_failure"])
+        self.assertTrue(any("trace_id=trace-1" in item for item in result.root_causes[0].evidence))
+        self.assertTrue(any("log_classification=hard_failure" in item for item in result.root_causes[0].evidence))
+
+    def test_hard_log_failure_is_rca_evidence_not_root_cause_metric(self):
+        runtime_config = load_runtime_config(Path("config/runtime.json"))
+        findings = [AnomalyFinding(algorithm="weighted_sum", service="payment", metric="cpu_millicores", signal_id="payment_cpu_millicores", score=0.8, timestamp=1000)]
+        corroboration = {
+            "payment": TelemetryCorroboration(
+                service="payment",
+                available_sources={"log"},
+                log_failure=True,
+                log_classification="hard_failure",
+                log_failure_count=12,
+                log_failure_timestamp=950,
+                log_reference="otel-logs-2026.07.23/log-1",
+                log_excerpt="connection refused",
+            )
+        }
+
+        result = rca_engine(runtime_config).rank(findings, [], top_k=5, corroboration=corroboration)
+
+        root = result.root_causes[0]
+        self.assertEqual(root.root_cause_metrics, ["cpu_millicores"])
+        self.assertTrue(any("log_classification=hard_failure" in item and "count=12" in item for item in root.evidence))
+
+    def test_trace_root_outside_dependency_path_is_rejected(self):
+        runtime_config = load_runtime_config(Path("config/runtime.json"))
+        findings = [AnomalyFinding(algorithm="weighted_sum", service="checkout", metric="cpu_millicores", signal_id="checkout_cpu_millicores", score=0.8, timestamp=1000)]
+        corroboration = {
+            "checkout": TelemetryCorroboration(service="checkout", available_sources={"trace"}, trace_failure=True, trace_root_service="frontend", trace_failure_timestamp=900)
+        }
+
+        result = rca_engine(runtime_config).rank(findings, [], top_k=5, corroboration=corroboration)
+
+        self.assertEqual(result.root_causes[0].service, "checkout")
+
+    def test_latency_only_trace_does_not_change_rca(self):
+        runtime_config = load_runtime_config(Path("config/runtime.json"))
+        findings = [AnomalyFinding(algorithm="weighted_sum", service="checkout", metric="cpu_millicores", signal_id="checkout_cpu_millicores", score=0.8, timestamp=1000)]
+        corroboration = {
+            "checkout": TelemetryCorroboration(service="checkout", available_sources={"trace"}, trace_root_service="payment")
+        }
+
+        result = rca_engine(runtime_config).rank(findings, [], top_k=5, corroboration=corroboration)
+
+        self.assertEqual(result.root_causes[0].service, "checkout")
+
+    def test_rca_suppresses_downstream_symptom_when_dependency_is_stronger_and_earlier(self):
+        runtime_config = load_runtime_config(Path("config/runtime.json"))
+        findings = [
+            AnomalyFinding(algorithm="weighted_sum", service="payment", metric="cpu_millicores", signal_id="payment_cpu_millicores", score=1.0, timestamp=900),
+            AnomalyFinding(algorithm="weighted_sum", service="checkout", metric="cpu_millicores", signal_id="checkout_cpu_millicores", score=0.8, timestamp=1000),
+        ]
+
+        result = rca_engine(runtime_config).rank(findings, [], top_k=5)
+
+        self.assertEqual([root.service for root in result.root_causes], ["payment"])
+
+    def test_rca_scores_downstream_coverage_for_early_dependency_root(self):
+        runtime_config = load_runtime_config(Path("config/runtime.json"))
+        findings = [
+            AnomalyFinding(algorithm="weighted_sum", service="payment", metric="cpu_millicores", signal_id="payment_cpu_millicores", score=1.0, timestamp=900),
+            AnomalyFinding(algorithm="weighted_sum", service="checkout", metric="cpu_millicores", signal_id="checkout_cpu_millicores", score=0.8, timestamp=1000),
+        ]
+
+        result = rca_engine(runtime_config).rank(findings, [], top_k=5)
+
+        self.assertTrue(any("downstream_coverage_score=1.000" in item for item in result.root_causes[0].evidence))
+
+    def test_rca_drops_tiny_disk_drift(self):
+        runtime_config = load_runtime_config(Path("config/runtime.json"))
+        findings = [
+            AnomalyFinding(algorithm="weighted_sum", service="recommendation", metric="error_rate_5m", signal_id="recommendation_error_rate_5m", score=1.0, timestamp=10),
+        ]
+        series = [
+            metric("recommendation", "error_rate_5m", [0] * 8 + [10, 10, 10]),
+            metric("recommendation", "disk_io_bytes_per_second", [0] * 8 + [3000, 3000, 3000]),
+        ]
+
+        result = rca_engine(runtime_config, drift_min_points=8).rank(findings, series, top_k=5)
+
+        self.assertEqual(result.root_causes, [])
+
+    def test_rca_excludes_error_rate_from_infra_root_cause(self):
+        runtime_config = load_runtime_config(Path("config/runtime.json"))
+        findings = [
+            AnomalyFinding(algorithm="weighted_sum", service="checkout", metric="cpu_millicores", signal_id="checkout_cpu_millicores", score=99.0, timestamp=5),
+            AnomalyFinding(algorithm="weighted_sum", service="checkout", metric="error_rate_5m", signal_id="checkout_error_rate_5m", score=1.0, timestamp=5),
+        ]
+
+        result = rca_engine(runtime_config).rank(findings, [], top_k=5)
+
+        self.assertEqual(result.root_causes[0].root_cause_metrics, ["cpu_millicores"])
+
+    def test_rca_uses_next_root_metric_for_error_breakout(self):
+        runtime_config = load_runtime_config(Path("config/runtime.json"))
+        findings = [
+            AnomalyFinding(algorithm="weighted_sum", service="checkout", metric="cpu_millicores", signal_id="checkout_cpu_millicores", score=99.0, timestamp=5),
+            AnomalyFinding(algorithm="weighted_sum", service="checkout", metric="error_rate_5m", signal_id="checkout_error_rate_5m", score=1.0, timestamp=5),
+        ]
+
+        result = rca_engine(runtime_config).rank(findings, [], top_k=5, breakout_metrics={"checkout": {"error_rate_5m"}})
+
+        self.assertEqual(result.root_causes[0].root_cause_metrics[0], "cpu_millicores")
+
+    def test_rca_promotes_root_cause_breakout_metric_for_breakout_service_only(self):
+        runtime_config = load_runtime_config(Path("config/runtime.json"))
+        findings = [
+            AnomalyFinding(algorithm="weighted_sum", service="checkout", metric="cpu_millicores", signal_id="checkout_cpu_millicores", score=99.0, timestamp=5),
+            AnomalyFinding(algorithm="weighted_sum", service="checkout", metric="memory_usage_bytes", signal_id="checkout_memory_usage_bytes", score=1.0, timestamp=5),
+        ]
+
+        result = rca_engine(runtime_config).rank(findings, [], top_k=5, breakout_metrics={"checkout": {"memory_usage_bytes"}})
+
+        self.assertEqual(result.root_causes[0].root_cause_metrics[0], "memory_usage_bytes")
+
+    def test_rca_ignores_breakout_service_when_breakout_metric_is_absent(self):
+        runtime_config = load_runtime_config(Path("config/runtime.json"))
+        findings = [
+            AnomalyFinding(algorithm="weighted_sum", service="checkout", metric="cpu_millicores", signal_id="checkout_cpu_millicores", score=99.0, timestamp=5),
+            AnomalyFinding(algorithm="weighted_sum", service="payment", metric="cpu_millicores", signal_id="payment_cpu_millicores", score=1.0, timestamp=5),
+        ]
+
+        result = rca_engine(runtime_config).rank(findings, [], top_k=5, breakout_metrics={"checkout": {"memory_usage_bytes"}})
+
+        self.assertEqual(result.root_causes[0].service, "payment")
+
+    def test_rca_drops_context_only_root_cause_candidates(self):
+        runtime_config = load_runtime_config(Path("config/runtime.json"))
+        findings = [
+            AnomalyFinding(algorithm="weighted_sum", service="checkout", metric="request_rate_5m", signal_id="checkout_request_rate_5m", score=1.0, timestamp=1),
+            AnomalyFinding(algorithm="weighted_sum", service="checkout", metric="p95_latency_5m", signal_id="checkout_p95_latency_5m", score=1.0, timestamp=1),
+        ]
+
+        result = rca_engine(runtime_config).rank(findings, [], top_k=5)
+
+        self.assertEqual(result.root_causes, [])
+
+    def test_rca_prefers_dependency_that_drifted_before_checkout(self):
+        runtime_config = load_runtime_config(Path("config/runtime.json"))
+        findings = [
+            AnomalyFinding(algorithm="weighted_sum", service="cart", metric="cpu_millicores", signal_id="cart_cpu_millicores", score=0.8, timestamp=305),
+            AnomalyFinding(algorithm="weighted_sum", service="checkout", metric="cpu_millicores", signal_id="checkout_cpu_millicores", score=0.8, timestamp=330),
+        ]
+        series = [
+            metric("cart", "cpu_millicores", [0] * 305 + [100] * 55),
+            metric("checkout", "cpu_millicores", [0] * 330 + [100] * 30),
+        ]
+
+        result = rca_engine(runtime_config, drift_min_points=5).rank(findings, series, top_k=5)
+
+        self.assertEqual(result.root_causes[0].service, "cart")
+
+    def test_graph_traversal_uses_pagerank_and_timestamp_scoring(self):
+        runtime_config = load_runtime_config(Path("config/runtime.json"))
+        engine = graph_rca(runtime_config)
+        scores = engine.rank_services(
+            [
+                AnomalyFinding(algorithm="weighted_sum", service="checkout", metric="latency", signal_id="checkout_latency", score=9.0, timestamp=100),
+                AnomalyFinding(algorithm="weighted_sum", service="frontend", metric="latency", signal_id="frontend_latency", score=8.0, timestamp=90),
+            ]
+        )
+
+        self.assertIn("product-catalog", scores)
+        self.assertGreater(engine._timestamp_scores({"checkout": 100, "frontend": 90})["frontend"], engine._timestamp_scores({"checkout": 100, "frontend": 90})["checkout"])
+
+    def test_rca_evidence_clamps_graph_score_to_unit_range(self):
+        runtime_config = load_runtime_config(Path("config/runtime.json"))
+        findings = [
+            AnomalyFinding(algorithm="weighted_sum", service="payment", metric="cpu_millicores", signal_id="payment_cpu_millicores", score=9.0, timestamp=1)
+        ]
+
+        result = rca_engine(runtime_config).rank(findings, [], top_k=1)
+
+        graph_score = next(item for item in result.root_causes[0].evidence if item.startswith("graph_score="))
+        self.assertLessEqual(float(graph_score.split("=", 1)[1]), 1.0)
+
+    def test_graph_traversal_keeps_observed_service_missing_from_topology(self):
+        runtime_config = load_runtime_config(Path("config/runtime.json"))
+        scores = graph_rca(runtime_config).rank_services(
+            [
+                AnomalyFinding(algorithm="weighted_sum", service="carts", metric="cpu", signal_id="carts_cpu", score=1.0, timestamp=100),
+            ]
+        )
+
+        self.assertIn("carts", scores)
+
+    def test_rca_keeps_runtime_service_names_unmodified_without_suffix_config(self):
+        runtime_config = load_runtime_config(Path("config/runtime.json"))
+        findings = [
+            AnomalyFinding(algorithm="weighted_sum", service="orders-db", metric="diskio", signal_id="orders_db_diskio", score=1.0, timestamp=100),
+        ]
+
+        result = rca_engine(runtime_config).rank(findings, [], top_k=5)
+
+        self.assertEqual(result.root_causes[0].service, "orders-db")
+
+    def test_rca_does_not_invent_metric_aliases_without_runtime_config(self):
+        runtime_config = load_runtime_config(Path("config/runtime.json"))
+        findings = [
+            AnomalyFinding(algorithm="weighted_sum", service="payment", metric="socket", signal_id="payment_socket", score=1.0, timestamp=100),
+        ]
+
+        result = rca_engine(runtime_config).rank(findings, [], top_k=5)
+
+        self.assertEqual(result.root_causes[0].root_cause_metrics, ["socket"])
+
+    def test_pipeline_api_accepts_metric_series_and_returns_rca_result(self):
+        series = [
+            metric("checkout", "latency", [1] * 350 + [2] * 10),
+            metric("payment", "latency", [1] * 350 + [20] * 10),
+            metric("payment", "error", [0] * 350 + [20] * 10),
+            metric("payment", "cpu_millicores", [100] * 350 + [1000] * 10),
+        ]
+        with TemporaryDirectory() as tmp:
+            settings = Settings().model_copy(update={"state_store_path": Path(tmp) / "aiops.sqlite3"})
+            output = io.StringIO()
+            with redirect_stdout(output):
+                result = run_static_pipeline(PipelineRunRequest(metric_series=series), settings=settings)
+
+        self.assertEqual(result.rca_result.root_causes[0].service, "payment")
+        logs = output.getvalue()
+        self.assertIn("AIOPS_ANOMALY", logs)
+        self.assertIn("AIOPS_ROOT_CAUSE", logs)
+        self.assertNotIn("AIOPS_INCIDENT", logs)
+
+
+if __name__ == "__main__":
+    unittest.main()

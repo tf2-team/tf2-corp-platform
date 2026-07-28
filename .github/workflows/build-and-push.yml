@@ -57,7 +57,7 @@ on:
         type: string
         default: ""
       force_full_rebuild:
-        description: Bake all 23 services from source (ignore selective rebuild; reason required)
+        description: Bake all 24 services from source (ignore selective rebuild; reason required)
         required: false
         type: boolean
         default: false
@@ -211,8 +211,8 @@ jobs:
             fi
           done
 
-          if [[ "${#RELEASE[@]}" -ne 23 ]]; then
-            echo "::error::Expected 23 release services, got ${#RELEASE[@]}"
+          if [[ "${#RELEASE[@]}" -ne 24 ]]; then
+            echo "::error::Expected 24 release services, got ${#RELEASE[@]}"
             exit 1
           fi
 
@@ -224,11 +224,11 @@ jobs:
             echo "${BAKE_RAW}"
             exit 1
           fi
-          echo "${BAKE_JSON}" | jq -e '.group.release.targets | length == 23' >/dev/null
+          echo "${BAKE_JSON}" | jq -e '.group.release.targets | length == 24' >/dev/null
 
           mapfile -t BAKE_TARGETS < <(echo "${BAKE_JSON}" | jq -r '.group.release.targets[]' | sort -u)
-          if [[ "${#BAKE_TARGETS[@]}" -ne 23 ]]; then
-            echo "::error::Bake release group has ${#BAKE_TARGETS[@]} unique targets (want 23)"
+          if [[ "${#BAKE_TARGETS[@]}" -ne 24 ]]; then
+            echo "::error::Bake release group has ${#BAKE_TARGETS[@]} unique targets (want 24)"
             exit 1
           fi
 
@@ -354,6 +354,10 @@ jobs:
                 third-party/mem0|third-party/mem0/*)
                   BUILD_SET["mem0"]=1
                   echo "Service change: mem0 (${f})"
+                  ;;
+                src/aio|src/aio/*)
+                  BUILD_SET["aiops"]=1
+                  echo "Service change: aiops (${f})"
                   ;;
                 src/*)
                   rest="${f#src/}"
@@ -591,7 +595,7 @@ jobs:
       actions: write
     strategy:
       fail-fast: false
-      max-parallel: 23
+      max-parallel: 24
       matrix:
         service: ${{ fromJson(needs.preflight.outputs.build_services) }}
     env:

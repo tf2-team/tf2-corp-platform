@@ -20,8 +20,8 @@ def main() -> int:
     if not isinstance(services, list) or not services:
         print("release_services.json must be a non-empty array", file=sys.stderr)
         return 1
-    if len(services) != 23:
-        print(f"expected 23 release services, got {len(services)}", file=sys.stderr)
+    if len(services) != 24:
+        print(f"expected 24 release services, got {len(services)}", file=sys.stderr)
         return 1
     if len(set(services)) != len(services):
         print("duplicate entries in release_services.json", file=sys.stderr)

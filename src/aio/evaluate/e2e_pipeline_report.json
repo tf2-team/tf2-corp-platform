@@ -1,0 +1,7224 @@
+{
+  "metrics": {
+    "incident": {
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1": 1.0,
+      "tp": 120,
+      "fp": 0,
+      "tn": 0,
+      "fn": 0
+    },
+    "rca_top_k": {
+      "precision": 0.07833333333333334,
+      "recall": 0.39166666666666666,
+      "f1": 0.13055555555555556,
+      "tp": 47,
+      "fp": 553,
+      "tn": 0,
+      "fn": 73
+    },
+    "rca_top_k_hit": {
+      "precision": 0.30833333333333335,
+      "recall": 0.30833333333333335,
+      "f1": 0.30833333333333335,
+      "tp": 37,
+      "fp": 0,
+      "tn": 0,
+      "fn": 83
+    }
+  },
+  "top_k": 5,
+  "incident_threshold": 1.0,
+  "case_count": 120,
+  "cases": [
+    {
+      "case_id": "RE2-SS/carts_cpu/1",
+      "expected_incident": true,
+      "predicted_incident": true,
+      "expected_root_service": "carts",
+      "expected_root_metric": "cpu",
+      "expected_root_causes": [
+        "carts"
+      ],
+      "predicted_root_causes": [
+        {
+          "service": "carts-db",
+          "metrics": [
+            "mem",
+            "diskio",
+            "cpu",
+            "socket"
+          ]
+        },
+        {
+          "service": "carts",
+          "metrics": [
+            "mem",
+            "cpu",
+            "latency-90",
+            "workload",
+            "socket"
+          ]
+        },
+        {
+          "service": "user-db",
+          "metrics": [
+            "mem",
+            "diskio"
+          ]
+        },
+        {
+          "service": "session-db",
+          "metrics": [
+            "mem",
+            "diskio",
+            "cpu"
+          ]
+        },
+        {
+          "service": "orders-db",
+          "metrics": [
+            "mem",
+            "diskio",
+            "socket"
+          ]
+        }
+      ],
+      "predicted_root_services": [
+        "carts-db",
+        "carts",
+        "user-db",
+        "session-db",
+        "orders-db"
+      ],
+      "rca_top_k_hit": true
+    },
+    {
+      "case_id": "RE2-SS/carts_cpu/2",
+      "expected_incident": true,
+      "predicted_incident": true,
+      "expected_root_service": "carts",
+      "expected_root_metric": "cpu",
+      "expected_root_causes": [
+        "carts"
+      ],
+      "predicted_root_causes": [
+        {
+          "service": "carts-db",
+          "metrics": [
+            "diskio",
+            "mem",
+            "cpu"
+          ]
+        },
+        {
+          "service": "user",
+          "metrics": [
+            "mem",
+            "workload"
+          ]
+        },
+        {
+          "service": "payment",
+          "metrics": [
+            "mem",
+            "workload"
+          ]
+        },
+        {
+          "service": "carts",
+          "metrics": [
+            "diskio",
+            "mem",
+            "cpu",
+            "socket"
+          ]
+        },
+        {
+          "service": "shipping",
+          "metrics": [
+            "mem",
+            "cpu",
+            "workload",
+            "socket"
+          ]
+        }
+      ],
+      "predicted_root_services": [
+        "carts-db",
+        "user",
+        "payment",
+        "carts",
+        "shipping"
+      ],
+      "rca_top_k_hit": true
+    },
+    {
+      "case_id": "RE2-SS/carts_cpu/3",
+      "expected_incident": true,
+      "predicted_incident": true,
+      "expected_root_service": "carts",
+      "expected_root_metric": "cpu",
+      "expected_root_causes": [
+        "carts"
+      ],
+      "predicted_root_causes": [
+        {
+          "service": "carts-db",
+          "metrics": [
+            "diskio",
+            "mem",
+            "cpu",
+            "socket"
+          ]
+        },
+        {
+          "service": "queue-master",
+          "metrics": [
+            "mem",
+            "diskio",
+            "cpu"
+          ]
+        },
+        {
+          "service": "rabbitmq",
+          "metrics": [
+            "mem",
+            "cpu"
+          ]
+        },
+        {
+          "service": "catalogue",
+          "metrics": [
+            "mem",
+            "workload"
+          ]
+        },
+        {
+          "service": "orders-db",
+          "metrics": [
+            "diskio",
+            "mem"
+          ]
+        }
+      ],
+      "predicted_root_services": [
+        "carts-db",
+        "queue-master",
+        "rabbitmq",
+        "catalogue",
+        "orders-db"
+      ],
+      "rca_top_k_hit": false
+    },
+    {
+      "case_id": "RE2-SS/carts_delay/1",
+      "expected_incident": true,
+      "predicted_incident": true,
+      "expected_root_service": "carts",
+      "expected_root_metric": "latency",
+      "expected_root_causes": [
+        "carts"
+      ],
+      "predicted_root_causes": [
+        {
+          "service": "orders-db",
+          "metrics": [
+            "diskio",
+            "mem"
+          ]
+        },
+        {
+          "service": "shipping",
+          "metrics": [
+            "mem",
+            "cpu",
+            "workload"
+          ]
+        },
+        {
+          "service": "carts-db",
+          "metrics": [
+            "mem",
+            "diskio",
+            "socket",
+            "cpu"
+          ]
+        },
+        {
+          "service": "session-db",
+          "metrics": [
+            "mem",
+            "diskio"
+          ]
+        },
+        {
+          "service": "front-end",
+          "metrics": [
+            "mem",
+            "latency-90",
+            "socket",
+            "cpu",
+            "workload"
+          ]
+        }
+      ],
+      "predicted_root_services": [
+        "orders-db",
+        "shipping",
+        "carts-db",
+        "session-db",
+        "front-end"
+      ],
+      "rca_top_k_hit": false
+    },
+    {
+      "case_id": "RE2-SS/carts_delay/2",
+      "expected_incident": true,
+      "predicted_incident": true,
+      "expected_root_service": "carts",
+      "expected_root_metric": "latency",
+      "expected_root_causes": [
+        "carts"
+      ],
+      "predicted_root_causes": [
+        {
+          "service": "orders-db",
+          "metrics": [
+            "mem",
+            "diskio"
+          ]
+        },
+        {
+          "service": "carts-db",
+          "metrics": [
+            "diskio",
+            "mem",
+            "cpu",
+            "socket"
+          ]
+        },
+        {
+          "service": "payment",
+          "metrics": [
+            "mem",
+            "workload"
+          ]
+        },
+        {
+          "service": "front-end",
+          "metrics": [
+            "mem",
+            "latency-90",
+            "socket",
+            "cpu",
+            "workload"
+          ]
+        },
+        {
+          "service": "user-db",
+          "metrics": [
+            "diskio",
+            "mem"
+          ]
+        }
+      ],
+      "predicted_root_services": [
+        "orders-db",
+        "carts-db",
+        "payment",
+        "front-end",
+        "user-db"
+      ],
+      "rca_top_k_hit": false
+    },
+    {
+      "case_id": "RE2-SS/carts_delay/3",
+      "expected_incident": true,
+      "predicted_incident": true,
+      "expected_root_service": "carts",
+      "expected_root_metric": "latency",
+      "expected_root_causes": [
+        "carts"
+      ],
+      "predicted_root_causes": [
+        {
+          "service": "session-db",
+          "metrics": [
+            "mem",
+            "diskio"
+          ]
+        },
+        {
+          "service": "carts",
+          "metrics": [
+            "diskio",
+            "mem",
+            "latency-50",
+            "latency-90"
+          ]
+        },
+        {
+          "service": "carts-db",
+          "metrics": [
+            "diskio",
+            "mem",
+            "cpu"
+          ]
+        },
+        {
+          "service": "queue-master",
+          "metrics": [
+            "mem",
+            "diskio"
+          ]
+        },
+        {
+          "service": "shipping",
+          "metrics": [
+            "cpu",
+            "mem",
+            "socket"
+          ]
+        }
+      ],
+      "predicted_root_services": [
+        "session-db",
+        "carts",
+        "carts-db",
+        "queue-master",
+        "shipping"
+      ],
+      "rca_top_k_hit": true
+    },
+    {
+      "case_id": "RE2-SS/carts_disk/1",
+      "expected_incident": true,
+      "predicted_incident": true,
+      "expected_root_service": "carts",
+      "expected_root_metric": "disk",
+      "expected_root_causes": [
+        "carts"
+      ],
+      "predicted_root_causes": [
+        {
+          "service": "carts-db",
+          "metrics": [
+            "diskio",
+            "cpu",
+            "mem"
+          ]
+        },
+        {
+          "service": "queue-master",
+          "metrics": [
+            "diskio",
+            "mem",
+            "cpu"
+          ]
+        },
+        {
+          "service": "catalogue",
+          "metrics": [
+            "mem",
+            "workload"
+          ]
+        },
+        {
+          "service": "shipping",
+          "metrics": [
+            "mem",
+            "cpu",
+            "workload",
+            "socket"
+          ]
+        },
+        {
+          "service": "catalogue-db",
+          "metrics": [
+            "mem",
+            "cpu"
+          ]
+        }
+      ],
+      "predicted_root_services": [
+        "carts-db",
+        "queue-master",
+        "catalogue",
+        "shipping",
+        "catalogue-db"
+      ],
+      "rca_top_k_hit": false
+    },
+    {
+      "case_id": "RE2-SS/carts_disk/2",
+      "expected_incident": true,
+      "predicted_incident": true,
+      "expected_root_service": "carts",
+      "expected_root_metric": "disk",
+      "expected_root_causes": [
+        "carts"
+      ],
+      "predicted_root_causes": [
+        {
+          "service": "user-db",
+          "metrics": [
+            "diskio",
+            "mem",
+            "cpu"
+          ]
+        },
+        {
+          "service": "carts-db",
+          "metrics": [
+            "diskio",
+            "mem",
+            "cpu",
+            "socket"
+          ]
+        },
+        {
+          "service": "queue-master",
+          "metrics": [
+            "diskio",
+            "mem",
+            "cpu"
+          ]
+        },
+        {
+          "service": "orders-db",
+          "metrics": [
+            "diskio",
+            "mem"
+          ]
+        },
+        {
+          "service": "orders",
+          "metrics": [
+            "mem",
+            "cpu",
+            "socket",
+            "workload"
+          ]
+        }
+      ],
+      "predicted_root_services": [
+        "user-db",
+        "carts-db",
+        "queue-master",
+        "orders-db",
+        "orders"
+      ],
+      "rca_top_k_hit": false
+    },
+    {
+      "case_id": "RE2-SS/carts_disk/3",
+      "expected_incident": true,
+      "predicted_incident": true,
+      "expected_root_service": "carts",
+      "expected_root_metric": "disk",
+      "expected_root_causes": [
+        "carts"
+      ],
+      "predicted_root_causes": [
+        {
+          "service": "carts-db",
+          "metrics": [
+            "mem",
+            "diskio",
+            "cpu",
+            "socket"
+          ]
+        },
+        {
+          "service": "orders-db",
+          "metrics": [
+            "diskio",
+            "mem"
+          ]
+        },
+        {
+          "service": "queue-master",
+          "metrics": [
+            "mem",
+            "diskio"
+          ]
+        },
+        {
+          "service": "catalogue",
+          "metrics": [
+            "mem",
+            "workload"
+          ]
+        },
+        {
+          "service": "shipping",
+          "metrics": [
+            "mem",
+            "cpu",
+            "workload",
+            "socket"
+          ]
+        }
+      ],
+      "predicted_root_services": [
+        "carts-db",
+        "orders-db",
+        "queue-master",
+        "catalogue",
+        "shipping"
+      ],
+      "rca_top_k_hit": false
+    },
+    {
+      "case_id": "RE2-SS/carts_loss/1",
+      "expected_incident": true,
+      "predicted_incident": true,
+      "expected_root_service": "carts",
+      "expected_root_metric": "error",
+      "expected_root_causes": [
+        "carts"
+      ],
+      "predicted_root_causes": [
+        {
+          "service": "carts-db",
+          "metrics": [
+            "cpu",
+            "diskio",
+            "mem"
+          ]
+        },
+        {
+          "service": "user-db",
+          "metrics": [
+            "diskio",
+            "mem",
+            "socket"
+          ]
+        },
+        {
+          "service": "orders",
+          "metrics": [
+            "mem",
+            "latency-90",
+            "socket",
+            "workload"
+          ]
+        },
+        {
+          "service": "shipping",
+          "metrics": [
+            "mem",
+            "cpu",
+            "workload"
+          ]
+        },
+        {
+          "service": "front-end",
+          "metrics": [
+            "mem",
+            "latency-90",
+            "socket",
+            "cpu"
+          ]
+        }
+      ],
+      "predicted_root_services": [
+        "carts-db",
+        "user-db",
+        "orders",
+        "shipping",
+        "front-end"
+      ],
+      "rca_top_k_hit": false
+    },
+    {
+      "case_id": "RE2-SS/carts_loss/2",
+      "expected_incident": true,
+      "predicted_incident": true,
+      "expected_root_service": "carts",
+      "expected_root_metric": "error",
+      "expected_root_causes": [
+        "carts"
+      ],
+      "predicted_root_causes": [
+        {
+          "service": "carts-db",
+          "metrics": [
+            "diskio",
+            "mem",
+            "socket"
+          ]
+        },
+        {
+          "service": "shipping",
+          "metrics": [
+            "mem",
+            "cpu",
+            "workload"
+          ]
+        },
+        {
+          "service": "front-end",
+          "metrics": [
+            "mem",
+            "latency-90",
+            "socket",
+            "workload"
+          ]
+        },
+        {
+          "service": "user-db",
+          "metrics": [
+            "diskio",
+            "mem"
+          ]
+        },
+        {
+          "service": "session-db",
+          "metrics": [
+            "mem",
+            "diskio"
+          ]
+        }
+      ],
+      "predicted_root_services": [
+        "carts-db",
+        "shipping",
+        "front-end",
+        "user-db",
+        "session-db"
+      ],
+      "rca_top_k_hit": false
+    },
+    {
+      "case_id": "RE2-SS/carts_loss/3",
+      "expected_incident": true,
+      "predicted_incident": true,
+      "expected_root_service": "carts",
+      "expected_root_metric": "error",
+      "expected_root_causes": [
+        "carts"
+      ],
+      "predicted_root_causes": [
+        {
+          "service": "queue-master",
+          "metrics": [
+            "mem",
+            "diskio",
+            "cpu"
+          ]
+        },
+        {
+          "service": "carts",
+          "metrics": [
+            "cpu",
+            "diskio",
+            "mem",
+            "latency-90",
+            "latency-50"
+          ]
+        },
+        {
+          "service": "front-end",
+          "metrics": [
+            "mem",
+            "latency-90",
+            "cpu",
+            "socket",
+            "workload"
+          ]
+        },
+        {
+          "service": "carts-db",
+          "metrics": [
+            "diskio",
+            "mem",
+            "cpu"
+          ]
+        },
+        {
+          "service": "orders-db",
+          "metrics": [
+            "diskio",
+            "mem"
+          ]
+        }
+      ],
+      "predicted_root_services": [
+        "queue-master",
+        "carts",
+        "front-end",
+        "carts-db",
+        "orders-db"
+      ],
+      "rca_top_k_hit": false
+    },
+    {
+      "case_id": "RE2-SS/carts_mem/1",
+      "expected_incident": true,
+      "predicted_incident": true,
+      "expected_root_service": "carts",
+      "expected_root_metric": "mem",
+      "expected_root_causes": [
+        "carts"
+      ],
+      "predicted_root_causes": [
+        {
+          "service": "user-db",
+          "metrics": [
+            "diskio",
+            "mem",
+            "cpu",
+            "socket"
+          ]
+        },
+        {
+          "service": "user",
+          "metrics": [
+            "mem",
+            "workload",
+            "socket"
+          ]
+        },
+        {
+          "service": "carts-db",
+          "metrics": [
+            "diskio",
+            "mem",
+            "cpu",
+            "socket"
+          ]
+        },
+        {
+          "service": "session-db",
+          "metrics": [
+            "diskio",
+            "mem"
+          ]
+        },
+        {
+          "service": "payment",
+          "metrics": [
+            "mem",
+            "workload"
+          ]
+        }
+      ],
+      "predicted_root_services": [
+        "user-db",
+        "user",
+        "carts-db",
+        "session-db",
+        "payment"
+      ],
+      "rca_top_k_hit": false
+    },
+    {
+      "case_id": "RE2-SS/carts_mem/2",
+      "expected_incident": true,
+      "predicted_incident": true,
+      "expected_root_service": "carts",
+      "expected_root_metric": "mem",
+      "expected_root_causes": [
+        "carts"
+      ],
+      "predicted_root_causes": [
+        {
+          "service": "orders",
+          "metrics": [
+            "mem",
+            "cpu",
+            "socket"
+          ]
+        },
+        {
+          "service": "rabbitmq",
+          "metrics": [
+            "mem"
+          ]
+        },
+        {
+          "service": "payment",
+          "metrics": [
+            "mem",
+            "workload",
+            "socket"
+          ]
+        },
+        {
+          "service": "queue-master",
+          "metrics": [
+            "cpu",
+            "mem",
+            "diskio"
+          ]
+        },
+        {
+          "service": "session-db",
+          "metrics": [
+            "mem",
+            "diskio"
+          ]
+        }
+      ],
+      "predicted_root_services": [
+        "orders",
+        "rabbitmq",
+        "payment",
+        "queue-master",
+        "session-db"
+      ],
+      "rca_top_k_hit": false
+    },
+    {
+      "case_id": "RE2-SS/carts_mem/3",
+      "expected_incident": true,
+      "predicted_incident": true,
+      "expected_root_service": "carts",
+      "expected_root_metric": "mem",
+      "expected_root_causes": [
+        "carts"
+      ],
+      "predicted_root_causes": [
+        {
+          "service": "user-db",
+          "metrics": [
+            "mem",
+            "diskio",
+            "socket"
+          ]
+        },
+        {
+          "service": "orders-db",
+          "metrics": [
+            "diskio",
+            "mem"
+          ]
+        },
+        {
+          "service": "orders",
+          "metrics": [
+            "mem",
+            "socket",
+            "cpu",
+            "workload"
+          ]
+        },
+        {
+          "service": "session-db",
+          "metrics": [
+            "mem",
+            "diskio"
+          ]
+        },
+        {
+          "service": "front-end",
+          "metrics": [
+            "mem",
+            "workload",
+            "cpu",
+            "socket"
+          ]
+        }
+      ],
+      "predicted_root_services": [
+        "user-db",
+        "orders-db",
+        "orders",
+        "session-db",
+        "front-end"
+      ],
+      "rca_top_k_hit": false
+    },
+    {
+      "case_id": "RE2-SS/carts_socket/1",
+      "expected_incident": true,
+      "predicted_incident": true,
+      "expected_root_service": "carts",
+      "expected_root_metric": "socket",
+      "expected_root_causes": [
+        "carts"
+      ],
+      "predicted_root_causes": [
+        {
+          "service": "queue-master",
+          "metrics": [
+            "mem",
+            "diskio",
+            "cpu"
+          ]
+        },
+        {
+          "service": "user-db",
+          "metrics": [
+            "diskio",
+            "mem",
+            "cpu"
+          ]
+        },
+        {
+          "service": "front-end",
+          "metrics": [
+            "mem",
+            "cpu",
+            "socket",
+            "latency-90",
+            "workload"
+          ]
+        },
+        {
+          "service": "catalogue",
+          "metrics": [
+            "mem"
+          ]
+        },
+        {
+          "service": "orders",
+          "metrics": [
+            "mem",
+            "socket",
+            "latency-50"
+          ]
+        }
+      ],
+      "predicted_root_services": [
+        "queue-master",
+        "user-db",
+        "front-end",
+        "catalogue",
+        "orders"
+      ],
+      "rca_top_k_hit": false
+    },
+    {
+      "case_id": "RE2-SS/carts_socket/2",
+      "expected_incident": true,
+      "predicted_incident": true,
+      "expected_root_service": "carts",
+      "expected_root_metric": "socket",
+      "expected_root_causes": [
+        "carts"
+      ],
+      "predicted_root_causes": [
+        {
+          "service": "payment",
+          "metrics": [
+            "mem",
+            "workload"
+          ]
+        },
+        {
+          "service": "queue-master",
+          "metrics": [
+            "diskio",
+            "mem",
+            "cpu"
+          ]
+        },
+        {
+          "service": "carts-db",
+          "metrics": [
+            "diskio",
+            "mem",
+            "cpu"
+          ]
+        },
+        {
+          "service": "user",
+          "metrics": [
+            "mem",
+            "cpu",
+            "workload"
+          ]
+        },
+        {
+          "service": "orders",
+          "metrics": [
+            "mem",
+            "socket",
+            "workload",
+            "cpu"
+          ]
+        }
+      ],
+      "predicted_root_services": [
+        "payment",
+        "queue-master",
+        "carts-db",
+        "user",
+        "orders"
+      ],
+      "rca_top_k_hit": false
+    },
+    {
+      "case_id": "RE2-SS/carts_socket/3",
+      "expected_incident": true,
+      "predicted_incident": true,
+      "expected_root_service": "carts",
+      "expected_root_metric": "socket",
+      "expected_root_causes": [
+        "carts"
+      ],
+      "predicted_root_causes": [
+        {
+          "service": "carts-db",
+          "metrics": [
+            "diskio",
+            "mem",
+            "cpu",
+            "socket"
+          ]
+        },
+        {
+          "service": "queue-master",
+          "metrics": [
+            "mem",
+            "diskio",
+            "cpu"
+          ]
+        },
+        {
+          "service": "orders",
+          "metrics": [
+            "mem",
+            "cpu",
+            "socket"
+          ]
+        },
+        {
+          "service": "orders-db",
+          "metrics": [
+            "diskio",
+            "mem"
+          ]
+        },
+        {
+          "service": "payment",
+          "metrics": [
+            "mem"
+          ]
+        }
+      ],
+      "predicted_root_services": [
+        "carts-db",
+        "queue-master",
+        "orders",
+        "orders-db",
+        "payment"
+      ],
+      "rca_top_k_hit": false
+    },
+    {
+      "case_id": "RE2-SS/catalogue_cpu/1",
+      "expected_incident": true,
+      "predicted_incident": true,
+      "expected_root_service": "catalogue",
+      "expected_root_metric": "cpu",
+      "expected_root_causes": [
+        "catalogue"
+      ],
+      "predicted_root_causes": [
+        {
+          "service": "user-db",
+          "metrics": [
+            "mem",
+            "diskio",
+            "cpu"
+          ]
+        },
+        {
+          "service": "carts",
+          "metrics": [
+            "mem",
+            "cpu",
+            "workload",
+            "socket"
+          ]
+        },
+        {
+          "service": "carts-db",
+          "metrics": [
+            "diskio",
+            "mem",
+            "cpu"
+          ]
+        },
+        {
+          "service": "shipping",
+          "metrics": [
+            "mem",
+            "cpu",
+            "workload"
+          ]
+        },
+        {
+          "service": "orders",
+          "metrics": [
+            "mem",
+            "socket",
+            "workload"
+          ]
+        }
+      ],
+      "predicted_root_services": [
+        "user-db",
+        "carts",
+        "carts-db",
+        "shipping",
+        "orders"
+      ],
+      "rca_top_k_hit": false
+    },
+    {
+      "case_id": "RE2-SS/catalogue_cpu/2",
+      "expected_incident": true,
+      "predicted_incident": true,
+      "expected_root_service": "catalogue",
+      "expected_root_metric": "cpu",
+      "expected_root_causes": [
+        "catalogue"
+      ],
+      "predicted_root_causes": [
+        {
+          "service": "catalogue",
+          "metrics": [
+            "diskio",
+            "mem",
+            "cpu",
+            "workload",
+            "socket"
+          ]
+        },
+        {
+          "service": "orders",
+          "metrics": [
+            "mem",
+            "cpu",
+            "workload",
+            "socket"
+          ]
+        },
+        {
+          "service": "user",
+          "metrics": [
+            "cpu",
+            "mem",
+            "socket"
+          ]
+        },
+        {
+          "service": "session-db",
+          "metrics": [
+            "mem",
+            "diskio"
+          ]
+        },
+        {
+          "service": "carts",
+          "metrics": [
+            "mem",
+            "cpu",
+            "workload",
+            "socket"
+          ]
+        }
+      ],
+      "predicted_root_services": [
+        "catalogue",
+        "orders",
+        "user",
+        "session-db",
+        "carts"
+      ],
+      "rca_top_k_hit": true
+    },
+    {
+      "case_id": "RE2-SS/catalogue_cpu/3",
+      "expected_incident": true,
+      "predicted_incident": true,
+      "expected_root_service": "catalogue",
+      "expected_root_metric": "cpu",
+      "expected_root_causes": [
+        "catalogue"
+      ],
+      "predicted_root_causes": [
+        {
+          "service": "user",
+          "metrics": [
+            "mem",
+            "workload",
+            "socket"
+          ]
+        },
+        {
+          "service": "orders",
+          "metrics": [
+            "cpu",
+            "mem",
+            "workload"
+          ]
+        },
+        {
+          "service": "shipping",
+          "metrics": [
+            "mem",
+            "cpu",
+            "workload"
+          ]
+        },
+        {
+          "service": "payment",
+          "metrics": [
+            "mem",
+            "workload"
+          ]
+        },
+        {
+          "service": "queue-master",
+          "metrics": [
+            "diskio",
+            "mem",
+            "cpu"
+          ]
+        }
+      ],
+      "predicted_root_services": [
+        "user",
+        "orders",
+        "shipping",
+        "payment",
+        "queue-master"
+      ],
+      "rca_top_k_hit": false
+    },
+    {
+      "case_id": "RE2-SS/catalogue_delay/1",
+      "expected_incident": true,
+      "predicted_incident": true,
+      "expected_root_service": "catalogue",
+      "expected_root_metric": "latency",
+      "expected_root_causes": [
+        "catalogue"
+      ],
+      "predicted_root_causes": [
+        {
+          "service": "catalogue",
+          "metrics": [
+            "latency-90",
+            "latency-50",
+            "mem",
+            "socket"
+          ]
+        },
+        {
+          "service": "front-end",
+          "metrics": [
+            "mem",
+            "cpu",
+            "socket",
+            "workload"
+          ]
+        },
+        {
+          "service": "carts",
+          "metrics": [
+            "mem",
+            "workload",
+            "latency-90",
+            "cpu",
+            "latency-50"
+          ]
+        },
+        {
+          "service": "carts-db",
+          "metrics": [
+            "diskio",
+            "mem",
+            "cpu",
+            "socket"
+          ]
+        },
+        {
+          "service": "session-db",
+          "metrics": [
+            "mem",
+            "diskio"
+          ]
+        }
+      ],
+      "predicted_root_services": [
+        "catalogue",
+        "front-end",
+        "carts",
+        "carts-db",
+        "session-db"
+      ],
+      "rca_top_k_hit": true
+    },
+    {
+      "case_id": "RE2-SS/catalogue_delay/2",
+      "expected_incident": true,
+      "predicted_incident": true,
+      "expected_root_service": "catalogue",
+      "expected_root_metric": "latency",
+      "expected_root_causes": [
+        "catalogue"
+      ],
+      "predicted_root_causes": [
+        {
+          "service": "session-db",
+          "metrics": [
+            "mem",
+            "diskio"
+          ]
+        },
+        {
+          "service": "orders",
+          "metrics": [
+            "cpu",
+            "mem",
+            "socket",
+            "workload"
+          ]
+        },
+        {
+          "service": "carts-db",
+          "metrics": [
+            "diskio",
+            "mem",
+            "cpu"
+          ]
+        },
+        {
+          "service": "front-end",
+          "metrics": [
+            "mem",
+            "latency-90",
+            "workload",
+            "cpu",
+            "socket"
+          ]
+        },
+        {
+          "service": "user-db",
+          "metrics": [
+            "diskio",
+            "mem",
+            "cpu"
+          ]
+        }
+      ],
+      "predicted_root_services": [
+        "session-db",
+        "orders",
+        "carts-db",
+        "front-end",
+        "user-db"
+      ],
+      "rca_top_k_hit": false
+    },
+    {
+      "case_id": "RE2-SS/catalogue_delay/3",
+      "expected_incident": true,
+      "predicted_incident": true,
+      "expected_root_service": "catalogue",
+      "expected_root_metric": "latency",
+      "expected_root_causes": [
+        "catalogue"
+      ],
+      "predicted_root_causes": [
+        {
+          "service": "front-end",
+          "metrics": [
+            "mem",
+            "workload",
+            "cpu",
+            "socket"
+          ]
+        },
+        {
+          "service": "catalogue",
+          "metrics": [
+            "mem",
+            "socket",
+            "workload"
+          ]
+        },
+        {
+          "service": "orders",
+          "metrics": [
+            "mem",
+            "socket",
+            "workload",
+            "cpu"
+          ]
+        },
+        {
+          "service": "user-db",
+          "metrics": [
+            "mem",
+            "diskio"
+          ]
+        },
+        {
+          "service": "orders-db",
+          "metrics": [
+            "diskio",
+            "mem"
+          ]
+        }
+      ],
+      "predicted_root_services": [
+        "front-end",
+        "catalogue",
+        "orders",
+        "user-db",
+        "orders-db"
+      ],
+      "rca_top_k_hit": false
+    },
+    {
+      "case_id": "RE2-SS/catalogue_disk/1",
+      "expected_incident": true,
+      "predicted_incident": true,
+      "expected_root_service": "catalogue",
+      "expected_root_metric": "disk",
+      "expected_root_causes": [
+        "catalogue"
+      ],
+      "predicted_root_causes": [
+        {
+          "service": "front-end",
+          "metrics": [
+            "mem",
+            "socket",
+            "workload",
+            "cpu"
+          ]
+        },
+        {
+          "service": "carts",
+          "metrics": [
+            "mem",
+            "cpu",
+            "socket",
+            "workload"
+          ]
+        },
+        {
+          "service": "orders-db",
+          "metrics": [
+            "diskio",
+            "mem"
+          ]
+        },
+        {
+          "service": "catalogue",
+          "metrics": [
+            "mem",
+            "cpu",
+            "workload",
+            "diskio"
+          ]
+        },
+        {
+          "service": "user-db",
+          "metrics": [
+            "diskio",
+            "mem",
+            "cpu"
+          ]
+        }
+      ],
+      "predicted_root_services": [
+        "front-end",
+        "carts",
+        "orders-db",
+        "catalogue",
+        "user-db"
+      ],
+      "rca_top_k_hit": true
+    },
+    {
+      "case_id": "RE2-SS/catalogue_disk/2",
+      "expected_incident": true,
+      "predicted_incident": true,
+      "expected_root_service": "catalogue",
+      "expected_root_metric": "disk",
+      "expected_root_causes": [
+        "catalogue"
+      ],
+      "predicted_root_causes": [
+        {
+          "service": "catalogue-db",
+          "metrics": [
+            "mem"
+          ]
+        },
+        {
+          "service": "catalogue",
+          "metrics": [
+            "diskio",
+            "mem",
+            "cpu",
+            "socket",
+            "workload"
+          ]
+        },
+        {
+          "service": "user-db",
+          "metrics": [
+            "diskio",
+            "mem"
+          ]
+        },
+        {
+          "service": "carts-db",
+          "metrics": [
+            "mem",
+            "socket",
+            "diskio",
+            "cpu"
+          ]
+        },
+        {
+          "service": "rabbitmq",
+          "metrics": [
+            "mem",
+            "socket",
+            "cpu"
+          ]
+        }
+      ],
+      "predicted_root_services": [
+        "catalogue-db",
+        "catalogue",
+        "user-db",
+        "carts-db",
+        "rabbitmq"
+      ],
+      "rca_top_k_hit": true
+    },
+    {
+      "case_id": "RE2-SS/catalogue_disk/3",
+      "expected_incident": true,
+      "predicted_incident": true,
+      "expected_root_service": "catalogue",
+      "expected_root_metric": "disk",
+      "expected_root_causes": [
+        "catalogue"
+      ],
+      "predicted_root_causes": [
+        {
+          "service": "carts-db",
+          "metrics": [
+            "diskio",
+            "mem",
+            "cpu",
+            "socket"
+          ]
+        },
+        {
+          "service": "catalogue",
+          "metrics": [
+            "diskio",
+            "mem",
+            "cpu",
+            "socket"
+          ]
+        },
+        {
+          "service": "session-db",
+          "metrics": [
+            "diskio",
+            "mem"
+          ]
+        },
+        {
+          "service": "orders-db",
+          "metrics": [
+            "mem",
+            "diskio"
+          ]
+        },
+        {
+          "service": "carts",
+          "metrics": [
+            "mem",
+            "cpu",
+            "socket"
+          ]
+        }
+      ],
+      "predicted_root_services": [
+        "carts-db",
+        "catalogue",
+        "session-db",
+        "orders-db",
+        "carts"
+      ],
+      "rca_top_k_hit": true
+    },
+    {
+      "case_id": "RE2-SS/catalogue_loss/1",
+      "expected_incident": true,
+      "predicted_incident": true,
+      "expected_root_service": "catalogue",
+      "expected_root_metric": "error",
+      "expected_root_causes": [
+        "catalogue"
+      ],
+      "predicted_root_causes": [
+        {
+          "service": "shipping",
+          "metrics": [
+            "mem",
+            "workload",
+            "socket"
+          ]
+        },
+        {
+          "service": "user",
+          "metrics": [
+            "mem",
+            "cpu",
+            "workload",
+            "socket"
+          ]
+        },
+        {
+          "service": "carts",
+          "metrics": [
+            "mem",
+            "cpu",
+            "workload",
+            "socket"
+          ]
+        },
+        {
+          "service": "front-end",
+          "metrics": [
+            "mem",
+            "socket",
+            "workload",
+            "cpu"
+          ]
+        },
+        {
+          "service": "catalogue",
+          "metrics": [
+            "mem",
+            "socket",
+            "workload"
+          ]
+        }
+      ],
+      "predicted_root_services": [
+        "shipping",
+        "user",
+        "carts",
+        "front-end",
+        "catalogue"
+      ],
+      "rca_top_k_hit": false
+    },
+    {
+      "case_id": "RE2-SS/catalogue_loss/2",
+      "expected_incident": true,
+      "predicted_incident": true,
+      "expected_root_service": "catalogue",
+      "expected_root_metric": "error",
+      "expected_root_causes": [
+        "catalogue"
+      ],
+      "predicted_root_causes": [
+        {
+          "service": "payment",
+          "metrics": [
+            "mem",
+            "workload"
+          ]
+        },
+        {
+          "service": "orders",
+          "metrics": [
+            "cpu",
+            "mem",
+            "workload",
+            "socket"
+          ]
+        },
+        {
+          "service": "session-db",
+          "metrics": [
+            "mem",
+            "diskio"
+          ]
+        },
+        {
+          "service": "catalogue-db",
+          "metrics": [
+            "mem"
+          ]
+        },
+        {
+          "service": "shipping",
+          "metrics": [
+            "mem",
+            "workload",
+            "cpu"
+          ]
+        }
+      ],
+      "predicted_root_services": [
+        "payment",
+        "orders",
+        "session-db",
+        "catalogue-db",
+        "shipping"
+      ],
+      "rca_top_k_hit": false
+    },
+    {
+      "case_id": "RE2-SS/catalogue_loss/3",
+      "expected_incident": true,
+      "predicted_incident": true,
+      "expected_root_service": "catalogue",
+      "expected_root_metric": "error",
+      "expected_root_causes": [
+        "catalogue"
+      ],
+      "predicted_root_causes": [
+        {
+          "service": "shipping",
+          "metrics": [
+            "mem",
+            "workload",
+            "socket"
+          ]
+        },
+        {
+          "service": "catalogue",
+          "metrics": [
+            "mem",
+            "socket",
+            "workload"
+          ]
+        },
+        {
+          "service": "front-end",
+          "metrics": [
+            "mem",
+            "workload",
+            "socket",
+            "cpu",
+            "error"
+          ]
+        },
+        {
+          "service": "user",
+          "metrics": [
+            "mem",
+            "workload",
+            "socket"
+          ]
+        },
+        {
+          "service": "payment",
+          "metrics": [
+            "mem",
+            "workload"
+          ]
+        }
+      ],
+      "predicted_root_services": [
+        "shipping",
+        "catalogue",
+        "front-end",
+        "user",
+        "payment"
+      ],
+      "rca_top_k_hit": false
+    },
+    {
+      "case_id": "RE2-SS/catalogue_mem/1",
+      "expected_incident": true,
+      "predicted_incident": true,
+      "expected_root_service": "catalogue",
+      "expected_root_metric": "mem",
+      "expected_root_causes": [
+        "catalogue"
+      ],
+      "predicted_root_causes": [
+        {
+          "service": "rabbitmq",
+          "metrics": [
+            "mem",
+            "cpu"
+          ]
+        },
+        {
+          "service": "user",
+          "metrics": [
+            "mem",
+            "cpu",
+            "workload",
+            "socket"
+          ]
+        },
+        {
+          "service": "orders-db",
+          "metrics": [
+            "diskio",
+            "mem"
+          ]
+        },
+        {
+          "service": "payment",
+          "metrics": [
+            "mem",
+            "workload"
+          ]
+        },
+        {
+          "service": "catalogue",
+          "metrics": [
+            "mem",
+            "latency-90",
+            "cpu",
+            "workload",
+            "socket"
+          ]
+        }
+      ],
+      "predicted_root_services": [
+        "rabbitmq",
+        "user",
+        "orders-db",
+        "payment",
+        "catalogue"
+      ],
+      "rca_top_k_hit": true
+    },
+    {
+      "case_id": "RE2-SS/catalogue_mem/2",
+      "expected_incident": true,
+      "predicted_incident": true,
+      "expected_root_service": "catalogue",
+      "expected_root_metric": "mem",
+      "expected_root_causes": [
+        "catalogue"
+      ],
+      "predicted_root_causes": [
+        {
+          "service": "orders",
+          "metrics": [
+            "mem",
+            "latency-90",
+            "cpu",
+            "socket"
+          ]
+        },
+        {
+          "service": "carts",
+          "metrics": [
+            "mem",
+            "workload",
+            "socket"
+          ]
+        },
+        {
+          "service": "catalogue",
+          "metrics": [
+            "diskio",
+            "mem",
+            "latency-90",
+            "cpu",
+            "socket"
+          ]
+        },
+        {
+          "service": "carts-db",
+          "metrics": [
+            "mem",
+            "cpu",
+            "diskio",
+            "socket"
+          ]
+        },
+        {
+          "service": "orders-db",
+          "metrics": [
+            "diskio",
+            "mem"
+          ]
+        }
+      ],
+      "predicted_root_services": [
+        "orders",
+        "carts",
+        "catalogue",
+        "carts-db",
+        "orders-db"
+      ],
+      "rca_top_k_hit": true
+    },
+    {
+      "case_id": "RE2-SS/catalogue_mem/3",
+      "expected_incident": true,
+      "predicted_incident": true,
+      "expected_root_service": "catalogue",
+      "expected_root_metric": "mem",
+      "expected_root_causes": [
+        "catalogue"
+      ],
+      "predicted_root_causes": [
+        {
+          "service": "catalogue",
+          "metrics": [
+            "diskio",
+            "mem",
+            "latency-90",
+            "cpu",
+            "socket"
+          ]
+        },
+        {
+          "service": "shipping",
+          "metrics": [
+            "mem",
+            "cpu",
+            "workload"
+          ]
+        },
+        {
+          "service": "front-end",
+          "metrics": [
+            "cpu",
+            "mem",
+            "socket",
+            "workload"
+          ]
+        },
+        {
+          "service": "carts-db",
+          "metrics": [
+            "diskio",
+            "mem",
+            "cpu"
+          ]
+        },
+        {
+          "service": "orders",
+          "metrics": [
+            "mem",
+            "cpu",
+            "socket"
+          ]
+        }
+      ],
+      "predicted_root_services": [
+        "catalogue",
+        "shipping",
+        "front-end",
+        "carts-db",
+        "orders"
+      ],
+      "rca_top_k_hit": true
+    },
+    {
+      "case_id": "RE2-SS/catalogue_socket/1",
+      "expected_incident": true,
+      "predicted_incident": true,
+      "expected_root_service": "catalogue",
+      "expected_root_metric": "socket",
+      "expected_root_causes": [
+        "catalogue"
+      ],
+      "predicted_root_causes": [
+        {
+          "service": "payment",
+          "metrics": [
+            "mem",
+            "workload"
+          ]
+        },
+        {
+          "service": "carts",
+          "metrics": [
+            "mem",
+            "latency-90",
+            "socket",
+            "cpu",
+            "workload"
+          ]
+        },
+        {
+          "service": "user-db",
+          "metrics": [
+            "diskio",
+            "mem"
+          ]
+        },
+        {
+          "service": "user",
+          "metrics": [
+            "mem",
+            "cpu",
+            "workload"
+          ]
+        },
+        {
+          "service": "catalogue",
+          "metrics": [
+            "mem",
+            "cpu",
+            "socket",
+            "workload"
+          ]
+        }
+      ],
+      "predicted_root_services": [
+        "payment",
+        "carts",
+        "user-db",
+        "user",
+        "catalogue"
+      ],
+      "rca_top_k_hit": true
+    },
+    {
+      "case_id": "RE2-SS/catalogue_socket/2",
+      "expected_incident": true,
+      "predicted_incident": true,
+      "expected_root_service": "catalogue",
+      "expected_root_metric": "socket",
+      "expected_root_causes": [
+        "catalogue"
+      ],
+      "predicted_root_causes": [
+        {
+          "service": "orders",
+          "metrics": [
+            "mem",
+            "cpu",
+            "workload",
+            "socket"
+          ]
+        },
+        {
+          "service": "user-db",
+          "metrics": [
+            "diskio",
+            "mem"
+          ]
+        },
+        {
+          "service": "user",
+          "metrics": [
+            "mem",
+            "workload"
+          ]
+        },
+        {
+          "service": "orders-db",
+          "metrics": [
+            "diskio",
+            "mem"
+          ]
+        },
+        {
+          "service": "carts",
+          "metrics": [
+            "mem",
+            "cpu",
+            "workload"
+          ]
+        }
+      ],
+      "predicted_root_services": [
+        "orders",
+        "user-db",
+        "user",
+        "orders-db",
+        "carts"
+      ],
+      "rca_top_k_hit": false
+    },
+    {
+      "case_id": "RE2-SS/catalogue_socket/3",
+      "expected_incident": true,
+      "predicted_incident": true,
+      "expected_root_service": "catalogue",
+      "expected_root_metric": "socket",
+      "expected_root_causes": [
+        "catalogue"
+      ],
+      "predicted_root_causes": [
+        {
+          "service": "carts",
+          "metrics": [
+            "mem",
+            "cpu",
+            "workload",
+            "socket"
+          ]
+        },
+        {
+          "service": "session-db",
+          "metrics": [
+            "mem",
+            "diskio"
+          ]
+        },
+        {
+          "service": "shipping",
+          "metrics": [
+            "mem",
+            "cpu",
+            "workload",
+            "socket"
+          ]
+        },
+        {
+          "service": "catalogue",
+          "metrics": [
+            "diskio",
+            "mem",
+            "cpu",
+            "socket",
+            "workload"
+          ]
+        },
+        {
+          "service": "payment",
+          "metrics": [
+            "mem",
+            "workload",
+            "socket"
+          ]
+        }
+      ],
+      "predicted_root_services": [
+        "carts",
+        "session-db",
+        "shipping",
+        "catalogue",
+        "payment"
+      ],
+      "rca_top_k_hit": true
+    },
+    {
+      "case_id": "RE2-SS/orders_cpu/1",
+      "expected_incident": true,
+      "predicted_incident": true,
+      "expected_root_service": "orders",
+      "expected_root_metric": "cpu",
+      "expected_root_causes": [
+        "orders"
+      ],
+      "predicted_root_causes": [
+        {
+          "service": "carts",
+          "metrics": [
+            "mem",
+            "workload",
+            "cpu",
+            "socket"
+          ]
+        },
+        {
+          "service": "front-end",
+          "metrics": [
+            "mem",
+            "cpu"
+          ]
+        },
+        {
+          "service": "orders-db",
+          "metrics": [
+            "mem",
+            "diskio"
+          ]
+        },
+        {
+          "service": "payment",
+          "metrics": [
+            "mem"
+          ]
+        },
+        {
+          "service": "user-db",
+          "metrics": [
+            "mem",
+            "diskio"
+          ]
+        }
+      ],
+      "predicted_root_services": [
+        "carts",
+        "front-end",
+        "orders-db",
+        "payment",
+        "user-db"
+      ],
+      "rca_top_k_hit": false
+    },
+    {
+      "case_id": "RE2-SS/orders_cpu/2",
+      "expected_incident": true,
+      "predicted_incident": true,
+      "expected_root_service": "orders",
+      "expected_root_metric": "cpu",
+      "expected_root_causes": [
+        "orders"
+      ],
+      "predicted_root_causes": [
+        {
+          "service": "session-db",
+          "metrics": [
+            "mem",
+            "diskio"
+          ]
+        },
+        {
+          "service": "user-db",
+          "metrics": [
+            "diskio",
+            "mem"
+          ]
+        },
+        {
+          "service": "orders-db",
+          "metrics": [
+            "mem",
+            "diskio"
+          ]
+        },
+        {
+          "service": "carts",
+          "metrics": [
+            "cpu",
+            "mem",
+            "workload",
+            "socket"
+          ]
+        },
+        {
+          "service": "shipping",
+          "metrics": [
+            "mem",
+            "cpu",
+            "workload",
+            "socket"
+          ]
+        }
+      ],
+      "predicted_root_services": [
+        "session-db",
+        "user-db",
+        "orders-db",
+        "carts",
+        "shipping"
+      ],
+      "rca_top_k_hit": false
+    },
+    {
+      "case_id": "RE2-SS/orders_cpu/3",
+      "expected_incident": true,
+      "predicted_incident": true,
+      "expected_root_service": "orders",
+      "expected_root_metric": "cpu",
+      "expected_root_causes": [
+        "orders"
+      ],
+      "predicted_root_causes": [
+        {
+          "service": "user-db",
+          "metrics": [
+            "diskio",
+            "mem",
+            "cpu"
+          ]
+        },
+        {
+          "service": "carts",
+          "metrics": [
+            "mem",
+            "cpu",
+            "workload"
+          ]
+        },
+        {
+          "service": "user",
+          "metrics": [
+            "mem",
+            "cpu",
+            "workload"
+          ]
+        },
+        {
+          "service": "front-end",
+          "metrics": [
+            "mem",
+            "cpu",
+            "workload",
+            "socket"
+          ]
+        },
+        {
+          "service": "catalogue",
+          "metrics": [
+            "mem",
+            "workload"
+          ]
+        }
+      ],
+      "predicted_root_services": [
+        "user-db",
+        "carts",
+        "user",
+        "front-end",
+        "catalogue"
+      ],
+      "rca_top_k_hit": false
+    },
+    {
+      "case_id": "RE2-SS/orders_delay/1",
+      "expected_incident": true,
+      "predicted_incident": true,
+      "expected_root_service": "orders",
+      "expected_root_metric": "latency",
+      "expected_root_causes": [
+        "orders"
+      ],
+      "predicted_root_causes": [
+        {
+          "service": "user-db",
+          "metrics": [
+            "diskio",
+            "mem",
+            "socket"
+          ]
+        },
+        {
+          "service": "carts-db",
+          "metrics": [
+            "diskio",
+            "mem",
+            "cpu",
+            "socket"
+          ]
+        },
+        {
+          "service": "queue-master",
+          "metrics": [
+            "mem",
+            "diskio"
+          ]
+        },
+        {
+          "service": "user",
+          "metrics": [
+            "mem",
+            "workload",
+            "socket"
+          ]
+        },
+        {
+          "service": "orders",
+          "metrics": [
+            "mem",
+            "latency-90",
+            "socket",
+            "workload",
+            "latency-50"
+          ]
+        }
+      ],
+      "predicted_root_services": [
+        "user-db",
+        "carts-db",
+        "queue-master",
+        "user",
+        "orders"
+      ],
+      "rca_top_k_hit": true
+    },
+    {
+      "case_id": "RE2-SS/orders_delay/2",
+      "expected_incident": true,
+      "predicted_incident": true,
+      "expected_root_service": "orders",
+      "expected_root_metric": "latency",
+      "expected_root_causes": [
+        "orders"
+      ],
+      "predicted_root_causes": [
+        {
+          "service": "orders",
+          "metrics": [
+            "mem",
+            "latency-90",
+            "latency-50",
+            "socket",
+            "cpu"
+          ]
+        },
+        {
+          "service": "rabbitmq",
+          "metrics": [
+            "mem",
+            "diskio"
+          ]
+        },
+        {
+          "service": "carts-db",
+          "metrics": [
+            "mem",
+            "diskio",
+            "cpu",
+            "socket"
+          ]
+        },
+        {
+          "service": "user",
+          "metrics": [
+            "mem",
+            "workload",
+            "socket"
+          ]
+        },
+        {
+          "service": "catalogue-db",
+          "metrics": [
+            "mem"
+          ]
+        }
+      ],
+      "predicted_root_services": [
+        "orders",
+        "rabbitmq",
+        "carts-db",
+        "user",
+        "catalogue-db"
+      ],
+      "rca_top_k_hit": true
+    },
+    {
+      "case_id": "RE2-SS/orders_delay/3",
+      "expected_incident": true,
+      "predicted_incident": true,
+      "expected_root_service": "orders",
+      "expected_root_metric": "latency",
+      "expected_root_causes": [
+        "orders"
+      ],
+      "predicted_root_causes": [
+        {
+          "service": "user-db",
+          "metrics": [
+            "diskio",
+            "mem"
+          ]
+        },
+        {
+          "service": "shipping",
+          "metrics": [
+            "mem",
+            "cpu",
+            "workload",
+            "socket"
+          ]
+        },
+        {
+          "service": "orders",
+          "metrics": [
+            "mem",
+            "diskio",
+            "latency-90",
+            "latency-50",
+            "workload"
+          ]
+        },
+        {
+          "service": "payment",
+          "metrics": [
+            "mem",
+            "latency-90",
+            "socket"
+          ]
+        },
+        {
+          "service": "orders-db",
+          "metrics": [
+            "diskio",
+            "mem"
+          ]
+        }
+      ],
+      "predicted_root_services": [
+        "user-db",
+        "shipping",
+        "orders",
+        "payment",
+        "orders-db"
+      ],
+      "rca_top_k_hit": true
+    },
+    {
+      "case_id": "RE2-SS/orders_disk/1",
+      "expected_incident": true,
+      "predicted_incident": true,
+      "expected_root_service": "orders",
+      "expected_root_metric": "disk",
+      "expected_root_causes": [
+        "orders"
+      ],
+      "predicted_root_causes": [
+        {
+          "service": "orders-db",
+          "metrics": [
+            "diskio",
+            "mem",
+            "socket"
+          ]
+        },
+        {
+          "service": "catalogue-db",
+          "metrics": [
+            "diskio",
+            "mem"
+          ]
+        },
+        {
+          "service": "queue-master",
+          "metrics": [
+            "diskio",
+            "mem",
+            "cpu"
+          ]
+        },
+        {
+          "service": "payment",
+          "metrics": [
+            "mem",
+            "socket"
+          ]
+        },
+        {
+          "service": "user-db",
+          "metrics": [
+            "diskio",
+            "mem",
+            "socket"
+          ]
+        }
+      ],
+      "predicted_root_services": [
+        "orders-db",
+        "catalogue-db",
+        "queue-master",
+        "payment",
+        "user-db"
+      ],
+      "rca_top_k_hit": false
+    },
+    {
+      "case_id": "RE2-SS/orders_disk/2",
+      "expected_incident": true,
+      "predicted_incident": true,
+      "expected_root_service": "orders",
+      "expected_root_metric": "disk",
+      "expected_root_causes": [
+        "orders"
+      ],
+      "predicted_root_causes": [
+        {
+          "service": "shipping",
+          "metrics": [
+            "mem",
+            "cpu",
+            "workload"
+          ]
+        },
+        {
+          "service": "orders",
+          "metrics": [
+            "mem",
+            "cpu",
+            "socket",
+            "workload"
+          ]
+        },
+        {
+          "service": "carts-db",
+          "metrics": [
+            "mem",
+            "diskio",
+            "cpu"
+          ]
+        },
+        {
+          "service": "user-db",
+          "metrics": [
+            "diskio",
+            "mem"
+          ]
+        },
+        {
+          "service": "front-end",
+          "metrics": [
+            "mem",
+            "error",
+            "socket",
+            "workload"
+          ]
+        }
+      ],
+      "predicted_root_services": [
+        "shipping",
+        "orders",
+        "carts-db",
+        "user-db",
+        "front-end"
+      ],
+      "rca_top_k_hit": false
+    },
+    {
+      "case_id": "RE2-SS/orders_disk/3",
+      "expected_incident": true,
+      "predicted_incident": true,
+      "expected_root_service": "orders",
+      "expected_root_metric": "disk",
+      "expected_root_causes": [
+        "orders"
+      ],
+      "predicted_root_causes": [
+        {
+          "service": "payment",
+          "metrics": [
+            "mem"
+          ]
+        },
+        {
+          "service": "carts-db",
+          "metrics": [
+            "diskio",
+            "mem",
+            "cpu"
+          ]
+        },
+        {
+          "service": "session-db",
+          "metrics": [
+            "mem",
+            "diskio",
+            "cpu"
+          ]
+        },
+        {
+          "service": "user",
+          "metrics": [
+            "mem",
+            "workload",
+            "cpu"
+          ]
+        },
+        {
+          "service": "front-end",
+          "metrics": [
+            "mem",
+            "cpu",
+            "workload",
+            "socket"
+          ]
+        }
+      ],
+      "predicted_root_services": [
+        "payment",
+        "carts-db",
+        "session-db",
+        "user",
+        "front-end"
+      ],
+      "rca_top_k_hit": false
+    },
+    {
+      "case_id": "RE2-SS/orders_loss/1",
+      "expected_incident": true,
+      "predicted_incident": true,
+      "expected_root_service": "orders",
+      "expected_root_metric": "error",
+      "expected_root_causes": [
+        "orders"
+      ],
+      "predicted_root_causes": [
+        {
+          "service": "front-end",
+          "metrics": [
+            "mem",
+            "cpu",
+            "workload",
+            "socket"
+          ]
+        },
+        {
+          "service": "session-db",
+          "metrics": [
+            "mem",
+            "diskio"
+          ]
+        },
+        {
+          "service": "user-db",
+          "metrics": [
+            "diskio",
+            "mem",
+            "socket"
+          ]
+        },
+        {
+          "service": "payment",
+          "metrics": [
+            "mem",
+            "workload",
+            "socket"
+          ]
+        },
+        {
+          "service": "orders-db",
+          "metrics": [
+            "diskio",
+            "mem",
+            "socket"
+          ]
+        }
+      ],
+      "predicted_root_services": [
+        "front-end",
+        "session-db",
+        "user-db",
+        "payment",
+        "orders-db"
+      ],
+      "rca_top_k_hit": false
+    },
+    {
+      "case_id": "RE2-SS/orders_loss/2",
+      "expected_incident": true,
+      "predicted_incident": true,
+      "expected_root_service": "orders",
+      "expected_root_metric": "error",
+      "expected_root_causes": [
+        "orders"
+      ],
+      "predicted_root_causes": [
+        {
+          "service": "carts-db",
+          "metrics": [
+            "mem",
+            "diskio",
+            "cpu"
+          ]
+        },
+        {
+          "service": "payment",
+          "metrics": [
+            "mem"
+          ]
+        },
+        {
+          "service": "user-db",
+          "metrics": [
+            "mem",
+            "diskio"
+          ]
+        },
+        {
+          "service": "orders-db",
+          "metrics": [
+            "diskio",
+            "mem"
+          ]
+        },
+        {
+          "service": "session-db",
+          "metrics": [
+            "mem",
+            "diskio"
+          ]
+        }
+      ],
+      "predicted_root_services": [
+        "carts-db",
+        "payment",
+        "user-db",
+        "orders-db",
+        "session-db"
+      ],
+      "rca_top_k_hit": false
+    },
+    {
+      "case_id": "RE2-SS/orders_loss/3",
+      "expected_incident": true,
+      "predicted_incident": true,
+      "expected_root_service": "orders",
+      "expected_root_metric": "error",
+      "expected_root_causes": [
+        "orders"
+      ],
+      "predicted_root_causes": [
+        {
+          "service": "front-end",
+          "metrics": [
+            "mem",
+            "cpu",
+            "socket",
+            "workload"
+          ]
+        },
+        {
+          "service": "orders-db",
+          "metrics": [
+            "diskio",
+            "mem"
+          ]
+        },
+        {
+          "service": "orders",
+          "metrics": [
+            "mem",
+            "diskio",
+            "latency-90",
+            "latency-50",
+            "cpu"
+          ]
+        },
+        {
+          "service": "carts",
+          "metrics": [
+            "mem",
+            "socket"
+          ]
+        },
+        {
+          "service": "carts-db",
+          "metrics": [
+            "mem",
+            "cpu",
+            "diskio"
+          ]
+        }
+      ],
+      "predicted_root_services": [
+        "front-end",
+        "orders-db",
+        "orders",
+        "carts",
+        "carts-db"
+      ],
+      "rca_top_k_hit": false
+    },
+    {
+      "case_id": "RE2-SS/orders_mem/1",
+      "expected_incident": true,
+      "predicted_incident": true,
+      "expected_root_service": "orders",
+      "expected_root_metric": "mem",
+      "expected_root_causes": [
+        "orders"
+      ],
+      "predicted_root_causes": [
+        {
+          "service": "catalogue-db",
+          "metrics": [
+            "mem"
+          ]
+        },
+        {
+          "service": "payment",
+          "metrics": [
+            "mem",
+            "socket"
+          ]
+        },
+        {
+          "service": "orders",
+          "metrics": [
+            "mem",
+            "cpu",
+            "workload"
+          ]
+        },
+        {
+          "service": "user",
+          "metrics": [
+            "mem",
+            "workload",
+            "socket"
+          ]
+        },
+        {
+          "service": "orders-db",
+          "metrics": [
+            "mem",
+            "diskio",
+            "socket"
+          ]
+        }
+      ],
+      "predicted_root_services": [
+        "catalogue-db",
+        "payment",
+        "orders",
+        "user",
+        "orders-db"
+      ],
+      "rca_top_k_hit": true
+    },
+    {
+      "case_id": "RE2-SS/orders_mem/2",
+      "expected_incident": true,
+      "predicted_incident": true,
+      "expected_root_service": "orders",
+      "expected_root_metric": "mem",
+      "expected_root_causes": [
+        "orders"
+      ],
+      "predicted_root_causes": [
+        {
+          "service": "catalogue-db",
+          "metrics": [
+            "mem"
+          ]
+        },
+        {
+          "service": "orders-db",
+          "metrics": [
+            "diskio",
+            "mem"
+          ]
+        },
+        {
+          "service": "user-db",
+          "metrics": [
+            "diskio",
+            "mem",
+            "cpu",
+            "socket"
+          ]
+        },
+        {
+          "service": "shipping",
+          "metrics": [
+            "mem",
+            "cpu",
+            "workload"
+          ]
+        },
+        {
+          "service": "carts-db",
+          "metrics": [
+            "diskio",
+            "mem",
+            "cpu",
+            "socket"
+          ]
+        }
+      ],
+      "predicted_root_services": [
+        "catalogue-db",
+        "orders-db",
+        "user-db",
+        "shipping",
+        "carts-db"
+      ],
+      "rca_top_k_hit": false
+    },
+    {
+      "case_id": "RE2-SS/orders_mem/3",
+      "expected_incident": true,
+      "predicted_incident": true,
+      "expected_root_service": "orders",
+      "expected_root_metric": "mem",
+      "expected_root_causes": [
+        "orders"
+      ],
+      "predicted_root_causes": [
+        {
+          "service": "orders",
+          "metrics": [
+            "mem",
+            "latency-90",
+            "cpu",
+            "socket"
+          ]
+        },
+        {
+          "service": "front-end",
+          "metrics": [
+            "mem",
+            "cpu",
+            "workload",
+            "socket"
+          ]
+        },
+        {
+          "service": "shipping",
+          "metrics": [
+            "mem",
+            "cpu",
+            "workload",
+            "socket"
+          ]
+        },
+        {
+          "service": "session-db",
+          "metrics": [
+            "mem",
+            "diskio"
+          ]
+        },
+        {
+          "service": "user",
+          "metrics": [
+            "mem",
+            "workload",
+            "socket"
+          ]
+        }
+      ],
+      "predicted_root_services": [
+        "orders",
+        "front-end",
+        "shipping",
+        "session-db",
+        "user"
+      ],
+      "rca_top_k_hit": true
+    },
+    {
+      "case_id": "RE2-SS/orders_socket/1",
+      "expected_incident": true,
+      "predicted_incident": true,
+      "expected_root_service": "orders",
+      "expected_root_metric": "socket",
+      "expected_root_causes": [
+        "orders"
+      ],
+      "predicted_root_causes": [
+        {
+          "service": "queue-master",
+          "metrics": [
+            "diskio",
+            "mem",
+            "cpu"
+          ]
+        },
+        {
+          "service": "carts",
+          "metrics": [
+            "mem",
+            "latency-50",
+            "workload",
+            "socket"
+          ]
+        },
+        {
+          "service": "user",
+          "metrics": [
+            "mem",
+            "cpu",
+            "workload"
+          ]
+        },
+        {
+          "service": "carts-db",
+          "metrics": [
+            "diskio",
+            "mem",
+            "cpu",
+            "socket"
+          ]
+        },
+        {
+          "service": "rabbitmq",
+          "metrics": [
+            "mem",
+            "cpu"
+          ]
+        }
+      ],
+      "predicted_root_services": [
+        "queue-master",
+        "carts",
+        "user",
+        "carts-db",
+        "rabbitmq"
+      ],
+      "rca_top_k_hit": false
+    },
+    {
+      "case_id": "RE2-SS/orders_socket/2",
+      "expected_incident": true,
+      "predicted_incident": true,
+      "expected_root_service": "orders",
+      "expected_root_metric": "socket",
+      "expected_root_causes": [
+        "orders"
+      ],
+      "predicted_root_causes": [
+        {
+          "service": "queue-master",
+          "metrics": [
+            "mem",
+            "diskio",
+            "cpu"
+          ]
+        },
+        {
+          "service": "user",
+          "metrics": [
+            "mem",
+            "cpu",
+            "workload"
+          ]
+        },
+        {
+          "service": "carts",
+          "metrics": [
+            "mem",
+            "workload",
+            "cpu",
+            "socket"
+          ]
+        },
+        {
+          "service": "user-db",
+          "metrics": [
+            "diskio",
+            "mem"
+          ]
+        },
+        {
+          "service": "payment",
+          "metrics": [
+            "mem",
+            "workload",
+            "socket"
+          ]
+        }
+      ],
+      "predicted_root_services": [
+        "queue-master",
+        "user",
+        "carts",
+        "user-db",
+        "payment"
+      ],
+      "rca_top_k_hit": false
+    },
+    {
+      "case_id": "RE2-SS/orders_socket/3",
+      "expected_incident": true,
+      "predicted_incident": true,
+      "expected_root_service": "orders",
+      "expected_root_metric": "socket",
+      "expected_root_causes": [
+        "orders"
+      ],
+      "predicted_root_causes": [
+        {
+          "service": "carts-db",
+          "metrics": [
+            "diskio",
+            "mem",
+            "cpu"
+          ]
+        },
+        {
+          "service": "carts",
+          "metrics": [
+            "mem",
+            "cpu",
+            "workload"
+          ]
+        },
+        {
+          "service": "user",
+          "metrics": [
+            "mem",
+            "workload"
+          ]
+        },
+        {
+          "service": "session-db",
+          "metrics": [
+            "mem",
+            "diskio"
+          ]
+        },
+        {
+          "service": "catalogue-db",
+          "metrics": [
+            "mem"
+          ]
+        }
+      ],
+      "predicted_root_services": [
+        "carts-db",
+        "carts",
+        "user",
+        "session-db",
+        "catalogue-db"
+      ],
+      "rca_top_k_hit": false
+    },
+    {
+      "case_id": "RE2-SS/payment_cpu/1",
+      "expected_incident": true,
+      "predicted_incident": true,
+      "expected_root_service": "payment",
+      "expected_root_metric": "cpu",
+      "expected_root_causes": [
+        "payment"
+      ],
+      "predicted_root_causes": [
+        {
+          "service": "queue-master",
+          "metrics": [
+            "diskio",
+            "mem"
+          ]
+        },
+        {
+          "service": "payment",
+          "metrics": [
+            "mem",
+            "cpu",
+            "latency-90",
+            "socket"
+          ]
+        },
+        {
+          "service": "carts-db",
+          "metrics": [
+            "diskio",
+            "mem",
+            "cpu"
+          ]
+        },
+        {
+          "service": "rabbitmq",
+          "metrics": [
+            "mem",
+            "cpu"
+          ]
+        },
+        {
+          "service": "orders-db",
+          "metrics": [
+            "diskio",
+            "mem",
+            "cpu"
+          ]
+        }
+      ],
+      "predicted_root_services": [
+        "queue-master",
+        "payment",
+        "carts-db",
+        "rabbitmq",
+        "orders-db"
+      ],
+      "rca_top_k_hit": true
+    },
+    {
+      "case_id": "RE2-SS/payment_cpu/2",
+      "expected_incident": true,
+      "predicted_incident": true,
+      "expected_root_service": "payment",
+      "expected_root_metric": "cpu",
+      "expected_root_causes": [
+        "payment"
+      ],
+      "predicted_root_causes": [
+        {
+          "service": "user",
+          "metrics": [
+            "mem",
+            "cpu",
+            "workload",
+            "socket"
+          ]
+        },
+        {
+          "service": "orders-db",
+          "metrics": [
+            "diskio",
+            "mem"
+          ]
+        },
+        {
+          "service": "carts",
+          "metrics": [
+            "mem",
+            "cpu",
+            "socket"
+          ]
+        },
+        {
+          "service": "user-db",
+          "metrics": [
+            "diskio",
+            "mem",
+            "socket"
+          ]
+        },
+        {
+          "service": "payment",
+          "metrics": [
+            "mem",
+            "diskio",
+            "cpu",
+            "workload",
+            "socket"
+          ]
+        }
+      ],
+      "predicted_root_services": [
+        "user",
+        "orders-db",
+        "carts",
+        "user-db",
+        "payment"
+      ],
+      "rca_top_k_hit": true
+    },
+    {
+      "case_id": "RE2-SS/payment_cpu/3",
+      "expected_incident": true,
+      "predicted_incident": true,
+      "expected_root_service": "payment",
+      "expected_root_metric": "cpu",
+      "expected_root_causes": [
+        "payment"
+      ],
+      "predicted_root_causes": [
+        {
+          "service": "shipping",
+          "metrics": [
+            "mem",
+            "cpu",
+            "workload"
+          ]
+        },
+        {
+          "service": "session-db",
+          "metrics": [
+            "mem",
+            "diskio"
+          ]
+        },
+        {
+          "service": "user",
+          "metrics": [
+            "mem",
+            "cpu",
+            "workload"
+          ]
+        },
+        {
+          "service": "front-end",
+          "metrics": [
+            "mem",
+            "cpu",
+            "socket"
+          ]
+        },
+        {
+          "service": "catalogue",
+          "metrics": [
+            "mem",
+            "workload"
+          ]
+        }
+      ],
+      "predicted_root_services": [
+        "shipping",
+        "session-db",
+        "user",
+        "front-end",
+        "catalogue"
+      ],
+      "rca_top_k_hit": false
+    },
+    {
+      "case_id": "RE2-SS/payment_delay/1",
+      "expected_incident": true,
+      "predicted_incident": true,
+      "expected_root_service": "payment",
+      "expected_root_metric": "latency",
+      "expected_root_causes": [
+        "payment"
+      ],
+      "predicted_root_causes": [
+        {
+          "service": "front-end",
+          "metrics": [
+            "mem",
+            "cpu",
+            "socket",
+            "latency-90",
+            "workload"
+          ]
+        },
+        {
+          "service": "orders",
+          "metrics": [
+            "mem",
+            "latency-50",
+            "latency-90",
+            "socket"
+          ]
+        },
+        {
+          "service": "payment",
+          "metrics": [
+            "latency-90",
+            "mem",
+            "latency-50"
+          ]
+        },
+        {
+          "service": "orders-db",
+          "metrics": [
+            "diskio",
+            "mem"
+          ]
+        },
+        {
+          "service": "user",
+          "metrics": [
+            "mem",
+            "workload",
+            "socket"
+          ]
+        }
+      ],
+      "predicted_root_services": [
+        "front-end",
+        "orders",
+        "payment",
+        "orders-db",
+        "user"
+      ],
+      "rca_top_k_hit": true
+    },
+    {
+      "case_id": "RE2-SS/payment_delay/2",
+      "expected_incident": true,
+      "predicted_incident": true,
+      "expected_root_service": "payment",
+      "expected_root_metric": "latency",
+      "expected_root_causes": [
+        "payment"
+      ],
+      "predicted_root_causes": [
+        {
+          "service": "session-db",
+          "metrics": [
+            "mem",
+            "diskio",
+            "cpu"
+          ]
+        },
+        {
+          "service": "payment",
+          "metrics": [
+            "diskio",
+            "mem",
+            "latency-90",
+            "workload"
+          ]
+        },
+        {
+          "service": "orders",
+          "metrics": [
+            "mem",
+            "latency-90",
+            "latency-50",
+            "cpu",
+            "workload"
+          ]
+        },
+        {
+          "service": "user",
+          "metrics": [
+            "mem",
+            "workload"
+          ]
+        },
+        {
+          "service": "carts",
+          "metrics": [
+            "mem",
+            "cpu",
+            "socket"
+          ]
+        }
+      ],
+      "predicted_root_services": [
+        "session-db",
+        "payment",
+        "orders",
+        "user",
+        "carts"
+      ],
+      "rca_top_k_hit": true
+    },
+    {
+      "case_id": "RE2-SS/payment_delay/3",
+      "expected_incident": true,
+      "predicted_incident": true,
+      "expected_root_service": "payment",
+      "expected_root_metric": "latency",
+      "expected_root_causes": [
+        "payment"
+      ],
+      "predicted_root_causes": [
+        {
+          "service": "catalogue",
+          "metrics": [
+            "mem",
+            "workload"
+          ]
+        },
+        {
+          "service": "user-db",
+          "metrics": [
+            "diskio",
+            "mem",
+            "socket"
+          ]
+        },
+        {
+          "service": "payment",
+          "metrics": [
+            "mem",
+            "latency-90",
+            "socket",
+            "workload"
+          ]
+        },
+        {
+          "service": "session-db",
+          "metrics": [
+            "mem",
+            "diskio"
+          ]
+        },
+        {
+          "service": "carts-db",
+          "metrics": [
+            "diskio",
+            "mem",
+            "cpu"
+          ]
+        }
+      ],
+      "predicted_root_services": [
+        "catalogue",
+        "user-db",
+        "payment",
+        "session-db",
+        "carts-db"
+      ],
+      "rca_top_k_hit": true
+    },
+    {
+      "case_id": "RE2-SS/payment_disk/1",
+      "expected_incident": true,
+      "predicted_incident": true,
+      "expected_root_service": "payment",
+      "expected_root_metric": "disk",
+      "expected_root_causes": [
+        "payment"
+      ],
+      "predicted_root_causes": [
+        {
+          "service": "rabbitmq",
+          "metrics": [
+            "mem",
+            "cpu"
+          ]
+        },
+        {
+          "service": "shipping",
+          "metrics": [
+            "mem",
+            "workload",
+            "socket"
+          ]
+        },
+        {
+          "service": "orders-db",
+          "metrics": [
+            "diskio",
+            "mem"
+          ]
+        },
+        {
+          "service": "queue-master",
+          "metrics": [
+            "diskio",
+            "mem"
+          ]
+        },
+        {
+          "service": "orders",
+          "metrics": [
+            "mem",
+            "cpu",
+            "latency-50",
+            "workload",
+            "error"
+          ]
+        }
+      ],
+      "predicted_root_services": [
+        "rabbitmq",
+        "shipping",
+        "orders-db",
+        "queue-master",
+        "orders"
+      ],
+      "rca_top_k_hit": false
+    },
+    {
+      "case_id": "RE2-SS/payment_disk/2",
+      "expected_incident": true,
+      "predicted_incident": true,
+      "expected_root_service": "payment",
+      "expected_root_metric": "disk",
+      "expected_root_causes": [
+        "payment"
+      ],
+      "predicted_root_causes": [
+        {
+          "service": "user-db",
+          "metrics": [
+            "diskio",
+            "mem"
+          ]
+        },
+        {
+          "service": "orders-db",
+          "metrics": [
+            "diskio",
+            "mem"
+          ]
+        },
+        {
+          "service": "user",
+          "metrics": [
+            "mem",
+            "workload",
+            "socket"
+          ]
+        },
+        {
+          "service": "session-db",
+          "metrics": [
+            "diskio",
+            "mem"
+          ]
+        },
+        {
+          "service": "carts-db",
+          "metrics": [
+            "diskio",
+            "mem",
+            "cpu",
+            "socket"
+          ]
+        }
+      ],
+      "predicted_root_services": [
+        "user-db",
+        "orders-db",
+        "user",
+        "session-db",
+        "carts-db"
+      ],
+      "rca_top_k_hit": false
+    },
+    {
+      "case_id": "RE2-SS/payment_disk/3",
+      "expected_incident": true,
+      "predicted_incident": true,
+      "expected_root_service": "payment",
+      "expected_root_metric": "disk",
+      "expected_root_causes": [
+        "payment"
+      ],
+      "predicted_root_causes": [
+        {
+          "service": "orders-db",
+          "metrics": [
+            "diskio",
+            "mem"
+          ]
+        },
+        {
+          "service": "queue-master",
+          "metrics": [
+            "mem",
+            "diskio",
+            "cpu"
+          ]
+        },
+        {
+          "service": "user",
+          "metrics": [
+            "mem",
+            "cpu",
+            "workload"
+          ]
+        },
+        {
+          "service": "session-db",
+          "metrics": [
+            "mem",
+            "diskio"
+          ]
+        },
+        {
+          "service": "user-db",
+          "metrics": [
+            "mem",
+            "cpu"
+          ]
+        }
+      ],
+      "predicted_root_services": [
+        "orders-db",
+        "queue-master",
+        "user",
+        "session-db",
+        "user-db"
+      ],
+      "rca_top_k_hit": false
+    },
+    {
+      "case_id": "RE2-SS/payment_loss/1",
+      "expected_incident": true,
+      "predicted_incident": true,
+      "expected_root_service": "payment",
+      "expected_root_metric": "error",
+      "expected_root_causes": [
+        "payment"
+      ],
+      "predicted_root_causes": [
+        {
+          "service": "user",
+          "metrics": [
+            "mem",
+            "workload",
+            "socket"
+          ]
+        },
+        {
+          "service": "catalogue",
+          "metrics": [
+            "mem"
+          ]
+        },
+        {
+          "service": "user-db",
+          "metrics": [
+            "diskio",
+            "mem",
+            "cpu",
+            "socket"
+          ]
+        },
+        {
+          "service": "rabbitmq",
+          "metrics": [
+            "mem"
+          ]
+        },
+        {
+          "service": "carts-db",
+          "metrics": [
+            "diskio",
+            "mem",
+            "cpu",
+            "socket"
+          ]
+        }
+      ],
+      "predicted_root_services": [
+        "user",
+        "catalogue",
+        "user-db",
+        "rabbitmq",
+        "carts-db"
+      ],
+      "rca_top_k_hit": false
+    },
+    {
+      "case_id": "RE2-SS/payment_loss/2",
+      "expected_incident": true,
+      "predicted_incident": true,
+      "expected_root_service": "payment",
+      "expected_root_metric": "error",
+      "expected_root_causes": [
+        "payment"
+      ],
+      "predicted_root_causes": [
+        {
+          "service": "carts-db",
+          "metrics": [
+            "diskio",
+            "mem",
+            "cpu"
+          ]
+        },
+        {
+          "service": "user-db",
+          "metrics": [
+            "diskio",
+            "mem",
+            "cpu"
+          ]
+        },
+        {
+          "service": "queue-master",
+          "metrics": [
+            "diskio",
+            "mem",
+            "cpu"
+          ]
+        },
+        {
+          "service": "front-end",
+          "metrics": [
+            "mem",
+            "cpu",
+            "error",
+            "socket"
+          ]
+        },
+        {
+          "service": "payment",
+          "metrics": [
+            "diskio",
+            "mem",
+            "socket"
+          ]
+        }
+      ],
+      "predicted_root_services": [
+        "carts-db",
+        "user-db",
+        "queue-master",
+        "front-end",
+        "payment"
+      ],
+      "rca_top_k_hit": false
+    },
+    {
+      "case_id": "RE2-SS/payment_loss/3",
+      "expected_incident": true,
+      "predicted_incident": true,
+      "expected_root_service": "payment",
+      "expected_root_metric": "error",
+      "expected_root_causes": [
+        "payment"
+      ],
+      "predicted_root_causes": [
+        {
+          "service": "user-db",
+          "metrics": [
+            "diskio",
+            "mem"
+          ]
+        },
+        {
+          "service": "orders",
+          "metrics": [
+            "mem",
+            "cpu",
+            "error",
+            "socket"
+          ]
+        },
+        {
+          "service": "front-end",
+          "metrics": [
+            "mem",
+            "workload"
+          ]
+        },
+        {
+          "service": "payment",
+          "metrics": [
+            "diskio",
+            "mem",
+            "workload",
+            "socket"
+          ]
+        },
+        {
+          "service": "carts-db",
+          "metrics": [
+            "diskio",
+            "mem",
+            "cpu"
+          ]
+        }
+      ],
+      "predicted_root_services": [
+        "user-db",
+        "orders",
+        "front-end",
+        "payment",
+        "carts-db"
+      ],
+      "rca_top_k_hit": false
+    },
+    {
+      "case_id": "RE2-SS/payment_mem/1",
+      "expected_incident": true,
+      "predicted_incident": true,
+      "expected_root_service": "payment",
+      "expected_root_metric": "mem",
+      "expected_root_causes": [
+        "payment"
+      ],
+      "predicted_root_causes": [
+        {
+          "service": "orders",
+          "metrics": [
+            "mem",
+            "socket",
+            "error",
+            "workload"
+          ]
+        },
+        {
+          "service": "session-db",
+          "metrics": [
+            "mem",
+            "diskio"
+          ]
+        },
+        {
+          "service": "carts-db",
+          "metrics": [
+            "mem",
+            "cpu",
+            "diskio"
+          ]
+        },
+        {
+          "service": "payment",
+          "metrics": [
+            "mem",
+            "cpu",
+            "socket"
+          ]
+        },
+        {
+          "service": "shipping",
+          "metrics": [
+            "mem",
+            "cpu",
+            "workload"
+          ]
+        }
+      ],
+      "predicted_root_services": [
+        "orders",
+        "session-db",
+        "carts-db",
+        "payment",
+        "shipping"
+      ],
+      "rca_top_k_hit": true
+    },
+    {
+      "case_id": "RE2-SS/payment_mem/2",
+      "expected_incident": true,
+      "predicted_incident": true,
+      "expected_root_service": "payment",
+      "expected_root_metric": "mem",
+      "expected_root_causes": [
+        "payment"
+      ],
+      "predicted_root_causes": [
+        {
+          "service": "queue-master",
+          "metrics": [
+            "mem",
+            "cpu",
+            "diskio"
+          ]
+        },
+        {
+          "service": "payment",
+          "metrics": [
+            "diskio",
+            "mem",
+            "latency-90",
+            "cpu",
+            "workload"
+          ]
+        },
+        {
+          "service": "catalogue-db",
+          "metrics": [
+            "mem"
+          ]
+        },
+        {
+          "service": "orders-db",
+          "metrics": [
+            "diskio",
+            "mem"
+          ]
+        },
+        {
+          "service": "catalogue",
+          "metrics": [
+            "mem",
+            "workload",
+            "socket"
+          ]
+        }
+      ],
+      "predicted_root_services": [
+        "queue-master",
+        "payment",
+        "catalogue-db",
+        "orders-db",
+        "catalogue"
+      ],
+      "rca_top_k_hit": true
+    },
+    {
+      "case_id": "RE2-SS/payment_mem/3",
+      "expected_incident": true,
+      "predicted_incident": true,
+      "expected_root_service": "payment",
+      "expected_root_metric": "mem",
+      "expected_root_causes": [
+        "payment"
+      ],
+      "predicted_root_causes": [
+        {
+          "service": "user-db",
+          "metrics": [
+            "diskio",
+            "mem",
+            "cpu"
+          ]
+        },
+        {
+          "service": "payment",
+          "metrics": [
+            "diskio",
+            "mem",
+            "cpu",
+            "socket"
+          ]
+        },
+        {
+          "service": "user",
+          "metrics": [
+            "mem",
+            "socket"
+          ]
+        },
+        {
+          "service": "rabbitmq",
+          "metrics": [
+            "mem",
+            "cpu"
+          ]
+        },
+        {
+          "service": "front-end",
+          "metrics": [
+            "mem",
+            "cpu",
+            "socket"
+          ]
+        }
+      ],
+      "predicted_root_services": [
+        "user-db",
+        "payment",
+        "user",
+        "rabbitmq",
+        "front-end"
+      ],
+      "rca_top_k_hit": true
+    },
+    {
+      "case_id": "RE2-SS/payment_socket/1",
+      "expected_incident": true,
+      "predicted_incident": true,
+      "expected_root_service": "payment",
+      "expected_root_metric": "socket",
+      "expected_root_causes": [
+        "payment"
+      ],
+      "predicted_root_causes": [
+        {
+          "service": "carts-db",
+          "metrics": [
+            "diskio",
+            "mem",
+            "cpu",
+            "socket"
+          ]
+        },
+        {
+          "service": "queue-master",
+          "metrics": [
+            "mem",
+            "diskio"
+          ]
+        },
+        {
+          "service": "payment",
+          "metrics": [
+            "mem",
+            "cpu",
+            "latency-90",
+            "socket"
+          ]
+        },
+        {
+          "service": "rabbitmq",
+          "metrics": [
+            "mem"
+          ]
+        },
+        {
+          "service": "catalogue-db",
+          "metrics": [
+            "mem"
+          ]
+        }
+      ],
+      "predicted_root_services": [
+        "carts-db",
+        "queue-master",
+        "payment",
+        "rabbitmq",
+        "catalogue-db"
+      ],
+      "rca_top_k_hit": true
+    },
+    {
+      "case_id": "RE2-SS/payment_socket/2",
+      "expected_incident": true,
+      "predicted_incident": true,
+      "expected_root_service": "payment",
+      "expected_root_metric": "socket",
+      "expected_root_causes": [
+        "payment"
+      ],
+      "predicted_root_causes": [
+        {
+          "service": "session-db",
+          "metrics": [
+            "mem",
+            "diskio"
+          ]
+        },
+        {
+          "service": "front-end",
+          "metrics": [
+            "mem",
+            "cpu",
+            "socket"
+          ]
+        },
+        {
+          "service": "carts-db",
+          "metrics": [
+            "diskio",
+            "mem",
+            "cpu"
+          ]
+        },
+        {
+          "service": "queue-master",
+          "metrics": [
+            "diskio",
+            "mem",
+            "cpu"
+          ]
+        },
+        {
+          "service": "orders",
+          "metrics": [
+            "mem",
+            "latency-90",
+            "workload",
+            "cpu",
+            "socket"
+          ]
+        }
+      ],
+      "predicted_root_services": [
+        "session-db",
+        "front-end",
+        "carts-db",
+        "queue-master",
+        "orders"
+      ],
+      "rca_top_k_hit": false
+    },
+    {
+      "case_id": "RE2-SS/payment_socket/3",
+      "expected_incident": true,
+      "predicted_incident": true,
+      "expected_root_service": "payment",
+      "expected_root_metric": "socket",
+      "expected_root_causes": [
+        "payment"
+      ],
+      "predicted_root_causes": [
+        {
+          "service": "payment",
+          "metrics": [
+            "diskio",
+            "mem",
+            "cpu",
+            "socket"
+          ]
+        },
+        {
+          "service": "carts-db",
+          "metrics": [
+            "diskio",
+            "mem",
+            "cpu"
+          ]
+        },
+        {
+          "service": "shipping",
+          "metrics": [
+            "mem",
+            "cpu",
+            "workload",
+            "socket"
+          ]
+        },
+        {
+          "service": "queue-master",
+          "metrics": [
+            "diskio",
+            "mem",
+            "cpu"
+          ]
+        },
+        {
+          "service": "carts",
+          "metrics": [
+            "cpu",
+            "mem",
+            "socket"
+          ]
+        }
+      ],
+      "predicted_root_services": [
+        "payment",
+        "carts-db",
+        "shipping",
+        "queue-master",
+        "carts"
+      ],
+      "rca_top_k_hit": true
+    },
+    {
+      "case_id": "RE2-SS/user_cpu/1",
+      "expected_incident": true,
+      "predicted_incident": true,
+      "expected_root_service": "user",
+      "expected_root_metric": "cpu",
+      "expected_root_causes": [
+        "user"
+      ],
+      "predicted_root_causes": [
+        {
+          "service": "user-db",
+          "metrics": [
+            "mem",
+            "diskio",
+            "cpu",
+            "socket"
+          ]
+        },
+        {
+          "service": "carts-db",
+          "metrics": [
+            "mem",
+            "cpu",
+            "diskio",
+            "socket"
+          ]
+        },
+        {
+          "service": "session-db",
+          "metrics": [
+            "mem",
+            "diskio"
+          ]
+        },
+        {
+          "service": "queue-master",
+          "metrics": [
+            "diskio",
+            "mem"
+          ]
+        },
+        {
+          "service": "catalogue",
+          "metrics": [
+            "mem",
+            "workload"
+          ]
+        }
+      ],
+      "predicted_root_services": [
+        "user-db",
+        "carts-db",
+        "session-db",
+        "queue-master",
+        "catalogue"
+      ],
+      "rca_top_k_hit": false
+    },
+    {
+      "case_id": "RE2-SS/user_cpu/2",
+      "expected_incident": true,
+      "predicted_incident": true,
+      "expected_root_service": "user",
+      "expected_root_metric": "cpu",
+      "expected_root_causes": [
+        "user"
+      ],
+      "predicted_root_causes": [
+        {
+          "service": "queue-master",
+          "metrics": [
+            "diskio",
+            "mem",
+            "cpu"
+          ]
+        },
+        {
+          "service": "user",
+          "metrics": [
+            "mem",
+            "diskio",
+            "workload",
+            "cpu",
+            "socket"
+          ]
+        },
+        {
+          "service": "carts-db",
+          "metrics": [
+            "diskio",
+            "mem",
+            "cpu"
+          ]
+        },
+        {
+          "service": "session-db",
+          "metrics": [
+            "mem",
+            "diskio"
+          ]
+        },
+        {
+          "service": "shipping",
+          "metrics": [
+            "mem",
+            "workload",
+            "cpu",
+            "socket"
+          ]
+        }
+      ],
+      "predicted_root_services": [
+        "queue-master",
+        "user",
+        "carts-db",
+        "session-db",
+        "shipping"
+      ],
+      "rca_top_k_hit": true
+    },
+    {
+      "case_id": "RE2-SS/user_cpu/3",
+      "expected_incident": true,
+      "predicted_incident": true,
+      "expected_root_service": "user",
+      "expected_root_metric": "cpu",
+      "expected_root_causes": [
+        "user"
+      ],
+      "predicted_root_causes": [
+        {
+          "service": "front-end",
+          "metrics": [
+            "cpu",
+            "mem",
+            "workload",
+            "socket"
+          ]
+        },
+        {
+          "service": "carts",
+          "metrics": [
+            "mem",
+            "workload",
+            "cpu",
+            "socket"
+          ]
+        },
+        {
+          "service": "catalogue",
+          "metrics": [
+            "mem",
+            "workload"
+          ]
+        },
+        {
+          "service": "user-db",
+          "metrics": [
+            "diskio",
+            "mem",
+            "cpu"
+          ]
+        },
+        {
+          "service": "queue-master",
+          "metrics": [
+            "mem",
+            "diskio",
+            "cpu"
+          ]
+        }
+      ],
+      "predicted_root_services": [
+        "front-end",
+        "carts",
+        "catalogue",
+        "user-db",
+        "queue-master"
+      ],
+      "rca_top_k_hit": false
+    },
+    {
+      "case_id": "RE2-SS/user_delay/1",
+      "expected_incident": true,
+      "predicted_incident": true,
+      "expected_root_service": "user",
+      "expected_root_metric": "latency",
+      "expected_root_causes": [
+        "user"
+      ],
+      "predicted_root_causes": [
+        {
+          "service": "catalogue",
+          "metrics": [
+            "mem"
+          ]
+        },
+        {
+          "service": "user-db",
+          "metrics": [
+            "diskio",
+            "mem",
+            "cpu",
+            "socket"
+          ]
+        },
+        {
+          "service": "carts-db",
+          "metrics": [
+            "diskio",
+            "mem",
+            "cpu"
+          ]
+        },
+        {
+          "service": "front-end",
+          "metrics": [
+            "mem",
+            "latency-50",
+            "workload",
+            "socket"
+          ]
+        },
+        {
+          "service": "catalogue-db",
+          "metrics": [
+            "mem"
+          ]
+        }
+      ],
+      "predicted_root_services": [
+        "catalogue",
+        "user-db",
+        "carts-db",
+        "front-end",
+        "catalogue-db"
+      ],
+      "rca_top_k_hit": false
+    },
+    {
+      "case_id": "RE2-SS/user_delay/2",
+      "expected_incident": true,
+      "predicted_incident": true,
+      "expected_root_service": "user",
+      "expected_root_metric": "latency",
+      "expected_root_causes": [
+        "user"
+      ],
+      "predicted_root_causes": [
+        {
+          "service": "user-db",
+          "metrics": [
+            "diskio",
+            "mem",
+            "cpu",
+            "socket"
+          ]
+        },
+        {
+          "service": "user",
+          "metrics": [
+            "diskio",
+            "mem",
+            "latency-50",
+            "latency-90",
+            "socket"
+          ]
+        },
+        {
+          "service": "orders-db",
+          "metrics": [
+            "diskio",
+            "mem"
+          ]
+        },
+        {
+          "service": "shipping",
+          "metrics": [
+            "mem",
+            "cpu"
+          ]
+        },
+        {
+          "service": "payment",
+          "metrics": [
+            "mem"
+          ]
+        }
+      ],
+      "predicted_root_services": [
+        "user-db",
+        "user",
+        "orders-db",
+        "shipping",
+        "payment"
+      ],
+      "rca_top_k_hit": true
+    },
+    {
+      "case_id": "RE2-SS/user_delay/3",
+      "expected_incident": true,
+      "predicted_incident": true,
+      "expected_root_service": "user",
+      "expected_root_metric": "latency",
+      "expected_root_causes": [
+        "user"
+      ],
+      "predicted_root_causes": [
+        {
+          "service": "carts-db",
+          "metrics": [
+            "diskio",
+            "mem",
+            "cpu"
+          ]
+        },
+        {
+          "service": "front-end",
+          "metrics": [
+            "mem",
+            "latency-90",
+            "socket",
+            "workload",
+            "cpu"
+          ]
+        },
+        {
+          "service": "user-db",
+          "metrics": [
+            "diskio",
+            "mem",
+            "socket"
+          ]
+        },
+        {
+          "service": "queue-master",
+          "metrics": [
+            "mem",
+            "diskio"
+          ]
+        },
+        {
+          "service": "orders-db",
+          "metrics": [
+            "diskio",
+            "mem"
+          ]
+        }
+      ],
+      "predicted_root_services": [
+        "carts-db",
+        "front-end",
+        "user-db",
+        "queue-master",
+        "orders-db"
+      ],
+      "rca_top_k_hit": false
+    },
+    {
+      "case_id": "RE2-SS/user_disk/1",
+      "expected_incident": true,
+      "predicted_incident": true,
+      "expected_root_service": "user",
+      "expected_root_metric": "disk",
+      "expected_root_causes": [
+        "user"
+      ],
+      "predicted_root_causes": [
+        {
+          "service": "front-end",
+          "metrics": [
+            "mem",
+            "cpu",
+            "workload",
+            "socket"
+          ]
+        },
+        {
+          "service": "carts",
+          "metrics": [
+            "mem",
+            "socket",
+            "cpu",
+            "workload"
+          ]
+        },
+        {
+          "service": "user-db",
+          "metrics": [
+            "diskio",
+            "mem",
+            "socket"
+          ]
+        },
+        {
+          "service": "carts-db",
+          "metrics": [
+            "diskio",
+            "mem",
+            "cpu",
+            "socket"
+          ]
+        },
+        {
+          "service": "payment",
+          "metrics": [
+            "mem",
+            "workload"
+          ]
+        }
+      ],
+      "predicted_root_services": [
+        "front-end",
+        "carts",
+        "user-db",
+        "carts-db",
+        "payment"
+      ],
+      "rca_top_k_hit": false
+    },
+    {
+      "case_id": "RE2-SS/user_disk/2",
+      "expected_incident": true,
+      "predicted_incident": true,
+      "expected_root_service": "user",
+      "expected_root_metric": "disk",
+      "expected_root_causes": [
+        "user"
+      ],
+      "predicted_root_causes": [
+        {
+          "service": "carts-db",
+          "metrics": [
+            "diskio",
+            "mem",
+            "cpu"
+          ]
+        },
+        {
+          "service": "user-db",
+          "metrics": [
+            "diskio",
+            "mem"
+          ]
+        },
+        {
+          "service": "rabbitmq",
+          "metrics": [
+            "mem",
+            "cpu"
+          ]
+        },
+        {
+          "service": "queue-master",
+          "metrics": [
+            "mem",
+            "diskio",
+            "cpu"
+          ]
+        },
+        {
+          "service": "catalogue",
+          "metrics": [
+            "mem",
+            "workload"
+          ]
+        }
+      ],
+      "predicted_root_services": [
+        "carts-db",
+        "user-db",
+        "rabbitmq",
+        "queue-master",
+        "catalogue"
+      ],
+      "rca_top_k_hit": false
+    },
+    {
+      "case_id": "RE2-SS/user_disk/3",
+      "expected_incident": true,
+      "predicted_incident": true,
+      "expected_root_service": "user",
+      "expected_root_metric": "disk",
+      "expected_root_causes": [
+        "user"
+      ],
+      "predicted_root_causes": [
+        {
+          "service": "carts",
+          "metrics": [
+            "mem",
+            "cpu",
+            "socket"
+          ]
+        },
+        {
+          "service": "front-end",
+          "metrics": [
+            "mem",
+            "cpu",
+            "socket"
+          ]
+        },
+        {
+          "service": "orders",
+          "metrics": [
+            "cpu",
+            "mem",
+            "socket",
+            "workload"
+          ]
+        },
+        {
+          "service": "shipping",
+          "metrics": [
+            "mem",
+            "cpu",
+            "socket",
+            "workload"
+          ]
+        },
+        {
+          "service": "session-db",
+          "metrics": [
+            "mem",
+            "diskio"
+          ]
+        }
+      ],
+      "predicted_root_services": [
+        "carts",
+        "front-end",
+        "orders",
+        "shipping",
+        "session-db"
+      ],
+      "rca_top_k_hit": false
+    },
+    {
+      "case_id": "RE2-SS/user_loss/1",
+      "expected_incident": true,
+      "predicted_incident": true,
+      "expected_root_service": "user",
+      "expected_root_metric": "error",
+      "expected_root_causes": [
+        "user"
+      ],
+      "predicted_root_causes": [
+        {
+          "service": "carts-db",
+          "metrics": [
+            "diskio",
+            "mem",
+            "cpu"
+          ]
+        },
+        {
+          "service": "user",
+          "metrics": [
+            "mem",
+            "workload",
+            "cpu",
+            "socket"
+          ]
+        },
+        {
+          "service": "catalogue",
+          "metrics": [
+            "mem",
+            "workload"
+          ]
+        },
+        {
+          "service": "front-end",
+          "metrics": [
+            "mem",
+            "cpu",
+            "workload",
+            "socket",
+            "error"
+          ]
+        },
+        {
+          "service": "payment",
+          "metrics": [
+            "mem",
+            "workload"
+          ]
+        }
+      ],
+      "predicted_root_services": [
+        "carts-db",
+        "user",
+        "catalogue",
+        "front-end",
+        "payment"
+      ],
+      "rca_top_k_hit": false
+    },
+    {
+      "case_id": "RE2-SS/user_loss/2",
+      "expected_incident": true,
+      "predicted_incident": true,
+      "expected_root_service": "user",
+      "expected_root_metric": "error",
+      "expected_root_causes": [
+        "user"
+      ],
+      "predicted_root_causes": [
+        {
+          "service": "user",
+          "metrics": [
+            "diskio",
+            "mem",
+            "socket",
+            "cpu",
+            "workload"
+          ]
+        },
+        {
+          "service": "front-end",
+          "metrics": [
+            "mem",
+            "error",
+            "cpu",
+            "socket",
+            "workload"
+          ]
+        },
+        {
+          "service": "carts-db",
+          "metrics": [
+            "mem",
+            "diskio",
+            "cpu"
+          ]
+        },
+        {
+          "service": "user-db",
+          "metrics": [
+            "diskio",
+            "mem",
+            "cpu"
+          ]
+        },
+        {
+          "service": "payment",
+          "metrics": [
+            "mem",
+            "workload"
+          ]
+        }
+      ],
+      "predicted_root_services": [
+        "user",
+        "front-end",
+        "carts-db",
+        "user-db",
+        "payment"
+      ],
+      "rca_top_k_hit": false
+    },
+    {
+      "case_id": "RE2-SS/user_loss/3",
+      "expected_incident": true,
+      "predicted_incident": true,
+      "expected_root_service": "user",
+      "expected_root_metric": "error",
+      "expected_root_causes": [
+        "user"
+      ],
+      "predicted_root_causes": [
+        {
+          "service": "user-db",
+          "metrics": [
+            "diskio",
+            "mem",
+            "socket"
+          ]
+        },
+        {
+          "service": "orders-db",
+          "metrics": [
+            "mem",
+            "diskio"
+          ]
+        },
+        {
+          "service": "front-end",
+          "metrics": [
+            "mem",
+            "cpu",
+            "workload",
+            "socket"
+          ]
+        },
+        {
+          "service": "carts-db",
+          "metrics": [
+            "diskio",
+            "mem",
+            "cpu"
+          ]
+        },
+        {
+          "service": "carts",
+          "metrics": [
+            "mem",
+            "workload",
+            "cpu",
+            "socket"
+          ]
+        }
+      ],
+      "predicted_root_services": [
+        "user-db",
+        "orders-db",
+        "front-end",
+        "carts-db",
+        "carts"
+      ],
+      "rca_top_k_hit": false
+    },
+    {
+      "case_id": "RE2-SS/user_mem/1",
+      "expected_incident": true,
+      "predicted_incident": true,
+      "expected_root_service": "user",
+      "expected_root_metric": "mem",
+      "expected_root_causes": [
+        "user"
+      ],
+      "predicted_root_causes": [
+        {
+          "service": "carts-db",
+          "metrics": [
+            "diskio",
+            "mem",
+            "cpu",
+            "socket"
+          ]
+        },
+        {
+          "service": "user-db",
+          "metrics": [
+            "diskio",
+            "mem",
+            "cpu",
+            "socket"
+          ]
+        },
+        {
+          "service": "rabbitmq",
+          "metrics": [
+            "mem"
+          ]
+        },
+        {
+          "service": "payment",
+          "metrics": [
+            "mem",
+            "cpu",
+            "workload",
+            "socket"
+          ]
+        },
+        {
+          "service": "orders-db",
+          "metrics": [
+            "diskio",
+            "mem"
+          ]
+        }
+      ],
+      "predicted_root_services": [
+        "carts-db",
+        "user-db",
+        "rabbitmq",
+        "payment",
+        "orders-db"
+      ],
+      "rca_top_k_hit": false
+    },
+    {
+      "case_id": "RE2-SS/user_mem/2",
+      "expected_incident": true,
+      "predicted_incident": true,
+      "expected_root_service": "user",
+      "expected_root_metric": "mem",
+      "expected_root_causes": [
+        "user"
+      ],
+      "predicted_root_causes": [
+        {
+          "service": "carts-db",
+          "metrics": [
+            "diskio",
+            "mem",
+            "socket"
+          ]
+        },
+        {
+          "service": "user",
+          "metrics": [
+            "mem",
+            "cpu",
+            "socket",
+            "workload"
+          ]
+        },
+        {
+          "service": "shipping",
+          "metrics": [
+            "mem",
+            "cpu",
+            "socket"
+          ]
+        },
+        {
+          "service": "orders",
+          "metrics": [
+            "mem",
+            "cpu",
+            "socket",
+            "workload"
+          ]
+        },
+        {
+          "service": "carts",
+          "metrics": [
+            "mem",
+            "cpu",
+            "socket",
+            "workload"
+          ]
+        }
+      ],
+      "predicted_root_services": [
+        "carts-db",
+        "user",
+        "shipping",
+        "orders",
+        "carts"
+      ],
+      "rca_top_k_hit": true
+    },
+    {
+      "case_id": "RE2-SS/user_mem/3",
+      "expected_incident": true,
+      "predicted_incident": true,
+      "expected_root_service": "user",
+      "expected_root_metric": "mem",
+      "expected_root_causes": [
+        "user"
+      ],
+      "predicted_root_causes": [
+        {
+          "service": "user-db",
+          "metrics": [
+            "diskio",
+            "mem",
+            "socket"
+          ]
+        },
+        {
+          "service": "orders-db",
+          "metrics": [
+            "diskio",
+            "mem"
+          ]
+        },
+        {
+          "service": "shipping",
+          "metrics": [
+            "mem",
+            "cpu",
+            "workload",
+            "socket"
+          ]
+        },
+        {
+          "service": "orders",
+          "metrics": [
+            "mem",
+            "cpu",
+            "socket",
+            "workload"
+          ]
+        },
+        {
+          "service": "catalogue",
+          "metrics": [
+            "mem",
+            "socket"
+          ]
+        }
+      ],
+      "predicted_root_services": [
+        "user-db",
+        "orders-db",
+        "shipping",
+        "orders",
+        "catalogue"
+      ],
+      "rca_top_k_hit": false
+    },
+    {
+      "case_id": "RE2-SS/user_socket/1",
+      "expected_incident": true,
+      "predicted_incident": true,
+      "expected_root_service": "user",
+      "expected_root_metric": "socket",
+      "expected_root_causes": [
+        "user"
+      ],
+      "predicted_root_causes": [
+        {
+          "service": "rabbitmq",
+          "metrics": [
+            "mem",
+            "cpu"
+          ]
+        },
+        {
+          "service": "front-end",
+          "metrics": [
+            "mem",
+            "workload",
+            "socket",
+            "latency-90"
+          ]
+        },
+        {
+          "service": "user-db",
+          "metrics": [
+            "diskio",
+            "mem",
+            "socket"
+          ]
+        },
+        {
+          "service": "user",
+          "metrics": [
+            "mem",
+            "cpu",
+            "socket",
+            "workload"
+          ]
+        },
+        {
+          "service": "payment",
+          "metrics": [
+            "mem",
+            "workload"
+          ]
+        }
+      ],
+      "predicted_root_services": [
+        "rabbitmq",
+        "front-end",
+        "user-db",
+        "user",
+        "payment"
+      ],
+      "rca_top_k_hit": true
+    },
+    {
+      "case_id": "RE2-SS/user_socket/2",
+      "expected_incident": true,
+      "predicted_incident": true,
+      "expected_root_service": "user",
+      "expected_root_metric": "socket",
+      "expected_root_causes": [
+        "user"
+      ],
+      "predicted_root_causes": [
+        {
+          "service": "session-db",
+          "metrics": [
+            "mem",
+            "diskio"
+          ]
+        },
+        {
+          "service": "carts-db",
+          "metrics": [
+            "diskio",
+            "cpu",
+            "mem"
+          ]
+        },
+        {
+          "service": "payment",
+          "metrics": [
+            "mem",
+            "workload",
+            "socket"
+          ]
+        },
+        {
+          "service": "orders-db",
+          "metrics": [
+            "mem",
+            "diskio"
+          ]
+        },
+        {
+          "service": "shipping",
+          "metrics": [
+            "mem",
+            "cpu",
+            "socket"
+          ]
+        }
+      ],
+      "predicted_root_services": [
+        "session-db",
+        "carts-db",
+        "payment",
+        "orders-db",
+        "shipping"
+      ],
+      "rca_top_k_hit": false
+    },
+    {
+      "case_id": "RE2-SS/user_socket/3",
+      "expected_incident": true,
+      "predicted_incident": true,
+      "expected_root_service": "user",
+      "expected_root_metric": "socket",
+      "expected_root_causes": [
+        "user"
+      ],
+      "predicted_root_causes": [
+        {
+          "service": "carts-db",
+          "metrics": [
+            "cpu",
+            "diskio",
+            "mem"
+          ]
+        },
+        {
+          "service": "session-db",
+          "metrics": [
+            "diskio",
+            "mem"
+          ]
+        },
+        {
+          "service": "user-db",
+          "metrics": [
+            "mem",
+            "diskio",
+            "socket"
+          ]
+        },
+        {
+          "service": "orders-db",
+          "metrics": [
+            "diskio",
+            "mem"
+          ]
+        },
+        {
+          "service": "front-end",
+          "metrics": [
+            "mem",
+            "workload",
+            "socket"
+          ]
+        }
+      ],
+      "predicted_root_services": [
+        "carts-db",
+        "session-db",
+        "user-db",
+        "orders-db",
+        "front-end"
+      ],
+      "rca_top_k_hit": false
+    },
+    {
+      "case_id": "RE3-SS/carts_f1/1",
+      "expected_incident": true,
+      "predicted_incident": true,
+      "expected_root_service": "carts",
+      "expected_root_metric": null,
+      "expected_root_causes": [
+        "carts"
+      ],
+      "predicted_root_causes": [
+        {
+          "service": "payment",
+          "metrics": [
+            "mem",
+            "socket"
+          ]
+        },
+        {
+          "service": "user-db",
+          "metrics": [
+            "diskio",
+            "mem",
+            "socket"
+          ]
+        },
+        {
+          "service": "orders-db",
+          "metrics": [
+            "diskio",
+            "mem"
+          ]
+        },
+        {
+          "service": "shipping",
+          "metrics": [
+            "mem",
+            "cpu",
+            "socket",
+            "workload"
+          ]
+        },
+        {
+          "service": "front-end",
+          "metrics": [
+            "mem",
+            "error",
+            "cpu",
+            "socket",
+            "workload"
+          ]
+        }
+      ],
+      "predicted_root_services": [
+        "payment",
+        "user-db",
+        "orders-db",
+        "shipping",
+        "front-end"
+      ],
+      "rca_top_k_hit": false
+    },
+    {
+      "case_id": "RE3-SS/carts_f1/2",
+      "expected_incident": true,
+      "predicted_incident": true,
+      "expected_root_service": "carts",
+      "expected_root_metric": null,
+      "expected_root_causes": [
+        "carts"
+      ],
+      "predicted_root_causes": [
+        {
+          "service": "user",
+          "metrics": [
+            "mem",
+            "socket",
+            "workload"
+          ]
+        },
+        {
+          "service": "payment",
+          "metrics": [
+            "mem",
+            "workload"
+          ]
+        },
+        {
+          "service": "carts-db",
+          "metrics": [
+            "mem",
+            "diskio",
+            "socket"
+          ]
+        },
+        {
+          "service": "orders",
+          "metrics": [
+            "mem",
+            "cpu",
+            "workload",
+            "socket"
+          ]
+        },
+        {
+          "service": "front-end",
+          "metrics": [
+            "mem",
+            "error",
+            "socket",
+            "workload"
+          ]
+        }
+      ],
+      "predicted_root_services": [
+        "user",
+        "payment",
+        "carts-db",
+        "orders",
+        "front-end"
+      ],
+      "rca_top_k_hit": false
+    },
+    {
+      "case_id": "RE3-SS/carts_f1/3",
+      "expected_incident": true,
+      "predicted_incident": true,
+      "expected_root_service": "carts",
+      "expected_root_metric": null,
+      "expected_root_causes": [
+        "carts"
+      ],
+      "predicted_root_causes": [
+        {
+          "service": "user-db",
+          "metrics": [
+            "diskio",
+            "mem"
+          ]
+        },
+        {
+          "service": "orders-db",
+          "metrics": [
+            "diskio",
+            "mem",
+            "socket"
+          ]
+        },
+        {
+          "service": "payment",
+          "metrics": [
+            "mem"
+          ]
+        },
+        {
+          "service": "front-end",
+          "metrics": [
+            "mem",
+            "error",
+            "workload",
+            "cpu",
+            "socket"
+          ]
+        },
+        {
+          "service": "carts-db",
+          "metrics": [
+            "diskio",
+            "mem",
+            "cpu",
+            "socket"
+          ]
+        }
+      ],
+      "predicted_root_services": [
+        "user-db",
+        "orders-db",
+        "payment",
+        "front-end",
+        "carts-db"
+      ],
+      "rca_top_k_hit": false
+    },
+    {
+      "case_id": "RE3-SS/carts_f1/4",
+      "expected_incident": true,
+      "predicted_incident": true,
+      "expected_root_service": "carts",
+      "expected_root_metric": null,
+      "expected_root_causes": [
+        "carts"
+      ],
+      "predicted_root_causes": [
+        {
+          "service": "payment",
+          "metrics": [
+            "mem",
+            "workload",
+            "socket"
+          ]
+        },
+        {
+          "service": "orders-db",
+          "metrics": [
+            "mem",
+            "diskio"
+          ]
+        },
+        {
+          "service": "catalogue",
+          "metrics": [
+            "mem",
+            "socket"
+          ]
+        },
+        {
+          "service": "carts-db",
+          "metrics": [
+            "diskio",
+            "mem",
+            "cpu",
+            "socket"
+          ]
+        },
+        {
+          "service": "catalogue-db",
+          "metrics": [
+            "mem"
+          ]
+        }
+      ],
+      "predicted_root_services": [
+        "payment",
+        "orders-db",
+        "catalogue",
+        "carts-db",
+        "catalogue-db"
+      ],
+      "rca_top_k_hit": false
+    },
+    {
+      "case_id": "RE3-SS/carts_f3/1",
+      "expected_incident": true,
+      "predicted_incident": true,
+      "expected_root_service": "carts",
+      "expected_root_metric": null,
+      "expected_root_causes": [
+        "carts"
+      ],
+      "predicted_root_causes": [
+        {
+          "service": "queue-master",
+          "metrics": [
+            "mem",
+            "cpu"
+          ]
+        },
+        {
+          "service": "carts",
+          "metrics": [
+            "mem",
+            "latency-90",
+            "cpu",
+            "socket",
+            "error"
+          ]
+        },
+        {
+          "service": "rabbitmq",
+          "metrics": [
+            "mem"
+          ]
+        },
+        {
+          "service": "payment",
+          "metrics": [
+            "mem",
+            "workload"
+          ]
+        },
+        {
+          "service": "front-end",
+          "metrics": [
+            "mem",
+            "cpu",
+            "error",
+            "socket",
+            "workload"
+          ]
+        }
+      ],
+      "predicted_root_services": [
+        "queue-master",
+        "carts",
+        "rabbitmq",
+        "payment",
+        "front-end"
+      ],
+      "rca_top_k_hit": true
+    },
+    {
+      "case_id": "RE3-SS/carts_f3/2",
+      "expected_incident": true,
+      "predicted_incident": true,
+      "expected_root_service": "carts",
+      "expected_root_metric": null,
+      "expected_root_causes": [
+        "carts"
+      ],
+      "predicted_root_causes": [
+        {
+          "service": "rabbitmq",
+          "metrics": [
+            "mem"
+          ]
+        },
+        {
+          "service": "orders",
+          "metrics": [
+            "mem",
+            "latency-90",
+            "cpu",
+            "socket",
+            "error"
+          ]
+        },
+        {
+          "service": "catalogue",
+          "metrics": [
+            "mem",
+            "socket"
+          ]
+        },
+        {
+          "service": "user",
+          "metrics": [
+            "mem",
+            "workload",
+            "socket"
+          ]
+        },
+        {
+          "service": "user-db",
+          "metrics": [
+            "diskio",
+            "mem",
+            "socket"
+          ]
+        }
+      ],
+      "predicted_root_services": [
+        "rabbitmq",
+        "orders",
+        "catalogue",
+        "user",
+        "user-db"
+      ],
+      "rca_top_k_hit": false
+    },
+    {
+      "case_id": "RE3-SS/carts_f3/3",
+      "expected_incident": true,
+      "predicted_incident": true,
+      "expected_root_service": "carts",
+      "expected_root_metric": null,
+      "expected_root_causes": [
+        "carts"
+      ],
+      "predicted_root_causes": [
+        {
+          "service": "orders",
+          "metrics": [
+            "mem",
+            "error",
+            "cpu",
+            "socket"
+          ]
+        },
+        {
+          "service": "user-db",
+          "metrics": [
+            "diskio",
+            "mem"
+          ]
+        },
+        {
+          "service": "front-end",
+          "metrics": [
+            "mem",
+            "error",
+            "socket",
+            "cpu",
+            "workload"
+          ]
+        },
+        {
+          "service": "queue-master",
+          "metrics": [
+            "mem",
+            "cpu"
+          ]
+        },
+        {
+          "service": "shipping",
+          "metrics": [
+            "mem",
+            "cpu",
+            "workload"
+          ]
+        }
+      ],
+      "predicted_root_services": [
+        "orders",
+        "user-db",
+        "front-end",
+        "queue-master",
+        "shipping"
+      ],
+      "rca_top_k_hit": false
+    },
+    {
+      "case_id": "RE3-SS/carts_f3/4",
+      "expected_incident": true,
+      "predicted_incident": true,
+      "expected_root_service": "carts",
+      "expected_root_metric": null,
+      "expected_root_causes": [
+        "carts"
+      ],
+      "predicted_root_causes": [
+        {
+          "service": "orders",
+          "metrics": [
+            "mem",
+            "latency-90",
+            "error",
+            "socket",
+            "cpu"
+          ]
+        },
+        {
+          "service": "queue-master",
+          "metrics": [
+            "mem",
+            "cpu"
+          ]
+        },
+        {
+          "service": "orders-db",
+          "metrics": [
+            "diskio",
+            "mem"
+          ]
+        },
+        {
+          "service": "user",
+          "metrics": [
+            "mem",
+            "workload",
+            "socket"
+          ]
+        },
+        {
+          "service": "user-db",
+          "metrics": [
+            "diskio",
+            "mem",
+            "socket"
+          ]
+        }
+      ],
+      "predicted_root_services": [
+        "orders",
+        "queue-master",
+        "orders-db",
+        "user",
+        "user-db"
+      ],
+      "rca_top_k_hit": false
+    },
+    {
+      "case_id": "RE3-SS/carts_f4/1",
+      "expected_incident": true,
+      "predicted_incident": true,
+      "expected_root_service": "carts",
+      "expected_root_metric": null,
+      "expected_root_causes": [
+        "carts"
+      ],
+      "predicted_root_causes": [
+        {
+          "service": "user-db",
+          "metrics": [
+            "diskio",
+            "mem",
+            "cpu"
+          ]
+        },
+        {
+          "service": "orders-db",
+          "metrics": [
+            "diskio",
+            "mem",
+            "socket"
+          ]
+        },
+        {
+          "service": "carts-db",
+          "metrics": [
+            "diskio",
+            "mem",
+            "cpu",
+            "socket"
+          ]
+        },
+        {
+          "service": "user",
+          "metrics": [
+            "mem",
+            "workload",
+            "socket"
+          ]
+        },
+        {
+          "service": "catalogue",
+          "metrics": [
+            "mem"
+          ]
+        }
+      ],
+      "predicted_root_services": [
+        "user-db",
+        "orders-db",
+        "carts-db",
+        "user",
+        "catalogue"
+      ],
+      "rca_top_k_hit": false
+    },
+    {
+      "case_id": "RE3-SS/carts_f4/2",
+      "expected_incident": true,
+      "predicted_incident": true,
+      "expected_root_service": "carts",
+      "expected_root_metric": null,
+      "expected_root_causes": [
+        "carts"
+      ],
+      "predicted_root_causes": [
+        {
+          "service": "payment",
+          "metrics": [
+            "mem",
+            "workload"
+          ]
+        },
+        {
+          "service": "orders-db",
+          "metrics": [
+            "diskio",
+            "mem"
+          ]
+        },
+        {
+          "service": "carts-db",
+          "metrics": [
+            "mem",
+            "cpu",
+            "socket",
+            "diskio"
+          ]
+        },
+        {
+          "service": "user",
+          "metrics": [
+            "mem"
+          ]
+        },
+        {
+          "service": "shipping",
+          "metrics": [
+            "mem",
+            "workload"
+          ]
+        }
+      ],
+      "predicted_root_services": [
+        "payment",
+        "orders-db",
+        "carts-db",
+        "user",
+        "shipping"
+      ],
+      "rca_top_k_hit": false
+    },
+    {
+      "case_id": "RE3-SS/carts_f4/3",
+      "expected_incident": true,
+      "predicted_incident": true,
+      "expected_root_service": "carts",
+      "expected_root_metric": null,
+      "expected_root_causes": [
+        "carts"
+      ],
+      "predicted_root_causes": [
+        {
+          "service": "carts-db",
+          "metrics": [
+            "cpu",
+            "diskio",
+            "mem",
+            "socket"
+          ]
+        },
+        {
+          "service": "shipping",
+          "metrics": [
+            "mem",
+            "workload"
+          ]
+        },
+        {
+          "service": "user",
+          "metrics": [
+            "mem",
+            "socket"
+          ]
+        },
+        {
+          "service": "user-db",
+          "metrics": [
+            "mem",
+            "socket",
+            "diskio"
+          ]
+        },
+        {
+          "service": "catalogue",
+          "metrics": [
+            "mem",
+            "workload",
+            "socket"
+          ]
+        }
+      ],
+      "predicted_root_services": [
+        "carts-db",
+        "shipping",
+        "user",
+        "user-db",
+        "catalogue"
+      ],
+      "rca_top_k_hit": false
+    },
+    {
+      "case_id": "RE3-SS/carts_f4/4",
+      "expected_incident": true,
+      "predicted_incident": true,
+      "expected_root_service": "carts",
+      "expected_root_metric": null,
+      "expected_root_causes": [
+        "carts"
+      ],
+      "predicted_root_causes": [
+        {
+          "service": "catalogue",
+          "metrics": [
+            "mem",
+            "workload",
+            "socket"
+          ]
+        },
+        {
+          "service": "carts-db",
+          "metrics": [
+            "diskio",
+            "mem",
+            "cpu",
+            "socket"
+          ]
+        },
+        {
+          "service": "session-db",
+          "metrics": [
+            "diskio",
+            "mem"
+          ]
+        },
+        {
+          "service": "user-db",
+          "metrics": [
+            "diskio",
+            "mem"
+          ]
+        },
+        {
+          "service": "shipping",
+          "metrics": [
+            "mem",
+            "cpu",
+            "workload"
+          ]
+        }
+      ],
+      "predicted_root_services": [
+        "catalogue",
+        "carts-db",
+        "session-db",
+        "user-db",
+        "shipping"
+      ],
+      "rca_top_k_hit": false
+    },
+    {
+      "case_id": "RE3-SS/front-end_f1/1",
+      "expected_incident": true,
+      "predicted_incident": true,
+      "expected_root_service": "front-end",
+      "expected_root_metric": null,
+      "expected_root_causes": [
+        "front-end"
+      ],
+      "predicted_root_causes": [
+        {
+          "service": "orders-db",
+          "metrics": [
+            "diskio",
+            "mem",
+            "socket"
+          ]
+        },
+        {
+          "service": "user",
+          "metrics": [
+            "mem",
+            "cpu",
+            "workload"
+          ]
+        },
+        {
+          "service": "catalogue",
+          "metrics": [
+            "mem",
+            "workload"
+          ]
+        },
+        {
+          "service": "front-end",
+          "metrics": [
+            "mem",
+            "cpu",
+            "error",
+            "socket"
+          ]
+        },
+        {
+          "service": "queue-master",
+          "metrics": [
+            "mem"
+          ]
+        }
+      ],
+      "predicted_root_services": [
+        "orders-db",
+        "user",
+        "catalogue",
+        "front-end",
+        "queue-master"
+      ],
+      "rca_top_k_hit": true
+    },
+    {
+      "case_id": "RE3-SS/front-end_f1/2",
+      "expected_incident": true,
+      "predicted_incident": true,
+      "expected_root_service": "front-end",
+      "expected_root_metric": null,
+      "expected_root_causes": [
+        "front-end"
+      ],
+      "predicted_root_causes": [
+        {
+          "service": "orders-db",
+          "metrics": [
+            "diskio",
+            "mem"
+          ]
+        },
+        {
+          "service": "shipping",
+          "metrics": [
+            "mem",
+            "cpu",
+            "workload",
+            "socket"
+          ]
+        },
+        {
+          "service": "catalogue",
+          "metrics": [
+            "mem",
+            "workload",
+            "socket"
+          ]
+        },
+        {
+          "service": "carts",
+          "metrics": [
+            "mem",
+            "cpu",
+            "socket",
+            "error"
+          ]
+        },
+        {
+          "service": "queue-master",
+          "metrics": [
+            "mem"
+          ]
+        }
+      ],
+      "predicted_root_services": [
+        "orders-db",
+        "shipping",
+        "catalogue",
+        "carts",
+        "queue-master"
+      ],
+      "rca_top_k_hit": false
+    },
+    {
+      "case_id": "RE3-SS/front-end_f1/3",
+      "expected_incident": true,
+      "predicted_incident": true,
+      "expected_root_service": "front-end",
+      "expected_root_metric": null,
+      "expected_root_causes": [
+        "front-end"
+      ],
+      "predicted_root_causes": [
+        {
+          "service": "shipping",
+          "metrics": [
+            "cpu",
+            "mem",
+            "socket"
+          ]
+        },
+        {
+          "service": "user",
+          "metrics": [
+            "mem",
+            "cpu",
+            "workload"
+          ]
+        },
+        {
+          "service": "carts-db",
+          "metrics": [
+            "mem",
+            "diskio",
+            "socket",
+            "cpu"
+          ]
+        },
+        {
+          "service": "orders-db",
+          "metrics": [
+            "diskio",
+            "mem"
+          ]
+        },
+        {
+          "service": "carts",
+          "metrics": [
+            "mem",
+            "cpu",
+            "socket",
+            "error",
+            "workload"
+          ]
+        }
+      ],
+      "predicted_root_services": [
+        "shipping",
+        "user",
+        "carts-db",
+        "orders-db",
+        "carts"
+      ],
+      "rca_top_k_hit": false
+    },
+    {
+      "case_id": "RE3-SS/front-end_f2/1",
+      "expected_incident": true,
+      "predicted_incident": true,
+      "expected_root_service": "front-end",
+      "expected_root_metric": null,
+      "expected_root_causes": [
+        "front-end"
+      ],
+      "predicted_root_causes": [
+        {
+          "service": "carts-db",
+          "metrics": [
+            "diskio",
+            "mem",
+            "cpu"
+          ]
+        },
+        {
+          "service": "user-db",
+          "metrics": [
+            "diskio",
+            "mem",
+            "cpu"
+          ]
+        },
+        {
+          "service": "payment",
+          "metrics": [
+            "mem",
+            "workload"
+          ]
+        },
+        {
+          "service": "shipping",
+          "metrics": [
+            "mem",
+            "cpu",
+            "workload",
+            "socket"
+          ]
+        },
+        {
+          "service": "front-end",
+          "metrics": [
+            "mem",
+            "cpu",
+            "error",
+            "workload",
+            "socket"
+          ]
+        }
+      ],
+      "predicted_root_services": [
+        "carts-db",
+        "user-db",
+        "payment",
+        "shipping",
+        "front-end"
+      ],
+      "rca_top_k_hit": true
+    },
+    {
+      "case_id": "RE3-SS/front-end_f2/2",
+      "expected_incident": true,
+      "predicted_incident": true,
+      "expected_root_service": "front-end",
+      "expected_root_metric": null,
+      "expected_root_causes": [
+        "front-end"
+      ],
+      "predicted_root_causes": [
+        {
+          "service": "shipping",
+          "metrics": [
+            "mem",
+            "cpu",
+            "workload"
+          ]
+        },
+        {
+          "service": "orders-db",
+          "metrics": [
+            "diskio",
+            "mem"
+          ]
+        },
+        {
+          "service": "user",
+          "metrics": [
+            "mem",
+            "cpu",
+            "workload"
+          ]
+        },
+        {
+          "service": "catalogue-db",
+          "metrics": [
+            "cpu"
+          ]
+        },
+        {
+          "service": "catalogue",
+          "metrics": [
+            "mem",
+            "workload"
+          ]
+        }
+      ],
+      "predicted_root_services": [
+        "shipping",
+        "orders-db",
+        "user",
+        "catalogue-db",
+        "catalogue"
+      ],
+      "rca_top_k_hit": false
+    },
+    {
+      "case_id": "RE3-SS/front-end_f2/3",
+      "expected_incident": true,
+      "predicted_incident": true,
+      "expected_root_service": "front-end",
+      "expected_root_metric": null,
+      "expected_root_causes": [
+        "front-end"
+      ],
+      "predicted_root_causes": [
+        {
+          "service": "front-end",
+          "metrics": [
+            "mem",
+            "error",
+            "workload",
+            "cpu",
+            "socket"
+          ]
+        },
+        {
+          "service": "shipping",
+          "metrics": [
+            "cpu",
+            "mem"
+          ]
+        },
+        {
+          "service": "orders",
+          "metrics": [
+            "mem",
+            "cpu",
+            "socket",
+            "error"
+          ]
+        },
+        {
+          "service": "user",
+          "metrics": [
+            "mem",
+            "cpu",
+            "workload"
+          ]
+        },
+        {
+          "service": "orders-db",
+          "metrics": [
+            "mem",
+            "diskio",
+            "cpu"
+          ]
+        }
+      ],
+      "predicted_root_services": [
+        "front-end",
+        "shipping",
+        "orders",
+        "user",
+        "orders-db"
+      ],
+      "rca_top_k_hit": true
+    },
+    {
+      "case_id": "RE3-SS/front-end_f3/1",
+      "expected_incident": true,
+      "predicted_incident": true,
+      "expected_root_service": "front-end",
+      "expected_root_metric": null,
+      "expected_root_causes": [
+        "front-end"
+      ],
+      "predicted_root_causes": [
+        {
+          "service": "shipping",
+          "metrics": [
+            "mem",
+            "cpu",
+            "socket"
+          ]
+        },
+        {
+          "service": "payment",
+          "metrics": [
+            "mem"
+          ]
+        },
+        {
+          "service": "carts",
+          "metrics": [
+            "mem",
+            "socket",
+            "cpu",
+            "workload"
+          ]
+        },
+        {
+          "service": "carts-db",
+          "metrics": [
+            "mem",
+            "diskio",
+            "socket"
+          ]
+        },
+        {
+          "service": "queue-master",
+          "metrics": [
+            "mem",
+            "cpu"
+          ]
+        }
+      ],
+      "predicted_root_services": [
+        "shipping",
+        "payment",
+        "carts",
+        "carts-db",
+        "queue-master"
+      ],
+      "rca_top_k_hit": false
+    },
+    {
+      "case_id": "RE3-SS/front-end_f3/2",
+      "expected_incident": true,
+      "predicted_incident": true,
+      "expected_root_service": "front-end",
+      "expected_root_metric": null,
+      "expected_root_causes": [
+        "front-end"
+      ],
+      "predicted_root_causes": [
+        {
+          "service": "carts",
+          "metrics": [
+            "mem",
+            "workload",
+            "cpu",
+            "socket"
+          ]
+        },
+        {
+          "service": "queue-master",
+          "metrics": [
+            "mem",
+            "cpu"
+          ]
+        },
+        {
+          "service": "shipping",
+          "metrics": [
+            "mem",
+            "cpu",
+            "workload",
+            "socket"
+          ]
+        },
+        {
+          "service": "payment",
+          "metrics": [
+            "mem",
+            "workload"
+          ]
+        },
+        {
+          "service": "catalogue",
+          "metrics": [
+            "mem",
+            "cpu",
+            "workload"
+          ]
+        }
+      ],
+      "predicted_root_services": [
+        "carts",
+        "queue-master",
+        "shipping",
+        "payment",
+        "catalogue"
+      ],
+      "rca_top_k_hit": false
+    },
+    {
+      "case_id": "RE3-SS/front-end_f3/3",
+      "expected_incident": true,
+      "predicted_incident": true,
+      "expected_root_service": "front-end",
+      "expected_root_metric": null,
+      "expected_root_causes": [
+        "front-end"
+      ],
+      "predicted_root_causes": [
+        {
+          "service": "catalogue",
+          "metrics": [
+            "mem",
+            "workload"
+          ]
+        },
+        {
+          "service": "user",
+          "metrics": [
+            "mem",
+            "cpu",
+            "workload"
+          ]
+        },
+        {
+          "service": "shipping",
+          "metrics": [
+            "mem",
+            "cpu",
+            "workload",
+            "socket"
+          ]
+        },
+        {
+          "service": "payment",
+          "metrics": [
+            "mem",
+            "workload"
+          ]
+        },
+        {
+          "service": "session-db",
+          "metrics": [
+            "diskio",
+            "mem"
+          ]
+        }
+      ],
+      "predicted_root_services": [
+        "catalogue",
+        "user",
+        "shipping",
+        "payment",
+        "session-db"
+      ],
+      "rca_top_k_hit": false
+    },
+    {
+      "case_id": "RE3-SS/orders_f1/1",
+      "expected_incident": true,
+      "predicted_incident": true,
+      "expected_root_service": "orders",
+      "expected_root_metric": null,
+      "expected_root_causes": [
+        "orders"
+      ],
+      "predicted_root_causes": [
+        {
+          "service": "user-db",
+          "metrics": [
+            "diskio",
+            "mem",
+            "cpu"
+          ]
+        },
+        {
+          "service": "payment",
+          "metrics": [
+            "mem",
+            "workload"
+          ]
+        },
+        {
+          "service": "carts-db",
+          "metrics": [
+            "diskio",
+            "mem",
+            "cpu",
+            "socket"
+          ]
+        },
+        {
+          "service": "orders",
+          "metrics": [
+            "mem",
+            "cpu",
+            "error",
+            "socket"
+          ]
+        },
+        {
+          "service": "carts",
+          "metrics": [
+            "mem",
+            "cpu",
+            "socket"
+          ]
+        }
+      ],
+      "predicted_root_services": [
+        "user-db",
+        "payment",
+        "carts-db",
+        "orders",
+        "carts"
+      ],
+      "rca_top_k_hit": true
+    },
+    {
+      "case_id": "RE3-SS/orders_f1/2",
+      "expected_incident": true,
+      "predicted_incident": true,
+      "expected_root_service": "orders",
+      "expected_root_metric": null,
+      "expected_root_causes": [
+        "orders"
+      ],
+      "predicted_root_causes": [
+        {
+          "service": "carts-db",
+          "metrics": [
+            "diskio",
+            "mem",
+            "cpu"
+          ]
+        },
+        {
+          "service": "user-db",
+          "metrics": [
+            "mem",
+            "diskio"
+          ]
+        },
+        {
+          "service": "user",
+          "metrics": [
+            "mem",
+            "cpu",
+            "workload"
+          ]
+        },
+        {
+          "service": "session-db",
+          "metrics": [
+            "diskio",
+            "mem",
+            "cpu"
+          ]
+        },
+        {
+          "service": "front-end",
+          "metrics": [
+            "mem",
+            "error",
+            "cpu",
+            "workload",
+            "socket"
+          ]
+        }
+      ],
+      "predicted_root_services": [
+        "carts-db",
+        "user-db",
+        "user",
+        "session-db",
+        "front-end"
+      ],
+      "rca_top_k_hit": false
+    },
+    {
+      "case_id": "RE3-SS/orders_f1/3",
+      "expected_incident": true,
+      "predicted_incident": true,
+      "expected_root_service": "orders",
+      "expected_root_metric": null,
+      "expected_root_causes": [
+        "orders"
+      ],
+      "predicted_root_causes": [
+        {
+          "service": "user",
+          "metrics": [
+            "mem",
+            "workload",
+            "cpu",
+            "socket"
+          ]
+        },
+        {
+          "service": "carts",
+          "metrics": [
+            "mem",
+            "cpu",
+            "socket"
+          ]
+        },
+        {
+          "service": "user-db",
+          "metrics": [
+            "diskio",
+            "mem"
+          ]
+        },
+        {
+          "service": "carts-db",
+          "metrics": [
+            "diskio",
+            "mem",
+            "cpu"
+          ]
+        },
+        {
+          "service": "orders-db",
+          "metrics": [
+            "diskio",
+            "mem",
+            "socket"
+          ]
+        }
+      ],
+      "predicted_root_services": [
+        "user",
+        "carts",
+        "user-db",
+        "carts-db",
+        "orders-db"
+      ],
+      "rca_top_k_hit": false
+    },
+    {
+      "case_id": "RE3-SS/orders_f3/1",
+      "expected_incident": true,
+      "predicted_incident": true,
+      "expected_root_service": "orders",
+      "expected_root_metric": null,
+      "expected_root_causes": [
+        "orders"
+      ],
+      "predicted_root_causes": [
+        {
+          "service": "front-end",
+          "metrics": [
+            "mem",
+            "cpu",
+            "error",
+            "workload",
+            "socket"
+          ]
+        },
+        {
+          "service": "rabbitmq",
+          "metrics": [
+            "mem",
+            "cpu"
+          ]
+        },
+        {
+          "service": "carts-db",
+          "metrics": [
+            "diskio",
+            "mem",
+            "cpu"
+          ]
+        },
+        {
+          "service": "catalogue",
+          "metrics": [
+            "mem",
+            "workload"
+          ]
+        },
+        {
+          "service": "payment",
+          "metrics": [
+            "mem",
+            "workload"
+          ]
+        }
+      ],
+      "predicted_root_services": [
+        "front-end",
+        "rabbitmq",
+        "carts-db",
+        "catalogue",
+        "payment"
+      ],
+      "rca_top_k_hit": false
+    },
+    {
+      "case_id": "RE3-SS/orders_f3/2",
+      "expected_incident": true,
+      "predicted_incident": true,
+      "expected_root_service": "orders",
+      "expected_root_metric": null,
+      "expected_root_causes": [
+        "orders"
+      ],
+      "predicted_root_causes": [
+        {
+          "service": "session-db",
+          "metrics": [
+            "diskio",
+            "mem"
+          ]
+        },
+        {
+          "service": "shipping",
+          "metrics": [
+            "mem",
+            "cpu",
+            "workload",
+            "socket"
+          ]
+        },
+        {
+          "service": "front-end",
+          "metrics": [
+            "mem",
+            "cpu",
+            "error",
+            "socket"
+          ]
+        },
+        {
+          "service": "user",
+          "metrics": [
+            "mem",
+            "workload",
+            "cpu"
+          ]
+        },
+        {
+          "service": "carts",
+          "metrics": [
+            "mem",
+            "cpu",
+            "workload",
+            "socket"
+          ]
+        }
+      ],
+      "predicted_root_services": [
+        "session-db",
+        "shipping",
+        "front-end",
+        "user",
+        "carts"
+      ],
+      "rca_top_k_hit": false
+    },
+    {
+      "case_id": "RE3-SS/orders_f3/3",
+      "expected_incident": true,
+      "predicted_incident": true,
+      "expected_root_service": "orders",
+      "expected_root_metric": null,
+      "expected_root_causes": [
+        "orders"
+      ],
+      "predicted_root_causes": [
+        {
+          "service": "payment",
+          "metrics": [
+            "mem",
+            "workload",
+            "socket"
+          ]
+        },
+        {
+          "service": "user-db",
+          "metrics": [
+            "mem",
+            "cpu",
+            "diskio",
+            "socket"
+          ]
+        },
+        {
+          "service": "carts",
+          "metrics": [
+            "mem"
+          ]
+        },
+        {
+          "service": "session-db",
+          "metrics": [
+            "diskio",
+            "mem"
+          ]
+        },
+        {
+          "service": "carts-db",
+          "metrics": [
+            "diskio",
+            "mem",
+            "cpu"
+          ]
+        }
+      ],
+      "predicted_root_services": [
+        "payment",
+        "user-db",
+        "carts",
+        "session-db",
+        "carts-db"
+      ],
+      "rca_top_k_hit": false
+    },
+    {
+      "case_id": "RE3-SS/orders_f4/1",
+      "expected_incident": true,
+      "predicted_incident": true,
+      "expected_root_service": "orders",
+      "expected_root_metric": null,
+      "expected_root_causes": [
+        "orders"
+      ],
+      "predicted_root_causes": [
+        {
+          "service": "user",
+          "metrics": [
+            "mem",
+            "cpu",
+            "socket",
+            "workload"
+          ]
+        },
+        {
+          "service": "session-db",
+          "metrics": [
+            "diskio",
+            "mem",
+            "socket"
+          ]
+        },
+        {
+          "service": "orders-db",
+          "metrics": [
+            "diskio",
+            "mem",
+            "socket"
+          ]
+        },
+        {
+          "service": "front-end",
+          "metrics": [
+            "mem",
+            "cpu",
+            "socket",
+            "workload",
+            "error"
+          ]
+        },
+        {
+          "service": "payment",
+          "metrics": [
+            "mem",
+            "workload"
+          ]
+        }
+      ],
+      "predicted_root_services": [
+        "user",
+        "session-db",
+        "orders-db",
+        "front-end",
+        "payment"
+      ],
+      "rca_top_k_hit": false
+    },
+    {
+      "case_id": "RE3-SS/orders_f4/2",
+      "expected_incident": true,
+      "predicted_incident": true,
+      "expected_root_service": "orders",
+      "expected_root_metric": null,
+      "expected_root_causes": [
+        "orders"
+      ],
+      "predicted_root_causes": [
+        {
+          "service": "orders-db",
+          "metrics": [
+            "mem",
+            "diskio"
+          ]
+        },
+        {
+          "service": "user",
+          "metrics": [
+            "mem",
+            "cpu",
+            "workload"
+          ]
+        },
+        {
+          "service": "payment",
+          "metrics": [
+            "mem"
+          ]
+        },
+        {
+          "service": "session-db",
+          "metrics": [
+            "diskio",
+            "mem",
+            "socket"
+          ]
+        },
+        {
+          "service": "shipping",
+          "metrics": [
+            "mem",
+            "workload"
+          ]
+        }
+      ],
+      "predicted_root_services": [
+        "orders-db",
+        "user",
+        "payment",
+        "session-db",
+        "shipping"
+      ],
+      "rca_top_k_hit": false
+    },
+    {
+      "case_id": "RE3-SS/orders_f4/3",
+      "expected_incident": true,
+      "predicted_incident": true,
+      "expected_root_service": "orders",
+      "expected_root_metric": null,
+      "expected_root_causes": [
+        "orders"
+      ],
+      "predicted_root_causes": [
+        {
+          "service": "session-db",
+          "metrics": [
+            "diskio",
+            "mem",
+            "socket"
+          ]
+        },
+        {
+          "service": "front-end",
+          "metrics": [
+            "mem",
+            "cpu",
+            "error",
+            "workload",
+            "socket"
+          ]
+        },
+        {
+          "service": "carts",
+          "metrics": [
+            "mem",
+            "cpu",
+            "workload",
+            "socket"
+          ]
+        },
+        {
+          "service": "shipping",
+          "metrics": [
+            "mem",
+            "workload",
+            "socket"
+          ]
+        },
+        {
+          "service": "queue-master",
+          "metrics": [
+            "mem"
+          ]
+        }
+      ],
+      "predicted_root_services": [
+        "session-db",
+        "front-end",
+        "carts",
+        "shipping",
+        "queue-master"
+      ],
+      "rca_top_k_hit": false
+    }
+  ]
+}

@@ -1,0 +1,41 @@
+# Scenario 3 - BURN RATE (checkout SLO error budget)
+
+## Paths (canonical)
+- State: state/7b/s3-burn-rate/
+  - aiops.sqlite3 (from state/aiops-07b-burn-rate-supplement.sqlite3)
+  - rca-history.jsonl (from state/rca-history-07b-burn-rate.jsonl)
+- Baseline dataset: evaluate/dataset/mandate7b_live/burn_rate_normal_baseline/
+- Fault dataset: evaluate/dataset/mandate7b_live/burn_rate_real_incident/
+- Incidents export: evaluate/dataset/mandate7b_live/burn_rate_fault_incidents.json
+- Final incidents: evaluate/dataset/mandate7b_live/burn_rate_fault_incidents_final.json
+
+## Fault and detector
+- Fault flag: local-paymentFailure (escalate 50% -> 75% -> 100%)
+- Detector: ops01_checkout_slo_burn_rate
+- Signal: checkout_error_budget_burn_rate_24h (24h window, threshold 1.0x)
+- Primary incident: inc-ca09d8e8a247 (occurrence_count 1 -> 2 -> 3+; dedup / no-spam)
+
+## Observed behavior
+- Baseline burn rate below 1x before fault
+- Burn rate crossed 1.0x after payment failure escalation
+- Detector fired (~value 1.15–1.22 on verified samples)
+- Fault disabled; supporting error-ratio / recovery evidence in screenshots
+- 24h burn window does not recover immediately after fault off (expected caveat)
+
+## Evidence files (screenshots)
+- 18a-burn-rate-baseline-runtime-no-fire.png
+- 18b-burn-rate-baseline-below-1x.png
+- 18c-burn-rate-fault-enabled-50-percent.png
+- 18d-burn-rate-fault-escalated-75-percent.png
+- 18e-burn-rate-fault-escalated-100-percent.png
+- 18f-burn-rate-crossed-1x-grafana.png
+- 18g-burn-rate-detector-fired-incident-notification.png
+- 18h-burn-rate-dedup-same-incident-occurrence2.png
+- 18i-burn-rate-fault-disabled.png
+- 18j-burn-rate-final-incident-api-occurrence3.png
+- 18k-burn-rate-supporting-error-ratio-impact-recovery.png
+
+## Dataset note
+- Incidents JSON exported from sqlite (same role as cart_fault_incidents*.json).
+- burn_rate_* folders: label.json present; metric_series.json / simple_metrics.csv chưa có (lần chạy này không lưu capture Prometheus riêng — khác cart/checkout_memory).
+
