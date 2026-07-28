@@ -15,6 +15,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
 )
 
+const preparedStatus = "prepared"
 const pendingStatus = "pending"
 const publishedStatus = "published"
 
@@ -53,6 +54,90 @@ func New(ctx context.Context, table string, logger *slog.Logger) (*Store, error)
 		logger: logger,
 		worker: fmt.Sprintf("worker-%d", time.Now().UnixNano()),
 	}, nil
+}
+
+func NewWithClient(client dynamoClient, table string, logger *slog.Logger) *Store {
+	return &Store{
+		client: client,
+		table:  table,
+		logger: logger,
+		worker: "test-worker",
+	}
+}
+
+func (s *Store) Prepare(ctx context.Context, event Event) error {
+	if event.ID == "" || len(event.Payload) == 0 {
+		return fmt.Errorf("event id and payload are required")
+	}
+	_, err := s.client.PutItem(ctx, &dynamodb.PutItemInput{
+		TableName: &s.table,
+		Item: map[string]types.AttributeValue{
+			"event_id":   &types.AttributeValueMemberS{Value: event.ID},
+			"status":     &types.AttributeValueMemberS{Value: preparedStatus},
+			"created_at": &types.AttributeValueMemberN{Value: strconv.FormatInt(time.Now().UnixMilli(), 10)},
+			"payload":    &types.AttributeValueMemberB{Value: event.Payload},
+		},
+		ConditionExpression: strPtr("attribute_not_exists(event_id)"),
+	})
+	if err != nil {
+		return fmt.Errorf("prepare outbox event: %w", err)
+	}
+	return nil
+}
+
+func (s *Store) Activate(ctx context.Context, eventID string, chargedAt time.Time, traceID string, txID string) error {
+	if eventID == "" {
+		return fmt.Errorf("event id is required")
+	}
+	_, err := s.client.UpdateItem(ctx, &dynamodb.UpdateItemInput{
+		TableName: &s.table,
+		Key: map[string]types.AttributeValue{
+			"event_id": &types.AttributeValueMemberS{Value: eventID},
+		},
+		UpdateExpression:    strPtr("SET #status = :pending, charged_at = :charged_at, trace_id = :trace_id, transaction_id = :transaction_id"),
+		ConditionExpression: strPtr("#status = :prepared"),
+		ExpressionAttributeNames: map[string]string{
+			"#status": "status",
+		},
+		ExpressionAttributeValues: map[string]types.AttributeValue{
+			":pending":        &types.AttributeValueMemberS{Value: pendingStatus},
+			":prepared":       &types.AttributeValueMemberS{Value: preparedStatus},
+			":charged_at":     &types.AttributeValueMemberN{Value: strconv.FormatInt(chargedAt.UnixMilli(), 10)},
+			":trace_id":       &types.AttributeValueMemberS{Value: traceID},
+			":transaction_id": &types.AttributeValueMemberS{Value: txID},
+		},
+	})
+	if err != nil {
+		return fmt.Errorf("activate outbox event %s: %w", eventID, err)
+	}
+	return nil
+}
+
+func (s *Store) RemovePrepared(ctx context.Context, eventID string) error {
+	if eventID == "" {
+		return fmt.Errorf("event id is required")
+	}
+	_, err := s.client.DeleteItem(ctx, &dynamodb.DeleteItemInput{
+		TableName: &s.table,
+		Key: map[string]types.AttributeValue{
+			"event_id": &types.AttributeValueMemberS{Value: eventID},
+		},
+		ConditionExpression: strPtr("#status = :prepared"),
+		ExpressionAttributeNames: map[string]string{
+			"#status": "status",
+		},
+		ExpressionAttributeValues: map[string]types.AttributeValue{
+			":prepared": &types.AttributeValueMemberS{Value: preparedStatus},
+		},
+	})
+	if err != nil {
+		var conditional *types.ConditionalCheckFailedException
+		if errors.As(err, &conditional) {
+			return nil
+		}
+		return fmt.Errorf("remove prepared outbox event %s: %w", eventID, err)
+	}
+	return nil
 }
 
 func (s *Store) Enqueue(ctx context.Context, event Event) error {
@@ -226,3 +311,5 @@ func (s *Store) release(ctx context.Context, eventID string) {
 
 func strPtr(value string) *string { return &value }
 func int32Ptr(value int32) *int32 { return &value }
+
+// Change trail: @hungxqt - 2026-07-28 - Add Prepare, Activate, and RemovePrepared outbox methods.
