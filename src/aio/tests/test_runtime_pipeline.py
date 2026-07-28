@@ -252,6 +252,29 @@ class FakeNotificationSender:
         return {"accepted": True}
 
 
+class RecordingCorroborator:
+    def __init__(self, strong_services: set[str] | None = None):
+        self.strong_services = strong_services or set()
+        self.calls: list[list[str]] = []
+
+    def enrich(self, candidates, features):
+        return candidates
+
+    def corroborate(self, findings: list[AnomalyFinding], window_seconds: int):
+        services = [finding.service for finding in findings]
+        self.calls.append(services)
+        return {
+            service: TelemetryCorroboration(
+                service=service,
+                available_sources={"log"},
+                log_failure=service in self.strong_services,
+                log_classification="hard_failure" if service in self.strong_services else None,
+                log_failure_count=1 if service in self.strong_services else 0,
+            )
+            for service in services
+        }
+
+
 class RuntimePipelineTest(unittest.TestCase):
     def test_pipeline_wraps_same_service_signals_into_one_notification(self):
         settings = Settings()
@@ -353,6 +376,76 @@ class RuntimePipelineTest(unittest.TestCase):
             pipeline.store.close()
 
         self.assertIn("slo_threshold", {finding.algorithm for finding in result.anomalies})
+
+    def test_rca_enrichment_queries_root_first(self):
+        settings = Settings()
+        enricher = RecordingCorroborator({"checkout"})
+        with TemporaryDirectory() as tmp:
+            pipeline = AiopsPipeline(
+                collector=StaticCollector([]),
+                detectors=[],
+                store=SQLiteIncidentStore(Path(tmp) / "aiops.sqlite3", environment=settings.environment),
+                policy=policy(settings),
+                enricher=enricher,
+                **runtime_kwargs(settings),
+            )
+            result = RcaResult(root_causes=[RootCauseCandidate(service="checkout", score=1.0, root_cause_metrics=["cpu_millicores"])])
+            findings = [
+                AnomalyFinding(algorithm="weighted_sum", service="checkout", metric="cpu_millicores", signal_id="checkout_cpu_millicores", score=1.0, timestamp=10),
+                AnomalyFinding(algorithm="weighted_sum", service="payment", metric="cpu_millicores", signal_id="payment_cpu_millicores", score=1.0, timestamp=10),
+            ]
+
+            corroboration = pipeline._staged_rca_corroboration(result, findings, findings, [], 900)
+            pipeline.store.close()
+
+        self.assertEqual(enricher.calls, [["checkout"]])
+        self.assertTrue(corroboration["checkout"].log_failure)
+
+    def test_rca_enrichment_falls_back_to_direct_dependencies_when_root_is_weak(self):
+        settings = Settings()
+        enricher = RecordingCorroborator({"payment"})
+        with TemporaryDirectory() as tmp:
+            pipeline = AiopsPipeline(
+                collector=StaticCollector([]),
+                detectors=[],
+                store=SQLiteIncidentStore(Path(tmp) / "aiops.sqlite3", environment=settings.environment),
+                policy=policy(settings),
+                enricher=enricher,
+                **runtime_kwargs(settings),
+            )
+            result = RcaResult(root_causes=[RootCauseCandidate(service="checkout", score=1.0, root_cause_metrics=["cpu_millicores"])])
+            findings = [AnomalyFinding(algorithm="weighted_sum", service="checkout", metric="cpu_millicores", signal_id="checkout_cpu_millicores", score=1.0, timestamp=10)]
+
+            corroboration = pipeline._staged_rca_corroboration(result, findings, findings, [], 900)
+            pipeline.store.close()
+
+        self.assertEqual(enricher.calls[0], ["checkout"])
+        self.assertIn("payment", set(enricher.calls[1]))
+        self.assertTrue(corroboration["payment"].log_failure)
+
+    def test_rca_enrichment_queries_anomalies_only_for_low_or_competing_roots(self):
+        settings = Settings()
+        enricher = RecordingCorroborator()
+        with TemporaryDirectory() as tmp:
+            pipeline = AiopsPipeline(
+                collector=StaticCollector([]),
+                detectors=[],
+                store=SQLiteIncidentStore(Path(tmp) / "aiops.sqlite3", environment=settings.environment),
+                policy=policy(settings),
+                enricher=enricher,
+                **runtime_kwargs(settings),
+            )
+            result = RcaResult(root_causes=[RootCauseCandidate(service="checkout", score=0.1, root_cause_metrics=["cpu_millicores"])])
+            findings = [
+                AnomalyFinding(algorithm="weighted_sum", service="checkout", metric="cpu_millicores", signal_id="checkout_cpu_millicores", score=1.0, timestamp=10),
+                AnomalyFinding(algorithm="weighted_sum", service="frontend", metric="cpu_millicores", signal_id="frontend_cpu_millicores", score=1.0, timestamp=10),
+            ]
+
+            pipeline._staged_rca_corroboration(result, findings, findings, [], 900)
+            pipeline.store.close()
+
+        self.assertEqual(enricher.calls[0], ["checkout"])
+        self.assertIn("frontend", set(enricher.calls[-1]))
 
     def test_rca_dedup_respects_configured_one_hop_scope(self):
         settings = Settings()

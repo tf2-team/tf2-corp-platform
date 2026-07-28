@@ -146,11 +146,11 @@
       "min_tail_anomaly_buckets": {
         "error": 1,
         "latency": 3,
-        "cpu": 5,
-        "memory": 8,
-        "disk": 2,
-        "socket_io": 5,
-        "request_rate": 2,
+        "cpu": 3,
+        "memory": 6,
+        "disk": 3,
+        "socket_io": 3,
+        "request_rate": 3,
         "default": 4
       },
       "min_relative_change_ratio": {

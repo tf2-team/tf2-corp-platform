@@ -18,7 +18,7 @@ from aiops.enrichment import Enricher
 from aiops.features import FeatureBuilder
 from aiops.anomaly import build_v001_anomaly_engine
 from aiops.rca import V001RcaEngine, is_root_cause_metric
-from aiops.schemas import AnomalyFinding, EvidenceItem, MetricSeries, NotificationMessage, PipelineResult, PolicyDecision, RcaResult, RootCauseCandidate, RuntimeConfig, SignalQuality
+from aiops.schemas import AnomalyFinding, EvidenceItem, MetricSeries, NotificationMessage, PipelineResult, PolicyDecision, RcaResult, RootCauseCandidate, RuntimeConfig, SignalQuality, TelemetryCorroboration
 from aiops.normalization import Normalizer
 from aiops.notifications import is_slo_notification
 from aiops.qualification import QualificationGate
@@ -365,17 +365,8 @@ class AiopsPipeline:
             )
             return RcaResult()
         anomaly_engine = build_v001_anomaly_engine(config)
-        findings = anomaly_engine.evaluate(detector_series, logs=log_messages) if log_messages else anomaly_engine.evaluate(detector_series)
+        anomaly_findings = anomaly_engine.evaluate(detector_series, logs=log_messages) if log_messages else anomaly_engine.evaluate(detector_series)
         anomaly_config = config["anomaly"]
-        corroboration = self.enricher.corroborate(impact_findings + findings, int(anomaly_config["evidence_window_seconds"]))
-        findings = impact_findings + _apply_corroboration(
-            findings,
-            detector_series,
-            corroboration,
-            float(anomaly_config["no_evidence_multiplier"]),
-            float(anomaly_config["single_evidence_bonus"]),
-            float(anomaly_config["dual_evidence_bonus"]),
-        )
         rca_engine = V001RcaEngine(
             self.runtime_config,
             config["graph"],
@@ -385,18 +376,63 @@ class AiopsPipeline:
         breakout_metrics = getattr(anomaly_engine, "last_normal_growth_breakout_metrics", {})
         normal_growth_metrics = getattr(anomaly_engine, "last_normal_growth_metrics", {})
         top_k = int(config["top_k"])
-        result = rca_engine.rank(
-            findings,
-            detector_series,
-            top_k=top_k + len(normal_growth_metrics),
-            corroboration=corroboration,
+        findings = impact_findings + anomaly_findings
+        rank_args = {
+            "top_k": top_k + len(normal_growth_metrics),
             **({"breakout_metrics": breakout_metrics} if breakout_metrics else {}),
+        }
+        result = rca_engine.rank(findings, detector_series, corroboration={}, **rank_args)
+        corroboration = self._staged_rca_corroboration(
+            result,
+            findings,
+            anomaly_findings,
+            detector_series,
+            int(anomaly_config["evidence_window_seconds"]),
         )
+        if _should_boost_from_anomaly_enrichment(result, float(self.correlation_hyperparameters["suppress_min_root_score"])):
+            anomaly_findings = _apply_corroboration(
+                anomaly_findings,
+                detector_series,
+                corroboration,
+                float(anomaly_config["no_evidence_multiplier"]),
+                float(anomaly_config["single_evidence_bonus"]),
+                float(anomaly_config["dual_evidence_bonus"]),
+            )
+            findings = impact_findings + anomaly_findings
+        if corroboration:
+            result = rca_engine.rank(findings, detector_series, corroboration=corroboration, **rank_args)
         if normal_growth_metrics:
             result = result.model_copy(update={"root_causes": _filter_normal_growth_root_metrics(result.root_causes, normal_growth_metrics, top_k)})
         algorithm_findings = list(getattr(anomaly_engine, "last_algorithm_findings", []) or [])
         _log_final_root_cause_algorithm_scores(result, algorithm_findings)
         return result.model_copy(update={"algorithm_findings": algorithm_findings})
+
+    def _staged_rca_corroboration(
+        self,
+        result: RcaResult,
+        findings: list[AnomalyFinding],
+        anomaly_findings: list[AnomalyFinding],
+        series: list[MetricSeries],
+        window_seconds: int,
+    ) -> dict[str, TelemetryCorroboration]:
+        if not result.root_causes:
+            return {}
+        root = result.root_causes[0]
+        root_finding = _service_context_finding(root.service, findings, series, root)
+        corroboration = self.enricher.corroborate([root_finding], window_seconds)
+        logger.info("AIOPS_RCA_ENRICH stage=root service=%s strong=%s", root.service, _has_strong_corroboration(corroboration.values()))
+        if not _has_strong_corroboration(corroboration.values()):
+            dependencies = _direct_dependencies(self.topology_graph, root.service)
+            if dependencies:
+                dependency_findings = [_service_context_finding(service, findings, series, root) for service in dependencies]
+                corroboration.update(self.enricher.corroborate(dependency_findings, window_seconds))
+                logger.info("AIOPS_RCA_ENRICH stage=dependency_path root_service=%s services=%s strong=%s", root.service, sorted(dependencies), _has_strong_corroboration(corroboration.values()))
+        if _should_boost_from_anomaly_enrichment(result, float(self.correlation_hyperparameters["suppress_min_root_score"])):
+            missing = {finding.service for finding in anomaly_findings} - set(corroboration)
+            if missing:
+                corroboration.update(self.enricher.corroborate([_service_context_finding(service, findings, series, root) for service in missing], window_seconds))
+                logger.info("AIOPS_RCA_ENRICH stage=anomaly_boost services=%s reason=low_score_or_multiple_roots", sorted(missing))
+        return corroboration
 
     def _record_rca_history(
         self,
@@ -631,6 +667,42 @@ def _filter_normal_growth_root_metrics(root_causes: list[RootCauseCandidate], no
     if suppressed:
         logger.info("AIOPS_RCA_BUSY_SUPPRESSED metrics=%s", {service: sorted(metrics) for service, metrics in suppressed.items()})
     return kept
+
+
+def _has_strong_corroboration(items) -> bool:
+    return any(item.log_failure or item.trace_failure for item in items)
+
+
+def _should_boost_from_anomaly_enrichment(result: RcaResult, low_score_threshold: float) -> bool:
+    return bool(result.root_causes) and (result.root_causes[0].score < low_score_threshold or len(result.root_causes) > 1)
+
+
+def _direct_dependencies(topology_graph: TopologyGraph | None, service: str) -> set[str]:
+    if topology_graph is None or not topology_graph.contains(service):
+        return set()
+    return set(topology_graph.graph.successors(service))
+
+
+def _service_context_finding(
+    service: str,
+    findings: list[AnomalyFinding],
+    series: list[MetricSeries],
+    root: RootCauseCandidate,
+) -> AnomalyFinding:
+    timestamp = max(
+        [finding.timestamp for finding in findings if finding.service == service]
+        + [metric.points[-1].timestamp for metric in series if metric.service == service and metric.points],
+        default=0,
+    )
+    metric = root.root_cause_metrics[0] if root.root_cause_metrics else "rca_root"
+    return AnomalyFinding(
+        algorithm="rca_enrichment",
+        service=service,
+        metric=metric,
+        signal_id=f"{service}_{metric}",
+        score=root.score,
+        timestamp=timestamp,
+    )
 
 
 def _service_oom_counter_increased(service: str, series: list[MetricSeries], detection_window_seconds: int | None, start: int) -> bool:
