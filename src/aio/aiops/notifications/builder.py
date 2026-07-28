@@ -3,8 +3,24 @@
 # SPDX-License-Identifier: Apache-2.0
 from __future__ import annotations
 
+from pathlib import Path
+
+from aiops.config.hyperparameters import load_hyperparameters
 from aiops.schemas import CandidateEvent, Incident, NotificationMessage
 from aiops.shared.metrics import is_error_metric
+
+DEFAULT_IMPORTANT_EVIDENCE_MARKERS = (
+    "Trace/log enrichment",
+    "log_",
+    "trace_",
+    "graph_score",
+    "earliest_drift_score",
+    "shape_correlation_score",
+    "downstream_coverage_score",
+    "weighted_rrf_score",
+    "evidence_strength",
+    "support_score",
+)
 
 
 def is_slo_notification(event: CandidateEvent) -> bool:
@@ -17,6 +33,11 @@ def is_slo_notification(event: CandidateEvent) -> bool:
 
 
 class NotificationBuilder:
+    def __init__(self, hyperparameters: dict | None = None):
+        config = hyperparameters or load_hyperparameters(Path("config/hyperparameters.json")).get("notification", {})
+        self.important_evidence_limit = int(config.get("important_evidence_limit", 8))
+        self.important_evidence_markers = tuple(config.get("important_evidence_markers", DEFAULT_IMPORTANT_EVIDENCE_MARKERS))
+
     def build(self, incidents: list[Incident]) -> list[NotificationMessage]:
         return [self._build_one(incident) for incident in incidents]
 
@@ -32,7 +53,13 @@ class NotificationBuilder:
             severity=incident.severity,
             state=incident.state,
             title=title,
-            summary=_event_summary(incident, last_event, signals),
+            summary=_event_summary(
+                incident,
+                last_event,
+                signals,
+                self.important_evidence_limit,
+                self.important_evidence_markers,
+            ),
             flow=incident.flow,
             service=incident.service,
             likely_dependency=dependency,
@@ -40,7 +67,13 @@ class NotificationBuilder:
         )
 
 
-def _event_summary(incident: Incident, event: CandidateEvent, signals: tuple[str, ...]) -> str:
+def _event_summary(
+    incident: Incident,
+    event: CandidateEvent,
+    signals: tuple[str, ...],
+    important_evidence_limit: int,
+    important_evidence_markers: tuple[str, ...],
+) -> str:
     signal_label = "Metric" if event.detector_id == "rca_root_cause" else "Signal"
     lines = [f"Detected: {event.reason}", f"{signal_label}: {', '.join(signals)}"]
     if event.detector_id == "rca_root_cause":
@@ -52,7 +85,7 @@ def _event_summary(incident: Incident, event: CandidateEvent, signals: tuple[str
         lines.append(f"Threshold: {_format_number(event.threshold)}{_unit_suffix(event.unit)}")
     if event.window:
         lines.append(f"Window: {event.window}")
-    if evidence := _important_evidence(event):
+    if evidence := _important_evidence(event, important_evidence_limit, important_evidence_markers):
         lines.append("Evidence:")
         lines.extend(f"- {item}" for item in evidence)
     lines.append(f"Action: {_action_hint(event.runbook_id, ','.join(signals))}")
@@ -60,12 +93,12 @@ def _event_summary(incident: Incident, event: CandidateEvent, signals: tuple[str
     return "\n".join(lines)
 
 
-def _important_evidence(event: CandidateEvent) -> list[str]:
+def _important_evidence(event: CandidateEvent, limit: int, markers: tuple[str, ...]) -> list[str]:
     raw = [item.summary for item in event.evidence if item.summary]
     keep = []
-    for marker in ("log_", "trace_", "graph_score", "earliest_drift_score", "shape_correlation_score", "downstream_coverage_score", "weighted_rrf_score", "evidence_strength", "support_score"):
+    for marker in markers:
         keep.extend(item for item in raw if marker in item and item not in keep)
-    return keep[:6]
+    return keep[:limit]
 
 
 def _action_hint(runbook_id: str, context: str = "") -> str:

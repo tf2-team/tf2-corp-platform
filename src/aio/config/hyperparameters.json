@@ -8,6 +8,27 @@
     "notification_retry_max_seconds": 3600,
     "notification_error_max_chars": 512
   },
+  "notification": {
+    "important_evidence_limit": 20,
+    "important_evidence_markers": [
+      "Trace/log enrichment",
+      "log_",
+      "trace_",
+      "graph_score",
+      "earliest_drift_score",
+      "shape_correlation_score",
+      "downstream_coverage_score",
+      "weighted_rrf_score",
+      "evidence_strength",
+      "support_score"
+    ]
+  },
+  "api": {
+    "grafana_annotation_max_chars": 5024
+  },
+  "replay": {
+    "explanation_finding_limit": 5
+  },
   "enrichment": {
     "corroboration_log_hits": 1,
     "corroboration_trace_limit": 20,

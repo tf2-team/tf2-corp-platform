@@ -10,7 +10,7 @@ from pathlib import Path
 from aiops.config import load_runtime_config
 from aiops.detectors import ThresholdDetector
 from aiops.features import FeatureBuilder
-from aiops.schemas import CandidateEvent, Observation, SignalQuality
+from aiops.schemas import CandidateEvent, EvidenceItem, Observation, SignalQuality
 from aiops.storage import SQLiteIncidentStore
 from aiops.topology import TopologyGraph
 
@@ -202,6 +202,68 @@ class SQLiteIncidentStoreTest(unittest.TestCase):
 
         self.assertEqual({message.incident_id for message in notifications}, {slo.incident_id, rca.incident_id})
         self.assertEqual(cooldown_rows, [("rca:product-reviews",), ("slo:product-reviews",)])
+
+    def test_rca_sends_one_supplement_when_strong_evidence_arrives_after_weak_notification(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            store = SQLiteIncidentStore(Path(tmp) / "aiops.sqlite3", environment="tf2", rca_dedup_seconds=900)
+            weak = service_candidate("product-reviews", "rca_root_cause").model_copy(
+                update={"signal_id": "cpu_millicores", "reason": "rca_root_cause"}
+            )
+            incident = store.upsert(weak)
+            store.mark_notification_sent(incident.incident_id)
+
+            strong = weak.model_copy(
+                update={
+                    "evidence": (
+                        EvidenceItem(
+                            source="rca",
+                            reference="product-reviews",
+                            summary="log_classification=hard_failure count=1 excerpt=timeout",
+                        ),
+                    )
+                }
+            )
+            repeated = store.upsert(strong)
+            duplicate = store.upsert(strong)
+            notifications = store.pending_notifications_for([repeated, duplicate])
+            store.close()
+
+        self.assertEqual(incident.incident_id, repeated.incident_id)
+        self.assertEqual(len(notifications), 1)
+        self.assertTrue(notifications[0].incident_id.endswith(":supplement"))
+        self.assertTrue(notifications[0].title.startswith("bổ sung:"))
+        self.assertIn("bổ sung", notifications[0].summary)
+        self.assertIn("log_classification=hard_failure", notifications[0].summary)
+
+    def test_rca_supplement_expires_after_dedup_window(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            store = SQLiteIncidentStore(Path(tmp) / "aiops.sqlite3", environment="tf2", rca_dedup_seconds=900)
+            weak = service_candidate("product-reviews", "rca_root_cause").model_copy(
+                update={"signal_id": "cpu_millicores", "reason": "rca_root_cause"}
+            )
+            incident = store.upsert(weak)
+            store.mark_notification_sent(incident.incident_id)
+            store._connection.execute(
+                "UPDATE notification_outbox SET created_at = datetime('now', '-16 minutes') WHERE incident_id = ?",
+                (incident.incident_id,),
+            )
+
+            strong = weak.model_copy(
+                update={
+                    "evidence": (
+                        EvidenceItem(
+                            source="rca",
+                            reference="product-reviews",
+                            summary="trace_id=abc operation=GET status=error",
+                        ),
+                    )
+                }
+            )
+            repeated = store.upsert(strong)
+            notifications = store.pending_notifications_for([repeated])
+            store.close()
+
+        self.assertEqual(notifications, [])
 
     def test_sev1_bypasses_same_service_cooldown(self):
         with tempfile.TemporaryDirectory() as tmp:

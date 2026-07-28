@@ -33,6 +33,7 @@ from aiops.remediation import (
     RemediationFeatureExtractor,
 )
 from aiops.schemas import GrafanaNormalizedEvent, GrafanaWebhookEvent, HealthResponse, Incident, PipelineResult, PipelineRunRequest
+from aiops.shared.evidence import STRONG_TRACE_MARKER
 from aiops.storage import SQLiteIncidentStore
 from aiops.topology import TopologyGraph
 
@@ -170,7 +171,7 @@ def print_rca_result(result: PipelineResult) -> None:
             flush=True,
         )
     for root in result.rca_result.root_causes:
-        trace = next((item for item in root.evidence if item.startswith("trace_id=")), "")
+        trace = next((item for item in root.evidence if item.startswith(STRONG_TRACE_MARKER)), "")
         print(
             "AIOPS_ROOT_CAUSE "
             f"service={root.service} "
@@ -260,6 +261,7 @@ def handle_grafana_webhook(
     settings: Settings | None = None,
 ) -> GrafanaNormalizedEvent:
     settings = settings or Settings()
+    max_annotation_chars = int(load_hyperparameters(settings.hyperparameters_path).get("api", {}).get("grafana_annotation_max_chars", 2048))
     if not _configured_secret(settings.grafana_webhook_secret):
         raise HTTPException(status_code=503, detail="grafana webhook is not configured")
     if not hmac.compare_digest(x_aiops_grafana_secret, settings.grafana_webhook_secret):
@@ -274,7 +276,7 @@ def handle_grafana_webhook(
         starts_at=alert.starts_at,
         ends_at=alert.ends_at,
         labels=alert.labels,
-        annotations_redacted={key: value[:2048] for key, value in alert.annotations.items()},
+        annotations_redacted={key: value[:max_annotation_chars] for key, value in alert.annotations.items()},
         links={"generator": alert.generator_url, "dashboard": alert.dashboard_url, "panel": alert.panel_url},
     )
 

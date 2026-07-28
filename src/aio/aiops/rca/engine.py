@@ -9,6 +9,7 @@ from collections import defaultdict
 from aiops.anomaly.stats import robust_score
 from aiops.rca.graph import GraphTraversalRca
 from aiops.schemas import AnomalyFinding, MetricSeries, RcaResult, RootCauseCandidate, RuntimeConfig, TelemetryCorroboration
+from aiops.shared.evidence import log_summary, trace_summary
 from aiops.shared.metrics import is_root_cause_metric, metric_priority
 from aiops.shared.tail import fixed_baseline_and_tail, metric_group, significant_tail_change, tail_aligned_spearman
 from aiops.topology import TopologyGraph
@@ -230,15 +231,29 @@ class V001RcaEngine:
             trace_root = self._canonical_service(evidence.trace_root_service or "")
             if evidence.trace_failure and trace_root:
                 trace_details[trace_root].append(
-                    f"trace_id={evidence.trace_id or 'unknown'} operation={evidence.trace_operation or 'unknown'} status={evidence.trace_status or 'unknown'} "
-                    f"upstream={source} downstream={trace_root} duration_ms={(evidence.trace_duration_ms or 0.0):.3f} reference={evidence.trace_reference or 'unknown'}"
+                    trace_summary(
+                        evidence.trace_id,
+                        evidence.trace_operation,
+                        evidence.trace_status,
+                        evidence.trace_duration_ms,
+                        evidence.trace_reference,
+                        upstream=source,
+                        downstream=trace_root,
+                    )
                 )
-            if evidence.log_failure:
-                detail = (
-                    f"log_classification={evidence.log_classification or 'unknown'} count={evidence.log_failure_count} "
-                    f"timestamp={evidence.log_failure_timestamp or 0} reference={evidence.log_reference or 'unknown'} "
-                    f"excerpt={evidence.log_excerpt or 'unknown'}"
+            elif evidence.trace_id:
+                trace_details[self._canonical_service(source)].append(
+                    trace_summary(
+                        evidence.trace_id,
+                        evidence.trace_operation,
+                        evidence.trace_status,
+                        evidence.trace_duration_ms,
+                        evidence.trace_reference,
+                        observed=True,
+                    )
                 )
+            if evidence.log_failure or evidence.log_failure_count:
+                detail = log_summary(evidence.log_classification, evidence.log_failure_count, evidence.log_failure_timestamp, evidence.log_reference, evidence.log_excerpt)
                 log_details[self._canonical_service(source)].append(detail)
                 if trace_root:
                     log_details[trace_root].append(detail)

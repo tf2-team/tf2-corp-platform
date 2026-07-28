@@ -12,8 +12,10 @@ from pathlib import Path
 from aiops.incidents import incident_fingerprint
 from aiops.notifications import NotificationBuilder, is_slo_notification
 from aiops.schemas import CandidateEvent, Incident, NotificationMessage
+from aiops.shared.evidence import STRONG_LOG_MARKER, STRONG_TRACE_MARKER
 
 logger = logging.getLogger(__name__)
+SUPPLEMENTAL_NOTIFICATION_SUFFIX = ":supplement"
 
 
 class SQLiteIncidentStore:
@@ -209,6 +211,26 @@ class SQLiteIncidentStore:
                         incident.severity,
                         notification.runbook_id,
                     )
+            supplemental = self._supplemental_rca_notification(incident, candidate)
+            if supplemental is not None:
+                self._connection.execute(
+                    """
+                    INSERT INTO notification_outbox (
+                        incident_id, fingerprint, notification_json, status, next_attempt_at
+                    )
+                    VALUES (?, ?, ?, 'pending', ?)
+                    """,
+                    (supplemental.incident_id, fingerprint, supplemental.model_dump_json(), _now()),
+                )
+                self._last_enqueued_incident_ids.add(supplemental.incident_id)
+                notification_enqueued = True
+                logger.info(
+                    "AIOPS_NOTIFY_ENQUEUED_READY incident=%s service=%s severity=%s runbook=%s status=pending reason=strong_evidence_supplement",
+                    supplemental.incident_id,
+                    supplemental.service,
+                    supplemental.severity,
+                    supplemental.runbook_id,
+                )
             elif service_suppressed:
                 logger.info(
                     "AIOPS_NOTIFY_SUPPRESSED filter=service_notification_cooldown source=notification incident=%s service=%s reason=same_service_cooldown cooldown_key=%s",
@@ -404,6 +426,11 @@ class SQLiteIncidentStore:
 
     def pending_notifications_for(self, incidents: list[Incident]) -> list[NotificationMessage]:
         incident_ids = [incident.incident_id for incident in incidents if incident.incident_id in self._last_enqueued_incident_ids]
+        incident_ids.extend(
+            f"{incident.incident_id}{SUPPLEMENTAL_NOTIFICATION_SUFFIX}"
+            for incident in incidents
+            if f"{incident.incident_id}{SUPPLEMENTAL_NOTIFICATION_SUFFIX}" in self._last_enqueued_incident_ids
+        )
         if not incident_ids:
             return []
         placeholders = ",".join("?" for _ in incident_ids)
@@ -500,6 +527,36 @@ class SQLiteIncidentStore:
         if "root_score" not in columns:
             self._connection.execute("ALTER TABLE active_root_causes ADD COLUMN root_score REAL NOT NULL DEFAULT 0")
 
+    def _supplemental_rca_notification(self, incident: Incident, candidate: CandidateEvent) -> NotificationMessage | None:
+        if candidate.detector_id != "rca_root_cause" or not _has_strong_trace_log_evidence(candidate):
+            return None
+        supplement_id = f"{incident.incident_id}{SUPPLEMENTAL_NOTIFICATION_SUFFIX}"
+        if self._connection.execute("SELECT 1 FROM notification_outbox WHERE incident_id = ?", (supplement_id,)).fetchone():
+            return None
+        row = self._connection.execute(
+            """
+            SELECT notification_json
+            FROM notification_outbox
+            WHERE incident_id = ?
+              AND status = 'sent'
+              AND datetime(created_at, '+' || ? || ' seconds') >= CURRENT_TIMESTAMP
+            """,
+            (incident.incident_id, self.rca_dedup_seconds),
+        ).fetchone()
+        if row is None:
+            return None
+        original = NotificationMessage.model_validate_json(row[0])
+        if _notification_has_strong_trace_log_evidence(original):
+            return None
+        message = NotificationBuilder().build([incident])[0]
+        return message.model_copy(
+            update={
+                "incident_id": supplement_id,
+                "title": f"bổ sung: {message.title}",
+                "summary": f"bổ sung cho {incident.incident_id}\n{message.summary}",
+            }
+        )
+
 
 def _seen_at(candidate: CandidateEvent) -> str:
     return _candidate_seen_at(candidate).isoformat()
@@ -525,6 +582,14 @@ def _notification_cooldown_key(service: str, slo_notification: bool, rca_notific
     if rca_notification:
         return f"rca:{service}"
     return service
+
+
+def _has_strong_trace_log_evidence(candidate: CandidateEvent) -> bool:
+    return any(STRONG_TRACE_MARKER in item.summary or STRONG_LOG_MARKER in item.summary for item in candidate.evidence)
+
+
+def _notification_has_strong_trace_log_evidence(message: NotificationMessage) -> bool:
+    return STRONG_TRACE_MARKER in message.summary or STRONG_LOG_MARKER in message.summary
 
 
 def _default_runbooks_dir() -> Path:

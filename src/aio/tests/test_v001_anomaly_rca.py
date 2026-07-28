@@ -1089,12 +1089,34 @@ class V001AnomalyRcaTest(unittest.TestCase):
         runtime_config = load_runtime_config(Path("config/runtime.json"))
         findings = [AnomalyFinding(algorithm="weighted_sum", service="checkout", metric="cpu_millicores", signal_id="checkout_cpu_millicores", score=0.8, timestamp=1000)]
         corroboration = {
-            "checkout": TelemetryCorroboration(service="checkout", available_sources={"trace"}, trace_root_service="payment")
+            "checkout": TelemetryCorroboration(service="checkout", available_sources={"trace"}, trace_root_service="payment", trace_id="trace-weak", trace_operation="charge", trace_status="OK")
         }
 
         result = rca_engine(runtime_config).rank(findings, [], top_k=5, corroboration=corroboration)
 
         self.assertEqual(result.root_causes[0].service, "checkout")
+        self.assertNotIn("trace_log_failure", result.root_causes[0].root_cause_metrics)
+        self.assertTrue(any("trace_observed id=trace-weak" in item for item in result.root_causes[0].evidence))
+
+    def test_weak_log_is_included_as_evidence_without_changing_rca(self):
+        runtime_config = load_runtime_config(Path("config/runtime.json"))
+        findings = [AnomalyFinding(algorithm="weighted_sum", service="checkout", metric="cpu_millicores", signal_id="checkout_cpu_millicores", score=0.8, timestamp=1000)]
+        corroboration = {
+            "checkout": TelemetryCorroboration(
+                service="checkout",
+                available_sources={"log"},
+                log_classification="soft_signal",
+                log_failure_count=2,
+                log_failure_timestamp=990,
+                log_reference="otel-logs/log-1",
+                log_excerpt="retrying checkout",
+            )
+        }
+
+        result = rca_engine(runtime_config).rank(findings, [], top_k=5, corroboration=corroboration)
+
+        self.assertEqual(result.root_causes[0].service, "checkout")
+        self.assertTrue(any("log_classification=soft_signal" in item for item in result.root_causes[0].evidence))
 
     def test_rca_suppresses_downstream_symptom_when_dependency_is_stronger_and_earlier(self):
         runtime_config = load_runtime_config(Path("config/runtime.json"))

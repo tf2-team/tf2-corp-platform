@@ -47,6 +47,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from aiops.anomaly.stats import robust_score
+from aiops.config.hyperparameters import load_hyperparameters
 
 DEFAULT_THRESHOLD = 3.0
 DEFAULT_CRITICAL_MULTIPLIER = 2.0
@@ -249,7 +250,8 @@ def _is_absolute_health_breach(metric: str, signal_id: str, value: float) -> boo
 def _build_summary(case_id: str, findings: list[SeriesFinding]) -> str:
     if not findings:
         return f"{case_id}: khong tin hieu nao lech khoi baseline cua chinh no -> khong co su co (no incident)."
-    parts = ", ".join(f"{finding.signal_id} (score={finding.score:.2f}, value={finding.value:g})" for finding in findings[:5])
+    limit = int(load_hyperparameters(Path("config/hyperparameters.json")).get("replay", {}).get("explanation_finding_limit", 5))
+    parts = ", ".join(f"{finding.signal_id} (score={finding.score:.2f}, value={finding.value:g})" for finding in findings[:limit])
     return f"{case_id}: {len(findings)} tin hieu lech khoi baseline: {parts}"
 
 
@@ -337,5 +339,4 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-
 

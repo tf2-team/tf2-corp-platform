@@ -108,6 +108,51 @@ class NotificationBuilderTest(unittest.TestCase):
 
         self.assertIn("- shape_correlation_score=0.750", message.summary)
 
+    def test_rca_notification_evidence_limit_is_configurable(self):
+        event = CandidateEvent(
+            detector_id="rca_root_cause",
+            flow="catalog",
+            service="product-reviews",
+            severity="SEV2",
+            signal_id="cpu_millicores",
+            value=0.3,
+            unit="score",
+            window="rca",
+            threshold=0.24,
+            quality=SignalQuality.FALLBACK_ONLY,
+            reason="rca_root_cause",
+            runbook_id="RB-SERVICE-RESOURCE",
+            confidence=0.3,
+            evidence=(
+                EvidenceItem(source="rca", reference="product-reviews", summary="trace_id=trace-1"),
+                EvidenceItem(source="rca", reference="product-reviews", summary="log_classification=hard_failure"),
+                EvidenceItem(source="rca", reference="product-reviews", summary="graph_score=0.9"),
+                EvidenceItem(source="rca", reference="product-reviews", summary="Trace/log enrichment: queried root/dependencies, no hard failure found"),
+            ),
+        )
+
+        message = NotificationBuilder(
+            {"important_evidence_limit": 3, "important_evidence_markers": ["Trace/log enrichment", "log_", "trace_", "graph_score"]}
+        ).build(
+            [
+                Incident(
+                    incident_id="inc-1",
+                    fingerprint="fp",
+                    state="open",
+                    severity="SEV2",
+                    flow="catalog",
+                    service="product-reviews",
+                    likely_dependency="unknown",
+                    events=[event],
+                )
+            ]
+        )[0]
+
+        self.assertIn("- Trace/log enrichment: queried root/dependencies, no hard failure found", message.summary)
+        self.assertIn("- log_classification=hard_failure", message.summary)
+        self.assertIn("- trace_id=trace-1", message.summary)
+        self.assertNotIn("- graph_score=0.9", message.summary)
+
 
 class FeatureBuilderTest(unittest.TestCase):
     def test_missing_signal_stays_unknown_not_zero(self):

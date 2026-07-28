@@ -12,6 +12,7 @@ from typing import Any, Protocol
 from aiops.config.hyperparameters import load_hyperparameters
 from aiops.schemas import AnomalyFinding, CandidateEvent, EvidenceItem, Feature, TelemetryCorroboration
 from aiops.schemas import RuntimeConfig
+from aiops.shared.evidence import log_search_summary, trace_summary
 from aiops.shared.features import index_features
 
 
@@ -152,6 +153,19 @@ class Enricher:
                         trace_log = self._trace_log_failure(trace_id, timestamp, window_seconds)
                         if trace_log.get("log_failure") or not update.get("log_failure"):
                             update.update(trace_log)
+                elif traces:
+                    trace = traces[0]
+                    span = next((item for item in trace.get("spans", []) if not _span_is_control_stream(item)), {})
+                    trace_id = str(trace.get("traceID", "unknown"))
+                    if span:
+                        update.update(
+                            trace_root_service=_span_service(trace, span),
+                            trace_reference=self.jaeger.trace_ui_url(trace_id),
+                            trace_id=trace_id,
+                            trace_operation=str(span.get("operationName", "unknown")),
+                            trace_status=_span_status(span),
+                            trace_duration_ms=float(span.get("duration", 0)) / 1000,
+                        )
             except Exception:
                 pass
         return TelemetryCorroboration(**update)
@@ -214,9 +228,23 @@ class Enricher:
             span = next((item for item in spans if _span_has_error(item)), spans[0] if spans else {})
             operation = span.get("operationName", "unknown")
             service = _span_service(trace, span)
-            duration = span.get("duration", "unknown")
             link = self.jaeger.trace_ui_url(trace_id)
-            return [EvidenceItem(source="trace", reference=link, summary=f"{service}/{operation} duration={duration} error_span={_span_has_error(span)}")]
+            status = _span_failure_status(span) if _span_has_failure(span) else _span_status(span)
+            return [
+                EvidenceItem(
+                    source="trace",
+                    reference=link,
+                    summary=trace_summary(
+                        trace_id,
+                        str(operation),
+                        status,
+                        float(span.get("duration", 0) or 0) / 1000,
+                        link,
+                        downstream=service,
+                        observed=not _span_has_failure(span),
+                    ),
+                )
+            ]
         except Exception as exc:
             return [EvidenceItem(source="enrichment_failure", reference="jaeger", summary=type(exc).__name__)]
 
@@ -247,7 +275,7 @@ class Enricher:
             if isinstance(total, dict):
                 total = total.get("value", 0)
             excerpts = [_redact(_hit_text(hit, self.log_excerpt_max_chars)) for hit in hits.get("hits", [])[: self.log_evidence_hits]]
-            return [EvidenceItem(source="log", reference=f"{self.opensearch_index}:bounded-search", summary=f"count={total} excerpts={excerpts}")]
+            return [EvidenceItem(source="log", reference=f"{self.opensearch_index}:bounded-search", summary=log_search_summary(int(total), excerpts))]
         except Exception as exc:
             return [EvidenceItem(source="enrichment_failure", reference="opensearch", summary=type(exc).__name__)]
 
@@ -304,11 +332,15 @@ def _span_has_failure(span: dict) -> bool:
 def _span_is_corroborating_failure(span: dict, window_seconds: int, max_request_seconds: float) -> bool:
     if not _span_has_failure(span):
         return False
-    operation = str(span.get("operationName", "")).lower()
-    if any(marker in operation for marker in ("eventstream", "event_stream", "subscribe", "watch")):
+    if _span_is_control_stream(span):
         return False
     duration_seconds = float(span.get("duration", 0) or 0) / 1_000_000
     return duration_seconds <= min(float(window_seconds), max_request_seconds)
+
+
+def _span_is_control_stream(span: dict) -> bool:
+    operation = str(span.get("operationName", "")).lower()
+    return any(marker in operation for marker in ("eventstream", "event_stream", "subscribe", "watch"))
 
 
 def _span_failure_status(span: dict) -> str:
@@ -318,6 +350,15 @@ def _span_failure_status(span: dict) -> str:
         return status
     http_status = tags.get("http.status_code", tags.get("http.response.status_code"))
     return f"HTTP_{http_status}" if http_status else ("ERROR" if _span_has_error(span) else "TIMEOUT")
+
+
+def _span_status(span: dict) -> str:
+    tags = {str(tag.get("key", "")).lower(): tag.get("value") for tag in span.get("tags", [])}
+    status = str(tags.get("otel.status_code", tags.get("status.code", ""))).upper()
+    if status:
+        return status
+    http_status = tags.get("http.status_code", tags.get("http.response.status_code"))
+    return f"HTTP_{http_status}" if http_status else "OK"
 
 
 def _span_service(trace: dict, span: dict) -> str:

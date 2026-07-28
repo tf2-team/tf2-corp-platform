@@ -27,7 +27,7 @@ from aiops.schemas import (
 )
 from aiops.pipeline import AiopsPipeline
 from aiops.notifications import is_slo_notification
-from aiops.pipeline.runtime import _algorithm_service_scores, _apply_corroboration, _filter_normal_growth_root_metrics, _slo_impact_findings
+from aiops.pipeline.runtime import _add_trace_log_enrichment_fallback, _algorithm_service_scores, _apply_corroboration, _filter_normal_growth_root_metrics, _slo_impact_findings
 from aiops.remediation import (
     ActionCatalog,
     HistoryRetriever,
@@ -502,6 +502,14 @@ class RuntimePipelineTest(unittest.TestCase):
         self.assertEqual(_apply_corroboration([finding], [], empty, 0.5, 0.15, 0.3)[0].score, 0.25)
         self.assertEqual(_apply_corroboration([finding], [], unavailable, 0.5, 0.15, 0.3)[0].score, 0.5)
 
+    def test_rca_adds_trace_log_fallback_when_enrichment_has_no_hard_failure(self):
+        result = RcaResult(root_causes=[RootCauseCandidate(service="checkout", score=1.0, root_cause_metrics=["cpu_millicores"], evidence=["graph_score=1.000"])])
+        corroboration = {"checkout": TelemetryCorroboration(service="checkout", available_sources={"log", "trace"})}
+
+        updated = _add_trace_log_enrichment_fallback(result, corroboration)
+
+        self.assertIn("Trace/log enrichment: queried root/dependencies, no hard failure found", updated.root_causes[0].evidence)
+
     def test_corroboration_treats_only_ready_pods_decrease_as_hard(self):
         decrease = metric("checkout", "workload_ready_pods", [2, 2, 2, 2, 2, 1])
         increase = metric("checkout", "workload_ready_pods", [1, 1, 1, 1, 1, 2])
@@ -810,18 +818,21 @@ class RuntimePipelineTest(unittest.TestCase):
                 **runtime_kwargs(settings),
             )
 
-            incidents = pipeline._upsert_rca_root_incidents(
-                RcaResult(
-                    root_causes=[
-                        RootCauseCandidate(service="frontend", score=0.79, root_cause_metrics=["memory_usage_bytes"]),
-                        RootCauseCandidate(service="accounting", score=1.0, root_cause_metrics=[]),
-                    ]
-                ),
-                [],
-            )
+            with self.assertLogs("aiops.pipeline.runtime", level="INFO") as logs:
+                incidents = pipeline._upsert_rca_root_incidents(
+                    RcaResult(
+                        root_causes=[
+                            RootCauseCandidate(service="frontend", score=0.79, root_cause_metrics=["memory_usage_bytes"]),
+                            RootCauseCandidate(service="accounting", score=1.0, root_cause_metrics=[]),
+                        ]
+                    ),
+                    [],
+                )
             store.close()
 
         self.assertEqual(incidents, [])
+        self.assertIn("filter=rca_metric_tail_gate", "\n".join(logs.output))
+        self.assertIn("missing_metric_series", "\n".join(logs.output))
 
     def test_v001_rca_filters_busy_normal_root_causes_after_anomaly_detection(self):
         settings = Settings()
@@ -939,16 +950,18 @@ class RuntimePipelineTest(unittest.TestCase):
                 ]
             )
 
-            incidents = pipeline._upsert_rca_root_incidents(
-                rca_result,
-                [],
-                [
-                    metric("ad", "memory_usage_bytes", [500_000_000.0] * 30 + [960_000_000.0] * 5 + [477_000_000.0] * 10),
-                ],
-            )
+            with self.assertLogs("aiops.pipeline.runtime", level="INFO") as logs:
+                incidents = pipeline._upsert_rca_root_incidents(
+                    rca_result,
+                    [],
+                    [
+                        metric("ad", "memory_usage_bytes", [500_000_000.0] * 30 + [960_000_000.0] * 5 + [477_000_000.0] * 10),
+                    ],
+                )
             store.close()
 
         self.assertEqual(incidents, [])
+        self.assertIn("tail_not_significant", "\n".join(logs.output))
 
     def test_pipeline_notifies_memory_root_when_oom_counter_increases(self):
         settings = Settings()

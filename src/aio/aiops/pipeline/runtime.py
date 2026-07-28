@@ -254,26 +254,51 @@ class AiopsPipeline:
         valid_roots = []
         for root in rca_result.root_causes:
             if root.score < threshold:
+                logger.info(
+                    "AIOPS_RCA_NOTIFY_SKIPPED filter=rca_notification_score source=rca service=%s score=%.3f threshold=%.3f reason=root_score_below_threshold",
+                    root.service,
+                    root.score,
+                    threshold,
+                )
                 continue
+            metric_reasons = {
+                metric: self._rca_root_metric_notify_reason(root.service, metric, metric_series or [])
+                for metric in root.root_cause_metrics
+            }
             filtered = root.model_copy(
                 update={
                     "root_cause_metrics": [
                         metric
                         for metric in root.root_cause_metrics
-                        if self._rca_root_metric_can_notify(root.service, metric, metric_series or [])
+                        if metric_reasons[metric][0]
                     ]
                 }
             )
             if not filtered.root_cause_metrics:
+                logger.info(
+                    "AIOPS_RCA_NOTIFY_SKIPPED filter=rca_metric_tail_gate source=rca service=%s metrics=%s reason=no_root_metric_can_notify",
+                    root.service,
+                    {metric: reason for metric, (_, reason) in metric_reasons.items()},
+                )
                 continue
+            oom_bypass = _root_has_oom_bypass(root, metric_series or [], self.rca_hyperparameters)
             if _passes_rca_notification_gate(
                 root,
                 min_metric_score,
                 strong_shape_correlation_score,
                 has_anomaly_context or has_slo_context,
-                _root_has_oom_bypass(root, metric_series or [], self.rca_hyperparameters),
+                oom_bypass,
             ):
                 valid_roots.append(filtered)
+            else:
+                logger.info(
+                    "AIOPS_RCA_NOTIFY_SKIPPED filter=rca_notification_gate source=rca service=%s metric_scores=%s shape_correlation=%.3f min_metric_score=%.3f strong_shape_correlation_score=%.3f reason=weak_metric_evidence",
+                    root.service,
+                    root.metric_scores,
+                    root.evidence_scores.get("shape_correlation", 0.0),
+                    min_metric_score,
+                    strong_shape_correlation_score,
+                )
         rows = []
         for root in self._dedup_rca_root_causes(valid_roots):
             metric = root.root_cause_metrics[0]
@@ -303,23 +328,31 @@ class AiopsPipeline:
         return rows
 
     def _rca_root_metric_can_notify(self, service: str, metric: str, metric_series: list[MetricSeries]) -> bool:
+        return self._rca_root_metric_notify_reason(service, metric, metric_series)[0]
+
+    def _rca_root_metric_notify_reason(self, service: str, metric: str, metric_series: list[MetricSeries]) -> tuple[bool, str]:
         if not is_root_cause_metric(metric):
-            return False
+            return False, "not_root_cause_metric"
         config = self.rca_hyperparameters.get("anomaly", {})
         combined = self.rca_hyperparameters.get("combined", {})
         detection_window_seconds = int(combined.get("detection_window_seconds", 0)) or None
         start = int(self.rca_hyperparameters.get("min_points", combined.get("drift_min_points", 1))) - 1
         if (is_memory_metric(metric) or is_oom_metric(metric)) and _service_oom_counter_increased(service, metric_series, detection_window_seconds, start):
-            return True
+            return True, "oom_counter_increased"
         match = next((item for item in metric_series if item.service == service and item.metric == metric), None)
         if match is None:
-            return bool(self.correlation_hyperparameters["rca_notification_allow_default_metric_without_series"]) and metric_group(metric) == "default"
+            allowed = bool(self.correlation_hyperparameters["rca_notification_allow_default_metric_without_series"]) and metric_group(metric) == "default"
+            return allowed, "default_metric_without_series" if allowed else "missing_metric_series"
         if not all(key in config for key in ("min_tail_anomaly_buckets", "min_relative_change_ratio", "min_absolute_change")):
-            return False
+            return False, "missing_tail_config"
         change = _metric_tail_change(match, detection_window_seconds, start, config)
         if not bool(self.correlation_hyperparameters["rca_notification_require_current_tail_change"]):
-            return change.significant
-        return change.significant and _tail_is_still_changed(metric, change, config)
+            return change.significant, "tail_significant" if change.significant else "tail_not_significant"
+        if not change.significant:
+            return False, "tail_not_significant"
+        if not _tail_is_still_changed(metric, change, config):
+            return False, "tail_recovered"
+        return True, "tail_significant_current"
 
     def _dedup_rca_root_causes(self, root_causes: list[RootCauseCandidate]) -> list[RootCauseCandidate]:
         kept: list[RootCauseCandidate] = []
@@ -403,6 +436,7 @@ class AiopsPipeline:
             result = rca_engine.rank(findings, detector_series, corroboration=corroboration, **rank_args)
         if normal_growth_metrics:
             result = result.model_copy(update={"root_causes": _filter_normal_growth_root_metrics(result.root_causes, normal_growth_metrics, top_k)})
+        result = _add_trace_log_enrichment_fallback(result, corroboration)
         algorithm_findings = list(getattr(anomaly_engine, "last_algorithm_findings", []) or [])
         _log_final_root_cause_algorithm_scores(result, algorithm_findings)
         return result.model_copy(update={"algorithm_findings": algorithm_findings})
@@ -671,6 +705,20 @@ def _filter_normal_growth_root_metrics(root_causes: list[RootCauseCandidate], no
 
 def _has_strong_corroboration(items) -> bool:
     return any(item.log_failure or item.trace_failure for item in items)
+
+
+def _add_trace_log_enrichment_fallback(result: RcaResult, corroboration: dict[str, TelemetryCorroboration]) -> RcaResult:
+    if not result.root_causes or not corroboration or _has_strong_corroboration(corroboration.values()):
+        return result
+    line = "Trace/log enrichment: queried root/dependencies, no hard failure found"
+    return result.model_copy(
+        update={
+            "root_causes": [
+                root.model_copy(update={"evidence": [*root.evidence, line]})
+                for root in result.root_causes
+            ]
+        }
+    )
 
 
 def _should_boost_from_anomaly_enrichment(result: RcaResult, low_score_threshold: float) -> bool:
