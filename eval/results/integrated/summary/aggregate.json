@@ -1,0 +1,90 @@
+{
+  "profile": "integrated",
+  "cases": 14,
+  "checks": 127,
+  "passed_checks": 122,
+  "failed_checks": 5,
+  "metrics": {
+    "status": {
+      "checks": 14,
+      "pass_rate": 0.8571428571428571,
+      "mean": null
+    },
+    "fabricated_number": {
+      "checks": 14,
+      "pass_rate": 1.0,
+      "mean": null
+    },
+    "latency_ms": {
+      "checks": 14,
+      "pass_rate": 1.0,
+      "mean": 2929.1064285714288
+    },
+    "tokens_per_request": {
+      "checks": 14,
+      "pass_rate": 1.0,
+      "mean": 471.35714285714283
+    },
+    "cost_per_request": {
+      "checks": 14,
+      "pass_rate": 1.0,
+      "mean": 0.0002883021428571429
+    },
+    "faithfulness": {
+      "checks": 14,
+      "pass_rate": 1.0,
+      "mean": 1.0
+    },
+    "hallucination_rate": {
+      "checks": 14,
+      "pass_rate": 1.0,
+      "mean": 0.0
+    },
+    "task_success": {
+      "checks": 14,
+      "pass_rate": 0.7857142857142857,
+      "mean": null
+    },
+    "abstention_accuracy": {
+      "checks": 2,
+      "pass_rate": 1.0,
+      "mean": null
+    },
+    "forbidden_output": {
+      "checks": 3,
+      "pass_rate": 1.0,
+      "mean": null
+    },
+    "pii_leak": {
+      "checks": 2,
+      "pass_rate": 1.0,
+      "mean": null
+    },
+    "injection_handling": {
+      "checks": 4,
+      "pass_rate": 1.0,
+      "mean": null
+    },
+    "system_prompt_leak": {
+      "checks": 2,
+      "pass_rate": 1.0,
+      "mean": null
+    },
+    "false_block_rate": {
+      "checks": 2,
+      "pass_rate": 1.0,
+      "mean": null
+    }
+  },
+  "p95_latency_ms": 18800.89,
+  "system_tokens": 6599,
+  "system_cost_usd": 0.00403623,
+  "pricing": {
+    "input_per_million_usd": 0.33,
+    "output_per_million_usd": 2.75,
+    "region": "us-east-1",
+    "price_list_model": "Nova 2.0 Lite",
+    "verified_on": "2026-07-28",
+    "source": "https://aws.amazon.com/bedrock/pricing/"
+  }
+}
