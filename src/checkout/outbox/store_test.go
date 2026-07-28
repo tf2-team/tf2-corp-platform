@@ -8,6 +8,7 @@ import (
 	"io"
 	"log/slog"
 	"testing"
+	"time"
 
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
@@ -102,3 +103,47 @@ func TestPublishBatchWaitsForPersistenceAckBeforeDelete(t *testing.T) {
 		t.Fatalf("deleteCount = %d, want 1 after RDS persistence ACK", fake.deleteCount)
 	}
 }
+
+func TestPreparePutsPreparedStatus(t *testing.T) {
+	fake := &fakeDynamo{}
+	store := testStore(fake)
+	if err := store.Prepare(context.Background(), Event{ID: "order-prep", Payload: []byte("payload")}); err != nil {
+		t.Fatalf("Prepare() error = %v", err)
+	}
+	if fake.putInput == nil {
+		t.Fatal("expected PutItem call")
+	}
+	statusAttr := fake.putInput.Item["status"].(*types.AttributeValueMemberS)
+	if statusAttr.Value != "prepared" {
+		t.Fatalf("status = %q, want prepared", statusAttr.Value)
+	}
+}
+
+func TestActivateUpdatesToPendingStatus(t *testing.T) {
+	fake := &fakeDynamo{}
+	store := testStore(fake)
+	now := time.Now()
+	if err := store.Activate(context.Background(), "order-prep", now, "trace-123", "tx-456"); err != nil {
+		t.Fatalf("Activate() error = %v", err)
+	}
+	if fake.updateCount != 1 {
+		t.Fatalf("updateCount = %d, want 1", fake.updateCount)
+	}
+	lastUpdate := fake.updateInputs[0]
+	if *lastUpdate.UpdateExpression != "SET #status = :pending, charged_at = :charged_at, trace_id = :trace_id, transaction_id = :transaction_id" {
+		t.Fatalf("UpdateExpression = %q", *lastUpdate.UpdateExpression)
+	}
+}
+
+func TestRemovePreparedDeletesItem(t *testing.T) {
+	fake := &fakeDynamo{}
+	store := testStore(fake)
+	if err := store.RemovePrepared(context.Background(), "order-prep"); err != nil {
+		t.Fatalf("RemovePrepared() error = %v", err)
+	}
+	if fake.deleteCount != 1 {
+		t.Fatalf("deleteCount = %d, want 1", fake.deleteCount)
+	}
+}
+
+// Change trail: @hungxqt - 2026-07-28 - Add Prepare, Activate, and RemovePrepared tests for outbox store.

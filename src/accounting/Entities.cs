@@ -3,11 +3,14 @@
 
 using Microsoft.EntityFrameworkCore;
 using System.ComponentModel.DataAnnotations.Schema;
+using System.Runtime.CompilerServices;
+
+[assembly: InternalsVisibleTo("Accounting.Tests")]
 
 namespace Accounting;
 
 [Table("shipping", Schema = "accounting")]
-[PrimaryKey(nameof(ShippingTrackingId), nameof(TransactionType))]
+[PrimaryKey(nameof(OrderId), nameof(TransactionType))]
 internal class ShippingEntity
 {
 
@@ -63,3 +66,5 @@ internal class OrderEntity
     [Column("status")]
     public string Status { get; set; } = "PENDING";
 }
+
+// Change trail: @hungxqt - 2026-07-28 - Change ShippingEntity primary key to OrderId and TransactionType.
