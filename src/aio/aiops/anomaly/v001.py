@@ -13,12 +13,9 @@ import warnings
 
 from aiops.anomaly.stats import mean, rolling_robust_scores, stdev
 from aiops.schemas import AnomalyFinding, MetricSeries
-from aiops.shared.metrics import is_error_metric, is_oom_metric
-from aiops.shared.tail import cusum_tail_change, evaluate_tail_change, fixed_baseline_and_tail, metric_group, normal_traffic_growth_decision, page_hinkley_tail_change, slow_drift_tail_change, traffic_explained_metrics
+from aiops.shared.tail import fixed_baseline_and_tail, significant_tail_change, slow_drift_tail_change, traffic_growth_decision
 
 logger = logging.getLogger(__name__)
-CUSUM_TAIL_GROUPS = {"cpu", "memory", "latency", "socket_io"}
-
 os.environ.setdefault("MPLCONFIGDIR", "/tmp")
 
 try:
@@ -326,7 +323,7 @@ class V001AnomalyEngine:
         self.last_algorithm_findings: list[AnomalyFinding] = []
 
     def evaluate(self, series: list[MetricSeries], logs: list[tuple[str, int, str]] | None = None) -> list[AnomalyFinding]:
-        detector_series = self._filter_normal_traffic_growth(series)
+        detector_series = self._record_normal_traffic_growth(series)
         detector_series = [metric for metric in detector_series if self._has_significant_tail_change(metric)]
         slow_drift_findings = self._slow_drift_findings(detector_series)
         raw_metric_findings = (
@@ -350,40 +347,15 @@ class V001AnomalyEngine:
         return [*metric_findings, *log_findings]
 
     def _has_significant_tail_change(self, metric: MetricSeries) -> bool:
-        if is_oom_metric(metric.metric):
-            values = [point.value for point in metric.points]
-            baseline, indexes = fixed_baseline_and_tail(metric, self.detection_window_seconds, self.min_points - 1, values)
-            return bool(baseline and indexes and max(values[index] for index in indexes) > max(baseline))
-        group = metric_group(metric.metric)
-        change = evaluate_tail_change(
+        return significant_tail_change(
             metric,
             self.detection_window_seconds,
             self.min_points - 1,
-            self.min_tail_anomaly_buckets[group],
-            self.min_relative_change_ratio[group],
-            self.min_absolute_change[group],
-        )
-        return change.significant or slow_drift_tail_change(metric, self.detection_window_seconds, self.min_points - 1, self.slow_drift).significant or (
-            group in CUSUM_TAIL_GROUPS
-            and (
-                cusum_tail_change(
-                    metric,
-                    self.detection_window_seconds,
-                    self.min_points - 1,
-                    self.min_tail_anomaly_buckets[group],
-                    self.min_relative_change_ratio[group],
-                    self.min_absolute_change[group],
-                ).significant
-                or page_hinkley_tail_change(
-                    metric,
-                    self.detection_window_seconds,
-                    self.min_points - 1,
-                    self.min_tail_anomaly_buckets[group],
-                    self.min_relative_change_ratio[group],
-                    self.min_absolute_change[group],
-                    self.page_hinkley_min_bucket_factor,
-                ).significant
-            )
+            self.min_tail_anomaly_buckets,
+            self.min_relative_change_ratio,
+            self.min_absolute_change,
+            self.slow_drift,
+            self.page_hinkley_min_bucket_factor,
         )
 
     def _slow_drift_findings(self, series: list[MetricSeries]) -> list[AnomalyFinding]:
@@ -439,30 +411,20 @@ class V001AnomalyEngine:
             )
         return sorted(combined, key=lambda item: item.score, reverse=True)
 
-    def _filter_normal_traffic_growth(self, series: list[MetricSeries]) -> list[MetricSeries]:
+    def _record_normal_traffic_growth(self, series: list[MetricSeries]) -> list[MetricSeries]:
         by_service: dict[str, list[MetricSeries]] = defaultdict(list)
         for metric in series:
             by_service[metric.service].append(metric)
         decisions = {service: self._normal_traffic_growth_decision(service_series) for service, service_series in by_service.items()}
         self.last_normal_growth_breakout_metrics = {
-            service: metrics
-            for service, (normal, detail) in decisions.items()
-            if not normal
-            if (metrics := _breakout_metrics_for_detail(detail, by_service[service]))
+            service: set(decision.breakout_metrics)
+            for service, decision in decisions.items()
+            if decision.breakout_metrics
         }
         self.last_normal_growth_metrics = {
-            service: metrics
-            for service, (normal, _) in decisions.items()
-            if (
-                metrics := _normal_growth_metrics_for_service(
-                    by_service[service],
-                    normal,
-                    self.normal_growth_detection_window_seconds,
-                    self.min_points - 1,
-                    self.traffic_shape_max_lag_buckets,
-                    self.traffic_explanation,
-                )
-            )
+            service: set(decision.explained_metrics)
+            for service, decision in decisions.items()
+            if decision.explained_metrics
         }
         self.last_normal_growth_services = set(self.last_normal_growth_metrics)
         # Only literal all-zero series (`zero_metrics=...`) count as monitoring-loss.
@@ -470,22 +432,22 @@ class V001AnomalyEngine:
         # not "telemetry disappeared" — treating those as zero-vector spam produced the
         # Scenario 1 false positives on healthy services under Locust load.
         self.last_normal_growth_zero_score_metrics = {
-            service: metrics
-            for service, (normal, detail) in decisions.items()
-            if not normal and (metrics := _zero_score_metrics_for_detail(detail))
+            service: set(decision.zero_metrics)
+            for service, decision in decisions.items()
+            if decision.zero_metrics
         }
-        (logger.warning if any("zero_metrics=" in detail for _, detail in decisions.values()) else logger.info)(
+        (logger.warning if any(decision.zero_metrics for decision in decisions.values()) else logger.info)(
             "growth_gate_event %s",
             " | ".join(
-                f"service={service} result={'skip' if service in self.last_normal_growth_metrics else 'detect'} breakout={str(service in self.last_normal_growth_breakout_metrics).lower()} {detail}"
+                f"service={service} result={'skip' if service in self.last_normal_growth_metrics else 'detect'} breakout={str(service in self.last_normal_growth_breakout_metrics).lower()} {decision.detail}"
                 f"{' explained_metrics=' + ','.join(sorted(self.last_normal_growth_metrics[service])) if service in self.last_normal_growth_metrics else ''}"
-                for service, (normal, detail) in decisions.items()
+                for service, decision in decisions.items()
             ),
         )
         return series
 
-    def _normal_traffic_growth_decision(self, series: list[MetricSeries]) -> tuple[bool, str]:
-        return normal_traffic_growth_decision(
+    def _normal_traffic_growth_decision(self, series: list[MetricSeries]):
+        return traffic_growth_decision(
             series,
             self.normal_growth_detection_window_seconds,
             self.min_points - 1,
@@ -495,33 +457,6 @@ class V001AnomalyEngine:
             self.traffic_shape_max_lag_buckets,
             self.traffic_explanation,
         )
-
-def _breakout_metrics_for_detail(detail: str, series: list[MetricSeries]) -> set[str]:
-    if detail.startswith("reason=oom_"):
-        return {metric.metric for metric in series if is_oom_metric(metric.metric)}
-    if detail.startswith("reason=error_"):
-        return {metric.metric for metric in series if is_error_metric(metric.metric)}
-    return set()
-
-
-def _normal_growth_metrics_for_service(
-    series: list[MetricSeries],
-    normal: bool,
-    detection_window_seconds: int | None,
-    start: int,
-    traffic_shape_max_lag_buckets: int,
-    traffic_explanation: dict | None,
-) -> set[str]:
-    metrics = traffic_explained_metrics(series, detection_window_seconds, start, traffic_shape_max_lag_buckets, traffic_explanation)
-    if normal:
-        return metrics
-    return {metric for metric in metrics if metric_group(metric) not in {"cpu", "socket_io"}}
-
-
-def _zero_score_metrics_for_detail(detail: str) -> set[str]:
-    if match := re.search(r"\bzero_metrics=([^ ]+)", detail):
-        return {item for item in match.group(1).split(",") if item}
-    return set()
 
 
 def build_v001_anomaly_engine(config: dict, **overrides) -> V001AnomalyEngine:

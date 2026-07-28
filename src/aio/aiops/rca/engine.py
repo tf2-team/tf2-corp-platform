@@ -9,11 +9,8 @@ from aiops.anomaly.stats import robust_score
 from aiops.rca.graph import GraphTraversalRca
 from aiops.schemas import AnomalyFinding, MetricSeries, RcaResult, RootCauseCandidate, RuntimeConfig, TelemetryCorroboration
 from aiops.shared.metrics import is_root_cause_metric, metric_priority
-from aiops.shared.tail import cusum_tail_change, evaluate_tail_change, fixed_baseline_and_tail, metric_group, page_hinkley_tail_change, slow_drift_tail_change, tail_aligned_spearman
+from aiops.shared.tail import fixed_baseline_and_tail, metric_group, significant_tail_change, tail_aligned_spearman
 from aiops.topology import TopologyGraph
-
-CUSUM_TAIL_GROUPS = {"cpu", "memory", "latency", "socket_io"}
-
 
 class V001RcaEngine:
     def __init__(
@@ -91,8 +88,8 @@ class V001RcaEngine:
             )
         if not root_findings:
             return RcaResult(anomalies=findings)
-        graph_scores = self.graph.rank_services(root_findings)
-        graph_evidence_scores = {service: min(1.0, score) for service, score in graph_scores.items()}
+        graph_scores = _normalize_scores(self.graph.rank_services(root_findings))
+        graph_evidence_scores = graph_scores
         earliest_scores = self._earliest_drift_scores(rca_series)
         shape_correlation_scores = self._shape_correlation_scores(rca_series, findings, series)
         downstream_coverage_scores = self._downstream_coverage_scores(root_findings)
@@ -301,36 +298,15 @@ class V001RcaEngine:
         return rows
 
     def _significant_tail_change(self, metric: MetricSeries) -> bool:
-        group = metric_group(metric.metric)
-        change = evaluate_tail_change(
+        return significant_tail_change(
             metric,
             self.detection_window_seconds,
             self.drift_min_points - 1,
-            self.min_tail_anomaly_buckets[group],
-            self.min_relative_change_ratio[group],
-            self.min_absolute_change[group],
-        )
-        return change.significant or slow_drift_tail_change(metric, self.detection_window_seconds, self.drift_min_points - 1, self.slow_drift).significant or (
-            group in CUSUM_TAIL_GROUPS
-            and (
-                cusum_tail_change(
-                    metric,
-                    self.detection_window_seconds,
-                    self.drift_min_points - 1,
-                    self.min_tail_anomaly_buckets[group],
-                    self.min_relative_change_ratio[group],
-                    self.min_absolute_change[group],
-                ).significant
-                or page_hinkley_tail_change(
-                    metric,
-                    self.detection_window_seconds,
-                    self.drift_min_points - 1,
-                    self.min_tail_anomaly_buckets[group],
-                    self.min_relative_change_ratio[group],
-                    self.min_absolute_change[group],
-                    self.page_hinkley_min_bucket_factor,
-                ).significant
-            )
+            self.min_tail_anomaly_buckets,
+            self.min_relative_change_ratio,
+            self.min_absolute_change,
+            self.slow_drift,
+            self.page_hinkley_min_bucket_factor,
         )
 
     def _shape_correlation_scores(
@@ -415,3 +391,10 @@ class V001RcaEngine:
             if suffix and service.endswith(suffix):
                 return service[: -len(suffix)]
         return service
+
+
+def _normalize_scores(scores: dict[str, float]) -> dict[str, float]:
+    maximum = max(scores.values(), default=0.0)
+    if maximum <= 0:
+        return {}
+    return {service: max(0.0, min(1.0, score / maximum)) for service, score in scores.items()}

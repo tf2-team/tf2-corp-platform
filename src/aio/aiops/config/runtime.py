@@ -284,6 +284,7 @@ def build_detectors(
                     runbook_id=item.runbook_id,
                     missing_confidence=no_data_hyperparameters["missing_confidence"],
                     unknown_confidence=no_data_hyperparameters["unknown_confidence"],
+                    stale_confidence=no_data_hyperparameters["stale_confidence"],
                 )
             )
     return detectors

@@ -8,7 +8,7 @@ from dataclasses import dataclass
 from statistics import median
 
 from aiops.schemas import MetricSeries
-from aiops.shared.metrics import is_root_cause_metric
+from aiops.shared.metrics import is_error_metric, is_oom_metric, is_root_cause_metric
 
 
 @dataclass(frozen=True)
@@ -19,6 +19,16 @@ class TailChange:
     changed_buckets: int
     first_changed_at: int | None
     significant: bool
+
+
+@dataclass(frozen=True)
+class GrowthDecision:
+    normal: bool
+    reason: str
+    detail: str
+    explained_metrics: frozenset[str] = frozenset()
+    breakout_metrics: frozenset[str] = frozenset()
+    zero_metrics: frozenset[str] = frozenset()
 
 
 def metric_group(metric: str) -> str:
@@ -130,6 +140,61 @@ def page_hinkley_tail_change(
     )
 
 
+def oom_counter_increased(series: list[MetricSeries], detection_window_seconds: int | None, start: int, service: str | None = None) -> bool:
+    return any(
+        _counter_increased(metric, detection_window_seconds, start)
+        for metric in series
+        if is_oom_metric(metric.metric) and (service is None or metric.service == service)
+    )
+
+
+def significant_tail_change(
+    metric: MetricSeries,
+    detection_window_seconds: int | None,
+    start: int,
+    min_tail_anomaly_buckets: dict[str, int],
+    min_relative_change_ratio: dict[str, float],
+    min_absolute_change: dict[str, float],
+    slow_drift: dict | None = None,
+    page_hinkley_min_bucket_factor: float = 2.0,
+    cusum_groups: set[str] | None = None,
+) -> bool:
+    if is_oom_metric(metric.metric):
+        return _counter_increased(metric, detection_window_seconds, start)
+    group = metric_group(metric.metric)
+    change = evaluate_tail_change(
+        metric,
+        detection_window_seconds,
+        start,
+        int(min_tail_anomaly_buckets[group]),
+        float(min_relative_change_ratio[group]),
+        float(min_absolute_change[group]),
+    )
+    if change.significant or slow_drift_tail_change(metric, detection_window_seconds, start, slow_drift).significant:
+        return True
+    if group not in (cusum_groups or {"cpu", "memory", "latency", "socket_io"}):
+        return False
+    return (
+        cusum_tail_change(
+            metric,
+            detection_window_seconds,
+            start,
+            int(min_tail_anomaly_buckets[group]),
+            float(min_relative_change_ratio[group]),
+            float(min_absolute_change[group]),
+        ).significant
+        or page_hinkley_tail_change(
+            metric,
+            detection_window_seconds,
+            start,
+            int(min_tail_anomaly_buckets[group]),
+            float(min_relative_change_ratio[group]),
+            float(min_absolute_change[group]),
+            page_hinkley_min_bucket_factor,
+        ).significant
+    )
+
+
 def slow_drift_tail_change(metric: MetricSeries, detection_window_seconds: int | None, start: int, config: dict | None) -> TailChange:
     params = _slow_drift_params(metric, config)
     values = tuple(point.value for point in metric.points)
@@ -180,6 +245,12 @@ def fixed_baseline_and_tail(metric: MetricSeries, detection_window_seconds: int 
     return (values[: indexes.start], indexes)
 
 
+def _counter_increased(metric: MetricSeries, detection_window_seconds: int | None, start: int) -> bool:
+    values = [point.value for point in metric.points]
+    baseline, indexes = fixed_baseline_and_tail(metric, detection_window_seconds, start, values)
+    return bool(baseline and indexes and max(values[index] for index in indexes) > max(baseline))
+
+
 def median3(values: list[float]) -> list[float]:
     if len(values) < 3:
         return values[:]
@@ -214,12 +285,59 @@ def normal_traffic_growth_decision(
     traffic_shape_max_lag_buckets: int = 0,
     traffic_explanation: dict | None = None,
 ) -> tuple[bool, str]:
+    decision = traffic_growth_decision(
+        series,
+        detection_window_seconds,
+        start,
+        min_tail_anomaly_buckets,
+        min_relative_change_ratio,
+        min_absolute_change,
+        traffic_shape_max_lag_buckets,
+        traffic_explanation,
+    )
+    return decision.normal, decision.detail
+
+
+def traffic_growth_decision(
+    series: list[MetricSeries],
+    detection_window_seconds: int | None,
+    start: int,
+    min_tail_anomaly_buckets: dict[str, int],
+    min_relative_change_ratio: dict[str, float],
+    min_absolute_change: dict[str, float],
+    traffic_shape_max_lag_buckets: int = 0,
+    traffic_explanation: dict | None = None,
+) -> GrowthDecision:
     required_infra_groups = ("cpu", "socket_io")
     groups = ("request_rate", *required_infra_groups)
     by_group = {group: [metric for metric in series if metric_group(metric.metric) == group] for group in groups}
+    request = by_group["request_rate"]
+    config = traffic_explanation or {}
+    threshold = float(config["threshold"])
+    min_primary = float(config["min_primary_shape"])
+    dtw_onset_threshold = float(config["dtw_onset_threshold"])
+    dtw_cost_scale = float(config["dtw_cost_scale"])
     missing = [group for group in ("request_rate", *required_infra_groups) if not by_group[group]]
     if missing:
-        return False, f"reason=missing_metrics metrics={','.join(missing)}"
+        detail = f"reason=missing_metrics metrics={','.join(missing)}"
+        explained = (
+            frozenset(
+                metric
+                for metric, score in _traffic_metric_scores(
+                    series,
+                    request,
+                    detection_window_seconds,
+                    start,
+                    traffic_shape_max_lag_buckets,
+                    dtw_onset_threshold,
+                    dtw_cost_scale,
+                ).items()
+                if score >= threshold and metric_group(metric) not in {"cpu", "socket_io"}
+            )
+            if request
+            else frozenset()
+        )
+        return GrowthDecision(False, "missing_metrics", detail, explained_metrics=explained)
     request_changes = [
         _smoothed_tail_change(metric, detection_window_seconds, start, min_tail_anomaly_buckets, min_relative_change_ratio, min_absolute_change)
         for metric in by_group["request_rate"]
@@ -227,18 +345,13 @@ def normal_traffic_growth_decision(
     request_increased = any(change.significant and any(change.values[index] > change.baseline for index in change.indexes) for change in request_changes)
     request_decreased = any(change.significant and any(change.values[index] < change.baseline for index in change.indexes) for change in request_changes)
     request_direction = 1 if request_increased else -1 if request_decreased else 0
-    request = by_group["request_rate"]
-    config = traffic_explanation or {}
-    threshold = float(config["threshold"])
-    min_primary = float(config["min_primary_shape"])
-    dtw_onset_threshold = float(config["dtw_onset_threshold"])
-    dtw_cost_scale = float(config["dtw_cost_scale"])
-    for metric in series:
-        if "oom_events_total" in metric.metric:
-            values = [point.value for point in metric.points]
-            baseline, indexes = fixed_baseline_and_tail(metric, detection_window_seconds, start, values)
-            if baseline and indexes and max(values[index] for index in indexes) > max(baseline):
-                return False, "reason=oom_increased"
+    if oom_counter_increased(series, detection_window_seconds, start):
+        return GrowthDecision(
+            False,
+            "oom_increased",
+            "reason=oom_increased",
+            breakout_metrics=frozenset(metric.metric for metric in series if is_oom_metric(metric.metric)),
+        )
     primary_direction_mismatch = False
     for metric in series:
         change = _smoothed_tail_change(metric, detection_window_seconds, start, min_tail_anomaly_buckets, min_relative_change_ratio, min_absolute_change)
@@ -251,39 +364,44 @@ def normal_traffic_growth_decision(
             and point_changed(change.values[index], change.baseline, 0.0, min_absolute_change["error"])
             for index in change.indexes
         ):
-            return False, "reason=error_increased"
-    scores = {
-        group: max(
-            (
-                tail_aligned_dtw_similarity(
-                    rate,
-                    metric,
-                    detection_window_seconds,
-                    start,
-                    max_warp_buckets=traffic_shape_max_lag_buckets,
-                    enforce_onset=group in required_infra_groups,
-                    onset_threshold=dtw_onset_threshold,
-                    cost_scale=dtw_cost_scale,
-                )
-                for rate in request
-                for metric in by_group[group]
-            ),
-            default=0.0,
-        )
-        for group in required_infra_groups
-    }
+            return GrowthDecision(
+                False,
+                "error_increased",
+                "reason=error_increased",
+                breakout_metrics=frozenset(metric.metric for metric in series if is_error_metric(metric.metric)),
+            )
+    metric_scores = _traffic_metric_scores(
+        series,
+        request,
+        detection_window_seconds,
+        start,
+        traffic_shape_max_lag_buckets,
+        dtw_onset_threshold,
+        dtw_cost_scale,
+    )
+    scores = {group: max((score for metric, score in metric_scores.items() if metric_group(metric) == group), default=0.0) for group in required_infra_groups}
+    explained = frozenset(metric for metric, score in metric_scores.items() if score >= threshold)
     if primary_direction_mismatch:
-        return False, f"reason=shape_mismatch direction=primary cpu={scores['cpu']:.3f} socket_io={scores['socket_io']:.3f}"
+        detail = f"reason=shape_mismatch direction=primary cpu={scores['cpu']:.3f} socket_io={scores['socket_io']:.3f}"
+        return GrowthDecision(False, "shape_mismatch", detail, explained_metrics=frozenset(metric for metric in explained if metric_group(metric) not in {"cpu", "socket_io"}))
     weights = config["weights"]
     positive = {group: score for group, score in scores.items() if score > 0}
     weight_sum = sum(float(weights[group]) for group in positive)
     traffic_score = sum(score * float(weights[group]) for group, score in positive.items()) / weight_sum if weight_sum else 0.0
     primary_score = max(scores["cpu"], scores["socket_io"])
     if traffic_score >= threshold and primary_score >= min_primary:
-        return True, f"reason=traffic_explained score={traffic_score:.3f} primary={primary_score:.3f} cpu={scores['cpu']:.3f} socket_io={scores['socket_io']:.3f}"
+        detail = f"reason=traffic_explained score={traffic_score:.3f} primary={primary_score:.3f} cpu={scores['cpu']:.3f} socket_io={scores['socket_io']:.3f}"
+        return GrowthDecision(True, "traffic_explained", detail, explained_metrics=explained)
     zero_metrics = [metric.metric for metrics in by_group.values() for metric in metrics if metric.points and all(point.value == 0 for point in metric.points)]
     zero_detail = f" zero_metrics={','.join(zero_metrics)}" if zero_metrics else ""
-    return False, f"reason=shape_mismatch score={traffic_score:.3f} primary={primary_score:.3f} cpu={scores['cpu']:.3f} socket_io={scores['socket_io']:.3f} threshold={threshold:.3f}{zero_detail}"
+    detail = f"reason=shape_mismatch score={traffic_score:.3f} primary={primary_score:.3f} cpu={scores['cpu']:.3f} socket_io={scores['socket_io']:.3f} threshold={threshold:.3f}{zero_detail}"
+    return GrowthDecision(
+        False,
+        "shape_mismatch",
+        detail,
+        explained_metrics=frozenset(metric for metric in explained if metric_group(metric) not in {"cpu", "socket_io"}),
+        zero_metrics=frozenset(zero_metrics),
+    )
 
 
 def traffic_explained_metrics(
@@ -300,11 +418,20 @@ def traffic_explained_metrics(
     threshold = float(config["threshold"])
     dtw_onset_threshold = float(config["dtw_onset_threshold"])
     dtw_cost_scale = float(config["dtw_cost_scale"])
+    return {metric for metric, score in _traffic_metric_scores(series, request, detection_window_seconds, start, traffic_shape_max_lag_buckets, dtw_onset_threshold, dtw_cost_scale).items() if score >= threshold}
+
+
+def _traffic_metric_scores(
+    series: list[MetricSeries],
+    request: list[MetricSeries],
+    detection_window_seconds: int | None,
+    start: int,
+    traffic_shape_max_lag_buckets: int,
+    dtw_onset_threshold: float,
+    dtw_cost_scale: float,
+) -> dict[str, float]:
     return {
-        metric.metric
-        for metric in series
-        if is_root_cause_metric(metric.metric)
-        and max(
+        metric.metric: max(
             (
                 tail_aligned_dtw_similarity(
                     rate,
@@ -320,7 +447,8 @@ def traffic_explained_metrics(
             ),
             default=0.0,
         )
-        >= threshold
+        for metric in series
+        if is_root_cause_metric(metric.metric)
     }
 
 

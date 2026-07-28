@@ -516,10 +516,10 @@ class V001AnomalyRcaTest(unittest.TestCase):
             minute_metric("checkout", "error_rate_5m", [0] * 45),
         ]
 
-        self.assertEqual(engine._filter_normal_traffic_growth(series), series)
+        self.assertEqual(engine._record_normal_traffic_growth(series), series)
         self.assertEqual(engine.last_normal_growth_services, {"checkout"})
         series[-1] = minute_metric("checkout", "error_rate_5m", [0] * 44 + [0.01])
-        self.assertEqual(engine._filter_normal_traffic_growth(series), series)
+        self.assertEqual(engine._record_normal_traffic_growth(series), series)
         self.assertEqual(engine.last_normal_growth_breakout_metrics, {"checkout": {"error_rate_5m"}})
 
     def test_oom_increase_breaks_out_even_when_request_increases(self):
@@ -531,7 +531,7 @@ class V001AnomalyRcaTest(unittest.TestCase):
             minute_metric("checkout", "oom_events_total", [0] * 44 + [1]),
         ]
 
-        self.assertEqual(engine._filter_normal_traffic_growth(series), series)
+        self.assertEqual(engine._record_normal_traffic_growth(series), series)
         self.assertEqual(engine.last_normal_growth_breakout_metrics, {"checkout": {"oom_events_total"}})
 
     def test_oom_counter_increase_passes_prefilter(self):
@@ -555,7 +555,7 @@ class V001AnomalyRcaTest(unittest.TestCase):
             minute_metric("checkout", "memory_usage_bytes", [100_000_000] * 30 + [200_000_000] * 15),
         ]
 
-        self.assertEqual(engine._filter_normal_traffic_growth(series), series)
+        self.assertEqual(engine._record_normal_traffic_growth(series), series)
 
     def test_load_growth_allows_flat_memory_when_cpu_and_socket_increase(self):
         engine = anomaly_engine()
@@ -567,11 +567,11 @@ class V001AnomalyRcaTest(unittest.TestCase):
             minute_metric("checkout", "error_rate_5m", [0] * 45),
         ]
 
-        self.assertEqual(engine._filter_normal_traffic_growth(series), series)
+        self.assertEqual(engine._record_normal_traffic_growth(series), series)
         self.assertEqual(engine.last_normal_growth_services, {"checkout"})
         series[-1] = minute_metric("checkout", "error_rate_5m", [0] * 45)
         series[-2] = minute_metric("checkout", "workload_ready_pods", [2] * 30 + [1] * 15)
-        self.assertEqual(engine._filter_normal_traffic_growth(series), series)
+        self.assertEqual(engine._record_normal_traffic_growth(series), series)
 
     def test_coordinated_load_decline_is_listed_as_normal_growth(self):
         engine = anomaly_engine()
@@ -584,7 +584,7 @@ class V001AnomalyRcaTest(unittest.TestCase):
             minute_metric("checkout", "error_rate_5m", [0] * 45),
         ]
 
-        self.assertEqual(engine._filter_normal_traffic_growth(series), series)
+        self.assertEqual(engine._record_normal_traffic_growth(series), series)
         self.assertEqual(engine.last_normal_growth_services, {"checkout"})
 
     def test_mixed_growth_and_decline_is_not_filtered(self):
@@ -598,7 +598,7 @@ class V001AnomalyRcaTest(unittest.TestCase):
             minute_metric("checkout", "error_rate_5m", [0] * 45),
         ]
 
-        self.assertEqual(engine._filter_normal_traffic_growth(series), series)
+        self.assertEqual(engine._record_normal_traffic_growth(series), series)
 
     def test_normal_growth_allows_one_bucket_timestamp_skew(self):
         engine = anomaly_engine()
@@ -616,7 +616,7 @@ class V001AnomalyRcaTest(unittest.TestCase):
             skewed("error_rate_5m", 0, 0, 0),
         ]
 
-        self.assertEqual(engine._filter_normal_traffic_growth(series), series)
+        self.assertEqual(engine._record_normal_traffic_growth(series), series)
         self.assertEqual(engine.last_normal_growth_services, {"checkout"})
 
     def test_normal_growth_allows_configured_memory_lag(self):
@@ -634,7 +634,7 @@ class V001AnomalyRcaTest(unittest.TestCase):
             shifted("error_rate_5m", 0, 0),
         ]
 
-        self.assertEqual(engine._filter_normal_traffic_growth(series), series)
+        self.assertEqual(engine._record_normal_traffic_growth(series), series)
         self.assertEqual(engine.last_normal_growth_services, {"checkout"})
 
     def test_growth_gate_uses_median_three_smoothing(self):
@@ -646,7 +646,7 @@ class V001AnomalyRcaTest(unittest.TestCase):
         ]
 
         with self.assertLogs("aiops.anomaly.v001", level="INFO") as logs:
-            self.assertEqual(engine._filter_normal_traffic_growth(series), series)
+            self.assertEqual(engine._record_normal_traffic_growth(series), series)
 
         self.assertIn("growth_gate_event", logs.output[0])
         self.assertIn("service=checkout", logs.output[0])
@@ -661,7 +661,7 @@ class V001AnomalyRcaTest(unittest.TestCase):
         ]
 
         with self.assertLogs("aiops.anomaly.v001", level="WARNING") as logs:
-            engine._filter_normal_traffic_growth(series)
+            engine._record_normal_traffic_growth(series)
 
         self.assertIn("zero_metrics=", logs.output[0])
         self.assertEqual(engine.last_normal_growth_zero_score_metrics["fraud-detection"], {"cpu_millicores", "socket_io_bytes_per_second"})
@@ -677,7 +677,7 @@ class V001AnomalyRcaTest(unittest.TestCase):
             minute_metric("product-catalog", "error_rate_5m", [0] * 45),
         ]
 
-        engine._filter_normal_traffic_growth(series)
+        engine._record_normal_traffic_growth(series)
 
         self.assertNotIn("product-catalog", engine.last_normal_growth_zero_score_metrics)
 
@@ -689,7 +689,7 @@ class V001AnomalyRcaTest(unittest.TestCase):
             minute_metric("email", "memory_usage_bytes", values),
         ]
 
-        engine._filter_normal_traffic_growth(series)
+        engine._record_normal_traffic_growth(series)
 
         self.assertEqual(engine.last_normal_growth_metrics, {"email": {"memory_usage_bytes"}})
 
@@ -708,7 +708,7 @@ class V001AnomalyRcaTest(unittest.TestCase):
             minute_metric("checkout", "error_rate_5m", [0] * 45),
         ]
 
-        self.assertEqual(engine._filter_normal_traffic_growth(series), series)
+        self.assertEqual(engine._record_normal_traffic_growth(series), series)
 
     def test_log_template_builder_groups_variable_log_lines_as_metric_series(self):
         builder = LogTemplateMetricBuilder(min_nonzero_buckets=1)

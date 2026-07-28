@@ -47,6 +47,7 @@ def no_data_detector(settings: Settings | None = None) -> NoDataDetector:
         runbook_id=detector.runbook_id,
         missing_confidence=no_data["missing_confidence"],
         unknown_confidence=no_data["unknown_confidence"],
+        stale_confidence=no_data["stale_confidence"],
     )
 
 

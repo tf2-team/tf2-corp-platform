@@ -34,7 +34,7 @@ from aiops.remediation import (
 from aiops.schemas import ActionCatalogItem, ActionProposal, CandidateEvent, Incident, RemediationDecision, VerificationResult
 from aiops.shared.metrics import is_memory_metric, is_oom_metric
 from aiops.shared.series import prepare_detector_series
-from aiops.shared.tail import evaluate_tail_change, fixed_baseline_and_tail, metric_group, point_changed
+from aiops.shared.tail import evaluate_tail_change, metric_group, oom_counter_increased, point_changed
 from aiops.topology import TopologyGraph
 from aiops.verification import VerificationEngine
 from aiops.pipeline.analysis import (
@@ -260,7 +260,7 @@ class AiopsPipeline:
                 }
             )
             for root in rca_result.root_causes
-            if root.score >= threshold and _has_strong_notification_evidence(root, min_metric_score, strong_shape_correlation_score)
+            if root.score >= threshold and _passes_rca_notification_gate(root, min_metric_score, strong_shape_correlation_score)
         ]
         valid_roots = [root for root in valid_roots if root.root_cause_metrics]
         rows = []
@@ -616,18 +616,7 @@ def _filter_normal_growth_root_metrics(root_causes: list[RootCauseCandidate], no
 
 
 def _service_oom_counter_increased(service: str, series: list[MetricSeries], detection_window_seconds: int | None, start: int) -> bool:
-    for metric in series:
-        if metric.service != service or not is_oom_metric(metric.metric):
-            continue
-        values = [point.value for point in metric.points]
-        baseline, indexes = fixed_baseline_and_tail(metric, detection_window_seconds, start, values)
-        if baseline and indexes and max(values[index] for index in indexes) > max(baseline):
-            return True
-    return False
-
-
-def _metric_tail_change_significant(metric: MetricSeries, detection_window_seconds: int | None, start: int, config: dict) -> bool:
-    return _metric_tail_change(metric, detection_window_seconds, start, config).significant
+    return oom_counter_increased(series, detection_window_seconds, start, service)
 
 
 def _metric_tail_change(metric: MetricSeries, detection_window_seconds: int | None, start: int, config: dict):
@@ -654,7 +643,7 @@ def _tail_is_still_changed(metric: str, change, config: dict) -> bool:
     )
 
 
-def _has_strong_notification_evidence(root: RootCauseCandidate, min_metric_score: float, strong_shape_correlation_score: float) -> bool:
+def _passes_rca_notification_gate(root: RootCauseCandidate, min_metric_score: float, strong_shape_correlation_score: float) -> bool:
     if min_metric_score <= 0:
         return True
     metric_scores = list(root.metric_scores.values())

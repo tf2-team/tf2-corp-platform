@@ -200,6 +200,16 @@ class SettingsTest(unittest.TestCase):
         )
         self.assertFalse(any(item.detector_id == "ops02_monitoring_loss" for item in detectors))
 
+        detectors = build_detectors(
+            runtime_config,
+            no_data_hyperparameters={"missing_confidence": 0.42, "unknown_confidence": 0.24, "stale_confidence": 0.66},
+            detector_hyperparameters=load_hyperparameters(Path("config/hyperparameters.json"))["detectors"],
+        )
+        detector = next(item for item in detectors if item.detector_id == "ops02_monitoring_loss")
+        self.assertEqual(detector.missing_confidence, 0.42)
+        self.assertEqual(detector.unknown_confidence, 0.24)
+        self.assertEqual(detector.stale_confidence, 0.66)
+
     def test_qualification_dev_env_reaches_pipeline(self):
         with tempfile.TemporaryDirectory() as directory:
             env_file = Path(directory) / ".env"
