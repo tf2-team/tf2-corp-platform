@@ -145,7 +145,8 @@ class SQLiteIncidentStore:
         slo_notification = is_slo_notification(candidate)
         rca_notification = candidate.detector_id == "rca_root_cause"
         notification_due = self._notification_due(incident, is_new, now)
-        can_enqueue_incident = notification_due and self._can_enqueue_notification(incident.incident_id)
+        outbox_status = self._notification_outbox_status(incident.incident_id)
+        can_enqueue_incident = notification_due and (outbox_status is None or outbox_status in {"sent", "suppressed"})
         cooldown_key = _notification_cooldown_key(incident.service, slo_notification, rca_notification)
         service_notification_due = False
         if can_enqueue_incident:
@@ -210,12 +211,27 @@ class SQLiteIncidentStore:
                     )
             elif service_suppressed:
                 logger.info(
-                    "AIOPS_NOTIFY_SUPPRESSED incident=%s service=%s reason=same_service_cooldown",
+                    "AIOPS_NOTIFY_SUPPRESSED filter=service_notification_cooldown source=notification incident=%s service=%s reason=same_service_cooldown cooldown_key=%s",
                     incident.incident_id,
                     incident.service,
+                    cooldown_key,
+                )
+            elif not notification_due:
+                logger.info(
+                    "AIOPS_NOTIFY_DEDUPED filter=incident_cooldown source=notification incident=%s service=%s reason=incident_cooldown_until cooldown_until=%s",
+                    incident.incident_id,
+                    incident.service,
+                    incident.cooldown_until,
+                )
+            elif outbox_status not in {None, "sent", "suppressed"}:
+                logger.info(
+                    "AIOPS_NOTIFY_DEDUPED filter=notification_outbox source=notification incident=%s service=%s reason=notification_status status=%s",
+                    incident.incident_id,
+                    incident.service,
+                    outbox_status,
                 )
         (logger.info if is_new else logger.debug)(
-            "AIOPS_INCIDENT_UPSERT action=%s incident=%s fingerprint=%s service=%s detector=%s occurrence=%s notification_enqueued=%s",
+            "AIOPS_INCIDENT_UPSERT action=%s filter=incident_fingerprint source=incident incident=%s fingerprint=%s service=%s detector=%s occurrence=%s notification_enqueued=%s",
             "created" if is_new else "deduped",
             incident.incident_id,
             fingerprint,
@@ -239,11 +255,15 @@ class SQLiteIncidentStore:
         return current_seen - first_seen >= timedelta(seconds=self.incident_count_reset_seconds)
 
     def _can_enqueue_notification(self, incident_id: str) -> bool:
+        status = self._notification_outbox_status(incident_id)
+        return status is None or status in {"sent", "suppressed"}
+
+    def _notification_outbox_status(self, incident_id: str) -> str | None:
         row = self._connection.execute(
             "SELECT status FROM notification_outbox WHERE incident_id = ?",
             (incident_id,),
         ).fetchone()
-        return row is None or row[0] in {"sent", "suppressed"}
+        return None if row is None else str(row[0])
 
     def _service_notification_due(self, service: str, severity: str, now: datetime, bypass_sev1: bool = True) -> bool:
         if bypass_sev1 and severity == "SEV1":
@@ -294,6 +314,13 @@ class SQLiteIncidentStore:
                 """,
                 (root_service, json.dumps(sorted(affected_services)), expires_at, root_score),
             )
+        logger.info(
+            "AIOPS_RCA_SUPPRESS_REGISTER filter=active_root_registry source=rca root_service=%s affected_services=%s suppress_until=%s root_score=%.3f reason=active_root_cause",
+            root_service,
+            sorted(affected_services),
+            expires_at,
+            root_score,
+        )
 
     def breakout_services(self, service_scores: dict[str, float], multiplier: float) -> set[str]:
         if self.topology_graph is None:
@@ -334,7 +361,7 @@ class SQLiteIncidentStore:
                 )
                 self._last_enqueued_incident_ids.discard(incident.incident_id)
                 logger.info(
-                    "AIOPS_NOTIFY_SUPPRESSED incident=%s service=%s parent_root_cause=%s reason=same_blast_radius",
+                    "AIOPS_NOTIFY_SUPPRESSED filter=same_blast_radius source=rca incident=%s service=%s parent_root_cause=%s reason=same_blast_radius",
                     incident.incident_id,
                     incident.service,
                     root_service,
@@ -364,7 +391,7 @@ class SQLiteIncidentStore:
                 )
                 self._last_enqueued_incident_ids.discard(incident.incident_id)
                 logger.info(
-                    "AIOPS_NOTIFY_SUPPRESSED incident=%s service=%s parent_root_cause=%s reason=active_root_cause",
+                    "AIOPS_NOTIFY_SUPPRESSED filter=active_root_cause source=rca incident=%s service=%s parent_root_cause=%s reason=active_root_cause",
                     incident.incident_id,
                     incident.service,
                     parent,

@@ -1103,9 +1103,13 @@ class V001AnomalyRcaTest(unittest.TestCase):
             AnomalyFinding(algorithm="weighted_sum", service="checkout", metric="cpu_millicores", signal_id="checkout_cpu_millicores", score=0.8, timestamp=1000),
         ]
 
-        result = rca_engine(runtime_config).rank(findings, [], top_k=5)
+        with self.assertLogs("aiops.rca.engine", level="INFO") as logs:
+            result = rca_engine(runtime_config).rank(findings, [], top_k=5)
 
         self.assertEqual([root.service for root in result.root_causes], ["payment"])
+        text = "\n".join(logs.output)
+        self.assertIn("filter=downstream_symptom", text)
+        self.assertIn("parent_root_cause=payment", text)
 
     def test_rca_scores_downstream_coverage_for_early_dependency_root(self):
         runtime_config = load_runtime_config(Path("config/runtime.json"))

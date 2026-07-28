@@ -3,6 +3,7 @@
 # SPDX-License-Identifier: Apache-2.0
 from __future__ import annotations
 
+import logging
 from collections import defaultdict
 
 from aiops.anomaly.stats import robust_score
@@ -11,6 +12,10 @@ from aiops.schemas import AnomalyFinding, MetricSeries, RcaResult, RootCauseCand
 from aiops.shared.metrics import is_root_cause_metric, metric_priority
 from aiops.shared.tail import fixed_baseline_and_tail, metric_group, significant_tail_change, tail_aligned_spearman
 from aiops.topology import TopologyGraph
+
+
+logger = logging.getLogger(__name__)
+
 
 class V001RcaEngine:
     def __init__(
@@ -246,14 +251,26 @@ class V001RcaEngine:
                 first_seen[finding.service] = min(first_seen.get(finding.service, finding.timestamp), finding.timestamp)
         suppressed: set[str] = set()
         for candidate in candidates:
-            if any(
-                self.topology_graph.has_dependency_path(candidate.service, root.service, self.topology_max_hops)
-                and first_seen.get(root.service, 0) < first_seen.get(candidate.service, 0)
-                and root.score >= candidate.score
-                for root in candidates
-                if root.service != candidate.service
-            ):
+            parent = next(
+                (
+                    root
+                    for root in candidates
+                    if root.service != candidate.service
+                    and self.topology_graph.has_dependency_path(candidate.service, root.service, self.topology_max_hops)
+                    and first_seen.get(root.service, 0) < first_seen.get(candidate.service, 0)
+                    and root.score >= candidate.score
+                ),
+                None,
+            )
+            if parent is not None:
                 suppressed.add(candidate.service)
+                logger.info(
+                    "AIOPS_RCA_SUPPRESSED filter=downstream_symptom source=rca service=%s parent_root_cause=%s reason=parent_earlier_and_stronger score=%.3f parent_score=%.3f",
+                    candidate.service,
+                    parent.service,
+                    candidate.score,
+                    parent.score,
+                )
         return [candidate for candidate in candidates if candidate.service not in suppressed]
 
     def _earliest_drift_scores(self, series: list[MetricSeries]) -> dict[str, float]:

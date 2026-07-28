@@ -330,7 +330,7 @@ class AiopsPipeline:
                 kept.append(root)
                 continue
             logger.info(
-                "AIOPS_RCA_DEDUP_SUPPRESSED service=%s kept_service=%s reason=topology_scope",
+                "AIOPS_RCA_DEDUP_SUPPRESSED filter=rca_topology_scope source=rca service=%s kept_service=%s reason=topology_scope",
                 root.service,
                 duplicate.service,
             )
@@ -535,6 +535,13 @@ class AiopsPipeline:
                 current_root_service = root_service
                 max_hops = int(self.correlation_hyperparameters["topology_max_hops"])
                 affected_services = self.topology_graph.neighborhood(root_service, max_hops) if self.topology_graph is not None else {root_service}
+                logger.info(
+                    "AIOPS_RCA_SUPPRESS_FILTER filter=active_root_cause source=rca root_service=%s affected_services=%s max_hops=%s suppress_seconds=%s reason=root_score_above_threshold",
+                    root_service,
+                    sorted(affected_services),
+                    max_hops,
+                    int(self.correlation_hyperparameters["suppress_window_seconds"]),
+                )
                 self.store.register_active_root_cause(
                     root_service,
                     affected_services,

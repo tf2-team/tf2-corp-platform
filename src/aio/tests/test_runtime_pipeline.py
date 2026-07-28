@@ -649,6 +649,7 @@ class RuntimePipelineTest(unittest.TestCase):
         self.assertEqual([message.service for message in notifications], ["checkout", "ad"])
         self.assertEqual([message.runbook_id for message in notifications], ["RB-SERVICE-RESOURCE", "RB-SERVICE-RESOURCE"])
         text = "\n".join(logs.output)
+        self.assertIn("filter=rca_topology_scope", text)
         self.assertIn("service=payment kept_service=checkout", text)
 
     def test_pipeline_keeps_slo_notification_and_adds_rca_root_notification(self):

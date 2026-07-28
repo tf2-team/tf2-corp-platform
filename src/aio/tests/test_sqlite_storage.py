@@ -74,6 +74,8 @@ class SQLiteIncidentStoreTest(unittest.TestCase):
         self.assertIn("AIOPS_NOTIFY_ENQUEUED_READY", text)
         self.assertIn("AIOPS_INCIDENT_UPSERT action=created", text)
         self.assertIn("AIOPS_INCIDENT_UPSERT action=deduped", text)
+        self.assertIn("filter=incident_cooldown", text)
+        self.assertIn("reason=incident_cooldown_until", text)
         self.assertIn("notification_enqueued=False", text)
         self.assertEqual(notifications[0].incident_id, incident.incident_id)
         self.assertEqual(notifications[0].runbook_id, "RB-CHECKOUT-SLO")
@@ -163,7 +165,7 @@ class SQLiteIncidentStoreTest(unittest.TestCase):
         self.assertEqual(set(outbox_rows), {(first.incident_id,), (second.incident_id,)})
 
     def test_slo_notification_bypass_is_deduped_by_service(self):
-        with tempfile.TemporaryDirectory() as tmp:
+        with tempfile.TemporaryDirectory() as tmp, self.assertLogs("aiops.storage.sqlite", level="INFO") as logs:
             store = SQLiteIncidentStore(Path(tmp) / "aiops.sqlite3", environment="tf2", slo_dedup_seconds=900)
             first = store.upsert(
                 service_candidate("product-reviews", "auto_product_reviews_latency").model_copy(update={"signal_id": "product_reviews_latency_5m"})
@@ -178,6 +180,9 @@ class SQLiteIncidentStoreTest(unittest.TestCase):
         self.assertEqual([message.incident_id for message in notifications], [first.incident_id])
         self.assertEqual(outbox_rows, [(first.incident_id,)])
         self.assertEqual(cooldown_rows, [("slo:product-reviews",)])
+        text = "\n".join(logs.output)
+        self.assertIn("filter=service_notification_cooldown", text)
+        self.assertIn("cooldown_key=slo:product-reviews", text)
 
     def test_rca_notification_uses_separate_service_dedup(self):
         with tempfile.TemporaryDirectory() as tmp:
