@@ -78,14 +78,16 @@ Browser (HTTPS) → CloudFront → VPC origin → Internal ALB (scheme=internal)
 | Path | CloudFront (public) | Internal ALB (private / Client VPN) |
 |---|---|---|
 | `/`, `/api/*`, `/images/*` | Allowed | Allowed |
-| `/grafana`, `/jaeger`, `/loadgen`, `/feature`, `/flagservice`, `/otlp-http` | **403** when edge blocking on | **Open** (app auth still applies) |
+| `/grafana`, `/jaeger`, `/loadgen`, `/feature`, `/argocd`, `/kubecost` | **403** when edge blocking on | **Open** (app auth still applies) |
+| `/flagservice`, `/otlp-http` | Allowed | Open |
 
 ### Operator admin access (Client VPN)
 
-Do **not** turn off CloudFront path blocking for day-to-day Grafana/Jaeger access. Connect **AWS Client VPN**, then use the **internal ALB** hostname:
+Do **not** turn off CloudFront path blocking for day-to-day Grafana/Jaeger/Kubecost access. Connect **AWS Client VPN**, then use the **internal ALB** hostname:
 
 * Runbook: `techx-corp-infra/docs/client-vpn.md`
 * Example: `http://<INTERNAL_ALB_DNS>/grafana/` after VPN connect
+* Kubecost: `https://internal.hungtran.id.vn/kubecost/` after VPN connect and GitOps sync
 
 Port-forward (section 5) remains valid for cluster-side debugging without VPN.
 
@@ -109,11 +111,13 @@ Port-forward (section 5) remains valid for cluster-side debugging without VPN.
    curl -i https://<cloudfront-alias>/grafana/
    curl -i https://<cloudfront-alias>/jaeger/
    curl -i https://<cloudfront-alias>/loadgen/
+   curl -i https://<cloudfront-alias>/kubecost/
    ```
 
 4. **Admin via Client VPN + internal ALB** (expect not edge 403):
    ```cmd
    curl -i http://<INTERNAL_ALB_DNS>/grafana/
+   curl -i http://<INTERNAL_ALB_DNS>/kubecost/
    ```
 
 ---
@@ -121,4 +125,4 @@ Port-forward (section 5) remains valid for cluster-side debugging without VPN.
 ### Security notes
 
 * Public edge HTTPS is terminated at **CloudFront** (ACM in `us-east-1`). The internal ALB listens HTTP:80 for VPC origin and private clients.
-* Grafana/Jaeger credentials remain separate (ESO/Secrets Manager); Client VPN is network access only.
+* Grafana/Jaeger/Kubecost credentials remain separate (ESO/Secrets Manager or app-local auth); Client VPN is network access only.

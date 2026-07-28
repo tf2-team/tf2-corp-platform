@@ -342,6 +342,8 @@ services:
       - GRAFANA_HOST
       - JAEGER_UI_PORT
       - JAEGER_HOST
+      - KUBECOST_HOST
+      - KUBECOST_PORT
       - ARGOCD_HOST
       - ARGOCD_PORT
       - OTEL_COLLECTOR_HOST
