@@ -675,6 +675,13 @@ jobs:
 
           docker image inspect "${IMAGE_NAME}/${SERVICE}:${DEMO_VERSION}" >/dev/null
 
+          case "${SERVICE}" in
+            accounting|email|llm|opensearch)
+              bash scripts/smoke_runtime_image.sh \
+                "${SERVICE}" "${IMAGE_NAME}/${SERVICE}:${DEMO_VERSION}"
+              ;;
+          esac
+
       - name: Trivy scan local image (block HIGH/CRITICAL before ECR push)
         # aquasecurity/trivy-action@v0.36.0
         uses: aquasecurity/trivy-action@a9c7b0f06e461e9d4b4d1711f154ee024b8d7ab8
