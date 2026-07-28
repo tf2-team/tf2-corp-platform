@@ -398,7 +398,7 @@
     "otel.request_rate": {
       "query_id_template": "otel_collector.request_rate_5m",
       "signal_id_template": "otel_collector_request_rate_5m",
-      "promql": "sum(rate({__name__=~\"otelcol_receiver_accepted_(spans|metric_points|log_records)(_total)?\"}[5m]))",
+      "promql": "sum(rate(otelcol_receiver_accepted_spans_total[5m])) + sum(rate(otelcol_receiver_accepted_metric_points_total[5m])) + sum(rate(otelcol_receiver_accepted_log_records_total[5m]))",
       "unit": "requests_per_second",
       "window": "5m",
       "metric": "request_rate_5m",
