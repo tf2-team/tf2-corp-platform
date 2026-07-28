@@ -69,6 +69,7 @@ def rca_engine(config: RuntimeConfig, **combined_overrides) -> V001RcaEngine:
         "min_relative_change_ratio": hyperparameters["anomaly"]["min_relative_change_ratio"],
         "min_absolute_change": hyperparameters["anomaly"]["min_absolute_change"],
         "page_hinkley_min_bucket_factor": hyperparameters["anomaly"]["page_hinkley_min_bucket_factor"],
+        "oom_recent_buckets": hyperparameters["anomaly"]["oom_recent_buckets"],
         "traffic_shape_max_lag_buckets": hyperparameters["anomaly"]["traffic_shape_max_lag_buckets"],
         "topology_max_hops": load_hyperparameters(Path("config/hyperparameters.json"))["correlation"]["topology_max_hops"],
         **combined_overrides,
@@ -539,6 +540,12 @@ class V001AnomalyRcaTest(unittest.TestCase):
         series = minute_metric("checkout", "oom_events_total", [0] * 44 + [1])
 
         self.assertTrue(engine._has_significant_tail_change(series))
+
+    def test_old_oom_counter_increase_does_not_pass_prefilter(self):
+        engine = anomaly_engine()
+        series = minute_metric("checkout", "oom_events_total", [0] * 30 + [1] * 15)
+
+        self.assertFalse(engine._has_significant_tail_change(series))
 
     def test_normal_growth_gate_uses_separate_detection_window(self):
         engine = anomaly_engine()

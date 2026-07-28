@@ -154,6 +154,7 @@
       "detection_window_seconds": 1800,
       "normal_growth_detection_window_seconds": 1800,
       "evidence_window_seconds": 900,
+      "oom_recent_buckets": 3,
       "no_evidence_multiplier": 0.5,
       "single_evidence_bonus": 0.15,
       "dual_evidence_bonus": 0.3,

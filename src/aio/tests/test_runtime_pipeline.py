@@ -1142,7 +1142,7 @@ class RuntimePipelineTest(unittest.TestCase):
 
         self.assertEqual([incident.service for incident in incidents], ["ad"])
 
-    def test_pipeline_oom_bypasses_metric_evidence_gate_without_slo(self):
+    def test_pipeline_oom_anomaly_context_passes_metric_evidence_gate(self):
         settings = Settings()
         hyperparameters = load_hyperparameters(settings.hyperparameters_path)
 
@@ -1159,6 +1159,16 @@ class RuntimePipelineTest(unittest.TestCase):
 
             incidents = pipeline._upsert_rca_root_incidents(
                 RcaResult(
+                    anomalies=[
+                        AnomalyFinding(
+                            algorithm="weighted_sum",
+                            service="email",
+                            metric="oom_events_total",
+                            signal_id="email_oom_events_total",
+                            score=1.0,
+                            timestamp=44 * 60,
+                        )
+                    ],
                     root_causes=[
                         RootCauseCandidate(
                             service="email",

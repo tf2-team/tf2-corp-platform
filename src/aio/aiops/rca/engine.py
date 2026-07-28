@@ -38,6 +38,7 @@ class V001RcaEngine:
         self.min_absolute_change = {key: float(value) for key, value in combined_hyperparameters["min_absolute_change"].items()}
         self.slow_drift = combined_hyperparameters.get("slow_drift", {})
         self.page_hinkley_min_bucket_factor = float(combined_hyperparameters["page_hinkley_min_bucket_factor"])
+        self.oom_recent_buckets = int(combined_hyperparameters["oom_recent_buckets"])
         self.traffic_shape_max_lag_buckets = int(combined_hyperparameters["traffic_shape_max_lag_buckets"])
         self.topology_max_hops = int(combined_hyperparameters["topology_max_hops"])
         self.canonical_service_suffixes = tuple(combined_hyperparameters["canonical_service_suffixes"])
@@ -339,6 +340,7 @@ class V001RcaEngine:
             self.min_absolute_change,
             self.slow_drift,
             self.page_hinkley_min_bucket_factor,
+            oom_recent_buckets=self.oom_recent_buckets,
         )
 
     def _shape_correlation_scores(

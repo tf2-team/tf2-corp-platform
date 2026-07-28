@@ -140,9 +140,15 @@ def page_hinkley_tail_change(
     )
 
 
-def oom_counter_increased(series: list[MetricSeries], detection_window_seconds: int | None, start: int, service: str | None = None) -> bool:
+def oom_counter_increased(
+    series: list[MetricSeries],
+    detection_window_seconds: int | None,
+    start: int,
+    service: str | None = None,
+    recent_buckets: int = 3,
+) -> bool:
     return any(
-        _counter_increased(metric, detection_window_seconds, start)
+        _counter_increased(metric, detection_window_seconds, start, recent_buckets)
         for metric in series
         if is_oom_metric(metric.metric) and (service is None or metric.service == service)
     )
@@ -158,9 +164,10 @@ def significant_tail_change(
     slow_drift: dict | None = None,
     page_hinkley_min_bucket_factor: float = 2.0,
     cusum_groups: set[str] | None = None,
+    oom_recent_buckets: int = 3,
 ) -> bool:
     if is_oom_metric(metric.metric):
-        return _counter_increased(metric, detection_window_seconds, start)
+        return _counter_increased(metric, detection_window_seconds, start, oom_recent_buckets)
     group = metric_group(metric.metric)
     change = evaluate_tail_change(
         metric,
@@ -245,10 +252,10 @@ def fixed_baseline_and_tail(metric: MetricSeries, detection_window_seconds: int 
     return (values[: indexes.start], indexes)
 
 
-def _counter_increased(metric: MetricSeries, detection_window_seconds: int | None, start: int) -> bool:
+def _counter_increased(metric: MetricSeries, detection_window_seconds: int | None, start: int, recent_buckets: int = 3) -> bool:
     values = [point.value for point in metric.points]
-    baseline, indexes = fixed_baseline_and_tail(metric, detection_window_seconds, start, values)
-    return bool(baseline and indexes and max(values[index] for index in indexes) > max(baseline))
+    indexes = list(tail_indexes(metric, detection_window_seconds, start))[-max(1, recent_buckets) :]
+    return any(index > 0 and values[index] > values[index - 1] for index in indexes)
 
 
 def median3(values: list[float]) -> list[float]:
@@ -307,6 +314,7 @@ def traffic_growth_decision(
     min_absolute_change: dict[str, float],
     traffic_shape_max_lag_buckets: int = 0,
     traffic_explanation: dict | None = None,
+    oom_recent_buckets: int = 3,
 ) -> GrowthDecision:
     required_infra_groups = ("cpu", "socket_io")
     groups = ("request_rate", *required_infra_groups)
@@ -345,7 +353,7 @@ def traffic_growth_decision(
     request_increased = any(change.significant and any(change.values[index] > change.baseline for index in change.indexes) for change in request_changes)
     request_decreased = any(change.significant and any(change.values[index] < change.baseline for index in change.indexes) for change in request_changes)
     request_direction = 1 if request_increased else -1 if request_decreased else 0
-    if oom_counter_increased(series, detection_window_seconds, start):
+    if oom_counter_increased(series, detection_window_seconds, start, recent_buckets=oom_recent_buckets):
         return GrowthDecision(
             False,
             "oom_increased",

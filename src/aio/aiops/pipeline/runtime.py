@@ -281,13 +281,11 @@ class AiopsPipeline:
                     {metric: reason for metric, (_, reason) in metric_reasons.items()},
                 )
                 continue
-            oom_bypass = _root_has_oom_bypass(root, metric_series or [], self.rca_hyperparameters)
             if _passes_rca_notification_gate(
                 root,
                 min_metric_score,
                 strong_shape_correlation_score,
                 has_anomaly_context or has_slo_context,
-                oom_bypass,
             ):
                 valid_roots.append(filtered)
             else:
@@ -337,7 +335,13 @@ class AiopsPipeline:
         combined = self.rca_hyperparameters.get("combined", {})
         detection_window_seconds = int(combined.get("detection_window_seconds", 0)) or None
         start = int(self.rca_hyperparameters.get("min_points", combined.get("drift_min_points", 1))) - 1
-        if (is_memory_metric(metric) or is_oom_metric(metric)) and _service_oom_counter_increased(service, metric_series, detection_window_seconds, start):
+        if (is_memory_metric(metric) or is_oom_metric(metric)) and _service_oom_counter_increased(
+            service,
+            metric_series,
+            detection_window_seconds,
+            start,
+            int(config.get("oom_recent_buckets", 3)),
+        ):
             return True, "oom_counter_increased"
         match = next((item for item in metric_series if item.service == service and item.metric == metric), None)
         if match is None:
@@ -753,8 +757,14 @@ def _service_context_finding(
     )
 
 
-def _service_oom_counter_increased(service: str, series: list[MetricSeries], detection_window_seconds: int | None, start: int) -> bool:
-    return oom_counter_increased(series, detection_window_seconds, start, service)
+def _service_oom_counter_increased(
+    service: str,
+    series: list[MetricSeries],
+    detection_window_seconds: int | None,
+    start: int,
+    recent_buckets: int,
+) -> bool:
+    return oom_counter_increased(series, detection_window_seconds, start, service, recent_buckets)
 
 
 def _metric_tail_change(metric: MetricSeries, detection_window_seconds: int | None, start: int, config: dict):
@@ -786,23 +796,13 @@ def _passes_rca_notification_gate(
     min_metric_score: float,
     strong_shape_correlation_score: float,
     has_rca_context: bool = False,
-    oom_bypass: bool = False,
 ) -> bool:
-    if has_rca_context or oom_bypass:
+    if has_rca_context:
         return True
     if min_metric_score <= 0:
         return True
     metric_scores = list(root.metric_scores.values())
     return not metric_scores or max(metric_scores) >= min_metric_score or root.evidence_scores.get("shape_correlation", 0.0) >= strong_shape_correlation_score
-
-
-def _root_has_oom_bypass(root: RootCauseCandidate, series: list[MetricSeries], config: dict) -> bool:
-    if not any(is_memory_metric(metric) or is_oom_metric(metric) for metric in root.root_cause_metrics):
-        return False
-    combined = config.get("combined", {})
-    detection_window_seconds = int(combined.get("detection_window_seconds", 0)) or None
-    start = int(config.get("min_points", combined.get("drift_min_points", 1))) - 1
-    return _service_oom_counter_increased(root.service, series, detection_window_seconds, start)
 
 
 def _combined_rca_hyperparameters(config: dict, topology_max_hops: int) -> dict:
@@ -814,6 +814,7 @@ def _combined_rca_hyperparameters(config: dict, topology_max_hops: int) -> dict:
         "min_absolute_change": anomaly["min_absolute_change"],
         "slow_drift": anomaly.get("slow_drift", {}),
         "page_hinkley_min_bucket_factor": anomaly["page_hinkley_min_bucket_factor"],
+        "oom_recent_buckets": anomaly["oom_recent_buckets"],
         "traffic_shape_max_lag_buckets": anomaly["traffic_shape_max_lag_buckets"],
         "topology_max_hops": topology_max_hops,
     }
