@@ -318,8 +318,8 @@
     "managed.postgresql.cpu": {
       "query_id_template": "postgresql.cpu_percentage",
       "signal_id_template": "postgresql_cpu_percentage",
-      "promql": "avg(aws_rds_cpuutilization_average) or avg(aws_rds_cpu_utilization_average)",
-      "unit": "percent",
+      "promql": "avg(aws_rds_cpuutilization_average{dimension_DBInstanceIdentifier=\"techx-prod-tf2-postgresql\"}) / 100",
+      "unit": "ratio",
       "window": "5m",
       "metric": "cpu_percentage",
       "feature_role": "anomaly_input",
@@ -328,7 +328,7 @@
     "managed.postgresql.socket_io": {
       "query_id_template": "postgresql.socket_io_bytes_per_second",
       "signal_id_template": "postgresql_socket_io_bytes_per_second",
-      "promql": "(sum(aws_rds_network_receive_throughput_average) or sum(aws_rds_networkreceivethroughput_average)) + (sum(aws_rds_network_transmit_throughput_average) or sum(aws_rds_networktransmitthroughput_average))",
+      "promql": "sum(aws_rds_network_receive_throughput_average{dimension_DBInstanceIdentifier=\"techx-prod-tf2-postgresql\"}) + sum(aws_rds_network_transmit_throughput_average{dimension_DBInstanceIdentifier=\"techx-prod-tf2-postgresql\"})",
       "unit": "bytes_per_second",
       "window": "5m",
       "metric": "socket_io_bytes_per_second",
@@ -348,8 +348,8 @@
     "managed.kafka.cpu": {
       "query_id_template": "kafka.cpu_percentage",
       "signal_id_template": "kafka_cpu_percentage",
-      "promql": "avg(aws_kafka_cpu_user_average + aws_kafka_cpu_system_average) or avg(aws_kafka_cpuuser_average + aws_kafka_cpusystem_average)",
-      "unit": "percent",
+      "promql": "(avg(aws_kafka_cpu_user_average{dimension_Cluster_Name=\"techx-prod-tf2-msk\"}) + avg(aws_kafka_cpu_system_average{dimension_Cluster_Name=\"techx-prod-tf2-msk\"})) / 100",
+      "unit": "ratio",
       "window": "5m",
       "metric": "cpu_percentage",
       "feature_role": "anomaly_input",
@@ -358,7 +358,7 @@
     "managed.kafka.socket_io": {
       "query_id_template": "kafka.socket_io_bytes_per_second",
       "signal_id_template": "kafka_socket_io_bytes_per_second",
-      "promql": "(sum(aws_kafka_bytes_in_per_sec_average) or sum(aws_kafka_bytesinpersec_average)) + (sum(aws_kafka_bytes_out_per_sec_average) or sum(aws_kafka_bytesoutpersec_average))",
+      "promql": "sum(aws_kafka_bytes_in_per_sec_average{dimension_Cluster_Name=\"techx-prod-tf2-msk\"}) + sum(aws_kafka_bytes_out_per_sec_average{dimension_Cluster_Name=\"techx-prod-tf2-msk\"})",
       "unit": "bytes_per_second",
       "window": "5m",
       "metric": "socket_io_bytes_per_second",
@@ -378,8 +378,8 @@
     "managed.valkey.cpu": {
       "query_id_template": "valkey_cart.cpu_percentage",
       "signal_id_template": "valkey_cart_cpu_percentage",
-      "promql": "avg(aws_elasticache_engine_cpuutilization_average) or avg(aws_elasticache_engine_cpu_utilization_average)",
-      "unit": "percent",
+      "promql": "avg(aws_elasticache_engine_cpuutilization_average{dimension_CacheClusterId=~\"techx-prod-tf2-cart-00[12]\"}) / 100",
+      "unit": "ratio",
       "window": "5m",
       "metric": "cpu_percentage",
       "feature_role": "anomaly_input",
@@ -388,7 +388,7 @@
     "managed.valkey.socket_io": {
       "query_id_template": "valkey_cart.socket_io_bytes_per_second",
       "signal_id_template": "valkey_cart_socket_io_bytes_per_second",
-      "promql": "max(rate(redis_net_input_bytes_total[5m])) + max(rate(redis_net_output_bytes_total[5m]))",
+      "promql": "sum(aws_elasticache_network_bytes_in_average{dimension_CacheClusterId=~\"techx-prod-tf2-cart-00[12]\"}) + sum(aws_elasticache_network_bytes_out_average{dimension_CacheClusterId=~\"techx-prod-tf2-cart-00[12]\"})",
       "unit": "bytes_per_second",
       "window": "5m",
       "metric": "socket_io_bytes_per_second",
