@@ -4,6 +4,7 @@
 import unittest
 from pathlib import Path
 from tempfile import TemporaryDirectory
+from unittest.mock import patch
 
 from fastapi import HTTPException
 
@@ -84,6 +85,44 @@ class FastApiAppTest(unittest.TestCase):
             readiness(settings)
 
         self.assertEqual(raised.exception.status_code, 503)
+
+    def test_readiness_checks_live_executor_dependency(self):
+        settings = Settings().model_copy(
+            update={
+                "self_heal_enabled": True,
+                "policy_mode": "live-approved",
+                "live_executor_url": "http://aiops-live-executor:8080",
+                "self_heal_approval_id": "adr-live-001",
+                "grafana_webhook_secret": "configured",
+            }
+        )
+
+        with patch("aiops.api.app.LiveExecutorClient") as client_type:
+            client_type.return_value.ready.return_value = True
+            response = readiness(settings)
+
+        self.assertEqual(response.status, "ready")
+        client_type.return_value.ready.assert_called_once_with()
+        client_type.return_value.close.assert_called_once_with()
+
+    def test_readiness_fails_when_live_executor_is_unavailable(self):
+        settings = Settings().model_copy(
+            update={
+                "self_heal_enabled": True,
+                "policy_mode": "live-approved",
+                "live_executor_url": "http://aiops-live-executor:8080",
+                "self_heal_approval_id": "adr-live-001",
+                "grafana_webhook_secret": "configured",
+            }
+        )
+
+        with patch("aiops.api.app.LiveExecutorClient") as client_type:
+            client_type.return_value.ready.return_value = False
+            with self.assertRaises(HTTPException) as raised:
+                readiness(settings)
+
+        self.assertEqual(raised.exception.status_code, 503)
+        client_type.return_value.close.assert_called_once_with()
 
     def test_template_settings_do_not_enable_external_enrichment_clients(self):
         settings = Settings().model_copy(

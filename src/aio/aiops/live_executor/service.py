@@ -9,7 +9,7 @@ from threading import RLock
 from typing import Any
 
 from runbooks.actions import page_oncall, plan_scale_deployment, restore_deployment_replicas, scale_deployment
-from runbooks.actions.common import ALLOWLIST, POLICY_ID, block_response, stable_hash
+from runbooks.actions.common import ALLOWLIST, POLICY_ID, block_response, parse_time, stable_hash, utc_now
 
 from aiops.live_executor.kubernetes import DeploymentGateway
 from aiops.live_executor.store import LiveExecutorStore, utc_now_text
@@ -31,11 +31,19 @@ class LiveExecutorService:
         deployment_gateway: DeploymentGateway | None = None,
         allow_live_apply: bool = False,
         cooldown_seconds: int = 900,
+        policy_id: str = POLICY_ID,
+        policy_expires_at: str = "2026-08-31T23:59:59Z",
+        approval_id: str = "",
+        environment: str = "techx-corp-prod",
     ):
         self.store = store
         self.deployment_gateway = deployment_gateway
         self.allow_live_apply = allow_live_apply
         self.cooldown_seconds = cooldown_seconds
+        self.policy_id = policy_id
+        self.policy_expires_at = policy_expires_at
+        self.approval_id = approval_id
+        self.environment = environment
         self._lock = RLock()
 
     @classmethod
@@ -46,24 +54,37 @@ class LiveExecutorService:
         deployment_gateway: DeploymentGateway | None = None,
         allow_live_apply: bool = False,
         cooldown_seconds: int = 900,
+        policy_id: str = POLICY_ID,
+        policy_expires_at: str = "2026-08-31T23:59:59Z",
+        approval_id: str = "",
+        environment: str = "techx-corp-prod",
     ) -> "LiveExecutorService":
         return cls(
             LiveExecutorStore(path),
             deployment_gateway=deployment_gateway,
             allow_live_apply=allow_live_apply,
             cooldown_seconds=cooldown_seconds,
+            policy_id=policy_id,
+            policy_expires_at=policy_expires_at,
+            approval_id=approval_id,
+            environment=environment,
         )
 
     def catalog(self) -> list[dict[str, Any]]:
-        return list(ALLOWLIST.values())
+        return [{**action, "namespace": self.environment} for action in ALLOWLIST.values()]
 
     def ready(self) -> bool:
         if not self.store.ready():
             return False
-        if self.allow_live_apply:
-            if self.deployment_gateway is None:
+        try:
+            if not self.policy_id or parse_time(self.policy_expires_at) <= utc_now():
                 return False
-            action = ALLOWLIST["scale_product_catalog"]
+        except (AttributeError, TypeError, ValueError):
+            return False
+        if self.allow_live_apply:
+            if self.deployment_gateway is None or not self.approval_id:
+                return False
+            action = self.catalog()[0]
             self.deployment_gateway.snapshot(action["namespace"], action["target"])
         return True
 
@@ -76,12 +97,12 @@ class LiveExecutorService:
         if cached is not None:
             return cached
 
-        plan_request = {**request, "dry_run": True}
+        plan_request = self._executor_policy_context({**request, "dry_run": True})
         allowlisted = ALLOWLIST.get(str(request.get("action_id") or ""))
         if self.deployment_gateway is not None and allowlisted is not None:
             try:
                 plan_request["kubernetes_snapshot"] = self.deployment_gateway.snapshot(
-                    allowlisted["namespace"],
+                    self.environment,
                     allowlisted["target"],
                 )
             except Exception as exc:
@@ -127,19 +148,24 @@ class LiveExecutorService:
                 try:
                     current = self.deployment_gateway.snapshot(plan_response["namespace"], plan_response["target"])
                     script_context = _request_to_script_context(
-                        {**request, "kubernetes_snapshot": current},
+                        self._executor_policy_context({**request, "kubernetes_snapshot": current}),
                         plan_response,
                     )
                     response = _script_response_to_api(scale_deployment.run(script_context), STATUS_RUNNING)
                     response["incident_id"] = request.get("incident_id")
                     response["plan_hash"] = plan_hash
                     if response["executed"]:
+                        requested_replicas = int(
+                            (plan_response.get("after") or {}).get("control_replicas")
+                            or (plan_response.get("after") or {})["replicas"]
+                        )
                         after = self.deployment_gateway.scale(
                             plan_response["namespace"],
                             plan_response["target"],
-                            int((plan_response.get("after") or {})["replicas"]),
+                            requested_replicas,
                             str(current.get("resource_version") or ""),
                         )
+                        after["requested_replicas"] = requested_replicas
                         response["before"] = current
                         response["after"] = after
                         response["message"] = (
@@ -176,6 +202,7 @@ class LiveExecutorService:
 
         execution = self.store.get_execution_response(execution_id)
         passed = request.get("passed")
+        transient = False
         if execution is None:
             response = self._blocked(request, "execution not found", ["execution_not_found"])
         elif not isinstance(passed, bool):
@@ -192,22 +219,90 @@ class LiveExecutorService:
                 )
         elif execution.get("status") != STATUS_RUNNING:
             response = self._blocked(request, "execution cannot be verified in its current state", ["invalid_execution_state"])
+        elif passed and self.deployment_gateway is not None:
+            try:
+                current = self.deployment_gateway.snapshot(execution.get("namespace"), execution["target"])
+            except Exception as exc:
+                transient = True
+                response = self._blocked(
+                    request,
+                    "unable to verify target readiness",
+                    [self._gateway_error_reason(exc)],
+                )
+            else:
+                expected_replicas = int(
+                    (execution.get("after") or {}).get("requested_replicas")
+                    or (execution.get("after") or {}).get("control_replicas")
+                    or (execution.get("after") or {}).get("replicas")
+                    or 0
+                )
+                original_control_replicas = int(
+                    (execution.get("before") or {}).get("control_replicas")
+                    or (execution.get("before") or {}).get("replicas")
+                    or 0
+                )
+                hpa_managed = (
+                    (execution.get("before") or {}).get("scaling_controller")
+                    == "HorizontalPodAutoscaler"
+                )
+                reasons: list[str] = []
+                current_control_replicas = int(current.get("control_replicas") or 0)
+                controller_matches = current_control_replicas == expected_replicas
+                controller_already_released = (
+                    hpa_managed and current_control_replicas == original_control_replicas
+                )
+                if not controller_matches and not controller_already_released:
+                    reasons.append("scaling_controller_drift")
+                if int(current.get("ready_replicas") or 0) < expected_replicas:
+                    reasons.append("target_not_ready")
+                if reasons:
+                    transient = True
+                    response = self._blocked(request, "target is not ready for successful verification", reasons)
+                else:
+                    if hpa_managed and not controller_already_released:
+                        try:
+                            released = self.deployment_gateway.scale(
+                                execution.get("namespace"),
+                                execution["target"],
+                                original_control_replicas,
+                                str(current.get("resource_version") or ""),
+                            )
+                        except Exception as exc:
+                            transient = True
+                            response = self._blocked(
+                                request,
+                                "unable to release autoscaler override after verification",
+                                [self._gateway_error_reason(exc)],
+                            )
+                        else:
+                            if int(released.get("control_replicas") or -1) != original_control_replicas:
+                                transient = True
+                                response = self._blocked(
+                                    request,
+                                    "autoscaler override release was not observed",
+                                    ["scaling_controller_drift"],
+                                )
+                            else:
+                                released["requested_replicas"] = expected_replicas
+                                released["control_released"] = True
+                                response = self._complete_verification(execution, request, passed, released)
+                    else:
+                        current["requested_replicas"] = expected_replicas
+                        current["control_released"] = controller_already_released
+                        response = self._complete_verification(execution, request, passed, current)
         else:
-            response = dict(execution)
-            response["status"] = STATUS_SUCCEEDED if passed else STATUS_FAILED
-            response["message"] = request.get("message") or (
-                "post-action verification passed" if passed else "post-action verification failed"
-            )
-            response["verification"] = {
-                "defined": True,
-                "passed": passed,
-                "query_id": request.get("query_id"),
-                "message": response["message"],
-            }
-            self.store.save_execution(response, response["status"])
+            response = self._complete_verification(execution, request, passed)
 
-        event_type = "verification_passed" if response.get("status") == STATUS_SUCCEEDED else "verification_failed"
+        event_type = (
+            "verification_pending"
+            if transient
+            else "verification_passed"
+            if response.get("status") == STATUS_SUCCEEDED
+            else "verification_failed"
+        )
         self._audit(request, response, event_type)
+        if transient:
+            return response
         self._save_idempotency(request, "verification", response)
         return response
 
@@ -239,6 +334,19 @@ class LiveExecutorService:
                 self._audit(request, response, "rollback_blocked")
                 self._save_idempotency(request, "rollback", response)
                 return response
+            expected_controller = (execution.get("before") or {}).get(
+                "scaling_controller",
+                "Deployment",
+            )
+            if current.get("scaling_controller", "Deployment") != expected_controller:
+                response = self._blocked(
+                    request,
+                    "scaling controller changed after execution",
+                    ["scaling_controller_changed"],
+                )
+                self._audit(request, response, "rollback_blocked")
+                self._save_idempotency(request, "rollback", response)
+                return response
             script_execution = {
                 **execution,
                 "rollback_token": execution.get("rollback_token") or (execution.get("rollback") or {}).get("rollback_token"),
@@ -253,9 +361,13 @@ class LiveExecutorService:
                 "target_kind": "Deployment",
                 "namespace": execution.get("namespace"),
                 "dry_run": False,
-                "policy_id": request.get("policy_id", POLICY_ID),
+                "policy_id": self.policy_id,
                 "policy_approved": request.get("policy_approved", True),
-                "policy_expires_at": request.get("policy_expires_at", "2026-08-31T23:59:59Z"),
+                "policy_expires_at": self.policy_expires_at,
+                "approval_id": self.approval_id,
+                "_executor_policy_id": self.policy_id,
+                "_executor_policy_expires_at": self.policy_expires_at,
+                "_executor_approval_id": self.approval_id,
                 "idempotency_key": request.get("idempotency_key"),
                 "reason": request.get("reason", "rollback_requested"),
                 "requested_by": request.get("requested_by", "aiops-runtime"),
@@ -268,7 +380,10 @@ class LiveExecutorService:
                 response = _script_response_to_api(restore_deployment_replicas.run(script_context), STATUS_ROLLED_BACK)
                 response["incident_id"] = script_context["incident_id"]
                 if response["executed"]:
-                    target_replicas = int((execution.get("before") or {})["replicas"])
+                    target_replicas = int(
+                        (execution.get("before") or {}).get("control_replicas")
+                        or (execution.get("before") or {})["replicas"]
+                    )
                     after = self.deployment_gateway.scale(
                         execution.get("namespace"),
                         execution["target"],
@@ -281,11 +396,14 @@ class LiveExecutorService:
                         f"restored deployment/{execution['target']} "
                         f"replicas from {current.get('replicas')} to {after.get('replicas')}"
                     )
-                    rollback_verified = int(after.get("replicas") or -1) == target_replicas
+                    rollback_verified = (
+                        int(after.get("control_replicas") or -1) == target_replicas
+                        and int(after.get("ready_replicas") or 0) >= target_replicas
+                    )
                     response["verification"] = {
                         "defined": True,
                         "passed": rollback_verified,
-                        "query_id": "deployment_spec_replicas",
+                        "query_id": "scaling_controller_and_ready_replicas",
                         "message": (
                             "rollback replica snapshot restored"
                             if rollback_verified
@@ -329,6 +447,38 @@ class LiveExecutorService:
     def _blocked(self, request: dict[str, Any], message: str, reasons: list[str]) -> dict[str, Any]:
         response = block_response(request, message, reasons)
         return _script_response_to_api(response, STATUS_BLOCKED)
+
+    def _executor_policy_context(self, request: dict[str, Any]) -> dict[str, Any]:
+        return {
+            **request,
+            "_executor_policy_id": self.policy_id,
+            "_executor_policy_expires_at": self.policy_expires_at,
+            "_executor_approval_id": self.approval_id,
+            "_executor_environment": self.environment,
+        }
+
+    def _complete_verification(
+        self,
+        execution: dict[str, Any],
+        request: dict[str, Any],
+        passed: bool,
+        current: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        response = dict(execution)
+        response["status"] = STATUS_SUCCEEDED if passed else STATUS_FAILED
+        response["message"] = request.get("message") or (
+            "post-action verification passed" if passed else "post-action verification failed"
+        )
+        if current is not None:
+            response["after"] = {**(response.get("after") or {}), **current}
+        response["verification"] = {
+            "defined": True,
+            "passed": passed,
+            "query_id": request.get("query_id"),
+            "message": response["message"],
+        }
+        self.store.save_execution(response, response["status"])
+        return response
 
     def _audit(self, request: dict[str, Any], response: dict[str, Any], event_type: str) -> None:
         target = {
@@ -400,10 +550,15 @@ def _request_to_script_context(request: dict[str, Any], plan_response: dict[str,
         "policy_id": request.get("policy_id"),
         "policy_approved": request.get("policy_approved"),
         "policy_expires_at": request.get("policy_expires_at", "2026-08-31T23:59:59Z"),
+        "approval_id": request.get("approval_id"),
+        "_executor_policy_id": request.get("_executor_policy_id"),
+        "_executor_policy_expires_at": request.get("_executor_policy_expires_at"),
+        "_executor_approval_id": request.get("_executor_approval_id"),
+        "_executor_environment": request.get("_executor_environment"),
         "idempotency_key": request.get("idempotency_key"),
         "reason": request.get("reason"),
         "requested_by": request.get("requested_by", "aiops-runtime"),
-        "root_cause_metrics": request.get("root_cause", {}).get("metrics", []),
+        "root_cause_metrics": (request.get("root_cause") or {}).get("metrics", []),
         "plan": plan,
         "plan_hash": request.get("plan_hash"),
         "rollback_token": request.get("rollback_token"),

@@ -104,6 +104,23 @@ class IntegrationClientTest(unittest.TestCase):
         self.assertEqual(response["status"], "blocked")
         self.assertEqual(response["reasons"], ["target_cooldown"])
 
+    def test_live_executor_readiness_calls_ready_endpoint(self):
+        seen: list[httpx.Request] = []
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            seen.append(request)
+            return httpx.Response(200, json={"status": "ready"})
+
+        client = LiveExecutorClient(
+            fixed_settings(live_executor_url="https://executor.example"),
+            transport=httpx.MockTransport(handler),
+        )
+        try:
+            self.assertTrue(client.ready())
+            self.assertEqual(seen[0].url.path, "/readyz")
+        finally:
+            client.close()
+
     def test_opensearch_uses_basic_auth(self):
         seen: list[httpx.Request] = []
 

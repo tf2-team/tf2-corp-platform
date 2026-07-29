@@ -4,8 +4,11 @@
 from __future__ import annotations
 
 import json
+import sqlite3
 from pathlib import Path
 
+import httpx
+from aiops.live_executor.kubernetes import KubernetesDeploymentGateway
 from aiops.live_executor.service import LiveExecutorService
 from aiops.live_executor.app import create_app
 from starlette.testclient import TestClient
@@ -19,6 +22,9 @@ class FakeDeploymentGateway:
             "name": "product-catalog",
             "replicas": 2,
             "ready_replicas": 2,
+            "scaling_controller": "HorizontalPodAutoscaler",
+            "control_replicas": 2,
+            "autoscaler_max_replicas": 12,
             "resource_version": "12345",
         }
         self.closed = False
@@ -30,10 +36,13 @@ class FakeDeploymentGateway:
 
     def scale(self, namespace: str, name: str, replicas: int, resource_version: str) -> dict:
         assert resource_version == self.state["resource_version"]
+        observed_replicas = max(int(self.state["replicas"]), replicas)
+        observed_ready_replicas = max(int(self.state["ready_replicas"]), replicas)
         self.state = {
             **self.state,
-            "replicas": replicas,
-            "ready_replicas": replicas,
+            "replicas": observed_replicas,
+            "ready_replicas": observed_ready_replicas,
+            "control_replicas": replicas,
             "resource_version": str(int(self.state["resource_version"]) + 1),
         }
         return dict(self.state)
@@ -50,6 +59,7 @@ def _live_service(path: Path) -> tuple[LiveExecutorService, FakeDeploymentGatewa
             deployment_gateway=gateway,
             allow_live_apply=True,
             cooldown_seconds=0,
+            approval_id="adr-live-001",
         ),
         gateway,
     )
@@ -133,8 +143,8 @@ def test_live_executor_plan_execute_status_rollback(tmp_path: Path) -> None:
         assert rollback["allowed"] is True
         assert rollback["executed"] is True
         assert rollback["status"] == "rolled_back"
-        assert rollback["after"]["replicas"] == 2
-        assert gateway.state["replicas"] == 2
+        assert rollback["after"]["control_replicas"] == 2
+        assert gateway.state["control_replicas"] == 2
         events = service.store.audit_events_for("inc-product-catalog-cpu-001")
         assert [event["event_type"] for event in events] == [
             "plan_recorded",
@@ -161,6 +171,63 @@ def test_live_executor_idempotent_execute(tmp_path: Path) -> None:
         second = service.execute(execute_request)
         assert first == second
         assert gateway.state["resource_version"] == "12346"
+    finally:
+        service.close()
+
+
+def test_live_executor_allows_same_key_for_plan_and_execute(tmp_path: Path) -> None:
+    service, gateway = _live_service(tmp_path / "executor.sqlite3")
+    try:
+        request = _request()
+        plan = service.plan(request)
+        execute_request = _request(
+            request_id="req-20260728-0002",
+            dry_run=False,
+            plan_hash=plan["plan_hash"],
+            rollback_token=plan["rollback"]["rollback_token"],
+        )
+        first = service.execute(execute_request)
+        second = service.execute(execute_request)
+
+        assert first == second
+        assert first["executed"] is True
+        assert gateway.state["resource_version"] == "12346"
+    finally:
+        service.close()
+
+
+def test_live_executor_never_plans_a_scale_down(tmp_path: Path) -> None:
+    service, gateway = _live_service(tmp_path / "executor.sqlite3")
+    try:
+        gateway.state.update({"replicas": 7, "ready_replicas": 7, "control_replicas": 2})
+        plan = service.plan(_request())
+
+        assert plan["allowed"] is True
+        assert plan["before"]["replicas"] == 7
+        assert plan["after"]["replicas"] == 8
+    finally:
+        service.close()
+
+
+def test_live_executor_blocks_when_autoscaler_capacity_is_exhausted(tmp_path: Path) -> None:
+    service, gateway = _live_service(tmp_path / "executor.sqlite3")
+    try:
+        gateway.state.update({"replicas": 12, "ready_replicas": 12})
+        response = service.plan(_request())
+
+        assert response["allowed"] is False
+        assert response["reasons"] == ["scale_capacity_exhausted"]
+    finally:
+        service.close()
+
+
+def test_live_executor_requires_matching_executor_approval(tmp_path: Path) -> None:
+    service, _ = _live_service(tmp_path / "executor.sqlite3")
+    try:
+        response = service.plan(_request(approval_id="different-approval"))
+
+        assert response["allowed"] is False
+        assert response["reasons"] == ["approval_id_mismatch"]
     finally:
         service.close()
 
@@ -221,6 +288,34 @@ def test_live_executor_resolves_allowlist_before_reading_target(tmp_path: Path) 
         service.close()
 
 
+def test_live_executor_scopes_allowlist_to_configured_environment(tmp_path: Path) -> None:
+    service = LiveExecutorService.from_path(
+        tmp_path / "executor.sqlite3",
+        environment="techx-corp-dev",
+    )
+    try:
+        request = _request(
+            namespace="techx-corp-dev",
+            kubernetes_snapshot={
+                "kind": "Deployment",
+                "namespace": "techx-corp-dev",
+                "name": "product-catalog",
+                "replicas": 2,
+                "ready_replicas": 2,
+                "scaling_controller": "Deployment",
+                "control_replicas": 2,
+                "resource_version": "dev-1",
+            },
+        )
+        response = service.plan(request)
+
+        assert response["allowed"] is True
+        assert response["namespace"] == "techx-corp-dev"
+        assert service.catalog()[0]["namespace"] == "techx-corp-dev"
+    finally:
+        service.close()
+
+
 def test_live_executor_records_runtime_verification(tmp_path: Path) -> None:
     service, _ = _live_service(tmp_path / "executor.sqlite3")
     try:
@@ -246,6 +341,9 @@ def test_live_executor_records_runtime_verification(tmp_path: Path) -> None:
         )
         assert verified["status"] == "succeeded"
         assert verified["verification"]["passed"] is True
+        assert verified["after"]["control_released"] is True
+        assert verified["after"]["control_replicas"] == 2
+        assert verified["after"]["requested_replicas"] == 3
         assert service.status(execution["execution_id"])["status"] == "succeeded"
 
         conflicting = service.record_verification(
@@ -265,6 +363,38 @@ def test_live_executor_records_runtime_verification(tmp_path: Path) -> None:
         service.close()
 
 
+def test_live_executor_rejects_success_until_requested_pods_are_ready(tmp_path: Path) -> None:
+    service, gateway = _live_service(tmp_path / "executor.sqlite3")
+    try:
+        plan = service.plan(_request())
+        execution = service.execute(
+            _request(
+                dry_run=False,
+                plan_hash=plan["plan_hash"],
+                rollback_token=plan["rollback"]["rollback_token"],
+                idempotency_key="sha256:1212121212121212121212121212121212121212121212121212121212121212",
+            )
+        )
+        gateway.state["ready_replicas"] = 2
+        request = {
+            "request_id": "req-verify-ready",
+            "incident_id": "inc-product-catalog-cpu-001",
+            "idempotency_key": "sha256:3434343434343434343434343434343434343434343434343434343434343434",
+            "passed": True,
+            "query_id": "product_catalog_cpu_millicores",
+        }
+        blocked = service.record_verification(execution["execution_id"], request)
+        assert blocked["status"] == "blocked"
+        assert blocked["reasons"] == ["target_not_ready"]
+
+        gateway.state["ready_replicas"] = 3
+        verified = service.record_verification(execution["execution_id"], request)
+        assert verified["status"] == "succeeded"
+        assert verified["after"]["ready_replicas"] == 3
+    finally:
+        service.close()
+
+
 def test_live_executor_app_auth_and_plan_endpoint(tmp_path: Path) -> None:
     service = LiveExecutorService.from_path(tmp_path / "executor.sqlite3")
     app = create_app(service=service, token="test-token")
@@ -273,9 +403,11 @@ def test_live_executor_app_auth_and_plan_endpoint(tmp_path: Path) -> None:
         unauthorized = client.post("/v1/actions/plan", json=_request())
         assert unauthorized.status_code == 401
 
+        api_request = _request()
+        api_request.pop("kubernetes_snapshot")
         response = client.post(
             "/v1/actions/plan",
-            json=_request(),
+            json=api_request,
             headers={
                 "Authorization": "Bearer test-token",
                 "X-AIOPS-Account": "aiops-runtime",
@@ -291,6 +423,40 @@ def test_live_executor_app_auth_and_plan_endpoint(tmp_path: Path) -> None:
         service.close()
 
 
+def test_live_executor_app_rejects_invalid_contract_input_without_500(tmp_path: Path) -> None:
+    service = LiveExecutorService.from_path(tmp_path / "executor.sqlite3")
+    app = create_app(service=service, token="test-token")
+    client = TestClient(app)
+    try:
+        api_request = _request(policy_expires_at="not-a-timestamp")
+        api_request.pop("kubernetes_snapshot")
+        response = client.post(
+            "/v1/actions/plan",
+            json=api_request,
+            headers={
+                "Authorization": "Bearer test-token",
+                "X-AIOPS-Account": "aiops-runtime",
+                "X-Request-Id": "req-20260728-0001",
+            },
+        )
+        assert response.status_code == 422
+
+        api_request = _request(unexpected_field=True)
+        api_request.pop("kubernetes_snapshot")
+        response = client.post(
+            "/v1/actions/plan",
+            json=api_request,
+            headers={
+                "Authorization": "Bearer test-token",
+                "X-AIOPS-Account": "aiops-runtime",
+                "X-Request-Id": "req-20260728-0001",
+            },
+        )
+        assert response.status_code == 422
+    finally:
+        service.close()
+
+
 def test_live_executor_app_refuses_live_apply_without_auth_token(tmp_path: Path) -> None:
     service, _ = _live_service(tmp_path / "executor.sqlite3")
     try:
@@ -300,5 +466,104 @@ def test_live_executor_app_refuses_live_apply_without_auth_token(tmp_path: Path)
             assert "token is required" in str(exc)
         else:
             raise AssertionError("live executor app must fail closed without authentication")
+    finally:
+        service.close()
+
+
+def test_live_executor_app_refuses_live_apply_without_executor_approval(tmp_path: Path) -> None:
+    gateway = FakeDeploymentGateway()
+    service = LiveExecutorService.from_path(
+        tmp_path / "executor.sqlite3",
+        deployment_gateway=gateway,
+        allow_live_apply=True,
+    )
+    try:
+        try:
+            create_app(service=service, token="test-token")
+        except RuntimeError as exc:
+            assert "approval id is required" in str(exc)
+        else:
+            raise AssertionError("live executor app must fail closed without executor approval")
+    finally:
+        service.close()
+
+
+def test_kubernetes_gateway_scales_hpa_minimum_instead_of_deployment() -> None:
+    calls: list[tuple[str, str, dict | None]] = []
+    deployment = {
+        "kind": "Deployment",
+        "metadata": {"namespace": "techx-corp-prod", "name": "product-catalog", "resourceVersion": "dep-1"},
+        "spec": {"replicas": 7},
+        "status": {"readyReplicas": 7},
+    }
+    autoscaler = {
+        "kind": "HorizontalPodAutoscaler",
+        "metadata": {"namespace": "techx-corp-prod", "name": "product-catalog", "resourceVersion": "hpa-1"},
+        "spec": {"minReplicas": 2, "maxReplicas": 12},
+        "status": {"currentReplicas": 7, "desiredReplicas": 7},
+    }
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        payload = json.loads(request.content) if request.content else None
+        calls.append((request.method, request.url.path, payload))
+        if request.url.path.endswith("/horizontalpodautoscalers/product-catalog"):
+            if request.method == "PATCH":
+                updated = {
+                    **autoscaler,
+                    "metadata": {**autoscaler["metadata"], "resourceVersion": "hpa-2"},
+                    "spec": {**autoscaler["spec"], "minReplicas": payload["spec"]["minReplicas"]},
+                }
+                return httpx.Response(200, json=updated)
+            return httpx.Response(200, json=autoscaler)
+        return httpx.Response(200, json=deployment)
+
+    gateway = KubernetesDeploymentGateway(
+        "https://kubernetes.example",
+        transport=httpx.MockTransport(handler),
+    )
+    try:
+        snapshot = gateway.snapshot("techx-corp-prod", "product-catalog")
+        assert snapshot["scaling_controller"] == "HorizontalPodAutoscaler"
+        assert snapshot["control_replicas"] == 2
+        result = gateway.scale("techx-corp-prod", "product-catalog", 8, snapshot["resource_version"])
+        assert result["control_replicas"] == 8
+        assert (
+            "PATCH",
+            "/apis/autoscaling/v2/namespaces/techx-corp-prod/horizontalpodautoscalers/product-catalog",
+            {"metadata": {"resourceVersion": "hpa-1"}, "spec": {"minReplicas": 8}},
+        ) in calls
+        assert not any(
+            method == "PATCH" and "/apis/apps/v1/" in path
+            for method, path, _ in calls
+        )
+    finally:
+        gateway.close()
+
+
+def test_live_executor_store_migrates_legacy_idempotency_key(tmp_path: Path) -> None:
+    path = tmp_path / "legacy.sqlite3"
+    connection = sqlite3.connect(path)
+    connection.execute(
+        """
+        CREATE TABLE idempotency_keys (
+            idempotency_key TEXT PRIMARY KEY,
+            operation TEXT NOT NULL,
+            response_json TEXT NOT NULL,
+            created_at TEXT NOT NULL
+        )
+        """
+    )
+    connection.execute(
+        "INSERT INTO idempotency_keys VALUES (?, ?, ?, ?)",
+        ("shared", "plan", '{"status":"planned"}', "2026-07-29T00:00:00Z"),
+    )
+    connection.commit()
+    connection.close()
+
+    service = LiveExecutorService.from_path(path)
+    try:
+        service.store.save_idempotency("shared", "execute", {"status": "running"})
+        assert service.store.get_idempotency("shared", "plan") == {"status": "planned"}
+        assert service.store.get_idempotency("shared", "execute") == {"status": "running"}
     finally:
         service.close()

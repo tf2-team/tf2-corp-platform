@@ -285,6 +285,13 @@ def readiness(settings: Settings) -> HealthResponse:
             raise RuntimeError("self-heal requires the live executor")
         if settings.self_heal_enabled and not settings.self_heal_approval_id:
             raise RuntimeError("self-heal requires an approval id")
+        if settings.self_heal_enabled:
+            executor_client = LiveExecutorClient(settings)
+            try:
+                if not executor_client.ready():
+                    raise RuntimeError("live executor is not ready")
+            finally:
+                executor_client.close()
         if not _configured_secret(settings.grafana_webhook_secret):
             raise RuntimeError("Grafana webhook secret is not configured")
         state_parent = settings.state_store_path.parent

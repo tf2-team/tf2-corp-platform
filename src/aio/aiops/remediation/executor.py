@@ -107,7 +107,6 @@ class SelfHealOrchestrator:
             "idempotency_key": _idempotency_key(incident.incident_id, action.action_id, f"plan-{attempt}"),
             "reason": event.reason,
             "requested_by": "aiops-runtime",
-            "requested_at": _iso(self.clock()),
             "dry_run": True,
             "root_cause": {
                 "service": root_cause.service if root_cause else incident.service,

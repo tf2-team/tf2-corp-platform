@@ -50,16 +50,7 @@ class LiveExecutorStore:
             )
             """
         )
-        self._connection.execute(
-            """
-            CREATE TABLE IF NOT EXISTS idempotency_keys (
-                idempotency_key TEXT PRIMARY KEY,
-                operation TEXT NOT NULL,
-                response_json TEXT NOT NULL,
-                created_at TEXT NOT NULL
-            )
-            """
-        )
+        self._ensure_idempotency_schema()
         self._connection.execute(
             """
             CREATE TABLE IF NOT EXISTS target_cooldowns (
@@ -196,7 +187,7 @@ class LiveExecutorStore:
                 """
                 INSERT INTO idempotency_keys (idempotency_key, operation, response_json, created_at)
                 VALUES (?, ?, ?, ?)
-                ON CONFLICT(idempotency_key) DO NOTHING
+                ON CONFLICT(idempotency_key, operation) DO NOTHING
                 """,
                 (key, operation, json.dumps(response, sort_keys=True), utc_now_text()),
             )
@@ -207,6 +198,51 @@ class LiveExecutorStore:
             (key, operation),
         ).fetchone()
         return json.loads(row["response_json"]) if row else None
+
+    def _ensure_idempotency_schema(self) -> None:
+        self._connection.execute(
+            """
+            CREATE TABLE IF NOT EXISTS idempotency_keys (
+                idempotency_key TEXT NOT NULL,
+                operation TEXT NOT NULL,
+                response_json TEXT NOT NULL,
+                created_at TEXT NOT NULL,
+                PRIMARY KEY (idempotency_key, operation)
+            )
+            """
+        )
+        columns = self._connection.execute("PRAGMA table_info(idempotency_keys)").fetchall()
+        primary_key_columns = [
+            str(row["name"])
+            for row in sorted(columns, key=lambda item: int(item["pk"]))
+            if int(row["pk"]) > 0
+        ]
+        if primary_key_columns == ["idempotency_key", "operation"]:
+            return
+
+        with self._connection:
+            self._connection.execute(
+                """
+                CREATE TABLE idempotency_keys_v2 (
+                    idempotency_key TEXT NOT NULL,
+                    operation TEXT NOT NULL,
+                    response_json TEXT NOT NULL,
+                    created_at TEXT NOT NULL,
+                    PRIMARY KEY (idempotency_key, operation)
+                )
+                """
+            )
+            self._connection.execute(
+                """
+                INSERT OR IGNORE INTO idempotency_keys_v2 (
+                    idempotency_key, operation, response_json, created_at
+                )
+                SELECT idempotency_key, operation, response_json, created_at
+                FROM idempotency_keys
+                """
+            )
+            self._connection.execute("DROP TABLE idempotency_keys")
+            self._connection.execute("ALTER TABLE idempotency_keys_v2 RENAME TO idempotency_keys")
 
     def audit(self, event: dict[str, Any]) -> None:
         with self._connection:

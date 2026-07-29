@@ -24,8 +24,7 @@ ALLOWLIST = {
         "target_kind": "Deployment",
         "namespace": "techx-corp-prod",
         "min_replicas": 2,
-        "max_replicas": 3,
-        "target_replicas": 3,
+        "max_replicas": 12,
         "blast_radius_services": ["frontend", "recommendation", "product-reviews", "checkout"],
         "verification_query_id": "product_catalog_cpu_millicores",
     }
@@ -76,6 +75,8 @@ def default_snapshot(config: dict[str, Any]) -> dict[str, Any]:
         "name": config["target"],
         "replicas": config["min_replicas"],
         "ready_replicas": config["min_replicas"],
+        "scaling_controller": "Deployment",
+        "control_replicas": config["min_replicas"],
         "resource_version": "phase2-mock-resource-version",
     }
 
@@ -99,7 +100,12 @@ def resolved_config(context: dict[str, Any]) -> dict[str, Any] | None:
     action_id = context.get("action_id")
     if action_id == "restore_deployment_replicas":
         action_id = context.get("original_action_id") or "scale_product_catalog"
-    return copy.deepcopy(ALLOWLIST.get(action_id))
+    config = copy.deepcopy(ALLOWLIST.get(action_id))
+    if config is not None:
+        executor_environment = context.get("_executor_environment")
+        if isinstance(executor_environment, str) and executor_environment:
+            config["namespace"] = executor_environment
+    return config
 
 
 def block_response(context: dict[str, Any], message: str, reasons: list[str], config: dict[str, Any] | None = None) -> dict[str, Any]:
@@ -149,17 +155,28 @@ def validate_common(context: dict[str, Any], *, expected_action_type: str, allow
         reasons.append("protected_namespace")
     if context.get("target_kind") in {"StatefulSet", "StatefulWorkload"}:
         reasons.append("stateful_target")
-    if context.get("policy_id") != POLICY_ID:
+    expected_policy_id = str(context.get("_executor_policy_id") or POLICY_ID)
+    expected_policy_expiry_text = str(context.get("_executor_policy_expires_at") or POLICY_EXPIRES_AT)
+    expected_approval_id = context.get("_executor_approval_id")
+    if context.get("policy_id") != expected_policy_id:
         reasons.append("policy_id_mismatch")
     if context.get("policy_approved") is not True:
         reasons.append("policy_not_approved")
+    approval_id = context.get("approval_id")
+    if not isinstance(approval_id, str) or not approval_id.strip():
+        reasons.append("missing_approval")
+    elif isinstance(expected_approval_id, str) and expected_approval_id and approval_id != expected_approval_id:
+        reasons.append("approval_id_mismatch")
 
-    policy_expiry = parse_time(context.get("policy_expires_at"), parse_time(POLICY_EXPIRES_AT))
-    configured_policy_expiry = parse_time(POLICY_EXPIRES_AT)
-    if policy_expiry <= utc_now():
-        reasons.append("policy_expired")
-    if policy_expiry > configured_policy_expiry:
-        reasons.append("policy_expiry_exceeds_executor_policy")
+    try:
+        configured_policy_expiry = parse_time(expected_policy_expiry_text)
+        policy_expiry = parse_time(context.get("policy_expires_at"), configured_policy_expiry)
+        if configured_policy_expiry <= utc_now() or policy_expiry <= utc_now():
+            reasons.append("policy_expired")
+        if policy_expiry > configured_policy_expiry:
+            reasons.append("policy_expiry_exceeds_executor_policy")
+    except (AttributeError, TypeError, ValueError):
+        reasons.append("invalid_policy_expiry")
     if not context.get("incident_id"):
         reasons.append("missing_incident_id")
     if not context.get("reason"):
@@ -197,9 +214,14 @@ def plan_payload(context: dict[str, Any], config: dict[str, Any], before: dict[s
 def make_plan(context: dict[str, Any], config: dict[str, Any]) -> dict[str, Any]:
     before = get_snapshot(context, config)
     current_replicas = int(before.get("replicas", config["min_replicas"]))
-    target_replicas = min(max(current_replicas + 1, config["min_replicas"]), config["max_replicas"])
-    target_replicas = min(target_replicas, config["target_replicas"])
-    after = {"replicas": target_replicas}
+    autoscaler_max = int(before.get("autoscaler_max_replicas") or config["max_replicas"])
+    effective_max = min(config["max_replicas"], autoscaler_max)
+    target_replicas = min(max(current_replicas + 1, config["min_replicas"]), effective_max)
+    after = {
+        "replicas": target_replicas,
+        "control_replicas": target_replicas,
+        "scaling_controller": before.get("scaling_controller", "Deployment"),
+    }
     requested_at = utc_now()
     expires_at = isoformat(requested_at + timedelta(seconds=PLAN_TTL_SECONDS))
     payload = plan_payload(context, config, before, after, expires_at)
@@ -234,11 +256,16 @@ def verify_plan_context(context: dict[str, Any], config: dict[str, Any]) -> tupl
         return plan, ["plan_hash_mismatch"]
     if context.get("rollback_token") != plan.get("rollback_token"):
         return plan, ["rollback_token_mismatch"]
-    expires_at = parse_time(plan.get("expires_at"))
+    try:
+        expires_at = parse_time(plan.get("expires_at"))
+    except (AttributeError, TypeError, ValueError):
+        return plan, ["invalid_plan_expiry"]
     if expires_at <= utc_now():
         return plan, ["plan_expired"]
     current = get_snapshot(context, config)
     before = plan.get("before") or {}
+    if current.get("scaling_controller") != before.get("scaling_controller"):
+        return plan, ["scaling_controller_changed"]
     if current.get("resource_version") != before.get("resource_version"):
         return plan, ["resource_version_mismatch"]
     return plan, []

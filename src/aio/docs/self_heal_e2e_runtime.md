@@ -53,9 +53,12 @@ The AIOps runtime owns post-action verification. It accepts only samples whose
 `sample_timestamp` is later than the executor's `executed_at`.
 
 For the golden CPU-saturation action, the verification signal is
-`product_catalog_cpu_millicores`. By default, recovery requires two fresh,
-consecutive samples at or below the incident threshold. Two consecutive failed
-samples, or no conclusive telemetry before the deadline, triggers rollback.
+`product_catalog_cpu_millicores`, measured as average CPU millicores per
+matching workload pod rather than aggregate service CPU. By default, recovery
+requires two fresh, consecutive samples at or below the incident threshold and
+the executor independently requires the requested ready-pod count. Two
+consecutive failed samples, or no conclusive telemetry before the deadline,
+triggers rollback.
 
 The thresholds are configurable through:
 

@@ -207,7 +207,7 @@
     "resource.cpu_millicores": {
       "query_id_template": "$service.cpu_millicores",
       "signal_id_template": "${service_id}_cpu_millicores",
-      "promql": "(sum(rate(container_cpu_usage_seconds_total{namespace=\"techx-corp-prod\",pod=~\"$service-[0-9a-f]{6,10}-.*\",container=\"$service\"}[5m])) * 1000) or (sum(rate(container_cpu_usage_seconds_total{pod=~\"$service-[0-9a-f]{6,10}-.*\",container=\"$service\"}[5m])) * 1000) or (sum(rate(container_cpu_usage_total{container_name=~\".*$service.*\"}[5m])) * 1000) or (sum(k8s_pod_cpu_usage{k8s_deployment_name=\"$service\"}) * 1000)",
+      "promql": "(avg(rate(container_cpu_usage_seconds_total{namespace=\"techx-corp-prod\",pod=~\"$service-[0-9a-f]{6,10}-.*\",container=\"$service\"}[5m])) * 1000) or (avg(rate(container_cpu_usage_seconds_total{pod=~\"$service-[0-9a-f]{6,10}-.*\",container=\"$service\"}[5m])) * 1000) or (avg(rate(container_cpu_usage_total{container_name=~\".*$service.*\"}[5m])) * 1000) or (avg(k8s_pod_cpu_usage{k8s_deployment_name=\"$service\"}) * 1000)",
       "unit": "millicores",
       "window": "5m",
       "metric": "cpu_millicores",

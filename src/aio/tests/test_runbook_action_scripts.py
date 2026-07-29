@@ -21,6 +21,7 @@ def _base_context() -> dict:
         "policy_id": "phase3-scale-policy-v1",
         "policy_approved": True,
         "policy_expires_at": "2026-08-31T23:59:59Z",
+        "approval_id": "adr-live-001",
         "idempotency_key": "sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
         "reason": "cpu_saturation",
         "root_cause_metrics": ["product_catalog_cpu_millicores"],

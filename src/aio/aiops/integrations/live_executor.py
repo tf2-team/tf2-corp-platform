@@ -26,6 +26,10 @@ class LiveExecutorClient:
     def catalog(self, request_id: str | None = None) -> list[dict]:
         return self._http.get("/v1/actions/catalog", headers=self._request_headers({"request_id": request_id}))
 
+    def ready(self) -> bool:
+        response = self._http.get("/readyz")
+        return isinstance(response, dict) and response.get("status") == "ready"
+
     def plan(self, action: dict) -> dict:
         return self._post("/v1/actions/plan", action)
 
