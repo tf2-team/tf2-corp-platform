@@ -14,6 +14,7 @@ from openai import OpenAI
 
 from bedrock_runtime import converse_json, is_bedrock_provider
 from copilot_contracts import MemoryExtraction
+from techx_ai_common.observability import call_model
 
 
 _PROMPT = """\
@@ -27,31 +28,35 @@ Return JSON exactly as {"memories":[...]} with at most 5 memories.
 """
 
 
-from techx_ai_common.observability import instructor_create, trace_subspan
-
-
 def extract_memories(user_message: str) -> MemoryExtraction:
-    with trace_subspan("memory.extraction"):
-        if is_bedrock_provider():
-            return converse_json(MemoryExtraction, _PROMPT, user_message)
-        client = instructor.from_openai(
-            OpenAI(
-                base_url=os.environ["LLM_BASE_URL"],
-                api_key=os.environ["OPENAI_API_KEY"],
-            ),
-            mode=instructor.Mode.JSON,
+    if is_bedrock_provider():
+        return converse_json(
+            MemoryExtraction,
+            _PROMPT,
+            user_message,
+            workflow_step="memory_extraction",
         )
-        return instructor_create(
-            instructor_client=client,
-            model=os.environ["LLM_MODEL"],
+    client = instructor.from_openai(
+        OpenAI(
+            base_url=os.environ["LLM_BASE_URL"],
+            api_key=os.environ["OPENAI_API_KEY"],
+        ),
+        mode=instructor.Mode.JSON,
+    )
+    model = os.environ["LLM_MODEL"]
+    return call_model(
+        lambda: client.chat.completions.create(
+            model=model,
             response_model=MemoryExtraction,
             messages=[
                 {"role": "system", "content": _PROMPT},
                 {"role": "user", "content": user_message},
             ],
-            surface="copilot",
             max_retries=2,
-        )
+        ),
+        model=model,
+        provider=os.environ.get("LLM_PROVIDER", "openai_compatible"),
+        workflow_step="memory_extraction",
+    )
 
-# Change trail: @hungxqt - 2026-07-29 - Route memory extraction through instructor_create adapter with telemetry subspan.
-
+# Change trail: @hungxqt - 2026-07-29 - Merge memory extraction onto the content-free model telemetry wrapper.

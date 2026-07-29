@@ -64,5 +64,4 @@ async function runWithSpan(parentSpan: Span, fn: () => Promise<unknown>) {
 
 export default InstrumentationMiddleware;
 
-// Change trail: @hungxqt - 2026-07-29 - Return active 32-hex trace ID in x-trace-id response header for AI APIs.
-
+// Change trail: @hungxqt - 2026-07-29 - Merge validated trace headers while limiting exposure to AI API responses.

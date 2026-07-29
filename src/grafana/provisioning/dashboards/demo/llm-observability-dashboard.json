@@ -1,0 +1,60 @@
+{
+  "annotations": {"list": []},
+  "editable": true,
+  "panels": [
+    {
+      "datasource": {"type": "prometheus", "uid": "webstore-metrics"},
+      "fieldConfig": {"defaults": {"unit": "tokens"}, "overrides": []},
+      "gridPos": {"h": 8, "w": 8, "x": 0, "y": 0},
+      "id": 1,
+      "targets": [
+        {
+          "expr": "sum by (surface, model, token_type) (increase(app_ai_model_tokens_total[$__range]))",
+          "legendFormat": "{{surface}} / {{model}} / {{token_type}}",
+          "refId": "A"
+        }
+      ],
+      "title": "LLM token usage",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "webstore-metrics"},
+      "fieldConfig": {"defaults": {"unit": "currencyUSD"}, "overrides": []},
+      "gridPos": {"h": 8, "w": 8, "x": 8, "y": 0},
+      "id": 2,
+      "targets": [
+        {
+          "expr": "sum by (surface, model) (increase(app_ai_model_cost_usd_USD_total[$__range]))",
+          "legendFormat": "{{surface}} / {{model}}",
+          "refId": "A"
+        }
+      ],
+      "title": "Estimated LLM cost",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "webstore-metrics"},
+      "fieldConfig": {"defaults": {"unit": "ms"}, "overrides": []},
+      "gridPos": {"h": 8, "w": 8, "x": 16, "y": 0},
+      "id": 3,
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.95, sum by (le, app_ai_surface, gen_ai_request_model) (rate(traces_span_metrics_duration_milliseconds_bucket{app_ai_surface=~\"summary|copilot\"}[$__rate_interval])))",
+          "legendFormat": "{{app_ai_surface}} / {{gen_ai_request_model}}",
+          "refId": "A"
+        }
+      ],
+      "title": "Model-call p95 latency",
+      "type": "timeseries"
+    }
+  ],
+  "refresh": "10s",
+  "schemaVersion": 41,
+  "tags": ["ai", "llm", "observability"],
+  "templating": {"list": []},
+  "time": {"from": "now-1h", "to": "now"},
+  "timezone": "browser",
+  "title": "LLM Observability",
+  "uid": "llm-observability",
+  "version": 1
+}

@@ -18,7 +18,7 @@ from aiops.rca.graph import GraphTraversalRca
 from aiops.rca import V001RcaEngine
 from aiops.schemas import AnomalyFinding, MetricPoint, MetricSeries, PipelineResult, PipelineRunRequest, RcaResult, RootCauseCandidate, RuntimeConfig, TelemetryCorroboration
 from aiops.shared.series import prepare_detector_series
-from aiops.shared.tail import aligned_spearman, cusum_tail_change, evaluate_tail_change, fixed_baseline_and_tail, median3, metric_group, normal_traffic_growth_decision, page_hinkley_tail_change, point_changed, slow_drift_tail_change, tail_aligned_dtw_similarity
+from aiops.shared.tail import aligned_spearman, cusum_tail_change, evaluate_tail_change, fixed_baseline_and_tail, median3, metric_group, normal_traffic_growth_decision, page_hinkley_tail_change, point_changed, significant_tail_change, slow_drift_tail_change, tail_aligned_dtw_similarity
 from scipy.stats import ConstantInputWarning
 
 
@@ -69,6 +69,7 @@ def rca_engine(config: RuntimeConfig, **combined_overrides) -> V001RcaEngine:
         "min_relative_change_ratio": hyperparameters["anomaly"]["min_relative_change_ratio"],
         "min_absolute_change": hyperparameters["anomaly"]["min_absolute_change"],
         "page_hinkley_min_bucket_factor": hyperparameters["anomaly"]["page_hinkley_min_bucket_factor"],
+        "oom_recent_buckets": hyperparameters["anomaly"]["oom_recent_buckets"],
         "traffic_shape_max_lag_buckets": hyperparameters["anomaly"]["traffic_shape_max_lag_buckets"],
         "topology_max_hops": load_hyperparameters(Path("config/hyperparameters.json"))["correlation"]["topology_max_hops"],
         **combined_overrides,
@@ -193,11 +194,35 @@ class V001AnomalyRcaTest(unittest.TestCase):
         self.assertFalse(evaluate_tail_change(series, 900, 29, 3, 0.3, 10.0).significant)
         self.assertTrue(cusum_tail_change(series, 900, 29, 3, 0.3, 10.0).significant)
 
+    def test_cusum_requires_consecutive_deviation_buckets(self):
+        series = minute_metric("payment", "cpu_millicores", [100] * 30 + [120, 100] * 7)
+
+        self.assertFalse(cusum_tail_change(series, 900, 29, 3, 0.3, 10.0).significant)
+
+    def test_memory_small_level_shift_does_not_become_significant_via_cusum(self):
+        mib = 1024 * 1024
+        series = minute_metric("cart", "memory_usage_bytes", [133 * mib] * 30 + [135 * mib] * 30)
+
+        self.assertFalse(significant_tail_change(
+            series,
+            1800,
+            29,
+            {"memory": 6},
+            {"memory": 0.05},
+            {"memory": 10 * mib},
+            {"enabled": True, "window_seconds": 3600, "min_points": 12, "positive_bucket_ratio": 0.65, "metrics": {"memory": {"direction": "up", "min_total_change": 5 * mib}}},
+        ))
+
     def test_page_hinkley_tail_change_detects_creeping_latency_drift(self):
         series = minute_metric("payment", "p95_latency_5m", [1.0] * 30 + [1.04 + index * 0.01 for index in range(15)])
 
         self.assertFalse(evaluate_tail_change(series, 900, 29, 3, 0.25, 0.05).significant)
         self.assertTrue(page_hinkley_tail_change(series, 900, 29, 3, 0.25, 0.05).significant)
+
+    def test_page_hinkley_requires_consecutive_deviation_buckets(self):
+        series = minute_metric("payment", "p95_latency_5m", [1.0] * 30 + [1.2, 1.0] * 7)
+
+        self.assertFalse(page_hinkley_tail_change(series, 900, 29, 3, 0.25, 0.05).significant)
 
     def test_slow_drift_detects_small_sustained_memory_growth(self):
         series = minute_metric("ad", "memory_usage_bytes", [460_000_000 + index * 100_000 for index in range(60)])
@@ -539,6 +564,12 @@ class V001AnomalyRcaTest(unittest.TestCase):
         series = minute_metric("checkout", "oom_events_total", [0] * 44 + [1])
 
         self.assertTrue(engine._has_significant_tail_change(series))
+
+    def test_old_oom_counter_increase_does_not_pass_prefilter(self):
+        engine = anomaly_engine()
+        series = minute_metric("checkout", "oom_events_total", [0] * 30 + [1] * 15)
+
+        self.assertFalse(engine._has_significant_tail_change(series))
 
     def test_normal_growth_gate_uses_separate_detection_window(self):
         engine = anomaly_engine()
@@ -1089,12 +1120,34 @@ class V001AnomalyRcaTest(unittest.TestCase):
         runtime_config = load_runtime_config(Path("config/runtime.json"))
         findings = [AnomalyFinding(algorithm="weighted_sum", service="checkout", metric="cpu_millicores", signal_id="checkout_cpu_millicores", score=0.8, timestamp=1000)]
         corroboration = {
-            "checkout": TelemetryCorroboration(service="checkout", available_sources={"trace"}, trace_root_service="payment")
+            "checkout": TelemetryCorroboration(service="checkout", available_sources={"trace"}, trace_root_service="payment", trace_id="trace-weak", trace_operation="charge", trace_status="OK")
         }
 
         result = rca_engine(runtime_config).rank(findings, [], top_k=5, corroboration=corroboration)
 
         self.assertEqual(result.root_causes[0].service, "checkout")
+        self.assertNotIn("trace_log_failure", result.root_causes[0].root_cause_metrics)
+        self.assertTrue(any("trace_observed id=trace-weak" in item for item in result.root_causes[0].evidence))
+
+    def test_weak_log_is_included_as_evidence_without_changing_rca(self):
+        runtime_config = load_runtime_config(Path("config/runtime.json"))
+        findings = [AnomalyFinding(algorithm="weighted_sum", service="checkout", metric="cpu_millicores", signal_id="checkout_cpu_millicores", score=0.8, timestamp=1000)]
+        corroboration = {
+            "checkout": TelemetryCorroboration(
+                service="checkout",
+                available_sources={"log"},
+                log_classification="soft_signal",
+                log_failure_count=2,
+                log_failure_timestamp=990,
+                log_reference="otel-logs/log-1",
+                log_excerpt="retrying checkout",
+            )
+        }
+
+        result = rca_engine(runtime_config).rank(findings, [], top_k=5, corroboration=corroboration)
+
+        self.assertEqual(result.root_causes[0].service, "checkout")
+        self.assertTrue(any("log_classification=soft_signal" in item for item in result.root_causes[0].evidence))
 
     def test_rca_suppresses_downstream_symptom_when_dependency_is_stronger_and_earlier(self):
         runtime_config = load_runtime_config(Path("config/runtime.json"))
@@ -1103,9 +1156,13 @@ class V001AnomalyRcaTest(unittest.TestCase):
             AnomalyFinding(algorithm="weighted_sum", service="checkout", metric="cpu_millicores", signal_id="checkout_cpu_millicores", score=0.8, timestamp=1000),
         ]
 
-        result = rca_engine(runtime_config).rank(findings, [], top_k=5)
+        with self.assertLogs("aiops.rca.engine", level="INFO") as logs:
+            result = rca_engine(runtime_config).rank(findings, [], top_k=5)
 
         self.assertEqual([root.service for root in result.root_causes], ["payment"])
+        text = "\n".join(logs.output)
+        self.assertIn("filter=downstream_symptom", text)
+        self.assertIn("parent_root_cause=payment", text)
 
     def test_rca_scores_downstream_coverage_for_early_dependency_root(self):
         runtime_config = load_runtime_config(Path("config/runtime.json"))

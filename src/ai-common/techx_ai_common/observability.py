@@ -3,314 +3,277 @@
 # Copyright The OpenTelemetry Authors
 # SPDX-License-Identifier: Apache-2.0
 
-"""Shared observability layer for AI services (spans, metrics, pseudonyms, cost)."""
+"""Minimal, content-free telemetry for runtime model calls."""
 
-import contextlib
-import contextvars
-import hmac
+from __future__ import annotations
+
 import hashlib
+import hmac
+import json
 import os
-import typing
-from typing import Any, Callable, Generator, Optional, Tuple, TypeVar
+from contextlib import contextmanager
+from contextvars import ContextVar
+from decimal import Decimal
+from dataclasses import dataclass
+from collections.abc import Iterator
+from typing import Any, Callable, TypeVar
 
 from opentelemetry import metrics, trace
-from opentelemetry.trace import Status, StatusCode
-from pydantic import BaseModel, ValidationError
+from opentelemetry.trace import SpanKind, Status, StatusCode
 
-T = TypeVar("T", bound=BaseModel)
 
-# Context variables for request-level metadata
-_SURFACE_VAR: contextvars.ContextVar[str] = contextvars.ContextVar("app_ai_surface", default="")
-_USER_ID_VAR: contextvars.ContextVar[str] = contextvars.ContextVar("app_ai_user_id", default="")
-_SESSION_ID_VAR: contextvars.ContextVar[str] = contextvars.ContextVar("app_ai_session_id", default="")
+T = TypeVar("T")
 
-# OpenTelemetry meters and offer counters
-tracer = trace.get_tracer("techx_ai_common")
-meter = metrics.get_meter("techx_ai_common")
+_TRACER = trace.get_tracer("techx-ai-common")
+_METER = metrics.get_meter("techx-ai-common")
+_TOKENS = _METER.create_counter("app_ai_model_tokens", unit="tokens")
+_COST = _METER.create_counter("app_ai_model_cost_usd", unit="USD")
 
-tokens_counter = meter.create_counter(
-    name="app_ai_model_tokens_total",
-    description="Total tokens consumed by AI model requests",
-    unit="1",
+
+@dataclass(frozen=True)
+class TelemetryContext:
+    surface: str = "unknown"
+    user_id: str | None = None
+    session_id: str | None = None
+
+
+_CONTEXT: ContextVar[TelemetryContext] = ContextVar(
+    "ai_telemetry_context",
+    default=TelemetryContext(),
 )
 
-cost_counter = meter.create_counter(
-    name="app_ai_model_cost_usd_USD_total",
-    description="Total estimated cost in USD for AI model requests",
-    unit="USD",
-)
-
-# Price registry per 1M tokens: (input_price_per_1M, output_price_per_1M)
-_MODEL_PRICE_REGISTRY: dict[str, tuple[float, float]] = {
-    "openai/gpt-oss-20b": (0.075, 0.30),
-    "amazon.nova-lite-v1:0": (0.33, 2.75),
-    "us.amazon.nova-lite-v1:0": (0.33, 2.75),
-    "apac.amazon.nova-lite-v1:0": (0.33, 2.75),
-    "eu.amazon.nova-lite-v1:0": (0.33, 2.75),
-    "amazon.nova-lite-v1": (0.33, 2.75),
-    "techx-llm": (0.0, 0.0),
+# AWS Price List API, AmazonBedrock offer, effective 2026-07-01.
+# Values are USD per 1M text tokens for standard on-demand inference.
+_PRICING = {
+    "global.amazon.nova-2-lite-v1:0": (
+        Decimal("0.30"),
+        Decimal("2.50"),
+        "aws-2026-07-01-global-standard",
+    ),
+    "us.amazon.nova-2-lite-v1:0": (
+        Decimal("0.33"),
+        Decimal("2.75"),
+        "aws-2026-07-01-us-standard",
+    ),
 }
 
 
-def set_ai_context(surface: str = "", user_id: str = "", session_id: str = "") -> None:
-    if surface:
-        _SURFACE_VAR.set(surface)
-    if user_id:
-        _USER_ID_VAR.set(user_id)
-    if session_id:
-        _SESSION_ID_VAR.set(session_id)
+def pseudonymize(raw_id: str | None, namespace: str) -> str | None:
+    """Return a stable, domain-separated pseudonym without a default secret."""
+    secret = os.environ.get("AI_TELEMETRY_HMAC_SECRET")
+    if not secret or not raw_id:
+        return None
+    return hmac.new(
+        secret.encode(),
+        f"{namespace}:{raw_id}".encode(),
+        hashlib.sha256,
+    ).hexdigest()
 
 
-def get_ai_context() -> Tuple[str, str, str]:
-    return _SURFACE_VAR.get(), _USER_ID_VAR.get(), _SESSION_ID_VAR.get()
-
-
-@contextlib.contextmanager
-def ai_context_scope(surface: str = "", user_id: str = "", session_id: str = "") -> Generator[None, None, None]:
-    token_surf = _SURFACE_VAR.set(surface) if surface else None
-    token_user = _USER_ID_VAR.set(user_id) if user_id else None
-    token_sess = _SESSION_ID_VAR.set(session_id) if session_id else None
+@contextmanager
+def telemetry_context(
+    *,
+    surface: str,
+    user_id: str | None = None,
+    session_id: str | None = None,
+) -> Iterator[None]:
+    token = _CONTEXT.set(TelemetryContext(surface, user_id, session_id))
     try:
         yield
     finally:
-        if token_surf is not None:
-            _SURFACE_VAR.reset(token_surf)
-        if token_user is not None:
-            _USER_ID_VAR.reset(token_user)
-        if token_sess is not None:
-            _SESSION_ID_VAR.reset(token_sess)
+        _CONTEXT.reset(token)
 
 
-def get_hmac_key() -> bytes:
-    key_str = os.environ.get("AI_OBSERVABILITY_HMAC_KEY", "")
-    if not key_str:
-        key_str = "01234567890123456789012345678901"
-    key_bytes = key_str.encode("utf-8")
-    if len(key_bytes) < 32:
-        raise ValueError("AI_OBSERVABILITY_HMAC_KEY environment variable must contain at least 32 bytes")
-    return key_bytes
+def _read(value: Any, *names: str) -> Any:
+    for name in names:
+        if isinstance(value, dict) and name in value:
+            return value[name]
+        item = getattr(value, name, None)
+        if item is not None:
+            return item
+    return None
 
 
-def pseudonymize_user(user_id: str) -> str:
-    if not user_id:
-        return ""
-    key = get_hmac_key()
-    raw = f"user:{user_id}".encode("utf-8")
-    return hmac.new(key, raw, hashlib.sha256).hexdigest()[:32]
+def usage_from(response: Any) -> tuple[int | None, int | None]:
+    usage = _read(response, "usage")
+    if usage is None:
+        return None, None
+    return (
+        _read(usage, "inputTokens", "input_tokens", "prompt_tokens"),
+        _read(usage, "outputTokens", "output_tokens", "completion_tokens"),
+    )
 
 
-def pseudonymize_session(session_id: str) -> str:
-    if not session_id:
-        return ""
-    key = get_hmac_key()
-    raw = f"session:{session_id}".encode("utf-8")
-    return hmac.new(key, raw, hashlib.sha256).hexdigest()[:32]
+def response_model_from(response: Any, requested_model: str) -> str:
+    return str(_read(response, "model", "modelId", "model_id") or requested_model or "unknown")
 
 
-def get_model_pricing(model_id: str) -> Tuple[float, float]:
-    if not isinstance(model_id, str):
-        model_id = str(model_id or "unknown")
-    normalized_model = model_id.strip().lower()
-    if normalized_model in _MODEL_PRICE_REGISTRY:
-        prices = _MODEL_PRICE_REGISTRY[normalized_model]
-        return prices[0] / 1_000_000.0, prices[1] / 1_000_000.0
+def tool_names_from(response: Any) -> list[str]:
+    names: list[str] = []
+    output = _read(response, "output")
+    message = _read(output, "message") if output is not None else None
+    for item in _read(message, "content") or []:
+        tool = _read(item, "toolUse", "tool_use")
+        name = _read(tool, "name") if tool is not None else None
+        if name:
+            names.append(str(name))
 
-    if "nova" in normalized_model:
-        return 0.33 / 1_000_000.0, 2.75 / 1_000_000.0
-
-    if normalized_model.startswith(("techx-llm", "test-", "mock-", "fake-")) or "mock" in normalized_model or "magicmock" in normalized_model:
-        return 0.0, 0.0
-
-    raise ValueError(f"No price registry entry for model '{model_id}'")
-
-
-
-def calculate_cost(model_id: str, input_tokens: int, output_tokens: int) -> float:
-    input_rate, output_rate = get_model_pricing(model_id)
-    return (input_tokens * input_rate) + (output_tokens * output_rate)
+    choices = _read(response, "choices") or []
+    if choices:
+        message = _read(choices[0], "message")
+        for tool_call in _read(message, "tool_calls") or []:
+            function = _read(tool_call, "function")
+            name = _read(function, "name") if function is not None else None
+            if name:
+                names.append(str(name))
+    return sorted(set(names))
 
 
-def record_chat_telemetry(
-    model_id: str,
-    input_tokens: int,
-    output_tokens: int,
-    surface: str = "",
-    outcome: str = "ok",
-    response_model: Optional[str] = None,
-    current_span: Optional[trace.Span] = None,
-) -> float:
-    ctx_surface, ctx_user, ctx_sess = get_ai_context()
-    active_surface = surface or ctx_surface or "copilot"
-    if active_surface not in ("copilot", "summary"):
-        active_surface = "copilot"
-
-    cost = calculate_cost(model_id, input_tokens, output_tokens)
-
-    # Increment token metric counters
-    tokens_counter.add(input_tokens, {"surface": active_surface, "model": model_id, "token_type": "input"})
-    tokens_counter.add(output_tokens, {"surface": active_surface, "model": model_id, "token_type": "output"})
-
-    # Increment cost metric counter
-    cost_counter.add(cost, {"surface": active_surface, "model": model_id})
-
-    user_pseudo = pseudonymize_user(ctx_user)
-    sess_pseudo = pseudonymize_session(ctx_sess)
-
-    span = current_span or trace.get_current_span()
-    if span and span.is_recording():
-        span.set_attribute("gen_ai.operation.name", "chat")
-        span.set_attribute("gen_ai.request.model", model_id)
-        span.set_attribute("gen_ai.response.model", response_model or model_id)
-        span.set_attribute("gen_ai.usage.input_tokens", input_tokens)
-        span.set_attribute("gen_ai.usage.output_tokens", output_tokens)
-        span.set_attribute("app.ai.estimated_cost_usd", cost)
-        span.set_attribute("app.ai.outcome", outcome)
-        span.set_attribute("app.ai.surface", active_surface)
-        span.set_attribute("app.ai.user_pseudonym", user_pseudo)
-        span.set_attribute("app.ai.session_pseudonym", sess_pseudo)
-
-    return cost
-
-
-@contextlib.contextmanager
-def trace_subspan(name: str, attributes: Optional[dict[str, Any]] = None) -> Generator[trace.Span, None, None]:
-    with tracer.start_as_current_span(name) as span:
-        if attributes:
-            for key, val in attributes.items():
-                span.set_attribute(key, val)
-        yield span
-
-
-def _extract_int_token(obj: Any, attr: str) -> int:
-    if obj is None:
-        return 0
-    val = getattr(obj, attr, 0)
-    try:
-        return int(val)
-    except (TypeError, ValueError):
-        return 0
-
-
-def chat_completions_create(client: Any, model: str, messages: list, surface: str = "", **kwargs) -> Any:
-    with tracer.start_as_current_span("gen_ai.chat") as span:
+def estimated_cost(
+    model: str,
+    input_tokens: int | None,
+    output_tokens: int | None,
+) -> tuple[Decimal, str] | None:
+    pricing = _PRICING.get(model)
+    raw_pricing = os.environ.get("AI_MODEL_PRICING_JSON")
+    if pricing is None and raw_pricing:
         try:
-            response = client.chat.completions.create(model=model, messages=messages, **kwargs)
-            usage = getattr(response, "usage", None)
-            input_tokens = _extract_int_token(usage, "prompt_tokens")
-            output_tokens = _extract_int_token(usage, "completion_tokens")
-            resp_model = getattr(response, "model", model) or model
-            if not isinstance(resp_model, str):
-                resp_model = str(resp_model)
-
-            record_chat_telemetry(
-                model_id=model,
-                input_tokens=input_tokens,
-                output_tokens=output_tokens,
-                surface=surface,
-                outcome="ok",
-                response_model=resp_model,
-                current_span=span,
+            configured = json.loads(raw_pricing)[model]
+            pricing = (
+                Decimal(str(configured["input_per_million"])),
+                Decimal(str(configured["output_per_million"])),
+                str(configured["version"]),
             )
-            return response
+        except (KeyError, TypeError, ValueError, json.JSONDecodeError):
+            pricing = None
+    if pricing is None or input_tokens is None or output_tokens is None:
+        return None
+    input_price, output_price, version = pricing
+    cost = (
+        Decimal(input_tokens) * input_price
+        + Decimal(output_tokens) * output_price
+    ) / Decimal(1_000_000)
+    return cost, version
+
+
+def call_model(
+    invoke: Callable[[], T],
+    *,
+    model: str,
+    provider: str,
+    workflow_step: str,
+    surface: str | None = None,
+    user_id: str | None = None,
+    session_id: str | None = None,
+    fallback: bool = False,
+) -> T:
+    """Invoke one provider call and emit one safe GenAI span."""
+    current = _CONTEXT.get()
+    surface = surface or current.surface
+    user_id = user_id or current.user_id
+    session_id = session_id or current.session_id
+    attributes: dict[str, Any] = {
+        "gen_ai.operation.name": "chat",
+        "gen_ai.provider.name": provider,
+        "gen_ai.request.model": model or "unknown",
+        "app.ai.surface": surface,
+        "app.ai.workflow_step": workflow_step,
+        "app.ai.outcome": "fallback" if fallback else "ok",
+        "app.ai.telemetry_complete": bool(model),
+    }
+    user = pseudonymize(user_id, "user")
+    session = pseudonymize(session_id, "session")
+    if user:
+        attributes["app.ai.user_pseudonym"] = user
+    if session:
+        attributes["app.ai.session_pseudonym"] = session
+    if (user_id and not user) or (session_id and not session):
+        attributes["app.ai.telemetry_complete"] = False
+
+    metric_attributes = {
+        "surface": surface,
+        "provider": provider,
+        "model": model or "unknown",
+    }
+    with _TRACER.start_as_current_span(
+        f"chat {model or 'unknown'}",
+        kind=SpanKind.CLIENT,
+        attributes=attributes,
+        record_exception=False,
+        set_status_on_exception=False,
+    ) as span:
+        try:
+            response = invoke()
         except Exception as exc:
-            ctx_surface, ctx_user, ctx_sess = get_ai_context()
-            active_surface = surface or ctx_surface or "copilot"
-            span.set_attribute("gen_ai.operation.name", "chat")
-            span.set_attribute("gen_ai.request.model", model)
             span.set_attribute("app.ai.outcome", "error")
-            span.set_attribute("app.ai.surface", active_surface)
-            span.set_attribute("app.ai.user_pseudonym", pseudonymize_user(ctx_user))
-            span.set_attribute("app.ai.session_pseudonym", pseudonymize_session(ctx_sess))
-            span.record_exception(exc)
-            span.set_status(Status(StatusCode.ERROR, str(exc)))
+            span.set_attribute("error.type", type(exc).__name__)
+            span.set_status(Status(StatusCode.ERROR))
+            raise
+
+        response_model = response_model_from(response, model)
+        span.set_attribute("gen_ai.response.model", response_model)
+        if response_model == "unknown":
+            span.set_attribute("app.ai.telemetry_complete", False)
+
+        input_tokens, output_tokens = usage_from(response)
+        if input_tokens is not None:
+            span.set_attribute("gen_ai.usage.input_tokens", input_tokens)
+            _TOKENS.add(input_tokens, {**metric_attributes, "token_type": "input"})
+        if output_tokens is not None:
+            span.set_attribute("gen_ai.usage.output_tokens", output_tokens)
+            _TOKENS.add(output_tokens, {**metric_attributes, "token_type": "output"})
+
+        tools = tool_names_from(response)
+        span.set_attribute("app.ai.tool_call_count", len(tools))
+        if tools:
+            span.set_attribute("app.ai.tool_names", tools)
+
+        cost = estimated_cost(model, input_tokens, output_tokens)
+        if cost:
+            amount, pricing_version = cost
+            span.set_attribute("app.ai.estimated_cost_usd", float(amount))
+            span.set_attribute("app.ai.pricing_version", pricing_version)
+            _COST.add(
+                float(amount),
+                {**metric_attributes, "pricing_version": pricing_version},
+            )
+        return response
+
+
+def call_tool(invoke: Callable[[], T], *, name: str, surface: str | None = None) -> T:
+    current = _CONTEXT.get()
+    surface = surface or current.surface
+    with _TRACER.start_as_current_span(
+        f"execute_tool {name}",
+        attributes={
+            "app.ai.surface": surface,
+            "app.ai.tool.name": name,
+            "app.ai.outcome": "ok",
+        },
+        record_exception=False,
+        set_status_on_exception=False,
+    ) as span:
+        try:
+            return invoke()
+        except Exception as exc:
+            span.set_attribute("app.ai.outcome", "error")
+            span.set_attribute("error.type", type(exc).__name__)
+            span.set_status(Status(StatusCode.ERROR))
             raise
 
 
+def record_fallback(reason_class: str, *, surface: str | None = None) -> None:
+    current = _CONTEXT.get()
+    surface = surface or current.surface
+    trace.get_current_span().set_attribute("app.ai.outcome", "fallback")
+    with _TRACER.start_as_current_span(
+        "app.ai.fallback",
+        attributes={
+            "app.ai.surface": surface,
+            "app.ai.fallback.reason_class": reason_class or "UnknownError",
+            "app.ai.outcome": "fallback",
+        },
+    ):
+        pass
 
-def instructor_create(instructor_client: Any, model: str, response_model: type[T], messages: list, surface: str = "", **kwargs) -> T:
-    with tracer.start_as_current_span("gen_ai.chat") as span:
-        try:
-            raw_completion = None
-            is_mock = type(instructor_client).__name__ in ("MagicMock", "Mock") or type(getattr(instructor_client, "chat", None)).__name__ in ("MagicMock", "Mock")
-            create_with_comp = getattr(instructor_client.chat.completions, "create_with_completion", None)
-            if create_with_comp is not None and not is_mock:
-                res = create_with_comp(model=model, response_model=response_model, messages=messages, **kwargs)
-                if isinstance(res, tuple) and len(res) == 2:
-                    parsed_obj, raw_completion = res
-                else:
-                    parsed_obj = res
-            else:
-                parsed_obj = instructor_client.chat.completions.create(
-                    model=model, response_model=response_model, messages=messages, **kwargs
-                )
-
-            usage = getattr(raw_completion, "usage", None) if raw_completion else None
-            input_tokens = _extract_int_token(usage, "prompt_tokens")
-            output_tokens = _extract_int_token(usage, "completion_tokens")
-            resp_model = getattr(raw_completion, "model", model) if raw_completion else model
-            if not isinstance(resp_model, str):
-                resp_model = str(resp_model)
-
-            record_chat_telemetry(
-                model_id=model,
-                input_tokens=input_tokens,
-                output_tokens=output_tokens,
-                surface=surface,
-                outcome="ok",
-                response_model=resp_model,
-                current_span=span,
-            )
-            return parsed_obj
-        except Exception as exc:
-            ctx_surface, ctx_user, ctx_sess = get_ai_context()
-            active_surface = surface or ctx_surface or "copilot"
-            span.set_attribute("gen_ai.operation.name", "chat")
-            span.set_attribute("gen_ai.request.model", model)
-            span.set_attribute("app.ai.outcome", "error")
-            span.set_attribute("app.ai.surface", active_surface)
-            span.set_attribute("app.ai.user_pseudonym", pseudonymize_user(ctx_user))
-            span.set_attribute("app.ai.session_pseudonym", pseudonymize_session(ctx_sess))
-            span.record_exception(exc)
-            span.set_status(Status(StatusCode.ERROR, str(exc)))
-            raise
-
-
-
-def bedrock_converse_adapter(boto3_client: Any, model_id: str, system_prompt: str, user_prompt: str, max_tokens: int = 1024, temperature: float = 0.0, surface: str = "") -> dict:
-    with tracer.start_as_current_span("gen_ai.chat") as span:
-        try:
-            response = boto3_client.converse(
-                modelId=model_id,
-                system=[{"text": system_prompt}],
-                messages=[{"role": "user", "content": [{"text": user_prompt}]}],
-                inferenceConfig={"maxTokens": max_tokens, "temperature": temperature},
-            )
-            usage = response.get("usage", {})
-            input_tokens = usage.get("inputTokens", 0)
-            output_tokens = usage.get("outputTokens", 0)
-
-            record_chat_telemetry(
-                model_id=model_id,
-                input_tokens=input_tokens,
-                output_tokens=output_tokens,
-                surface=surface,
-                outcome="ok",
-                response_model=model_id,
-                current_span=span,
-            )
-            return response
-        except Exception as exc:
-            ctx_surface, ctx_user, ctx_sess = get_ai_context()
-            active_surface = surface or ctx_surface or "copilot"
-            span.set_attribute("gen_ai.operation.name", "chat")
-            span.set_attribute("gen_ai.request.model", model_id)
-            span.set_attribute("app.ai.outcome", "error")
-            span.set_attribute("app.ai.surface", active_surface)
-            span.set_attribute("app.ai.user_pseudonym", pseudonymize_user(ctx_user))
-            span.set_attribute("app.ai.session_pseudonym", pseudonymize_session(ctx_sess))
-            span.record_exception(exc)
-            span.set_status(Status(StatusCode.ERROR, str(exc)))
-            raise
-
-
-# Change trail: @hungxqt - 2026-07-29 - Add shared AI observability layer with model spans, token/cost counters, pseudonyms, and adapters.
+# Change trail: @hungxqt - 2026-07-29 - Merge content-free model and tool telemetry with explicit-secret pseudonyms.

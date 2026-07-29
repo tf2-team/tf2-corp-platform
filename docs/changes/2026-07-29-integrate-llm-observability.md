@@ -115,4 +115,13 @@ Production LLM interactions previously lacked centralized client-visible trace p
 
 Revert code changes in `techx-corp-platform` git repository.
 
-<!-- Change trail: @hungxqt - 2026-07-29 - Integrated end-to-end LLM observability, trace header, private trace proxy, and HMAC pseudonyms across platform services. -->
+## Merge Resolution Note
+
+The merge with origin/main makes telemetry_context, call_model, call_tool, and record_fallback the authoritative Python telemetry API. Pseudonyms use AI_TELEMETRY_HMAC_SECRET. When it is absent, pseudonym attributes are omitted and telemetry is marked incomplete instead of using a fallback secret. The bounded src/frontend/pages/api/ai-traces/[traceId]/index.ts route and TraceApi.test.mjs are retained. The duplicate route variant and its test were removed. The superseded ai-common observability test and its false-positive direct-call regex test were also removed; product-reviews/tests/test_observability.py covers the merged wrapper. The JSON change-trail exception for src/frontend/package.json remains applicable.
+
+### Remaining Verification (Merged Tree)
+
+* Run npm run test:resilience from src/frontend.
+* Run the targeted Python pytest suites from the repository root.
+
+<!-- Change trail: @hungxqt - 2026-07-29 - Reconcile telemetry APIs, secret handling, duplicate routes, tests, and validation. -->

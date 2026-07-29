@@ -1,12 +1,36 @@
 {
   "incident": {
     "count_reset_seconds": 900,
+    "recovery_consecutive_buckets": 30,
     "notification_cooldown_seconds": 900,
     "rca_dedup_seconds": 900,
     "slo_dedup_seconds": 900,
     "notification_retry_base_seconds": 60,
     "notification_retry_max_seconds": 3600,
     "notification_error_max_chars": 512
+  },
+  "notification": {
+    "user_rca_medium_confidence_score": 0.3,
+    "user_rca_high_confidence_score": 0.42,
+    "important_evidence_limit": 20,
+    "important_evidence_markers": [
+      "Trace/log enrichment",
+      "log_",
+      "trace_",
+      "graph_score",
+      "earliest_drift_score",
+      "shape_correlation_score",
+      "downstream_coverage_score",
+      "weighted_rrf_score",
+      "evidence_strength",
+      "support_score"
+    ]
+  },
+  "api": {
+    "grafana_annotation_max_chars": 5024
+  },
+  "replay": {
+    "explanation_finding_limit": 5
   },
   "enrichment": {
     "corroboration_log_hits": 1,
@@ -27,6 +51,9 @@
     "rca_notification_require_current_tail_change": true,
     "rca_notification_allow_default_metric_without_series": true,
     "suppress_breakout_multiplier": 1.5,
+    "allow_direct_anomaly_breakout": true,
+    "allow_slo_breakout": true,
+    "rca_dedup_require_same_service": true,
     "suppress_window_seconds": 900,
     "weights": {
       "verified_primary_signal": 0.25,
@@ -133,6 +160,7 @@
       "detection_window_seconds": 1800,
       "normal_growth_detection_window_seconds": 1800,
       "evidence_window_seconds": 900,
+      "oom_recent_buckets": 3,
       "no_evidence_multiplier": 0.5,
       "single_evidence_bonus": 0.15,
       "dual_evidence_bonus": 0.3,
@@ -146,11 +174,11 @@
       "min_tail_anomaly_buckets": {
         "error": 1,
         "latency": 3,
-        "cpu": 5,
-        "memory": 8,
-        "disk": 2,
-        "socket_io": 5,
-        "request_rate": 2,
+        "cpu": 3,
+        "memory": 6,
+        "disk": 3,
+        "socket_io": 3,
+        "request_rate": 3,
         "default": 4
       },
       "min_relative_change_ratio": {
@@ -177,7 +205,7 @@
         "enabled": true,
         "window_seconds": 3600,
         "min_points": 12,
-        "positive_bucket_ratio": 0.65,
+        "positive_bucket_ratio": 0.45,
         "metrics": {
           "memory": {
             "direction": "up",
@@ -189,7 +217,8 @@
           },
           "socket_io": {
             "direction": "up",
-            "min_total_change": 1048576.0
+            "min_total_change": 512000.0,
+            "positive_bucket_ratio": 0.45
           },
           "disk": {
             "direction": "up",

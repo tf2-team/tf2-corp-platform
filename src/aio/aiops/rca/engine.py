@@ -3,14 +3,20 @@
 # SPDX-License-Identifier: Apache-2.0
 from __future__ import annotations
 
+import logging
 from collections import defaultdict
 
 from aiops.anomaly.stats import robust_score
 from aiops.rca.graph import GraphTraversalRca
 from aiops.schemas import AnomalyFinding, MetricSeries, RcaResult, RootCauseCandidate, RuntimeConfig, TelemetryCorroboration
+from aiops.shared.evidence import log_summary, trace_summary
 from aiops.shared.metrics import is_root_cause_metric, metric_priority
 from aiops.shared.tail import fixed_baseline_and_tail, metric_group, significant_tail_change, tail_aligned_spearman
 from aiops.topology import TopologyGraph
+
+
+logger = logging.getLogger(__name__)
+
 
 class V001RcaEngine:
     def __init__(
@@ -32,6 +38,7 @@ class V001RcaEngine:
         self.min_absolute_change = {key: float(value) for key, value in combined_hyperparameters["min_absolute_change"].items()}
         self.slow_drift = combined_hyperparameters.get("slow_drift", {})
         self.page_hinkley_min_bucket_factor = float(combined_hyperparameters["page_hinkley_min_bucket_factor"])
+        self.oom_recent_buckets = int(combined_hyperparameters["oom_recent_buckets"])
         self.traffic_shape_max_lag_buckets = int(combined_hyperparameters["traffic_shape_max_lag_buckets"])
         self.topology_max_hops = int(combined_hyperparameters["topology_max_hops"])
         self.canonical_service_suffixes = tuple(combined_hyperparameters["canonical_service_suffixes"])
@@ -225,15 +232,29 @@ class V001RcaEngine:
             trace_root = self._canonical_service(evidence.trace_root_service or "")
             if evidence.trace_failure and trace_root:
                 trace_details[trace_root].append(
-                    f"trace_id={evidence.trace_id or 'unknown'} operation={evidence.trace_operation or 'unknown'} status={evidence.trace_status or 'unknown'} "
-                    f"upstream={source} downstream={trace_root} duration_ms={(evidence.trace_duration_ms or 0.0):.3f} reference={evidence.trace_reference or 'unknown'}"
+                    trace_summary(
+                        evidence.trace_id,
+                        evidence.trace_operation,
+                        evidence.trace_status,
+                        evidence.trace_duration_ms,
+                        evidence.trace_reference,
+                        upstream=source,
+                        downstream=trace_root,
+                    )
                 )
-            if evidence.log_failure:
-                detail = (
-                    f"log_classification={evidence.log_classification or 'unknown'} count={evidence.log_failure_count} "
-                    f"timestamp={evidence.log_failure_timestamp or 0} reference={evidence.log_reference or 'unknown'} "
-                    f"excerpt={evidence.log_excerpt or 'unknown'}"
+            elif evidence.trace_id:
+                trace_details[self._canonical_service(source)].append(
+                    trace_summary(
+                        evidence.trace_id,
+                        evidence.trace_operation,
+                        evidence.trace_status,
+                        evidence.trace_duration_ms,
+                        evidence.trace_reference,
+                        observed=True,
+                    )
                 )
+            if evidence.log_failure or evidence.log_failure_count:
+                detail = log_summary(evidence.log_classification, evidence.log_failure_count, evidence.log_failure_timestamp, evidence.log_reference, evidence.log_excerpt)
                 log_details[self._canonical_service(source)].append(detail)
                 if trace_root:
                     log_details[trace_root].append(detail)
@@ -246,14 +267,26 @@ class V001RcaEngine:
                 first_seen[finding.service] = min(first_seen.get(finding.service, finding.timestamp), finding.timestamp)
         suppressed: set[str] = set()
         for candidate in candidates:
-            if any(
-                self.topology_graph.has_dependency_path(candidate.service, root.service, self.topology_max_hops)
-                and first_seen.get(root.service, 0) < first_seen.get(candidate.service, 0)
-                and root.score >= candidate.score
-                for root in candidates
-                if root.service != candidate.service
-            ):
+            parent = next(
+                (
+                    root
+                    for root in candidates
+                    if root.service != candidate.service
+                    and self.topology_graph.has_dependency_path(candidate.service, root.service, self.topology_max_hops)
+                    and first_seen.get(root.service, 0) < first_seen.get(candidate.service, 0)
+                    and root.score >= candidate.score
+                ),
+                None,
+            )
+            if parent is not None:
                 suppressed.add(candidate.service)
+                logger.info(
+                    "AIOPS_RCA_SUPPRESSED filter=downstream_symptom source=rca service=%s parent_root_cause=%s reason=parent_earlier_and_stronger score=%.3f parent_score=%.3f",
+                    candidate.service,
+                    parent.service,
+                    candidate.score,
+                    parent.score,
+                )
         return [candidate for candidate in candidates if candidate.service not in suppressed]
 
     def _earliest_drift_scores(self, series: list[MetricSeries]) -> dict[str, float]:
@@ -307,6 +340,7 @@ class V001RcaEngine:
             self.min_absolute_change,
             self.slow_drift,
             self.page_hinkley_min_bucket_factor,
+            oom_recent_buckets=self.oom_recent_buckets,
         )
 
     def _shape_correlation_scores(

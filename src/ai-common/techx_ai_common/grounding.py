@@ -41,6 +41,7 @@ from .contracts import (
     SafeReviewSet,
 )
 from .bedrock import converse_json, is_bedrock_provider
+from .observability import call_model
 from .retrieval import tokenize
 
 logger = logging.getLogger("grounding")
@@ -110,9 +111,6 @@ def _get_client_and_model() -> tuple[OpenAI, str]:
     return client, model
 
 
-from .observability import instructor_create
-
-
 def generate_grounded_summary(safe_reviews: SafeReviewSet, question: str = "") -> GroundedDraft:
     """Calls the LLM through Instructor, which enforces the GroundedDraft
     schema on the model's response and retries automatically on a schema
@@ -123,21 +121,28 @@ def generate_grounded_summary(safe_reviews: SafeReviewSet, question: str = "") -
     output contract is unchanged.
     """
     if is_bedrock_provider():
-        return converse_json(GroundedDraft, _SYSTEM_PROMPT, _build_review_prompt(safe_reviews, question))
+        return converse_json(
+            GroundedDraft,
+            _SYSTEM_PROMPT,
+            _build_review_prompt(safe_reviews, question),
+            workflow_step="grounded_summary",
+        )
 
     client, model = _get_client_and_model()
     instructor_client = instructor.from_openai(client, mode=instructor.Mode.JSON)
-    return instructor_create(
-        instructor_client=instructor_client,
+    return call_model(
+        lambda: instructor_client.chat.completions.create(
+            model=model,
+            response_model=GroundedDraft,
+            messages=[
+                {"role": "system", "content": _SYSTEM_PROMPT},
+                {"role": "user", "content": _build_review_prompt(safe_reviews, question)},
+            ],
+        ),
         model=model,
-        response_model=GroundedDraft,
-        messages=[
-            {"role": "system", "content": _SYSTEM_PROMPT},
-            {"role": "user", "content": _build_review_prompt(safe_reviews, question)},
-        ],
-        surface="summary",
+        provider=os.environ.get("LLM_PROVIDER", "openai_compatible"),
+        workflow_step="grounded_summary",
     )
-
 
 
 def _extract_numbers(text: str) -> set[str]:
@@ -297,4 +302,5 @@ def validate_grounded_summary(
         answer=answer,
         claims=surviving_claims,
     )
-# Change trail: @hungxqt - 2026-07-16 - Add Apache-2.0 copyright headers for license-checker.
+
+# Change trail: @hungxqt - 2026-07-29 - Merge grounded generation onto the content-free model telemetry wrapper.

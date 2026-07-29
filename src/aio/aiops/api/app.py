@@ -17,7 +17,7 @@ from fastapi import FastAPI, Header, HTTPException
 from aiops.collectors import PrometheusCollector, StaticCollector
 from aiops.config import Settings, build_detectors, load_hyperparameters, load_runtime_config
 from aiops.enrichment import Enricher
-from aiops.integrations import JaegerClient, KubernetesClient, NotificationClient, OpenSearchClient, PrometheusClient
+from aiops.integrations import JaegerClient, KubernetesClient, LiveExecutorClient, NotificationClient, OpenSearchClient, PrometheusClient
 from aiops.normalization import load_normalization_schema
 from aiops.observability.logging import configure_root_logging
 from aiops.observability import metrics_response, record_pipeline_failure, record_pipeline_success
@@ -31,8 +31,11 @@ from aiops.remediation import (
     RemediationAuditLog,
     RemediationDecisionEngine,
     RemediationFeatureExtractor,
+    SelfHealConfig,
+    SelfHealOrchestrator,
 )
 from aiops.schemas import GrafanaNormalizedEvent, GrafanaWebhookEvent, HealthResponse, Incident, PipelineResult, PipelineRunRequest
+from aiops.shared.evidence import STRONG_TRACE_MARKER
 from aiops.storage import SQLiteIncidentStore
 from aiops.topology import TopologyGraph
 
@@ -80,6 +83,17 @@ def run_live_pipeline(settings: Settings | None = None) -> PipelineResult:
 
 def run_pipeline_with_collector(collector, settings: Settings, runtime_config, metric_series=None) -> PipelineResult:
     started = time.monotonic()
+    try:
+        if settings.self_heal_enabled:
+            if settings.policy_mode != "live-approved":
+                raise RuntimeError("self-heal requires AIOPS_POLICY_MODE=live-approved")
+            if not _configured_url(settings.live_executor_url):
+                raise RuntimeError("self-heal requires a configured live executor URL")
+            if not settings.self_heal_approval_id:
+                raise RuntimeError("self-heal requires a signed approval id")
+    except Exception:
+        _close_if_supported(collector)
+        raise
     hyperparameters = load_hyperparameters(settings.hyperparameters_path)
     topology_graph = TopologyGraph(runtime_config)
     store = SQLiteIncidentStore(
@@ -89,13 +103,33 @@ def run_pipeline_with_collector(collector, settings: Settings, runtime_config, m
         slo_dedup_seconds=int(hyperparameters["incident"]["slo_dedup_seconds"]),
         rca_dedup_seconds=int(hyperparameters["incident"]["rca_dedup_seconds"]),
         incident_count_reset_seconds=int(hyperparameters["incident"]["count_reset_seconds"]),
+        recovery_consecutive_buckets=int(hyperparameters["incident"]["recovery_consecutive_buckets"]),
         notification_retry_base_seconds=int(hyperparameters["incident"]["notification_retry_base_seconds"]),
         notification_retry_max_seconds=int(hyperparameters["incident"]["notification_retry_max_seconds"]),
         notification_error_max_chars=int(hyperparameters["incident"]["notification_error_max_chars"]),
         topology_graph=topology_graph,
     )
     enricher = build_enricher(settings, runtime_config, hyperparameters["enrichment"])
-    notification_sender = NotificationClient(settings) if _configured_url(settings.notification_webhook_url) else None
+    notification_sender = NotificationClient(settings) if _notification_configured(settings) else None
+    executor_client = None
+    self_heal = None
+    if settings.self_heal_enabled:
+        executor_client = LiveExecutorClient(settings)
+        self_heal = SelfHealOrchestrator(
+            executor_client,
+            store,
+            SelfHealConfig(
+                namespace=settings.environment,
+                policy_id=settings.self_heal_policy_id,
+                policy_expires_at=settings.self_heal_policy_expires_at,
+                approval_id=settings.self_heal_approval_id,
+                protected_targets=frozenset(runtime_config.policy.protected_targets),
+                verification_deadline_seconds=settings.self_heal_verification_deadline_seconds,
+                min_fresh_samples=settings.self_heal_min_fresh_samples,
+                consecutive_passes=settings.self_heal_consecutive_passes,
+                failure_samples=settings.self_heal_failure_samples,
+            ),
+        )
     pipeline = AiopsPipeline(
         collector=collector,
         detectors=build_detectors(runtime_config, hyperparameters["no_data"], hyperparameters["detectors"]),
@@ -138,6 +172,7 @@ def run_pipeline_with_collector(collector, settings: Settings, runtime_config, m
         ),
         notification_sender=notification_sender,
         rca_history_path=settings.rca_history_path,
+        self_heal=self_heal,
     )
     try:
         result = pipeline.run_once(metric_series=metric_series or [])
@@ -150,6 +185,7 @@ def run_pipeline_with_collector(collector, settings: Settings, runtime_config, m
     finally:
         store.close()
         _close_if_supported(notification_sender)
+        _close_if_supported(executor_client)
         _close_if_supported(enricher)
         _close_if_supported(collector)
 
@@ -170,7 +206,7 @@ def print_rca_result(result: PipelineResult) -> None:
             flush=True,
         )
     for root in result.rca_result.root_causes:
-        trace = next((item for item in root.evidence if item.startswith("trace_id=")), "")
+        trace = next((item for item in root.evidence if item.startswith(STRONG_TRACE_MARKER)), "")
         print(
             "AIOPS_ROOT_CAUSE "
             f"service={root.service} "
@@ -211,6 +247,17 @@ def _configured_url(value: str) -> bool:
     return _configured_secret(value) and ".example" not in value
 
 
+def _notification_configured(settings: Settings) -> bool:
+    return any(
+        _configured_url(url)
+        for url in (
+            settings.notification_dev_webhook_url,
+            settings.notification_user_webhook_url,
+            settings.notification_webhook_url,
+        )
+    )
+
+
 def _configured_secret(value: str) -> bool:
     text = value.strip().upper()
     return bool(text) and "CHANGE_ME" not in text and "<FILL_IN" not in text
@@ -241,8 +288,21 @@ def readiness(settings: Settings) -> HealthResponse:
         load_normalization_schema(settings.normalization_schema_path)
         if settings.auto_run_enabled and not _configured_url(settings.prometheus_base_url):
             raise RuntimeError("automatic runs require Prometheus")
-        if settings.auto_run_enabled and not _configured_url(settings.notification_webhook_url):
+        if settings.auto_run_enabled and not _notification_configured(settings):
             raise RuntimeError("automatic runs require an incident notification webhook")
+        if settings.self_heal_enabled and settings.policy_mode != "live-approved":
+            raise RuntimeError("self-heal requires live-approved policy mode")
+        if settings.self_heal_enabled and not _configured_url(settings.live_executor_url):
+            raise RuntimeError("self-heal requires the live executor")
+        if settings.self_heal_enabled and not settings.self_heal_approval_id:
+            raise RuntimeError("self-heal requires an approval id")
+        if settings.self_heal_enabled:
+            executor_client = LiveExecutorClient(settings)
+            try:
+                if not executor_client.ready():
+                    raise RuntimeError("live executor is not ready")
+            finally:
+                executor_client.close()
         if not _configured_secret(settings.grafana_webhook_secret):
             raise RuntimeError("Grafana webhook secret is not configured")
         state_parent = settings.state_store_path.parent
@@ -260,6 +320,7 @@ def handle_grafana_webhook(
     settings: Settings | None = None,
 ) -> GrafanaNormalizedEvent:
     settings = settings or Settings()
+    max_annotation_chars = int(load_hyperparameters(settings.hyperparameters_path).get("api", {}).get("grafana_annotation_max_chars", 2048))
     if not _configured_secret(settings.grafana_webhook_secret):
         raise HTTPException(status_code=503, detail="grafana webhook is not configured")
     if not hmac.compare_digest(x_aiops_grafana_secret, settings.grafana_webhook_secret):
@@ -274,7 +335,7 @@ def handle_grafana_webhook(
         starts_at=alert.starts_at,
         ends_at=alert.ends_at,
         labels=alert.labels,
-        annotations_redacted={key: value[:2048] for key, value in alert.annotations.items()},
+        annotations_redacted={key: value[:max_annotation_chars] for key, value in alert.annotations.items()},
         links={"generator": alert.generator_url, "dashboard": alert.dashboard_url, "panel": alert.panel_url},
     )
 
