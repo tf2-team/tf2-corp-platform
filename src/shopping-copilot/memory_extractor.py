@@ -27,22 +27,31 @@ Return JSON exactly as {"memories":[...]} with at most 5 memories.
 """
 
 
+from techx_ai_common.observability import instructor_create, trace_subspan
+
+
 def extract_memories(user_message: str) -> MemoryExtraction:
-    if is_bedrock_provider():
-        return converse_json(MemoryExtraction, _PROMPT, user_message)
-    client = instructor.from_openai(
-        OpenAI(
-            base_url=os.environ["LLM_BASE_URL"],
-            api_key=os.environ["OPENAI_API_KEY"],
-        ),
-        mode=instructor.Mode.JSON,
-    )
-    return client.chat.completions.create(
-        model=os.environ["LLM_MODEL"],
-        response_model=MemoryExtraction,
-        messages=[
-            {"role": "system", "content": _PROMPT},
-            {"role": "user", "content": user_message},
-        ],
-        max_retries=2,
-    )
+    with trace_subspan("memory.extraction"):
+        if is_bedrock_provider():
+            return converse_json(MemoryExtraction, _PROMPT, user_message)
+        client = instructor.from_openai(
+            OpenAI(
+                base_url=os.environ["LLM_BASE_URL"],
+                api_key=os.environ["OPENAI_API_KEY"],
+            ),
+            mode=instructor.Mode.JSON,
+        )
+        return instructor_create(
+            instructor_client=client,
+            model=os.environ["LLM_MODEL"],
+            response_model=MemoryExtraction,
+            messages=[
+                {"role": "system", "content": _PROMPT},
+                {"role": "user", "content": user_message},
+            ],
+            surface="copilot",
+            max_retries=2,
+        )
+
+# Change trail: @hungxqt - 2026-07-29 - Route memory extraction through instructor_create adapter with telemetry subspan.
+

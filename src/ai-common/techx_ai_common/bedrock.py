@@ -27,19 +27,21 @@ def _response_text(response: dict) -> str:
 
 def _converse(system_prompt: str, user_prompt: str) -> dict:
     import boto3
+    from .observability import bedrock_converse_adapter
 
-    return boto3.client(
+    boto_client = boto3.client(
         "bedrock-runtime",
         region_name=os.environ.get("AWS_REGION", "us-east-1"),
-    ).converse(
-        modelId=os.environ["BEDROCK_MODEL_ID"],
-        system=[{"text": system_prompt}],
-        messages=[{"role": "user", "content": [{"text": user_prompt}]}],
-        inferenceConfig={
-            "maxTokens": int(os.environ.get("BEDROCK_MAX_TOKENS", "1024")),
-            "temperature": 0.0,
-        },
     )
+    return bedrock_converse_adapter(
+        boto3_client=boto_client,
+        model_id=os.environ["BEDROCK_MODEL_ID"],
+        system_prompt=system_prompt,
+        user_prompt=user_prompt,
+        max_tokens=int(os.environ.get("BEDROCK_MAX_TOKENS", "1024")),
+        temperature=0.0,
+    )
+
 
 
 def converse_text(system_prompt: str, user_prompt: str) -> str:
@@ -64,3 +66,6 @@ def converse_json(response_model: type[T], system_prompt: str, user_prompt: str)
         except ValidationError as exc:
             last_error = exc
     raise RuntimeError("Bedrock returned invalid structured output") from last_error
+
+# Change trail: @hungxqt - 2026-07-29 - Route Bedrock Converse calls through shared bedrock_converse_adapter.
+

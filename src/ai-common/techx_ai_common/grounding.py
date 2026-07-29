@@ -110,6 +110,9 @@ def _get_client_and_model() -> tuple[OpenAI, str]:
     return client, model
 
 
+from .observability import instructor_create
+
+
 def generate_grounded_summary(safe_reviews: SafeReviewSet, question: str = "") -> GroundedDraft:
     """Calls the LLM through Instructor, which enforces the GroundedDraft
     schema on the model's response and retries automatically on a schema
@@ -124,14 +127,17 @@ def generate_grounded_summary(safe_reviews: SafeReviewSet, question: str = "") -
 
     client, model = _get_client_and_model()
     instructor_client = instructor.from_openai(client, mode=instructor.Mode.JSON)
-    return instructor_client.chat.completions.create(
+    return instructor_create(
+        instructor_client=instructor_client,
         model=model,
         response_model=GroundedDraft,
         messages=[
             {"role": "system", "content": _SYSTEM_PROMPT},
             {"role": "user", "content": _build_review_prompt(safe_reviews, question)},
         ],
+        surface="summary",
     )
+
 
 
 def _extract_numbers(text: str) -> set[str]:

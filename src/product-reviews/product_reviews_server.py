@@ -48,6 +48,12 @@ from techx_ai_common.bedrock import converse_text, is_bedrock_provider
 from techx_ai_common.grounding import generate_grounded_summary, validate_grounded_summary
 from techx_ai_common.rate_limiter import check_rate_limit
 from techx_ai_common.retrieval import retrieve_relevant_reviews
+from techx_ai_common.observability import (
+    ai_context_scope,
+    chat_completions_create,
+    set_ai_context,
+)
+
 
 llm_host = None
 llm_port = None
@@ -261,6 +267,7 @@ def _get_bedrock_response(request_product_id, question, system_prompt, span):
 
 def get_ai_assistant_response(request_product_id, question, user_id="anonymous"):
 
+    set_ai_context(surface="summary", user_id=user_id)
     with tracer.start_as_current_span("get_ai_assistant_response") as span:
 
         ai_assistant_response = demo_pb2.AskProductAIAssistantResponse()
@@ -328,11 +335,13 @@ def get_ai_assistant_response(request_product_id, question, user_id="anonymous")
                 logger.info(f"Invoking mock LLM with model: techx-llm-rate-limit")
 
                 try:
-                    initial_response = client.chat.completions.create(
+                    initial_response = chat_completions_create(
+                        client,
                         model="techx-llm-rate-limit",
                         messages=messages,
                         tools=tools,
-                        tool_choice="auto"
+                        tool_choice="auto",
+                        surface="summary",
                     )
                 except Exception as e:
                     logger.error(f"Caught Exception: {e}")
@@ -359,12 +368,14 @@ def get_ai_assistant_response(request_product_id, question, user_id="anonymous")
 
         # use the LLM to decide which tool(s) it needs
         try:
-            initial_response = client.chat.completions.create(
+            initial_response = chat_completions_create(
+                client,
                 model=llm_model,
                 messages=messages,
                 tools=tools,
                 tool_choice="auto",
                 timeout=20.0,
+                surface="summary",
             )
             response_message = initial_response.choices[0].message
             tool_calls = response_message.tool_calls
@@ -515,10 +526,12 @@ def get_ai_assistant_response(request_product_id, question, user_id="anonymous")
             logger.info(f"Invoking the LLM with {len(messages)} messages")
 
             try:
-                final_response = client.chat.completions.create(
+                final_response = chat_completions_create(
+                    client,
                     model=llm_model,
                     messages=messages,
                     timeout=20.0,
+                    surface="summary",
                 )
                 candidate_text = final_response.choices[0].message.content
             except Exception as e:
@@ -657,5 +670,8 @@ if __name__ == "__main__":
         f'Product reviews service started, listening on port {port}, '
         f'grpc_max_workers={max_workers}'
     )
+
+# Change trail: @hungxqt - 2026-07-29 - Route review-summary chat completion calls through shared observability adapters.
+
     server.wait_for_termination()
 # Change trail: @hungxqt - 2026-07-16 - Configurable gRPC max_workers to avoid health probe starvation.

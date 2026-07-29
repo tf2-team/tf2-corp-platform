@@ -17,10 +17,17 @@ from cart_tool import create_pending_token
 from catalog_tool import get_product, search_catalog
 from copilot_contracts import CatalogSearchInput, CartActionInput, CopilotStatus, ProductInput, ReviewQuestionInput
 import conversation_store
-from review_tool import answer_with_reviews
+from techx_ai_common.observability import (
+    ai_context_scope,
+    chat_completions_create,
+    record_chat_telemetry,
+    trace_subspan,
+    tracer,
+)
 
 logger = logging.getLogger("react_agent")
 _MAX_TOOL_ROUNDS = 4
+
 
 _SYSTEM_PROMPT = """You are Shopping Copilot for product discovery, grounded
 review Q&A, and cart preparation. Use only available tools for store facts or
@@ -183,7 +190,10 @@ def _run_openai(state: dict[str, Any], deps: Any) -> str:
         request.update({"tools": tools, "tool_choice": "auto"})
     seen_calls: set[str] = set()
     for _ in range(_MAX_TOOL_ROUNDS if tools_allowed else 1):
-        response = client.chat.completions.create(**request)
+        model_name = request["model"]
+        msgs = request["messages"]
+        extra = {k: v for k, v in request.items() if k not in ("model", "messages")}
+        response = chat_completions_create(client, model=model_name, messages=msgs, surface="copilot", **extra)
         message = response.choices[0].message
         calls = message.tool_calls or []
         messages.append(message.model_dump(exclude_none=True))
@@ -200,7 +210,8 @@ def _run_openai(state: dict[str, Any], deps: Any) -> str:
             if call_key in seen_calls:
                 return _tool_loop_failure(state)
             seen_calls.add(call_key)
-            result = _run_tool(call.function.name, arguments, state, deps)
+            with trace_subspan(f"tool.{call.function.name}"):
+                result = _run_tool(call.function.name, arguments, state, deps)
             messages.append({"role": "tool", "tool_call_id": call.id, "content": json.dumps(result)})
     return _tool_loop_failure(state)
 
@@ -223,7 +234,18 @@ def _run_bedrock(state: dict[str, Any], deps: Any) -> str:
         request["toolConfig"] = tool_config
     seen_calls: set[str] = set()
     for _ in range(_MAX_TOOL_ROUNDS if tools_allowed else 1):
-        response = client.converse(**request)
+        with tracer.start_as_current_span("gen_ai.chat") as span:
+            response = client.converse(**request)
+            usage = response.get("usage", {})
+            record_chat_telemetry(
+                model_id=request["modelId"],
+                input_tokens=usage.get("inputTokens", 0),
+                output_tokens=usage.get("outputTokens", 0),
+                surface="copilot",
+                outcome="ok",
+                response_model=request["modelId"],
+                current_span=span,
+            )
         assistant = response["output"]["message"]
         messages.append(assistant)
         calls = [item["toolUse"] for item in assistant["content"] if "toolUse" in item]
@@ -238,7 +260,8 @@ def _run_bedrock(state: dict[str, Any], deps: Any) -> str:
             if call_key in seen_calls:
                 return _tool_loop_failure(state)
             seen_calls.add(call_key)
-            result = _run_tool(call["name"], call.get("input", {}), state, deps)
+            with trace_subspan(f"tool.{call['name']}"):
+                result = _run_tool(call["name"], call.get("input", {}), state, deps)
             results.append({"toolResult": {
                 "toolUseId": call["toolUseId"], "content": [{"json": result}], "status": "success",
             }})
@@ -248,4 +271,11 @@ def _run_bedrock(state: dict[str, Any], deps: Any) -> str:
 
 def run_react_agent(state: dict[str, Any], deps: Any) -> str:
     """Run a bounded agent loop; all tool calls pass through _run_tool."""
-    return _run_bedrock(state, deps) if is_bedrock_provider() else _run_openai(state, deps)
+    user_id = state.get("user_id", "")
+    session_id = state.get("conversation_id", "")
+    with ai_context_scope(surface="copilot", user_id=user_id, session_id=session_id):
+        return _run_bedrock(state, deps) if is_bedrock_provider() else _run_openai(state, deps)
+
+
+# Change trail: @hungxqt - 2026-07-29 - Route ReAct model and tool calls through shared observability adapters.
+
