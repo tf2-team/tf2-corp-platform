@@ -1,3 +1,4 @@
+#!/usr/bin/python
 # Copyright The OpenTelemetry Authors
 # SPDX-License-Identifier: Apache-2.0
 
@@ -165,6 +166,9 @@ class LiveExecutorService:
     def execute(self, request: dict[str, Any]) -> dict[str, Any]:
         with self._lock:
             return self._execute(request)
+
+    def submit_execution(self, request: dict[str, Any]) -> dict[str, Any]:
+        return self.execute(request)
 
     def _execute(self, request: dict[str, Any]) -> dict[str, Any]:
         cached = self._idempotent(request, "execute")
