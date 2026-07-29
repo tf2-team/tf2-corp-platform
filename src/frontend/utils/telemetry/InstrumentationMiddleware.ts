@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { NextApiHandler } from 'next';
-import {context, Exception, Span, SpanStatusCode, trace} from '@opentelemetry/api';
+import {context, isSpanContextValid, Span, SpanStatusCode, trace} from '@opentelemetry/api';
 import { SemanticAttributes } from '@opentelemetry/semantic-conventions';
 import { metrics } from '@opentelemetry/api';
 
@@ -25,13 +25,20 @@ const InstrumentationMiddleware = (handler: NextApiHandler): NextApiHandler => {
     const target = normalizeMetricTarget(rawTarget);
 
     const span = trace.getSpan(context.active()) as Span;
+    const spanContext = span?.spanContext();
+    if (spanContext && isSpanContextValid(spanContext)) {
+      response.setHeader('x-trace-id', spanContext.traceId);
+    }
 
     let httpStatus = 200;
     try {
       await runWithSpan(span, async () => handler(request, response));
       httpStatus = response.statusCode;
     } catch (error) {
-      span.recordException(error as Exception);
+      span.setAttribute(
+        'error.type',
+        error instanceof Error ? error.constructor.name : 'UnknownError',
+      );
       span.setStatus({ code: SpanStatusCode.ERROR });
       httpStatus = 500;
       throw error;
