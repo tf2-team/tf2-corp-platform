@@ -9,10 +9,20 @@ import { metrics } from '@opentelemetry/api';
 const meter = metrics.getMeter('frontend');
 const requestCounter = meter.createCounter('app.frontend.requests');
 
+/** Keep Prometheus labels bounded while preserving the endpoint's operation. */
+export const normalizeMetricTarget = (target: string): string => {
+  if (/^\/api\/products\/[^/]+\/index$/.test(target)) return '/api/products/{productId}/index';
+  if (/^\/api\/product-reviews\/[^/]+\/index$/.test(target)) return '/api/product-reviews/{productId}/index';
+  if (/^\/api\/product-reviews-avg-score\/[^/]+\/index$/.test(target)) return '/api/product-reviews-avg-score/{productId}/index';
+  if (/^\/api\/product-ask-ai-assistant\/[^/]+\/index$/.test(target)) return '/api/product-ask-ai-assistant/{productId}/index';
+  return target;
+};
+
 const InstrumentationMiddleware = (handler: NextApiHandler): NextApiHandler => {
   return async (request, response) => {
     const {method, url = ''} = request;
-    const [target] = url.split('?');
+    const [rawTarget] = url.split('?');
+    const target = normalizeMetricTarget(rawTarget);
 
     const span = trace.getSpan(context.active()) as Span;
 

@@ -42,7 +42,6 @@ sys.path.insert(0, str(Path(__file__).parent.parent.parent / "ai-common"))
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from copilot_graph import CopilotDeps, run_copilot, CopilotStatus
-from copilot_contracts import ShoppingIntent
 from unittest.mock import MagicMock
 
 EVAL_CASES_PATH = Path(__file__).parent / "eval_cases.json"

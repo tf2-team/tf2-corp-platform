@@ -64,7 +64,13 @@ defmodule FlagdUi.Storage do
   end
 
   defp write_state(json_string) do
-    File.write!(@file_path, json_string)
+    # flagd watches this path with fsnotify. Writing it in place briefly
+    # truncates the file, so flagd can read an empty JSON document and discard
+    # the update. A same-directory rename exposes only the complete document.
+    temp_path = "#{@file_path}.tmp"
+
+    File.write!(temp_path, json_string)
+    File.rename!(temp_path, @file_path)
 
     Logger.info("Wrote new state to file")
   end

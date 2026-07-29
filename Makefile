@@ -145,11 +145,8 @@ run-tests:
 
 .PHONY: eval
 eval:
-	@test -n "$(DATASET)" || (echo "Usage: make eval DATASET=eval/datasets/gold/<file>.jsonl" && exit 1)
-	python -m pip install -r eval/requirements.txt
-	cd eval && python -m unittest harness.test_loader
-	cd eval && python -c "from harness.loader import load_dataset; load_dataset(r'$(abspath $(DATASET))')"
-	@echo "Dataset validation complete. Full adapter and grader execution will be added in EV-2.4."
+	uv sync --project eval
+	cd eval && uv run --project . --env-file ../.env --env-file ../.env.override -- python run_eval.py --repro
 
 .PHONY: run-tracetesting
 run-tracetesting:

@@ -104,7 +104,7 @@ def _get_presidio_engines():
     return AnalyzerEngine(), AnonymizerEngine()
 
 def redact_pii(text: str) -> str:
-    """Redacts email, phone number, location/address and credit cards."""
+    """Redact direct contact and payment identifiers."""
     if not text:
         return text
 
@@ -118,13 +118,12 @@ def redact_pii(text: str) -> str:
         results = analyzer.analyze(
             text=sanitized,
             language="en",
-            entities=["EMAIL_ADDRESS", "PHONE_NUMBER", "LOCATION", "CREDIT_CARD"]
+            entities=["EMAIL_ADDRESS", "PHONE_NUMBER", "CREDIT_CARD"]
         )
 
         operators = {
             "EMAIL_ADDRESS": OperatorConfig("replace", {"new_value": "[REDACTED]"}),
             "PHONE_NUMBER": OperatorConfig("replace", {"new_value": "[REDACTED]"}),
-            "LOCATION": OperatorConfig("replace", {"new_value": "[REDACTED]"}),
             "CREDIT_CARD": OperatorConfig("replace", {"new_value": "[REDACTED]"}),
         }
 
@@ -323,7 +322,7 @@ def scan_output(text: str) -> GuardrailResult:
         results = analyzer.analyze(
             text=text,
             language="en",
-            entities=["EMAIL_ADDRESS", "PHONE_NUMBER", "LOCATION", "CREDIT_CARD"]
+            entities=["EMAIL_ADDRESS", "PHONE_NUMBER", "CREDIT_CARD"]
         )
         if results:
             return GuardrailResult(

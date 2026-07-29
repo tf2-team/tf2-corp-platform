@@ -1,0 +1,45 @@
+# Copyright The OpenTelemetry Authors
+# SPDX-License-Identifier: Apache-2.0
+
+name: Deploy Audit Alert Router Lambda
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'src/audit-alert-router/**'
+      - '.github/workflows/audit-alert-router-deploy.yml'
+  workflow_dispatch:
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  deploy:
+    name: Deploy Lambda to Production
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::493499579600:role/techx-prod-tf2-github-actions-deploy
+          aws-region: us-east-1
+
+      - name: Package Lambda Function
+        run: |
+          cd src/audit-alert-router
+          zip -r /tmp/function.zip router.py
+
+      - name: Update Lambda Code
+        run: |
+          aws lambda update-function-code \
+            --function-name techx-audit-alert-router \
+            --zip-file fileb:///tmp/function.zip
+
+# Change trail: @hungxqt - 2026-07-28 - Fix missing license header.

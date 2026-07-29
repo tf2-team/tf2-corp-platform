@@ -10,7 +10,6 @@ import uuid
 import logging
 
 from locust import HttpUser, task, tag, between
-from locust_plugins.users.playwright import PlaywrightUser, pw, PageWithRetry, event
 
 # Durable guard for distributed mode: stale worker messages (HPA scale-down, Spot
 # interrupt, pod restart) must not KeyError-kill MasterRunner.client_listener.
@@ -109,8 +108,6 @@ from opentelemetry.sdk.resources import Resource
 from openfeature import api
 from openfeature.contrib.provider.ofrep import OFREPProvider
 from openfeature.contrib.hook.opentelemetry import TracingHook
-
-from playwright.async_api import Route, Request
 
 # Configure tracer provider first (needed for trace context in logs)
 tracer_provider = TracerProvider()
@@ -340,6 +337,9 @@ class WebsiteUser(HttpUser):
 browser_traffic_enabled = os.environ.get("LOCUST_BROWSER_TRAFFIC_ENABLED", "").lower() in ("true", "yes", "on")
 
 if browser_traffic_enabled:
+    from locust_plugins.users.playwright import PlaywrightUser, pw, PageWithRetry
+    from playwright.async_api import Route, Request
+
     class WebsiteBrowserUser(PlaywrightUser):
         weight = int(os.environ.get("LOCUST_BROWSER_USER_WEIGHT", "1"))
         headless = True  # to use a headless browser, without a GUI
@@ -390,12 +390,12 @@ if browser_traffic_enabled:
                 except Exception as e:
                     logging.error(f"Error in add to cart task: {str(e)}")
 
-async def add_baggage_header(route: Route, request: Request):
-    existing_baggage = request.headers.get('baggage', '')
-    headers = {
-        **request.headers,
-        'baggage': ', '.join(filter(None, (existing_baggage, 'synthetic_request=true')))
-    }
-    await route.continue_(headers=headers)
+    async def add_baggage_header(route: Route, request: Request):
+        existing_baggage = request.headers.get('baggage', '')
+        headers = {
+            **request.headers,
+            'baggage': ', '.join(filter(None, (existing_baggage, 'synthetic_request=true')))
+        }
+        await route.continue_(headers=headers)
 
 # Change trail: @hungxqt - 2026-07-19 - Fail-closed flagd integer reads to avoid OpenFeature UnboundLocalError under Locust.

@@ -1,0 +1,9 @@
+{
+  "scenario_type": "normal",
+  "expected_incident": false,
+  "incident_start_ts": null,
+  "captured_at": "2026-07-26T14:25:37.434557+00:00",
+  "notes": "baseline before local-cartFailure",
+  "source": "live_prometheus_capture",
+  "prometheus_base_url_host": "localhost:9090"
+}

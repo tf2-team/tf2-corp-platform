@@ -69,8 +69,15 @@ def converse_json(response_model: type[T], system_prompt: str, user_prompt: str)
     last_error: Exception | None = None
     for _ in range(2):
         try:
+            text = converse_text(
+                f"{system_prompt}\nReturn valid JSON only; do not use Markdown fences.",
+                user_prompt,
+            )
+            start, end = text.find("{"), text.rfind("}")
+            if start >= 0 and end > start:
+                text = text[start:end + 1]
             return response_model.model_validate_json(
-                converse_text(f"{system_prompt}\nReturn valid JSON only; do not use Markdown fences.", user_prompt)
+                text
             )
         except ValidationError as exc:
             last_error = exc

@@ -16,6 +16,12 @@ ADD --chmod=644 https://repo1.maven.org/maven2/com/fasterxml/jackson/core/jackso
 ADD --chmod=644 https://repo1.maven.org/maven2/tools/jackson/core/jackson-core/3.1.4/jackson-core-3.1.4.jar /tmp/jackson-core-3.1.4.jar
 ADD --chmod=644 https://repo1.maven.org/maven2/com/fasterxml/jackson/core/jackson-databind/2.21.4/jackson-databind-2.21.4.jar /tmp/jackson-databind-2.21.4.jar
 ADD --chmod=644 https://repo1.maven.org/maven2/tools/jackson/core/jackson-databind/3.1.4/jackson-databind-3.1.4.jar /tmp/jackson-databind-3.1.4.jar
+# OpenSearch 3.7.0 ships Netty 4.2.15.Final. Replace only the four vulnerable
+# codec modules with the binary-compatible 4.2.16.Final security patch.
+ADD --chmod=644 https://repo1.maven.org/maven2/io/netty/netty-codec-compression/4.2.16.Final/netty-codec-compression-4.2.16.Final.jar /tmp/netty-codec-compression-4.2.16.Final.jar
+ADD --chmod=644 https://repo1.maven.org/maven2/io/netty/netty-codec-http/4.2.16.Final/netty-codec-http-4.2.16.Final.jar /tmp/netty-codec-http-4.2.16.Final.jar
+ADD --chmod=644 https://repo1.maven.org/maven2/io/netty/netty-codec-http2/4.2.16.Final/netty-codec-http2-4.2.16.Final.jar /tmp/netty-codec-http2-4.2.16.Final.jar
+ADD --chmod=644 https://repo1.maven.org/maven2/io/netty/netty-codec-http3/4.2.16.Final/netty-codec-http3-4.2.16.Final.jar /tmp/netty-codec-http3-4.2.16.Final.jar
 
 # Apply available OS security updates for Trivy HIGH/CRITICAL on the vendor base.
 RUN echo "security update baseline: ${SECURITY_UPDATE_EPOCH}" >/dev/null \
@@ -86,6 +92,24 @@ RUN ls -la /usr/share/opensearch/lib/jackson-core-*.jar \
     && test ! -e /usr/share/opensearch/lib/jackson-core-2.21.3.jar \
     && test ! -e /usr/share/opensearch/lib/jackson-core-3.1.3.jar \
     && ls -la /usr/share/opensearch/lib/jackson-core-*.jar
+
+# Keep the vendor Netty module/plugin layouts intact and update only vulnerable codecs.
+RUN set -eux; \
+    for netty_dir in \
+      /usr/share/opensearch/modules/transport-netty4 \
+      /usr/share/opensearch/plugins/opensearch-security; do \
+      for artifact in netty-codec-compression netty-codec-http netty-codec-http2 netty-codec-http3; do \
+        test -f "${netty_dir}/${artifact}-4.2.15.Final.jar"; \
+        rm -f "${netty_dir}/${artifact}-4.2.15.Final.jar"; \
+        cp "/tmp/${artifact}-4.2.16.Final.jar" "${netty_dir}/${artifact}-4.2.16.Final.jar"; \
+        test -f "${netty_dir}/${artifact}-4.2.16.Final.jar"; \
+        test ! -e "${netty_dir}/${artifact}-4.2.15.Final.jar"; \
+      done; \
+    done; \
+    rm -f /tmp/netty-codec-compression-4.2.16.Final.jar \
+      /tmp/netty-codec-http-4.2.16.Final.jar \
+      /tmp/netty-codec-http2-4.2.16.Final.jar \
+      /tmp/netty-codec-http3-4.2.16.Final.jar
 
 # Keep Jackson databind module/plugin-local and preserve its 2.x versus 3.x
 # family. Scrub stale Jackson Maven/service metadata from the OpenSAML fat jars;
