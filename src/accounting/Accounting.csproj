@@ -6,30 +6,37 @@
 		<ImplicitUsings>enable</ImplicitUsings>
 		<Nullable>enable</Nullable>
 		<DockerDefaultTargetOS>Linux</DockerDefaultTargetOS>
+		<DefaultItemExcludes>$(DefaultItemExcludes);Accounting.Tests\**</DefaultItemExcludes>
 	</PropertyGroup>
 
 	<ItemGroup>
-		<PackageReference Include="AWSSDK.DynamoDBv2" Version="4.0.21.3" />
-		<PackageReference Include="Confluent.Kafka" Version="2.12.0" />
-		<PackageReference Include="EFCore.NamingConventions" Version="10.0.0-rc.2" />
-		<PackageReference Include="Google.Protobuf" Version="3.33.1" />
+		<PackageReference Include="AWSSDK.DynamoDBv2" Version="3.7.405" />
+		<PackageReference Include="AWSSDK.SecurityToken" Version="3.7.504.50" />
+		<PackageReference Include="Confluent.Kafka" Version="2.8.0" />
+		<PackageReference Include="EFCore.NamingConventions" Version="9.0.0" />
+		<PackageReference Include="Google.Protobuf" Version="3.29.3" />
 		<PackageReference Include="Grpc.Tools" Version="2.68.1">
 			<PrivateAssets>all</PrivateAssets>
 			<IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
 		</PackageReference>
-		<PackageReference Include="Microsoft.Extensions.Logging" Version="10.0.0" />
-		<PackageReference Include="Microsoft.VisualStudio.Azure.Containers.Tools.Targets" Version="1.22.1" />
-		<PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="10.0.0" />
-		<PackageReference Include="OpenTelemetry.AutoInstrumentation" Version="1.13.0" />
+		<PackageReference Include="Microsoft.Extensions.Logging" Version="9.0.1" />
+		<PackageReference Include="Microsoft.VisualStudio.Azure.Containers.Tools.Targets" Version="1.21.0" />
+		<PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="9.0.3" />
+		<PackageReference Include="OpenTelemetry.AutoInstrumentation" Version="1.10.0" />
 	</ItemGroup>
 
-	<ItemGroup>
+	<ItemGroup Condition="Exists('src\protos\demo.proto')">
 		<!-- GrpcServices is 'none' so that we do not need to depend on the grpc nuget package, and we only need protobuf support. -->
 		<Protobuf Include="src\protos\demo.proto" GrpcServices="none" />
+	</ItemGroup>
+	<ItemGroup Condition="!Exists('src\protos\demo.proto') And Exists('..\..\pb\demo.proto')">
+		<Protobuf Include="..\..\pb\demo.proto" Link="src\protos\demo.proto" GrpcServices="none" />
 	</ItemGroup>
 
 	<ItemGroup>
 	  <Folder Include="src\protos\" />
 	</ItemGroup>
 
+	<!-- Change trail: @hungxqt - 2026-07-28 - Update TargetFramework to net10.0 to match .NET 10 runtime image. -->
+	<!-- Change trail: @minh-khoa - 2026-07-29 - Include STS runtime assembly required by EKS web-identity credentials. -->
 </Project>

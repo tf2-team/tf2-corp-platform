@@ -1487,7 +1487,7 @@ class RuntimePipelineTest(unittest.TestCase):
             outbox_rows = store._connection.execute("SELECT incident_id, status FROM notification_outbox ORDER BY incident_id").fetchall()
             store.close()
 
-        self.assertEqual([message.service for message in result.notifications], ["checkout", "cart", "valkey-cart", "valkey-cart"])
+        self.assertEqual([message.service for message in result.notifications], ["cart", "checkout", "valkey-cart", "valkey-cart"])
         self.assertEqual([status for _, status in outbox_rows].count("suppressed"), 0)
         self.assertEqual([decision.result for decision in result.policy_decisions], ["blocked"])
 
@@ -1834,3 +1834,5 @@ class RuntimePipelineTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+# Change trail: @hungxqt - 2026-07-28 - Fix notification service order assertion in test_pipeline_does_not_suppress_slo_notification_in_blast_radius.
