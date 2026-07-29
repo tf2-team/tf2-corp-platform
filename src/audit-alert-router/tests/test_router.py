@@ -18,10 +18,56 @@ class TestAuditAlertRouter(unittest.TestCase):
 
     def setUp(self):
         router._WEBHOOK_URL_CACHE = None
+        router.func_get_secret = None
+        for name in (
+            "DISCORD_WEBHOOK_URL",
+            "DISCORD_WEBHOOK_SECRET_ARN",
+            "WEBHOOK_SECRET_NAME",
+        ):
+            os.environ.pop(name, None)
         os.environ["DISCORD_WEBHOOK_URL"] = "https://discord.com/api/webhooks/test-webhook-url"
 
     def tearDown(self):
         router._WEBHOOK_URL_CACHE = None
+        router.func_get_secret = None
+        for name in (
+            "DISCORD_WEBHOOK_URL",
+            "DISCORD_WEBHOOK_SECRET_ARN",
+            "WEBHOOK_SECRET_NAME",
+        ):
+            os.environ.pop(name, None)
+
+    def test_secret_arn_matches_terraform_runtime_contract(self):
+        os.environ.pop("DISCORD_WEBHOOK_URL")
+        secret_arn = (
+            "arn:aws:secretsmanager:us-east-1:493499579600:"
+            "secret:techx-prod-tf2/mandate11/discord-webhook-test"
+        )
+        os.environ["DISCORD_WEBHOOK_SECRET_ARN"] = secret_arn
+        os.environ["WEBHOOK_SECRET_NAME"] = "legacy-secret-name"
+        router.func_get_secret = MagicMock(
+            return_value="https://discord.com/api/webhooks/test"
+        )
+
+        self.assertEqual(
+            "https://discord.com/api/webhooks/test",
+            router.get_webhook_url(),
+        )
+        router.func_get_secret.assert_called_once_with(secret_arn)
+
+    def test_missing_secret_identifier_fails_closed(self):
+        os.environ.pop("DISCORD_WEBHOOK_URL")
+
+        with self.assertRaisesRegex(
+            RuntimeError, "secret identifier is not configured"
+        ):
+            router.get_webhook_url()
+
+    def test_non_https_webhook_url_is_rejected(self):
+        os.environ["DISCORD_WEBHOOK_URL"] = "http://example.test/webhook"
+
+        with self.assertRaisesRegex(RuntimeError, "must use HTTPS"):
+            router.get_webhook_url()
 
     @patch("urllib.request.urlopen")
     def test_discord_2xx_success(self, mock_urlopen):
@@ -121,8 +167,37 @@ class TestAuditAlertRouter(unittest.TestCase):
         res = router.handler(event)
         self.assertEqual(res, {"batchItemFailures": [{"itemIdentifier": "msg-fail"}]})
 
+    @patch("builtins.print")
+    @patch("urllib.request.urlopen")
+    def test_delivery_failure_emits_metric_without_message_content(
+        self, mock_urlopen, mock_print
+    ):
+        mock_urlopen.side_effect = Exception("Discord unavailable")
+        sensitive_body = "sensitive-audit-event"
+        event = {
+            "Records": [
+                {
+                    "messageId": "msg-failure",
+                    "body": json.dumps({"Detail": sensitive_body}),
+                }
+            ]
+        }
+
+        result = router.handler(event)
+
+        self.assertEqual(
+            {"batchItemFailures": [{"itemIdentifier": "msg-failure"}]},
+            result,
+        )
+        metric = json.loads(mock_print.call_args.args[0])
+        self.assertEqual(0, metric["DiscordDeliverySuccess"])
+        self.assertEqual(1, metric["DiscordDeliveryFailure"])
+        self.assertEqual("audit-detection", metric["Pipeline"])
+        self.assertEqual("discord", metric["Channel"])
+        self.assertNotIn(sensitive_body, mock_print.call_args.args[0])
+
 
 if __name__ == "__main__":
     unittest.main()
 
-# Change trail: @hungxqt - 2026-07-28 - Fix missing license header.
+# Change trail: @hungxqt - 2026-07-29 - Cover the Terraform secret ARN and delivery failure metric contracts.
