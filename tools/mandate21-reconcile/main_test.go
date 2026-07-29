@@ -120,4 +120,29 @@ func TestReconcile_DataSourceUnavailable_ReturnsCode3(t *testing.T) {
 	}
 }
 
-// Change trail: @hungxqt - 2026-07-28 - Add unit tests for mandate21-reconcile exit codes and invariants.
+func TestReconcile_MissingDDBItemRequiresSingleRDSRecord(t *testing.T) {
+	records := []DrillRecord{
+		{HTTPStatus: 200, OrderID: "order-ack-deleted", TraceID: "t1", TestRequestID: "req1"},
+	}
+	// Case A: DDB missing, RDS count = 1 -> PASS
+	dbPass := &testDB{exists: true, count: 1}
+	ddb := &testDDB{exists: false}
+	jaeger := &testJaeger{counts: map[string]int{"t1": 1}}
+
+	res, code := Reconcile(records, dbPass, ddb, jaeger)
+	if code != ExitPass {
+		t.Fatalf("Reconcile code = %d, want ExitPass (0); violations: %v", code, res.Violations)
+	}
+
+	// Case B: DDB missing, RDS count = 2 -> FAIL
+	dbDup := &testDB{exists: true, count: 2}
+	res2, code2 := Reconcile(records, dbDup, ddb, jaeger)
+	if code2 != ExitInvariantViolation {
+		t.Fatalf("Reconcile code = %d, want ExitInvariantViolation (2)", code2)
+	}
+	if len(res2.Violations) == 0 {
+		t.Fatal("expected violation for non-unique RDS record when DDB item missing")
+	}
+}
+
+// Change trail: @hungxqt - 2026-07-29 - Verify exact single RDS record ACK rule when DynamoDB item is absent.
