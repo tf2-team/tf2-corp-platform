@@ -1264,4 +1264,4 @@ volumes:
   shopping-copilot-hf-cache:
   valkey-ai-cache-data:
 
-# Change trail: @hungxqt - 2026-07-20 - Drop build from mem0-migrate/model-init so Compose builds match release catalog.
+# Change trail: @hungxqt - 2026-07-29 - Merge secure content-free AI telemetry environment settings.

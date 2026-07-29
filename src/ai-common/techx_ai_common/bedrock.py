@@ -85,3 +85,5 @@ def converse_json(
         except ValidationError as exc:
             last_error = exc
     raise RuntimeError("Bedrock returned invalid structured output") from last_error
+
+# Change trail: @hungxqt - 2026-07-29 - Merge Bedrock calls onto the content-free telemetry wrapper.

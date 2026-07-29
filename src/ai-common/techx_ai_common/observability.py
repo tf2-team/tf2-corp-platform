@@ -275,3 +275,5 @@ def record_fallback(reason_class: str, *, surface: str | None = None) -> None:
         },
     ):
         pass
+
+# Change trail: @hungxqt - 2026-07-29 - Merge content-free model and tool telemetry with explicit-secret pseudonyms.
