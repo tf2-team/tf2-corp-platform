@@ -3,115 +3,87 @@
 # Copyright The OpenTelemetry Authors
 # SPDX-License-Identifier: Apache-2.0
 
-"""Catalog search tool for Shopping Copilot (A2.1).
-
-Calls ProductCatalogService.SearchProducts with structured filter fields
-extracted by the intent parser. Applies a secondary price filter in
-Python code (defense-in-depth) in case the catalog service's SQL filter
-is not strict enough.
-
-Public API:
-    search_catalog(intent, product_catalog_stub) -> list[CopilotProductResult]
-"""
+"""Validated Product Catalog calls used by the ReAct agent."""
 
 import logging
 import os
 
 import grpc
 from techx_ai_common.proto import demo_pb2, demo_pb2_grpc
-from copilot_contracts import CopilotProductResult, ShoppingIntent
+
+from copilot_contracts import CatalogSearchInput, CopilotProductResult
 
 logger = logging.getLogger("catalog_tool")
-
-_MAX_RESULTS = 10  # hard cap on number of products returned to the user
+_MAX_RESULTS = 10
 
 
 def _price_to_float(units: int, nanos: int) -> float:
-    """Convert proto Money (units + nanos) to a float for comparison."""
     return units + nanos / 1_000_000_000
 
 
-def _intent_to_request(intent: ShoppingIntent) -> demo_pb2.SearchProductsRequest:
-    """Build a SearchProductsRequest from a parsed ShoppingIntent.
-
-    Only sets the optional filter fields if the intent has them, so that
-    the catalog service can apply them efficiently in SQL.
-    """
-    req = demo_pb2.SearchProductsRequest(query=intent.query)
-
-    if intent.category is not None:
-        req.category = intent.category
-
-    if intent.max_price is not None:
-        # Split float price into units + nanos for the proto Money fields.
-        units = int(intent.max_price)
-        nanos = int(round((intent.max_price - units) * 1_000_000_000))
-        req.max_price_units = units
-        req.max_price_nanos = nanos
-
-    return req
+def _filters_to_request(filters: CatalogSearchInput) -> demo_pb2.SearchProductsRequest:
+    request = demo_pb2.SearchProductsRequest(query=filters.query)
+    if filters.category is not None:
+        request.category = filters.category
+    if filters.max_price is not None:
+        units = int(filters.max_price)
+        request.max_price_units = units
+        request.max_price_nanos = int(round((filters.max_price - units) * 1_000_000_000))
+    return request
 
 
 def search_catalog(
-    intent: ShoppingIntent,
+    filters: CatalogSearchInput,
     product_catalog_stub: demo_pb2_grpc.ProductCatalogServiceStub,
 ) -> list[CopilotProductResult]:
-    """Call ProductCatalogService.SearchProducts and apply secondary filters.
-
-    Returns an empty list when no results match — callers must handle
-    the empty case and return NO_RESULTS without fabricating products.
-
-    Raises:
-        grpc.RpcError: propagated to the LangGraph node which must catch it
-                       and route to the fallback node.
-    """
-    request = _intent_to_request(intent)
-    logger.info(
-        "Calling SearchProducts: query=%r category=%r max_price_units=%s",
-        request.query,
-        request.category if request.HasField("category") else None,
-        request.max_price_units if request.HasField("max_price_units") else None,
-    )
-
+    """Call Catalog with validated filters and enforce them again locally."""
+    request = _filters_to_request(filters)
     response = product_catalog_stub.SearchProducts(request)
     products = response.results
-
-    # Secondary Python-level price filter (defense-in-depth).
-    if intent.max_price is not None:
+    if filters.max_price is not None:
         products = [
-            p for p in products
-            if _price_to_float(p.price_usd.units, p.price_usd.nanos) <= intent.max_price
+            product for product in products
+            if _price_to_float(product.price_usd.units, product.price_usd.nanos) <= filters.max_price
         ]
-
-    # Secondary category filter (defense-in-depth).
-    if intent.category is not None:
-        cat_lower = intent.category.lower()
+    if filters.category is not None:
         products = [
-            p for p in products
-            if any(c.lower() == cat_lower for c in p.categories)
+            product for product in products
+            if any(category.lower() == filters.category for category in product.categories)
         ]
-
-    results = [
+    return [
         CopilotProductResult(
-            product_id=p.id,
-            name=p.name,
-            description=p.description if isinstance(getattr(p, "description", None), str) else "",
-            price_units=p.price_usd.units,
-            price_nanos=p.price_usd.nanos,
-            currency_code=p.price_usd.currency_code or "USD",
+            product_id=product.id,
+            name=product.name,
+            description=getattr(product, "description", "") or "",
+            price_units=product.price_usd.units,
+            price_nanos=product.price_usd.nanos,
+            currency_code=product.price_usd.currency_code or "USD",
         )
-        for p in products[:_MAX_RESULTS]
+        for product in products[:_MAX_RESULTS]
     ]
 
-    logger.info(
-        "SearchProducts returned %d results (after filters, capped at %d)",
-        len(results), _MAX_RESULTS,
+
+def get_product(
+    product_id: str,
+    product_catalog_stub: demo_pb2_grpc.ProductCatalogServiceStub,
+) -> CopilotProductResult | None:
+    """Rehydrate one product from Catalog; caller validates its ID first."""
+    if not product_id:
+        return None
+    product = product_catalog_stub.GetProduct(demo_pb2.GetProductRequest(id=product_id))
+    if not getattr(product, "id", ""):
+        return None
+    return CopilotProductResult(
+        product_id=product.id,
+        name=product.name,
+        description=getattr(product, "description", "") or "",
+        price_units=product.price_usd.units,
+        price_nanos=product.price_usd.nanos,
+        currency_code=product.price_usd.currency_code or "USD",
     )
-    return results
 
 
 def make_catalog_stub() -> demo_pb2_grpc.ProductCatalogServiceStub:
-    """Build a gRPC stub from the PRODUCT_CATALOG_ADDR env var."""
     addr = os.environ["PRODUCT_CATALOG_ADDR"]
     channel = grpc.insecure_channel(addr)
     return demo_pb2_grpc.ProductCatalogServiceStub(channel)

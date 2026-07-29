@@ -74,9 +74,17 @@ const ShoppingCopilotContext = createContext<ShoppingCopilotContextType | undefi
   undefined
 );
 
-const DEFAULT_SESSION_ID = 'session_default';
 const STORAGE_KEY = 'shopping_copilot_sessions_v2';
 const ACTIVE_SESSION_KEY = 'shopping_copilot_active_session_v2';
+const UUID_V4 = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+function createUuid(): string {
+  return globalThis.crypto.randomUUID();
+}
+
+function isUuidV4(value: string): boolean {
+  return UUID_V4.test(value);
+}
 
 function sanitizeCriteria(criteria: string): string {
   if (!criteria) return '';
@@ -116,21 +124,38 @@ export const ShoppingCopilotProvider: React.FC<{ children: React.ReactNode }> = 
         if (saved) {
           const parsed = JSON.parse(saved);
           if (Array.isArray(parsed) && parsed.length > 0) {
-            return parsed;
+            const idMap = new Map<string, string>();
+            const migrated = parsed.map((session) => {
+              if (session && typeof session.id === 'string' && isUuidV4(session.id)) {
+                return session;
+              }
+              const nextId = createUuid();
+              if (session?.id) idMap.set(session.id, nextId);
+              return { ...session, id: nextId };
+            });
+            const savedActiveId = localStorage.getItem(ACTIVE_SESSION_KEY);
+            const migratedActiveId = savedActiveId
+              ? idMap.get(savedActiveId) || savedActiveId
+              : migrated[0].id;
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(migrated));
+            localStorage.setItem(ACTIVE_SESSION_KEY, migratedActiveId);
+            return migrated;
           }
         }
       } catch (e) {
         console.error('Failed to load sessions from localStorage', e);
       }
     }
-    return [
-      {
-        id: DEFAULT_SESSION_ID,
-        title: 'New Conversation',
-        turns: [],
-        createdAt: new Date().toISOString(),
-      },
-    ];
+    const initialSession = {
+      id: createUuid(),
+      title: 'New Conversation',
+      turns: [],
+      createdAt: new Date().toISOString(),
+    };
+    if (typeof window !== 'undefined') {
+      localStorage.setItem(ACTIVE_SESSION_KEY, initialSession.id);
+    }
+    return [initialSession];
   });
 
   const [activeSessionId, setActiveSessionId] = useState<string>(() => {
@@ -142,7 +167,7 @@ export const ShoppingCopilotProvider: React.FC<{ children: React.ReactNode }> = 
         console.error('Failed to load active session ID from localStorage', e);
       }
     }
-    return DEFAULT_SESSION_ID;
+    return createUuid();
   });
 
   useEffect(() => {
@@ -169,7 +194,7 @@ export const ShoppingCopilotProvider: React.FC<{ children: React.ReactNode }> = 
   const currentTurns = activeSession ? activeSession.turns : [];
 
   const createNewSession = () => {
-    const newId = `session_${Date.now()}`;
+    const newId = createUuid();
     const newSession: ChatSessionData = {
       id: newId,
       title: 'New Conversation',
@@ -201,7 +226,7 @@ export const ShoppingCopilotProvider: React.FC<{ children: React.ReactNode }> = 
     setSessions((prev) => {
       const filtered = prev.filter((s) => s.id !== id);
       if (filtered.length === 0) {
-        const fallbackId = `session_${Date.now()}`;
+        const fallbackId = createUuid();
         return [
           {
             id: fallbackId,
@@ -216,7 +241,7 @@ export const ShoppingCopilotProvider: React.FC<{ children: React.ReactNode }> = 
 
     if (activeSessionId === id) {
       const remaining = sessions.filter((s) => s.id !== id);
-      const nextId = remaining.length > 0 ? remaining[0].id : DEFAULT_SESSION_ID;
+      const nextId = remaining.length > 0 ? remaining[0].id : createUuid();
       setActiveSessionId(nextId);
     }
   };
@@ -228,6 +253,9 @@ export const ShoppingCopilotProvider: React.FC<{ children: React.ReactNode }> = 
     setConfirmSuccess(null);
     setConfirmMessage(null);
 
+    const turnId = createUuid();
+    const conversationId = activeSession?.id || activeSessionId;
+
     try {
       const res = await fetch('/api/copilot', {
         method: 'POST',
@@ -235,6 +263,8 @@ export const ShoppingCopilotProvider: React.FC<{ children: React.ReactNode }> = 
         body: JSON.stringify({
           user_message: message,
           user_id: SessionGateway.getSession().userId || 'anonymous',
+          conversation_id: conversationId,
+          turn_id: turnId,
         }),
       });
       const rawData: CopilotResponse = await res.json();
@@ -251,7 +281,7 @@ export const ShoppingCopilotProvider: React.FC<{ children: React.ReactNode }> = 
       setResponse(cleanData);
 
       const newTurn: ChatTurn = {
-        id: `turn_${Date.now()}`,
+        id: turnId,
         userMessage: message,
         response: cleanData,
         timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
