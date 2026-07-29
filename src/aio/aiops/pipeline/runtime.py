@@ -165,8 +165,12 @@ class AiopsPipeline:
             [root.service for root in rca_result.root_causes],
         )
         self._log_failure_conclusion(rca_result, analysis_incidents)
-        suppressed_incident_ids = self._suppress_related_notifications(_unique_incidents(regular_incidents), rca_result)
-        actionable_incidents = [incident for incident in regular_incidents if incident.incident_id not in suppressed_incident_ids]
+        suppressed_incident_ids = self._suppress_related_notifications(
+            _unique_incidents(regular_incidents),
+            rca_result,
+            _unique_incidents(root_incidents),
+        )
+        actionable_incidents = _unique_incidents(regular_incidents)
         self._record_rca_history(rca_result, incidents, enriched, metric_series or [])
         notifications = direct_notifications + self._flush_notifications(_unique_incidents(regular_incidents))
         logger.debug("AIOPS_BLOCK notify notifications=%s", len(notifications))
@@ -608,41 +612,54 @@ class AiopsPipeline:
             }
         )
 
-    def _suppress_related_notifications(self, incidents: list[Incident], rca_result: RcaResult) -> set[str]:
+    def _suppress_related_notifications(
+        self,
+        incidents: list[Incident],
+        rca_result: RcaResult,
+        root_incidents: list[Incident] | None = None,
+    ) -> set[str]:
         suppressed = set()
-        current_root_service = None
         service_scores = _algorithm_service_scores(rca_result.algorithm_findings)
-        affected_services: set[str] = set()
-        if self.runtime_config is not None and rca_result.root_causes:
-            root = rca_result.root_causes[0]
-            if root.score >= float(self.correlation_hyperparameters["suppress_min_root_score"]):
-                root_service = root.service
-                current_root_service = root_service
-                max_hops = int(self.correlation_hyperparameters["topology_max_hops"])
-                affected_services = self.topology_graph.neighborhood(root_service, max_hops) if self.topology_graph is not None else {root_service}
-                logger.info(
-                    "AIOPS_RCA_SUPPRESS_FILTER filter=active_root_cause source=rca root_service=%s affected_services=%s max_hops=%s suppress_seconds=%s reason=root_score_above_threshold",
-                    root_service,
-                    sorted(affected_services),
-                    max_hops,
-                    int(self.correlation_hyperparameters["suppress_window_seconds"]),
-                )
-                self.store.register_active_root_cause(
-                    root_service,
-                    affected_services,
-                    int(self.correlation_hyperparameters["suppress_window_seconds"]),
-                    service_scores.get(root_service, 0.0),
-                )
+        max_hops = int(self.correlation_hyperparameters.get("topology_max_hops", 1))
+        min_score = float(self.correlation_hyperparameters.get("suppress_min_root_score", 1.0))
+        active_roots = [incident for incident in (root_incidents or []) if incident.events[-1].confidence >= min_score]
+        root_services = {incident.service for incident in active_roots}
+        affected_by_root = {
+            incident.service: self.topology_graph.neighborhood(incident.service, max_hops) if self.topology_graph is not None else {incident.service}
+            for incident in active_roots
+        }
+        for incident in active_roots:
+            root_service = incident.service
+            affected_services = affected_by_root[root_service]
+            root_score = service_scores.get(root_service) or incident.events[-1].confidence
+            logger.info(
+                "AIOPS_RCA_SUPPRESS_FILTER filter=active_root_cause source=rca root_service=%s affected_services=%s max_hops=%s suppress_seconds=%s reason=notifiable_root_cause",
+                root_service,
+                sorted(affected_services),
+                max_hops,
+                int(self.correlation_hyperparameters.get("suppress_window_seconds", 900)),
+            )
+            self.store.register_active_root_cause(
+                root_service,
+                affected_services,
+                int(self.correlation_hyperparameters.get("suppress_window_seconds", 900)),
+                root_score,
+            )
         breakout_services = (
-            self.store.breakout_services(service_scores, float(self.correlation_hyperparameters["suppress_breakout_multiplier"]))
+            self.store.breakout_services(
+                service_scores,
+                float(self.correlation_hyperparameters.get("suppress_breakout_multiplier", 1.5)),
+                max_hops,
+            )
             if service_scores
             else set()
         )
-        if current_root_service:
-            suppressed.update(self.store.suppress_related_notifications(incidents, current_root_service, affected_services, breakout_services))
+        exempt_services = breakout_services | root_services
+        for root_service, affected_services in affected_by_root.items():
+            suppressed.update(self.store.suppress_related_notifications(incidents, root_service, affected_services, exempt_services))
         if incidents:
             remaining = [incident for incident in incidents if incident.incident_id not in suppressed]
-            suppressed.update(self.store.suppress_active_root_notifications(remaining, breakout_services))
+            suppressed.update(self.store.suppress_active_root_notifications(remaining, exempt_services))
         return suppressed
 
     def _record_verified_history(

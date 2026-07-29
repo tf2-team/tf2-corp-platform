@@ -1661,6 +1661,83 @@ class RuntimePipelineTest(unittest.TestCase):
         self.assertEqual({message.service for message in result.notifications}, {"checkout", "cart", "valkey-cart"})
         self.assertEqual([status for (status,) in outbox_rows].count("suppressed"), 0)
 
+    def test_pipeline_does_not_register_root_that_failed_notification_gate(self):
+        settings = Settings()
+        with TemporaryDirectory() as tmp:
+            store = SQLiteIncidentStore(Path(tmp) / "aiops.sqlite3", environment=settings.environment)
+            child = store.upsert(
+                CandidateEvent(
+                    detector_id="ops_cart_requests",
+                    flow="checkout",
+                    service="cart",
+                    severity="SEV2",
+                    signal_id="cart_request_count_5m",
+                    value=10.0,
+                    unit="requests",
+                    window="5m",
+                    threshold=5.0,
+                    quality=SignalQuality.VERIFIED,
+                    reason="threshold_breached",
+                    runbook_id="RB-CART-ERROR-RATE",
+                )
+            )
+            pipeline = AiopsPipeline(
+                collector=StaticCollector([]),
+                detectors=[],
+                store=store,
+                policy=policy(settings),
+                **runtime_kwargs(settings),
+            )
+            suppressed = pipeline._suppress_related_notifications(
+                [child],
+                RcaResult(root_causes=[RootCauseCandidate(service="checkout", score=1.0, root_cause_metrics=["cpu_millicores"])]),
+                [],
+            )
+            active = store._connection.execute("SELECT COUNT(*) FROM active_root_causes").fetchone()[0]
+            store.close()
+
+        self.assertEqual(suppressed, set())
+        self.assertEqual(active, 0)
+
+    def test_pipeline_registers_all_notifiable_roots_with_score_fallback(self):
+        settings = Settings()
+        with TemporaryDirectory() as tmp:
+            store = SQLiteIncidentStore(Path(tmp) / "aiops.sqlite3", environment=settings.environment)
+            pipeline = AiopsPipeline(
+                collector=StaticCollector([]),
+                detectors=[],
+                store=store,
+                policy=policy(settings),
+                **runtime_kwargs(settings),
+            )
+            roots = [
+                store.upsert(
+                    CandidateEvent(
+                        detector_id="rca_root_cause",
+                        flow="checkout",
+                        service=service,
+                        severity="SEV2",
+                        signal_id="cpu_millicores",
+                        value=score,
+                        unit="score",
+                        window="rca",
+                        threshold=0.24,
+                        quality=SignalQuality.FALLBACK_ONLY,
+                        reason="rca_root_cause",
+                        runbook_id="RB-SERVICE-RESOURCE",
+                        confidence=score,
+                    )
+                )
+                for service, score in (("checkout", 0.8), ("ad", 0.7))
+            ]
+            pipeline._suppress_related_notifications(roots, RcaResult(), roots)
+            active = store._connection.execute(
+                "SELECT root_service, root_score FROM active_root_causes ORDER BY root_service"
+            ).fetchall()
+            store.close()
+
+        self.assertEqual(active, [("ad", 0.7), ("checkout", 0.8)])
+
     def test_pipeline_suppresses_current_child_root_without_breakout_score(self):
         settings = Settings()
         with TemporaryDirectory() as tmp:
@@ -1862,16 +1939,28 @@ class RuntimePipelineTest(unittest.TestCase):
                 detectors=[MultiServiceDetector(cart_severity="SEV1", cart_signal_id="cart_request_count_5m")],
                 store=store,
                 policy=policy(settings),
+                rca_hyperparameters=load_hyperparameters(settings.hyperparameters_path)["rca"],
                 **kwargs,
             )
             pipeline._run_v001_rca = lambda metric_series, incidents: RcaResult(
-                root_causes=[RootCauseCandidate(service="valkey-cart", score=1.0, root_cause_metrics=["error_rate_5m"])]
+                anomalies=[
+                    AnomalyFinding(
+                        algorithm="weighted_sum",
+                        service="valkey-cart",
+                        metric="cpu_millicores",
+                        signal_id="valkey_cart_cpu_millicores",
+                        score=1.0,
+                        timestamp=59,
+                    )
+                ],
+                root_causes=[RootCauseCandidate(service="valkey-cart", score=1.0, root_cause_metrics=["cpu_millicores"])]
             )
 
-            result = pipeline.run_once()
+            result = pipeline.run_once(metric_series=[cpu_ramp_metric("valkey-cart")])
             store.close()
 
         self.assertEqual({message.service for message in result.notifications}, {"checkout", "valkey-cart"})
+        self.assertEqual(len(result.policy_decisions), 2)
 
     def test_dry_run_remediation_is_not_added_to_success_history(self):
         settings = Settings()
