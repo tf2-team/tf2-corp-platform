@@ -11,6 +11,7 @@
 
 	<ItemGroup>
 		<PackageReference Include="AWSSDK.DynamoDBv2" Version="3.7.405" />
+		<PackageReference Include="AWSSDK.SecurityToken" Version="3.7.504.50" />
 		<PackageReference Include="Confluent.Kafka" Version="2.8.0" />
 		<PackageReference Include="EFCore.NamingConventions" Version="9.0.0" />
 		<PackageReference Include="Google.Protobuf" Version="3.29.3" />
@@ -37,5 +38,5 @@
 	</ItemGroup>
 
 	<!-- Change trail: @hungxqt - 2026-07-28 - Update TargetFramework to net10.0 to match .NET 10 runtime image. -->
+	<!-- Change trail: @minh-khoa - 2026-07-29 - Include STS runtime assembly required by EKS web-identity credentials. -->
 </Project>
-
