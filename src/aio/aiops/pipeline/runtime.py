@@ -34,7 +34,7 @@ from aiops.remediation import (
 from aiops.schemas import ActionCatalogItem, ActionProposal, CandidateEvent, Incident, RemediationDecision, VerificationResult
 from aiops.shared.metrics import is_memory_metric, is_oom_metric
 from aiops.shared.series import prepare_detector_series
-from aiops.shared.tail import evaluate_tail_change, metric_group, oom_counter_increased, point_changed
+from aiops.shared.tail import evaluate_tail_change, metric_group, oom_counter_increased, point_changed, significant_tail_change
 from aiops.topology import TopologyGraph
 from aiops.verification import VerificationEngine
 from aiops.pipeline.analysis import (
@@ -350,12 +350,23 @@ class AiopsPipeline:
         if not all(key in config for key in ("min_tail_anomaly_buckets", "min_relative_change_ratio", "min_absolute_change")):
             return False, "missing_tail_config"
         change = _metric_tail_change(match, detection_window_seconds, start, config)
+        significant = significant_tail_change(
+            match,
+            detection_window_seconds,
+            start,
+            config["min_tail_anomaly_buckets"],
+            config["min_relative_change_ratio"],
+            config["min_absolute_change"],
+            config.get("slow_drift", {}),
+            float(config.get("page_hinkley_min_bucket_factor", 2.0)),
+            oom_recent_buckets=int(config.get("oom_recent_buckets", 3)),
+        )
         if not bool(self.correlation_hyperparameters["rca_notification_require_current_tail_change"]):
-            return change.significant, "tail_significant" if change.significant else "tail_not_significant"
-        if not change.significant:
+            return significant, "tail_significant" if significant else "tail_not_significant"
+        if not significant:
             return False, "tail_not_significant"
         if not _tail_is_still_changed(metric, change, config):
-            return False, "tail_recovered"
+            return False, "tail_reversed"
         return True, "tail_significant_current"
 
     def _dedup_rca_root_causes(self, root_causes: list[RootCauseCandidate]) -> list[RootCauseCandidate]:
@@ -783,12 +794,21 @@ def _tail_is_still_changed(metric: str, change, config: dict) -> bool:
     if not change.indexes:
         return False
     group = metric_group(metric)
-    return point_changed(
-        change.values[change.indexes[-1]],
+    last = change.values[change.indexes[-1]]
+    if point_changed(
+        last,
         change.baseline,
         float(config["min_relative_change_ratio"][group]),
         float(config["min_absolute_change"][group]),
-    )
+    ):
+        return True
+    direction = config.get("slow_drift", {}).get("metrics", {}).get(group, {}).get("direction")
+    recent = change.indexes[-max(2, int(config["min_tail_anomaly_buckets"][group])) :]
+    if direction == "up":
+        return len(recent) > 1 and last > change.values[recent[0]]
+    if direction == "down":
+        return len(recent) > 1 and last < change.values[recent[0]]
+    return False
 
 
 def _passes_rca_notification_gate(

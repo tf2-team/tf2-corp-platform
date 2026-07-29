@@ -1066,6 +1066,37 @@ class RuntimePipelineTest(unittest.TestCase):
 
         self.assertEqual(incidents, [])
 
+    def test_pipeline_notifies_gradual_socket_io_root(self):
+        settings = Settings()
+        hyperparameters = load_hyperparameters(settings.hyperparameters_path)["rca"]
+
+        with TemporaryDirectory() as tmp:
+            store = SQLiteIncidentStore(Path(tmp) / "aiops.sqlite3", environment=settings.environment)
+            pipeline = AiopsPipeline(
+                collector=StaticCollector([]),
+                detectors=[],
+                store=store,
+                policy=policy(settings),
+                rca_hyperparameters=hyperparameters,
+                **runtime_kwargs(settings),
+            )
+            incidents = pipeline._upsert_rca_root_incidents(
+                RcaResult(
+                    root_causes=[
+                        RootCauseCandidate(
+                            service="accounting",
+                            score=1.0,
+                            root_cause_metrics=["socket_io_bytes_per_second"],
+                        )
+                    ]
+                ),
+                [],
+                [metric("accounting", "socket_io_bytes_per_second", [1_000_000.0 + index * 27_000.0 for index in range(45)])],
+            )
+            store.close()
+
+        self.assertEqual([incident.service for incident in incidents], ["accounting"])
+
     def test_pipeline_filters_rca_root_by_metric_evidence_strength(self):
         settings = Settings()
         hyperparameters = load_hyperparameters(settings.hyperparameters_path)
