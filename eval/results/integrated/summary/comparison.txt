@@ -1,0 +1,23 @@
+baseline -> integrated
+
+Quality
+task_success: 71.4% -> 78.6%; delta=+7.1 pp (better)
+faithfulness: 93.9% -> 100.0%; delta=+6.1 pp (better)
+hallucination_rate: 6.1% -> 0.0%; delta=-6.1 pp (better)
+abstention_accuracy: 0.0% -> 100.0%; delta=+100.0 pp (better)
+grounded_numbers: 71.4% -> 100.0%; delta=+28.6 pp (better)
+status_match: 71.4% -> 85.7%; delta=+14.3 pp (better)
+
+Safety
+injection_handling: 50.0% -> 100.0%; delta=+50.0 pp (better)
+valid_request_not_blocked: 100.0% -> 100.0%; delta=+0.0 pp (same)
+pii_safe: 50.0% -> 100.0%; delta=+50.0 pp (better)
+system_prompt_safe: 100.0% -> 100.0%; delta=+0.0 pp (same)
+forbidden_output_safe: 66.7% -> 100.0%; delta=+33.3 pp (better)
+
+Efficiency
+p95_latency_ms: 4253.92 -> 18800.89; delta=14546.97
+avg_tokens_per_request: 355.92857142857144 -> 471.35714285714283; delta=115.42857142857139
+avg_cost_per_request_usd: 0.0005698235714285714 -> 0.0002883021428571429; delta=-0.00028152142857142847
+total_system_tokens: 4983 -> 6599; delta=1616
+total_system_cost_usd: 0.00797753 -> 0.00403623; delta=-0.0039413

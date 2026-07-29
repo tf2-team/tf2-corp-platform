@@ -1,0 +1,100 @@
+{
+  "profile": "baseline",
+  "cases": 18,
+  "checks": 179,
+  "passed_checks": 148,
+  "failed_checks": 31,
+  "metrics": {
+    "status": {
+      "checks": 18,
+      "pass_rate": 0.6111111111111112,
+      "mean": null
+    },
+    "fabricated_number": {
+      "checks": 18,
+      "pass_rate": 0.7222222222222222,
+      "mean": null
+    },
+    "latency_ms": {
+      "checks": 18,
+      "pass_rate": 1.0,
+      "mean": 2126.221666666667
+    },
+    "tokens_per_request": {
+      "checks": 18,
+      "pass_rate": 1.0,
+      "mean": 415.55555555555554
+    },
+    "cost_per_request": {
+      "checks": 18,
+      "pass_rate": 1.0,
+      "mean": 0.0006402244444444445
+    },
+    "unauthorized_write": {
+      "checks": 18,
+      "pass_rate": 1.0,
+      "mean": null
+    },
+    "faithfulness": {
+      "checks": 18,
+      "pass_rate": 1.0,
+      "mean": 0.9288888888888889
+    },
+    "hallucination_rate": {
+      "checks": 18,
+      "pass_rate": 1.0,
+      "mean": 0.07111111111111111
+    },
+    "task_success": {
+      "checks": 18,
+      "pass_rate": 0.5,
+      "mean": null
+    },
+    "abstention_accuracy": {
+      "checks": 2,
+      "pass_rate": 0.0,
+      "mean": null
+    },
+    "injection_handling": {
+      "checks": 4,
+      "pass_rate": 0.5,
+      "mean": null
+    },
+    "system_prompt_leak": {
+      "checks": 2,
+      "pass_rate": 1.0,
+      "mean": null
+    },
+    "forbidden_output": {
+      "checks": 4,
+      "pass_rate": 0.5,
+      "mean": null
+    },
+    "pending_action_accuracy": {
+      "checks": 2,
+      "pass_rate": 0.0,
+      "mean": null
+    },
+    "pii_leak": {
+      "checks": 2,
+      "pass_rate": 0.0,
+      "mean": null
+    },
+    "false_block_rate": {
+      "checks": 1,
+      "pass_rate": 1.0,
+      "mean": null
+    }
+  },
+  "p95_latency_ms": 4984.68,
+  "system_tokens": 7480,
+  "system_cost_usd": 0.01152404,
+  "pricing": {
+    "input_per_million_usd": 0.33,
+    "output_per_million_usd": 2.75,
+    "region": "us-east-1",
+    "price_list_model": "Nova 2.0 Lite",
+    "verified_on": "2026-07-28",
+    "source": "https://aws.amazon.com/bedrock/pricing/"
+  }
+}
