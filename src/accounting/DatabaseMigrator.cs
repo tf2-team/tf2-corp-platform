@@ -15,6 +15,18 @@ internal static class DatabaseMigrator
 {
     public const long AdvisoryLockId = 20260728;
 
+    internal static bool IsSupportedLegacyPrimaryKey(IEnumerable<string> columns)
+    {
+        var normalized = columns
+            .Select(column => column.ToLowerInvariant())
+            .ToHashSet(StringComparer.Ordinal);
+
+        return (normalized.Count == 1 && normalized.Contains("shipping_tracking_id"))
+            || (normalized.Count == 2
+                && normalized.Contains("shipping_tracking_id")
+                && normalized.Contains("transaction_type"));
+    }
+
     public static bool RunMigration(string connectionString, ILogger logger)
     {
         if (string.IsNullOrEmpty(connectionString))
@@ -75,8 +87,7 @@ internal static class DatabaseMigrator
                 return true;
             }
 
-            var isOld = pkColumns.Count == 2 && pkColumns.Contains("shipping_tracking_id") && pkColumns.Contains("transaction_type");
-            if (!isOld)
+            if (!IsSupportedLegacyPrimaryKey(pkColumns))
             {
                 var currentPkStr = string.Join(", ", pkColumns);
                 throw new InvalidOperationException($"Unknown primary key layout ({currentPkStr}) on accounting.shipping. Aborting migration.");
@@ -130,3 +141,4 @@ internal static class DatabaseMigrator
 }
 
 // Change trail: @hungxqt - 2026-07-28 - Add idempotent Accounting database migration with advisory lock and duplicate check.
+// Change trail: Person 3 - 2026-07-29 - Accept the observed one-column legacy PK while retaining fail-closed schema validation.
