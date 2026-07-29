@@ -199,7 +199,7 @@
         "enabled": true,
         "window_seconds": 3600,
         "min_points": 12,
-        "positive_bucket_ratio": 0.65,
+        "positive_bucket_ratio": 0.45,
         "metrics": {
           "memory": {
             "direction": "up",
@@ -211,7 +211,8 @@
           },
           "socket_io": {
             "direction": "up",
-            "min_total_change": 1048576.0
+            "min_total_change": 512000.0,
+            "positive_bucket_ratio": 0.45
           },
           "disk": {
             "direction": "up",
