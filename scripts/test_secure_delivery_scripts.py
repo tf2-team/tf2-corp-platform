@@ -112,6 +112,79 @@ class DigestOverlayTests(unittest.TestCase):
             self.assertIn(self.digest, overlay.read_text(encoding="utf-8"))
             self.assertIn(self.digest, live_values.read_text(encoding="utf-8"))
 
+    def test_multi_service_promotion_keeps_per_service_digests(self) -> None:
+        ad_digest = "sha256:" + "c" * 64
+        old_digest = "sha256:" + "b" * 64
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            live_values = root / "values-aiops-live-executor.yaml"
+            live_values.write_text(
+                "aiopsLiveExecutor:\n"
+                "  image:\n"
+                f"    digest: {old_digest}\n",
+                encoding="utf-8",
+            )
+            import sys
+
+            argv = sys.argv
+            try:
+                sys.argv = [
+                    "update_chart_service_digests.py",
+                    "--directory",
+                    str(root),
+                    "--services-json",
+                    json.dumps(["ad", "aiops"]),
+                    "--digests-json",
+                    json.dumps({"ad": ad_digest, "aiops": self.digest}),
+                    "--promote-aiops-live-executor",
+                ]
+                digest_mod.main()
+            finally:
+                sys.argv = argv
+
+            ad_overlay = root / "service-digest" / "values-ad.yaml"
+            aiops_overlay = root / "service-digest" / "values-aiops.yaml"
+            self.assertIn(ad_digest, ad_overlay.read_text(encoding="utf-8"))
+            self.assertNotIn(self.digest, ad_overlay.read_text(encoding="utf-8"))
+            self.assertIn(self.digest, aiops_overlay.read_text(encoding="utf-8"))
+            self.assertIn(self.digest, live_values.read_text(encoding="utf-8"))
+
+    def test_non_aiops_promotion_leaves_live_executor_unchanged(self) -> None:
+        old_digest = "sha256:" + "b" * 64
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            live_values = root / "values-aiops-live-executor.yaml"
+            original = (
+                "aiopsLiveExecutor:\n"
+                "  image:\n"
+                f"    digest: {old_digest}\n"
+            )
+            live_values.write_text(original, encoding="utf-8")
+            import sys
+
+            argv = sys.argv
+            try:
+                sys.argv = [
+                    "update_chart_service_digests.py",
+                    "--directory",
+                    str(root),
+                    "--services-json",
+                    json.dumps(["ad"]),
+                    "--digests-json",
+                    json.dumps({"ad": self.digest}),
+                ]
+                digest_mod.main()
+            finally:
+                sys.argv = argv
+
+            self.assertEqual(original, live_values.read_text(encoding="utf-8"))
+            self.assertIn(
+                self.digest,
+                (root / "service-digest" / "values-ad.yaml").read_text(
+                    encoding="utf-8"
+                ),
+            )
+
     def test_aio_source_changes_select_aiops_image(self) -> None:
         workflow_dir = Path(__file__).resolve().parents[1] / ".github" / "workflows"
         for workflow_name in ("ci.yml", "build-and-push.yml"):
