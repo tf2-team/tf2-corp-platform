@@ -232,7 +232,7 @@
       "window": "instant",
       "metric": "oom_events_total",
       "feature_role": "anomaly_input",
-      "required_for_monitoring": false
+      "required_for_monitoring": true
     },
     "resource.disk_io_bytes_per_second": {
       "query_id_template": "$service.disk_io_bytes_per_second",
