@@ -73,6 +73,9 @@ jobs:
           - name: cart (.NET)
             kind: dotnet
             workdir: src/cart
+          - name: accounting (.NET)
+            kind: dotnet
+            workdir: src/accounting
           - name: mem0 (Python)
             kind: python
             workdir: src/mem0
@@ -392,7 +395,7 @@ jobs:
           docker image inspect "${IMAGE_NAME}/${SERVICE}:${DEMO_VERSION}" >/dev/null
 
           case "${SERVICE}" in
-            email|llm|opensearch)
+            accounting|email|llm|opensearch)
               bash scripts/smoke_runtime_image.sh \
                 "${SERVICE}" "${IMAGE_NAME}/${SERVICE}:${DEMO_VERSION}"
               ;;
@@ -634,4 +637,4 @@ jobs:
       - name: Validate shared guardrail dependency
         run: >-
           python -c "from llm_guard.input_scanners import PromptInjection; from techx_ai_common import guardrails"
-# Change trail: @hungxqt - 2026-07-23 - PR local image bake includes Trivy HIGH/CRITICAL gate
+# Change trail: @hungxqt - 2026-07-28 - Add accounting to unit-tests matrix in CI.

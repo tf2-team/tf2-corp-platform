@@ -80,6 +80,24 @@
     "replicas": 2
   },
   {
+    "action_id": "scale_product_catalog",
+    "action_type": "scale_deployment",
+    "target": "product-catalog",
+    "target_kind": "Deployment",
+    "cost_min": 2.0,
+    "downtime_min": 0.0,
+    "blast_radius_services": [
+      "frontend",
+      "recommendation",
+      "product-reviews",
+      "checkout"
+    ],
+    "replicas": 3,
+    "verification_defined": true,
+    "rollback_defined": true,
+    "approved": true
+  },
+  {
     "action_id": "page_data_oncall",
     "action_type": "page",
     "target": "data-platform-oncall",

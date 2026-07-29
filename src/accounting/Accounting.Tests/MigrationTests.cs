@@ -76,6 +76,17 @@ public class MigrationTests
     {
         Assert.Equal(20260728L, DatabaseMigrator.AdvisoryLockId);
     }
+
+    [Theory]
+    [InlineData("shipping_tracking_id", true)]
+    [InlineData("shipping_tracking_id,transaction_type", true)]
+    [InlineData("order_id", false)]
+    [InlineData("shipping_tracking_id,unexpected_column", false)]
+    public void LegacyPrimaryKeyGuardAcceptsOnlyKnownLayouts(string columns, bool expected)
+    {
+        var result = DatabaseMigrator.IsSupportedLegacyPrimaryKey(columns.Split(','));
+        Assert.Equal(expected, result);
+    }
 }
 
 internal class TestDbContext : DbContext
@@ -95,3 +106,4 @@ internal class TestDbContext : DbContext
 }
 
 // Change trail: @hungxqt - 2026-07-28 - Add migration and co-existence tests for Accounting.
+// Change trail: Person 3 - 2026-07-29 - Cover both known legacy primary-key layouts.
