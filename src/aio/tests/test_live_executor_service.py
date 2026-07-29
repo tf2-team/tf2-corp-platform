@@ -165,6 +165,7 @@ def test_live_executor_catalog_endpoint_returns_action_capabilities(tmp_path: Pa
     service = LiveExecutorService(
         LiveExecutorStore(tmp_path / "executor.sqlite3"),
         capability_catalog_path=root / "config" / "executor_supported_actions.json",
+        service_support_catalog_path=root / "config" / "executor_service_support.json",
     )
     app = create_app(service=service, token="test-token")
     client = TestClient(app)
@@ -195,5 +196,38 @@ def test_live_executor_catalog_endpoint_returns_action_capabilities(tmp_path: Pa
         assert all(item["executor_supported"] is False for item in restart_actions)
         assert catalog["restart_payment"]["protected"] is True
         assert catalog["restart_payment"]["blocked"] is True
+    finally:
+        service.close()
+
+def test_live_executor_services_catalog_covers_runbook_services(tmp_path: Path) -> None:
+    root = Path(__file__).resolve().parents[1]
+    service = LiveExecutorService(
+        LiveExecutorStore(tmp_path / "executor.sqlite3"),
+        capability_catalog_path=root / "config" / "executor_supported_actions.json",
+        service_support_catalog_path=root / "config" / "executor_service_support.json",
+    )
+    app = create_app(service=service, token="test-token")
+    client = TestClient(app)
+    try:
+        response = client.get(
+            "/v1/services/catalog",
+            headers={
+                "Authorization": "Bearer test-token",
+                "X-AIOPS-Account": "aiops-runtime",
+                "X-Request-Id": "req-20260729-services-catalog",
+            },
+        )
+        assert response.status_code == 200
+        service_catalog = {item["service"]: item for item in response.json()}
+        runbook_map = json.loads((root / "runbooks" / "service_runbook_map.json").read_text(encoding="utf-8"))
+
+        assert set(service_catalog) == set(runbook_map["services"])
+        assert service_catalog["product-catalog"]["executor_supported"] is True
+        assert service_catalog["product-catalog"]["supported_actions"] == ["scale_product_catalog"]
+        assert service_catalog["product-catalog"]["live_execute_supported"] is False
+        assert service_catalog["checkout"]["support_status"] == "recommendation_only"
+        assert service_catalog["checkout"]["supported_actions"] == []
+        assert service_catalog["payment"]["protected"] is True
+        assert service_catalog["postgresql"]["fallback_action"] == "page_data_oncall"
     finally:
         service.close()

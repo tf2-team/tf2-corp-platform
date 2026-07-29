@@ -49,11 +49,16 @@ def create_app(service: LiveExecutorService | None = None, token: str | None = N
     @app.get("/readyz")
     def readyz() -> dict[str, str]:
         service.catalog()
+        service.service_catalog()
         return {"status": "ready"}
 
     @app.get("/v1/actions/catalog", dependencies=[Depends(require_auth)])
     def catalog() -> list[dict[str, Any]]:
         return service.catalog()
+
+    @app.get("/v1/services/catalog", dependencies=[Depends(require_auth)])
+    def services_catalog() -> list[dict[str, Any]]:
+        return service.service_catalog()
 
     @app.post("/v1/actions/plan", dependencies=[Depends(require_auth)])
     def plan(request: dict[str, Any]) -> dict[str, Any]:
@@ -76,4 +81,3 @@ def create_app(service: LiveExecutorService | None = None, token: str | None = N
         return service.legacy_submit(request)
 
     return app
-

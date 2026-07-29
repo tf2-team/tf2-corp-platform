@@ -27,12 +27,19 @@ STATUS_RUNNING = "running"
 STATUS_BLOCKED = "blocked"
 STATUS_ROLLED_BACK = "rolled_back"
 DEFAULT_CAPABILITY_CATALOG_PATH = Path("config/executor_supported_actions.json")
+DEFAULT_SERVICE_SUPPORT_CATALOG_PATH = Path("config/executor_service_support.json")
 
 
 class LiveExecutorService:
-    def __init__(self, store: LiveExecutorStore, capability_catalog_path: Path | None = None):
+    def __init__(
+        self,
+        store: LiveExecutorStore,
+        capability_catalog_path: Path | None = None,
+        service_support_catalog_path: Path | None = None,
+    ):
         self.store = store
         self.capability_catalog_path = capability_catalog_path or DEFAULT_CAPABILITY_CATALOG_PATH
+        self.service_support_catalog_path = service_support_catalog_path or DEFAULT_SERVICE_SUPPORT_CATALOG_PATH
 
     @classmethod
     def from_path(cls, path: Path) -> "LiveExecutorService":
@@ -40,6 +47,9 @@ class LiveExecutorService:
 
     def catalog(self) -> list[dict[str, Any]]:
         return _load_capability_catalog(self.capability_catalog_path)
+
+    def service_catalog(self) -> list[dict[str, Any]]:
+        return _load_service_support_catalog(self.service_support_catalog_path)
 
     def plan(self, request: dict[str, Any]) -> dict[str, Any]:
         cached = self._idempotent(request, "plan")
@@ -268,6 +278,14 @@ def _load_capability_catalog(path: Path) -> list[dict[str, Any]]:
     catalog = [_capability_from_allowlist(config) for config in ALLOWLIST.values()]
     _assert_json_serializable({"actions": catalog})
     return catalog
+
+def _load_service_support_catalog(path: Path) -> list[dict[str, Any]]:
+    if path.exists():
+        catalog = json.loads(path.read_text(encoding="utf-8"))
+        if isinstance(catalog, list):
+            _assert_json_serializable({"services": catalog})
+            return catalog
+    return []
 
 def _capability_from_allowlist(config: dict[str, Any]) -> dict[str, Any]:
     target = config["target"]
