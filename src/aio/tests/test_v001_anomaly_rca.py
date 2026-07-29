@@ -194,6 +194,11 @@ class V001AnomalyRcaTest(unittest.TestCase):
         self.assertFalse(evaluate_tail_change(series, 900, 29, 3, 0.3, 10.0).significant)
         self.assertTrue(cusum_tail_change(series, 900, 29, 3, 0.3, 10.0).significant)
 
+    def test_cusum_requires_consecutive_deviation_buckets(self):
+        series = minute_metric("payment", "cpu_millicores", [100] * 30 + [120, 100] * 7)
+
+        self.assertFalse(cusum_tail_change(series, 900, 29, 3, 0.3, 10.0).significant)
+
     def test_memory_small_level_shift_does_not_become_significant_via_cusum(self):
         mib = 1024 * 1024
         series = minute_metric("cart", "memory_usage_bytes", [133 * mib] * 30 + [135 * mib] * 30)
@@ -213,6 +218,11 @@ class V001AnomalyRcaTest(unittest.TestCase):
 
         self.assertFalse(evaluate_tail_change(series, 900, 29, 3, 0.25, 0.05).significant)
         self.assertTrue(page_hinkley_tail_change(series, 900, 29, 3, 0.25, 0.05).significant)
+
+    def test_page_hinkley_requires_consecutive_deviation_buckets(self):
+        series = minute_metric("payment", "p95_latency_5m", [1.0] * 30 + [1.2, 1.0] * 7)
+
+        self.assertFalse(page_hinkley_tail_change(series, 900, 29, 3, 0.25, 0.05).significant)
 
     def test_slow_drift_detects_small_sustained_memory_growth(self):
         series = minute_metric("ad", "memory_usage_bytes", [460_000_000 + index * 100_000 for index in range(60)])
