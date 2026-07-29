@@ -640,7 +640,7 @@ jobs:
 
   required-gate:
     name: Mandate 10 required gate
-    if: always()
+    if: always() && github.event_name == 'pull_request'
     needs:
       - lint
       - unit-tests
