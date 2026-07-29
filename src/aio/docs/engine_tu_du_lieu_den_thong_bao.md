@@ -1634,6 +1634,302 @@ tối đa 3600 giây
 
 Backoff tránh webhook lỗi làm pipeline gửi request liên tục, nhưng vẫn giữ notification trong outbox để thử lại.
 
+### 26.14 Chuyển unit, tuổi sample và time bucket
+
+#### Chuyển unit
+
+```text
+normalized_value = raw_value × conversion_factor
+```
+
+| Biến | Ý nghĩa |
+| --- | --- |
+| `raw_value` | Giá trị collector nhận từ nguồn dữ liệu |
+| `conversion_factor` | Hệ số đổi từ unit nguồn sang unit chuẩn |
+| `normalized_value` | Giá trị detector nhìn thấy sau chuyển đổi |
+
+Ví dụ đổi byte sang MiB:
+
+```text
+raw_value = 104,857,600 byte
+conversion_factor = 1 / 1,048,576
+normalized_value = 100 MiB
+```
+
+Chỉ đổi thang đo, không làm thay đổi hình dạng chuỗi hoặc ý nghĩa dữ liệu.
+
+#### Tuổi sample
+
+```text
+sample_age = current_time - sample_timestamp
+```
+
+Ví dụ hiện tại là `10:05:30`, sample cuối ở `10:00:00`:
+
+```text
+sample_age = 330 giây
+330 > 300 -> STALE
+```
+
+Sample stale không được dùng như giá trị hiện tại, dù bản thân số đo có vẻ hợp lệ.
+
+#### Time bucket
+
+```text
+bucket_id = floor(timestamp / bucket_seconds)
+bucket_timestamp = bucket_id × bucket_seconds
+```
+
+Ví dụ bucket 30 giây:
+
+```text
+12:00:04 -> bucket 12:00:00
+12:00:19 -> bucket 12:00:00
+12:00:31 -> bucket 12:00:30
+```
+
+Correlation dùng ý tưởng tương tự với bucket 300 giây để gom CandidateEvent cùng khoảng thời gian.
+
+### 26.15 Hàm tổng hợp trong detector bucket
+
+Giả sử một bucket chứa `n` sample `x_1...x_n`:
+
+```text
+mean_bucket = Σx_i / n
+max_bucket = max(x_1...x_n)
+last_bucket = x_n theo timestamp
+```
+
+| Metric | Hàm | Lý do |
+| --- | --- | --- |
+| Error/latency | `max` | Giữ lại thời điểm xấu nhất |
+| CPU/memory/request/socket | `mean` | Giảm nhiễu scrape và phụ thuộc tần suất lấy mẫu |
+| Metric khác | `last` | Bảo toàn trạng thái cuối/counter |
+
+Ví dụ latency trong 30 giây là `[0.2, 0.3, 2.0, 0.4]`:
+
+```text
+max_bucket = 2.0 giây
+```
+
+Nếu lấy mean `0.725`, spike 2 giây sẽ bị làm mờ; vì vậy latency dùng max.
+
+### 26.16 DTW shape similarity và traffic score
+
+Growth gate cần so **hình dạng**, không so trực tiếp đơn vị. Trước DTW, mỗi chuỗi được Min-Max normalize độc lập:
+
+```text
+z_i = (x_i - min(x)) / (max(x) - min(x))
+```
+
+Min-Max ở đây chỉ dùng cho DTW shape comparison. Isolation Forest đã dùng Robust Scaling. DTW cần bỏ khác biệt “CPU là millicore, request là req/s”; IF cần giữ mức tail đi xa baseline robust bao nhiêu.
+
+DTW tìm đường ghép các điểm có tổng cost nhỏ nhất:
+
+```text
+DP(i,j) = |left_i-right_j| + min(
+    DP(i-1,j),
+    DP(i,j-1),
+    DP(i-1,j-1)
+)
+```
+
+Trong đó:
+
+    - Đi lên: một điểm bên phải ghép với nhiều điểm bên trái.
+    - Đi ngang: một điểm bên trái ghép với nhiều điểm bên phải.
+    - Đi chéo: hai điểm cùng tiến một bước.
+    - `max_warp_buckets = 5`: không cho đường ghép lệch quá xa.
+
+Cost được đổi thành similarity:
+
+```text
+normalized_cost = total_DTW_cost / max(len(left), len(right))
+similarity = 1 / (1 + cost_scale × normalized_cost)
+```
+
+Với `cost_scale = 2`:
+
+```text
+cost = 0   -> similarity = 1.00
+cost = 0.1 -> similarity = 1/(1+0.2) = 0.833
+cost = 0.5 -> similarity = 1/(1+1.0) = 0.500
+```
+
+CPU/socket còn phải có onset gần request rate. Nếu điểm bắt đầu tăng lệch quá 5 bucket, similarity bị trả về 0 dù hình dạng tổng thể giống nhau.
+
+Traffic score tổng hợp:
+
+```text
+traffic_score = Σ(shape_score_group × weight_group) / Σ(active_weight)
+```
+
+Ví dụ CPU shape 0.8, socket shape 0.6:
+
+```text
+traffic_score = (0.8×0.45 + 0.6×0.35) / (0.45+0.35)
+              = 0.7125
+primary_score = max(0.8, 0.6) = 0.8
+```
+
+`0.7125 >= 0.65` và `0.8 >= 0.55`, nên biến động resource có thể được request rate giải thích.
+
+### 26.17 Evidence multiplier và bonus
+
+Evidence adjustment chỉ chạy khi RCA sơ bộ yếu hoặc có nhiều root cạnh tranh:
+
+```text
+không có hard failure = anomaly_score × no_evidence_multiplier
+một nguồn failure     = min(1, anomaly_score + single_evidence_bonus)
+hai nguồn failure     = min(1, anomaly_score + dual_evidence_bonus)
+```
+
+Config hiện tại là `0.5`, `0.15`, `0.30`.
+
+Ví dụ anomaly score 0.8:
+
+```text
+log/trace đều không failure -> 0.8 × 0.5 = 0.4
+chỉ log failure             -> min(1, 0.8+0.15) = 0.95
+log và trace failure        -> min(1, 0.8+0.30) = 1.0
+```
+
+`min(1, ...)` giữ evidence strength trong miền 0..1. Error/OOM hard failure không bị giảm chỉ vì nguồn external evidence chưa có dữ liệu.
+
+### 26.18 Personalized PageRank
+
+PageRank phân phối “độ nghi ngờ” qua topology. Dạng khái niệm:
+
+```text
+PR(v) = (1-d) × personalization(v)
+        + d × Σ(PR(u) / out_degree(u)) với mọi u trỏ tới v
+```
+
+| Biến | Ý nghĩa |
+| --- | --- |
+| `PR(v)` | Điểm PageRank của service v |
+| `d` | Damping, hiện là 0.85 |
+| `personalization(v)` | Anomaly seed của v chia tổng seed |
+| `u trỏ tới v` | Service u khai báo v là dependency |
+| `out_degree(u)` | Số dependency mà u gọi |
+
+Ví dụ checkout gọi payment và shipping, anomaly seed tập trung ở checkout/payment. Personalized PageRank không bắt đầu từ mọi node như nhau mà ưu tiên node đã có evidence, sau đó lan điểm theo cạnh dependency.
+
+Engine lặp tới khi thay đổi nhỏ hơn `1e-8` hoặc tối đa 100 vòng. PageRank sau đó chỉ đóng góp 70% vào graph raw; timestamp đóng góp 30% để node trung tâm nhưng đỏ muộn không tự động thắng.
+
+### 26.19 Earliest drift chi tiết
+
+```text
+earliest_score(service) = 1 - first_drift_index(service) / latest_drift_index
+```
+
+| Biến | Ý nghĩa |
+| --- | --- |
+| `first_drift_index` | Bucket đầu tiên của service có robust score >= 4 và tail significant |
+| `latest_drift_index` | Index muộn nhất trong các service có drift |
+| `earliest_score` | Điểm ưu tiên thời gian; index nhỏ nhận điểm lớn |
+
+Ví dụ:
+
+```text
+payment first drift index = 10
+checkout first drift index = 20
+latest drift index = 20
+
+payment score = 1 - 10/20 = 0.5
+checkout score = 1 - 20/20 = 0.0
+```
+
+Điểm này là **điểm tương đối giữa các service**, không phải độ mạnh anomaly. Khi chỉ có một drift index, công thức hiện tại có thể cho service đó điểm 0; graph, shape, coverage và evidence vẫn tham gia RCA.
+
+### 26.20 Spearman shape correlation
+
+Spearman đổi giá trị thành thứ hạng rồi tính tương quan. Khi không có tie, có thể hình dung:
+
+```text
+rho = 1 - 6×Σd_i² / (n×(n²-1))
+```
+
+| Biến | Ý nghĩa |
+| --- | --- |
+| `d_i` | Chênh lệch rank của cặp điểm thứ i |
+| `n` | Số cặp timestamp đã căn chỉnh |
+| `rho` | Từ -1 đến 1 |
+
+Engine dùng `abs(rho)`:
+
+    - Gần 1: hai chuỗi có thứ tự biến động rất giống hoặc đảo ngược rất đều.
+    - Gần 0: không có quan hệ đơn điệu rõ.
+
+Ví dụ:
+
+```text
+latency = [1, 2, 3, 4]
+cpu     = [10, 20, 30, 40]
+rank hai chuỗi đều [1,2,3,4] -> rho = 1
+```
+
+Engine thử lag 0..5 bucket và lấy giá trị lớn nhất. Vì dùng trị tuyệt đối, correlation âm mạnh cũng có score cao; điều này chỉ nói shape liên quan, chưa chứng minh cùng chiều hay quan hệ nhân quả.
+
+### 26.21 Downstream coverage
+
+```text
+coverage_raw(root) = Σ anomaly_strength(service)
+```
+
+Chỉ cộng service thỏa cả ba điều kiện:
+
+    - Khác root.
+    - Có dependency path từ service đó tới root trong tối đa 2 hop.
+    - Root xuất hiện trước service đó.
+
+Sau đó:
+
+```text
+coverage_score(root) = coverage_raw(root) / max_coverage_raw
+```
+
+Ví dụ payment đỏ trước, checkout anomaly strength 0.8 và frontend 0.6 đều phụ thuộc payment:
+
+```text
+coverage_raw(payment) = 0.8 + 0.6 = 1.4
+```
+
+Nếu đây là coverage lớn nhất thì `coverage_score(payment) = 1.0`. Service có coverage bằng 0 không nhận điểm từ ranker này.
+
+### 26.22 Chuẩn hóa score về 0..1
+
+Nhiều RCA component dùng cùng công thức:
+
+```text
+normalized_score(service) = raw_score(service) / max(raw_scores)
+```
+
+Ví dụ graph raw:
+
+```text
+payment = 4
+cart = 2
+checkout = 1
+
+normalized = [1.0, 0.5, 0.25]
+```
+
+Chuẩn hóa giữ nguyên thứ hạng nhưng đưa các component về cùng thang. Nếu maximum bằng 0, engine trả tập score rỗng để tránh chia cho 0.
+
+### 26.23 Fingerprint hash
+
+Fingerprint không phải score mà là khóa định danh:
+
+```text
+stable_text = environment | detector_id | flow | scope | likely_dependency
+fingerprint = "sha256:" + SHA256(stable_text)
+```
+
+RCA thêm signal ID vào `stable_text`.
+
+Ví dụ cùng checkout/payment nhưng value hoặc timestamp đổi vẫn tạo cùng stable text, nên cập nhật incident cũ. Nếu detector hoặc root metric đổi, fingerprint đổi và có thể tạo incident khác.
+
 ---
 
 ## 27. File nguồn
@@ -1655,7 +1951,366 @@ Backoff tránh webhook lỗi làm pipeline gửi request liên tục, nhưng v�
 | Webhook | `aio/aiops/integrations/notification.py` |
 | Config | `aio/config/hyperparameters.json` |
 
-## 28. Kết luận
+## 28. Deep-dive: baseline, feature, grouping và ordering
+
+### 28.1 Baseline được tạo như thế nào?
+
+Engine hiện không lưu một baseline model lâu dài. Mỗi lần chạy, baseline được dựng lại từ range series Prometheus của lần đó.
+
+Với detection window:
+
+```text
+cutoff = last_timestamp - detection_window_seconds + series_step_seconds
+first_tail_index = index đầu tiên có timestamp >= cutoff
+baseline = values trước first_tail_index
+tail = values từ first_tail_index tới điểm cuối
+```
+
+`start` còn buộc tail không bắt đầu trước số điểm baseline tối thiểu. Ví dụ:
+
+```text
+lookback series = 90 phút
+detection window = 30 phút
+step = 30 giây
+
+baseline xấp xỉ 60 phút đầu
+tail xấp xỉ 30 phút cuối
+```
+
+Nếu không đủ ít nhất bốn baseline point, basic-tail không kết luận significant. Robust Drift và RCA drift còn yêu cầu số baseline point cao hơn theo config, hiện thường là 30.
+
+```mermaid
+flowchart LR
+    S["Range series"] --> C["Tính cutoff theo điểm cuối"]
+    C --> B["Points trước cutoff = baseline"]
+    C --> T["Points từ cutoff = tail"]
+    B --> M{"Đủ baseline points?"}
+    M -- "Không" --> X["Không chấm detector"]
+    M -- "Có" --> D["Fit/score detector"]
+    T --> D
+```
+
+### 28.2 Mỗi detector sử dụng baseline khác nhau ra sao?
+
+| Detector/gate | Baseline | Tail | Baseline có cập nhật trong cùng lần chạy? |
+| --- | --- | --- | --- |
+| Basic-tail | Median của phần trước cutoff | Detection window | Không |
+| CUSUM/Page-Hinkley | Cùng fixed baseline median | Detection window | Không; cumulative chỉ chạy trên tail |
+| EWMA/STL | Mean/stdev của residual trước cutoff | Residual trong tail | Đường EWMA chạy tuần tự trên toàn chuỗi nên tail trước ảnh hưởng kỳ vọng của tail sau |
+| Robust Drift | Rolling window trước mỗi tail point | Từng tail point | Có; cửa sổ trượt có thể chứa các tail point trước đó |
+| Isolation Forest | Các multivariate row trước tail | Các row trong tail | Không; fit model đúng một lần trên baseline rows |
+| Slow-drift | Không có baseline tách riêng | Toàn cửa sổ slow-drift | Không áp dụng; dùng slope và consistency |
+| RCA earliest/drift | Fixed baseline trước detection tail | Detection tail | Không |
+
+Điểm cần hiểu: “baseline” không phải một khái niệm duy nhất trong engine. Basic-tail và IF dùng split cố định; Robust Drift dùng rolling baseline; Slow-drift không cần baseline level.
+
+### 28.3 Các lớp đang bảo vệ baseline khỏi nhiễm bẩn
+
+#### 1. Chỉ nhận series verified
+
+Missing, stale, invalid và chuỗi có gap không được đưa vào anomaly model. Điều này ngăn số 0 giả hoặc sample cũ trở thành “bình thường”.
+
+#### 2. Tách baseline khỏi current tail
+
+Các detector chính không fit trực tiếp trên detection tail đang được đánh giá. Isolation Forest đặc biệt fit `baseline_rows` rồi mới score `tail_rows`.
+
+#### 3. Dùng thống kê robust
+
+Median, MAD và IQR giảm ảnh hưởng của vài spike cũ:
+
+```text
+center = median(baseline)
+spread = max(MAD×1.4826, IQR/1.349, min_spread)
+```
+
+Một hoặc hai outlier khó kéo center mạnh như mean/stddev.
+
+#### 4. Yêu cầu nhiều bucket và current tail
+
+Engine không chỉ tìm một điểm từng bất thường. Nó yêu cầu số bucket, absolute/relative change và kiểm tra điểm cuối chưa quay về baseline trước khi notify RCA.
+
+#### 5. Growth gate
+
+Thay đổi resource có shape giống request rate được đánh dấu explained, giảm khả năng workload hợp lệ trở thành root cause và sau đó bị hiểu nhầm thành baseline sự cố.
+
+#### 6. Không online-fit model vào persistent state
+
+Isolation Forest được fit lại cho từng lần chạy và không lưu model đã học từ incident trước. Vì vậy một lần anomaly không vĩnh viễn sửa model production.
+
+### 28.4 Những trường hợp baseline vẫn có thể bị nhiễm bẩn
+
+Đây là giới hạn thực tế của code hiện tại:
+
+#### Sự cố kéo dài trượt vào baseline
+
+Range query dùng cửa sổ trượt. Nếu sự cố kéo dài, ở lần chạy sau các điểm sự cố cũ có thể nằm trước cutoff và trở thành baseline mới.
+
+```text
+Run 1: [healthy baseline][incident tail]
+Run N: [incident đã kéo dài -> baseline][incident tail]
+```
+
+Hậu quả: detector giảm score hoặc xuất hiện khoảng câm dù incident chưa hết.
+
+#### Robust Drift hấp thụ tail trước
+
+Rolling baseline trước bucket hiện tại có thể chứa các tail bucket bất thường trước đó. Cách này giúp detector thích nghi, nhưng cũng có thể làm drift dài bị giảm điểm. Slow-drift và incident lifecycle đang bù một phần, không loại bỏ hoàn toàn rủi ro.
+
+#### EWMA thích nghi với level mới
+
+EWMA chạy tuần tự. Khi level mới tồn tại lâu, smoothed value tiến gần raw value, residual giảm. EWMA phù hợp change cục bộ hơn sự cố kéo dài.
+
+#### Không có quarantine theo incident/deploy
+
+Engine chưa đánh dấu khoảng thời gian incident, deploy, load test hoặc maintenance để loại khỏi baseline của lần chạy sau.
+
+#### Không có baseline theo mùa dài hạn
+
+Config hiện tại `seasonal_period = 1`; engine chưa học riêng baseline theo giờ trong ngày/ngày trong tuần. Workload có mùa dài có thể bị xem là drift hoặc bị hấp thụ tùy cửa sổ.
+
+#### Prometheus query trả nhiều series
+
+Collector kiểm tra cardinality nhưng khi kết quả không vượt `max_series`, nó đọc `result[0]`; nó không tự cộng nhiều pod/instance series. Vì vậy PromQL phải aggregate đúng ở nguồn (`sum`, `max`, `avg` theo service). Nếu không, baseline có thể đại diện cho pod đầu tiên thay vì toàn service.
+
+### 28.5 Cách làm baseline sạch hơn nếu cần hardening
+
+Các bước nên ưu tiên theo thứ tự, chưa cần triển khai tất cả ngay:
+
+1. **Freeze baseline khi incident active:** tiếp tục score tail nhưng không cho sample thuộc incident đi vào baseline mới.
+2. **Recovery buffer:** chỉ nhận sample vào baseline sau N bucket healthy liên tiếp.
+3. **Exclude deploy/maintenance/load-test windows:** lấy marker từ Kubernetes/GitOps/Flagd.
+4. **Baseline bank theo service + metric + time-of-day:** chỉ cần khi có ít nhất một tuần telemetry ổn định.
+5. **Theo dõi baseline health:** log baseline point count, median, spread, incident overlap ratio và age.
+
+Phương án tối thiểu phù hợp engine hiện tại là freeze theo active incident và recovery buffer. Baseline bank theo mùa chỉ cần khi dữ liệu production chứng minh có seasonality rõ.
+
+---
+
+### 28.6 Feature được xử lý và kết hợp như thế nào?
+
+#### Cấp 1: sample thành bucket feature
+
+```text
+Prometheus samples
+-> quality filter
+-> timestamp bucket
+-> max/mean/last theo metric family
+-> một MetricSeries chuẩn cho service + metric + signal
+```
+
+Engine không impute series missing. Series không verified bị bỏ, thay vì điền 0 hoặc forward-fill và vô tình tạo shape giả.
+
+#### Cấp 2: feature riêng từng detector
+
+| Detector | Feature đầu vào | Số chiều |
+| --- | --- | ---: |
+| Basic-tail/CUSUM/Page-Hinkley | Raw bucket value so với baseline | 1 metric |
+| Robust Drift | Robust score của raw bucket | 1 metric |
+| EWMA/STL | Residual sau smoothing/seasonal | 1 metric |
+| Slow-drift | Projected change + positive ratio | 2 feature tổng hợp |
+| Isolation Forest | Vector các metric cùng service và timestamp | N metric |
+| Log anomaly | Template count theo bucket | 1 template series hoặc nhiều template trong IF |
+
+#### Cấp 3: kết hợp nhiều metric cho Isolation Forest
+
+Ví dụ service cart có CPU, memory và socket:
+
+```text
+X_t = [cpu_scaled_t, memory_scaled_t, socket_scaled_t]
+```
+
+Chỉ timestamp tồn tại trong **tất cả** eligible metric mới được giữ:
+
+```text
+common_timestamps = intersection(
+    timestamps(cpu),
+    timestamps(memory),
+    timestamps(socket)
+)
+```
+
+Ưu điểm: mỗi row luôn đủ cột, không cần imputation.
+
+Đổi lại, một metric thiếu nhiều timestamp có thể làm giảm mạnh số row chung; nếu còn dưới `min_points`, IF không chạy cho service đó. No-data detector phải chịu trách nhiệm báo vấn đề dữ liệu.
+
+#### Cấp 4: kết hợp detector cho cùng metric
+
+Raw finding chỉ cộng với nhau khi cùng:
+
+```text
+(service, metric, signal_id)
+```
+
+Do đó Robust CPU của cart không cộng trực tiếp với EWMA memory của cart. Mỗi metric phải tự qua weighted anomaly gate; RCA mới gom nhiều metric lên cấp service.
+
+#### Cấp 5: metric đại diện của Isolation Forest
+
+IF phát hiện row đa biến cấp service, nhưng schema AnomalyFinding cần một metric. Engine chọn cột có:
+
+```text
+max |tail_scaled_value - baseline_scaled_mean|
+```
+
+Metric đó là “cột đóng góp nổi bật nhất”, không có nghĩa các cột còn lại không tham gia IF.
+
+```mermaid
+flowchart TD
+    P["Prometheus samples"] --> B["Bucket features"]
+    B --> U["Univariate features: raw, residual, robust score, trend"]
+    B --> M["Multivariate rows theo service cho IF"]
+    U --> AF["Raw finding theo service+metric+signal"]
+    M --> IF["IF service anomaly + metric đại diện"]
+    IF --> AF
+    AF --> W["Weighted anomaly theo cùng metric"]
+    W --> RCA["RCA gom findings lên cấp service"]
+```
+
+---
+
+### 28.7 Metrics được phân loại và group như thế nào?
+
+#### Metric family
+
+`metric_group()` phân loại bằng marker trong tên metric, theo thứ tự:
+
+```text
+error_rate/error_ratio -> error
+latency                 -> latency
+cpu                     -> cpu
+memory                  -> memory
+disk                    -> disk
+socket_io               -> socket_io
+request_rate            -> request_rate
+còn lại                 -> default
+```
+
+Tên metric quyết định absolute threshold, relative threshold, bucket count và slow-drift config. Metric đặt tên sai có thể rơi vào `default` và dùng ngưỡng không phù hợp.
+
+#### Root-cause metric và context metric
+
+Context metric gồm request rate, latency, burn rate, error và log template. Chúng giải thích impact/shape nhưng không được chọn làm resource root metric.
+
+```text
+Context: checkout latency tăng
+Root metric: payment CPU hoặc OOM tăng
+```
+
+#### Group trong Growth Gate
+
+Series được group theo `service`, sau đó tìm request rate, CPU và socket I/O trong cùng service. Explained/breakout metrics cũng được lưu theo service.
+
+#### Group trong Anomaly weighted sum
+
+```text
+key = (service, metric, signal_id)
+```
+
+Các detector chỉ đồng thuận nếu nói về đúng cùng một series.
+
+#### Group log template
+
+```text
+key = (service, normalized_log_template)
+```
+
+Mỗi service chỉ giữ các template có tổng count cao nhất tới giới hạn config, rồi tạo một MetricSeries cho từng template.
+
+#### Group CandidateEvent trong correlation
+
+```text
+key = (environment, flow, service, timestamp // 300)
+```
+
+Dependency khác nhau có thể cạnh tranh trong cùng nhóm; correlator chọn dependency có confidence cao nhất.
+
+#### Group RCA theo service
+
+RCA canonicalize tên service theo suffix config, hiện suffix list rỗng nên giữ nguyên tên runtime. Với mỗi service:
+
+    - Graph seed lấy anomaly score lớn nhất.
+    - Evidence strength lấy finding score lớn nhất và cap 1.
+    - Earliest drift lấy index sớm nhất trong các metric.
+    - Shape lấy correlation lớn nhất trong các metric.
+    - Root metrics giữ danh sách metric evidence của service.
+
+#### Group Incident
+
+Incident không group theo mỗi service đơn thuần mà theo fingerprint gồm environment, detector, flow, service/dependency scope và likely dependency; RCA thêm signal ID.
+
+---
+
+### 28.8 Service và metric được sắp xếp như thế nào?
+
+#### Xếp hạng trong từng RCA ranker
+
+Mỗi ranker sort service theo component score giảm dần. Weighted RRF sau đó dùng `rank_position`, không dùng trực tiếp độ chênh score.
+
+#### Xếp root candidate trước khi tính score cuối
+
+Service được duyệt theo:
+
+```text
+weighted_rrf × evidence_strength
+```
+
+Sau đó RCA score đầy đủ mới là:
+
+```text
+weighted_rrf × evidence_strength × support
+```
+
+#### Xếp root metric trong một service
+
+Metric sort giảm dần theo tuple:
+
+```text
+(is_breakout_metric, metric_priority, metric_score)
+```
+
+Trong đó:
+
+    - Breakout metric đứng trước.
+    - Error priority 2, resource/OOM priority 1, metric khác priority 0.
+    - Cùng loại thì score cao đứng trước.
+
+Context/error metric thường đã bị loại khỏi root-cause metric trước bước này; priority vẫn bảo vệ các trường hợp breakout/alias đặc biệt.
+
+#### Top-K
+
+Engine dừng sau tối đa `top_k = 5` root candidates trước downstream suppression. Notification gate và suppression có thể làm số root cuối ít hơn 5.
+
+#### Severity
+
+Khi nhiều event cùng incident, engine giữ severity mạnh nhất. Với naming hiện tại, `SEV1` mạnh hơn `SEV2`, nên phép chọn giá trị nhỏ nhất cho kết quả đúng.
+
+---
+
+### 28.9 Bộ câu hỏi kiểm tra hiểu sâu engine
+
+| Câu hỏi | Câu trả lời phải chạm tới |
+| --- | --- |
+| Baseline lấy từ đâu? | Range series hiện tại, phần trước detection cutoff; không phải model persistent |
+| Vì sao baseline ít bị spike bẩn? | Verified-only, fixed split, median/MAD/IQR, min points |
+| Sự cố dài có thể biến thành baseline không? | Có; sliding lookback chưa có incident quarantine/freeze |
+| Detector nào dễ thích nghi với level lỗi mới? | Rolling Robust Drift và EWMA; IF fit baseline cố định trong từng run |
+| IF kết hợp metric thế nào? | Group theo service, giao timestamp, robust-scale từng cột, một row mỗi timestamp |
+| Missing metric trong IF xử lý sao? | Không impute; timestamp không chung bị bỏ, thiếu row thì IF skip |
+| Anomaly score có cộng CPU và memory không? | Không; weighted sum chỉ cùng service+metric+signal |
+| Khi nào metrics được gom lên service? | Isolation Forest và RCA; weighted anomaly còn ở cấp metric |
+| likely_dependency khác root cause thế nào? | Dependency nghi phạm cục bộ từ candidate correlation, chưa phải RCA đa tín hiệu |
+| Graph score có phải RCA score không? | Không; graph là một ranker, RCA còn RRF, evidence và support |
+| Vì sao RRF dùng rank? | Giảm việc một score thô hoặc thang đo chi phối |
+| Traffic tăng có bị bỏ anomaly ngay không? | Không hoàn toàn; hiện đánh dấu explained rồi lọc root metric sau RCA |
+| Vì sao memory không dùng CUSUM? | Current gate chỉ bật CUSUM/Page-Hinkley cho CPU, latency, socket I/O |
+| Vì sao IF score không phải xác suất? | Là `-score_samples × scale`, chỉ dùng so threshold |
+| Query nhiều pod được combine ở đâu? | Phải aggregate trong PromQL; collector hiện đọc result đầu nếu cardinality hợp lệ |
+| Khi nào notification không gửi dù có RCA? | Score/tail/context gate, fingerprint cooldown, service cooldown, active-root suppression hoặc outbox state |
+
+Toàn bộ công thức và ví dụ số tương ứng nằm ở Mục 26.1-26.23.
+
+---
+
+## 29. Kết luận
 
 ```text
 Dữ liệu hợp lệ
@@ -1673,7 +2328,7 @@ Dữ liệu hợp lệ
 
 ---
 
-## 29. Mermaid tổng hợp toàn bộ engine
+## 30. Mermaid tổng hợp toàn bộ engine
 
 Sơ đồ dưới đây ghép các Mermaid nhỏ thành một luồng duy nhất. Đọc từ trên xuống; nhánh trái là detector instant, nhánh phải là anomaly/RCA.
 
