@@ -43,7 +43,7 @@ def _prompt_injection_scanner():
     except Exception as e:
         if _model_is_required():
             raise e
-        logger.warning(f"Failed to load LLM Guard PromptInjection scanner: {e}")
+        logger.warning("Failed to load LLM Guard PromptInjection scanner: %s", type(e).__name__)
         _scanner_cache = None
 
     _scanner_initialized = True
@@ -63,7 +63,7 @@ def initialize_guardrails() -> None:
     try:
         _get_presidio_engines()
     except Exception as e:
-        logger.warning(f"Presidio model unavailable at startup: {e}")
+        logger.warning("Presidio model unavailable at startup: %s", type(e).__name__)
 
 # Common PII Regex Fallback patterns
 EMAIL_REGEX = re.compile(r"[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+")
@@ -134,7 +134,7 @@ def redact_pii(text: str) -> str:
         )
         sanitized = anonymized.text
     except Exception as e:
-        logger.warning(f"Presidio PII anonymization failed or not installed. Error: {e}")
+        logger.warning("Presidio PII anonymization failed or not installed: %s", type(e).__name__)
 
     # 2. Defense-in-depth: always run Regex fallback on top to catch missed or unclassified PII
     sanitized = EMAIL_REGEX.sub("[REDACTED]", sanitized)
@@ -178,7 +178,7 @@ def check_prompt_injection(text: str) -> bool:
     except Exception as e:
         if _model_is_required():
             raise RuntimeError("Required prompt-injection model is unavailable") from e
-        logger.warning(f"LLM Guard prompt injection model scan failed. Error: {e}")
+        logger.warning("LLM Guard prompt injection model scan failed: %s", type(e).__name__)
 
     return True
 
@@ -214,7 +214,7 @@ def sanitize_reviews(product_id: str, reviews) -> SafeReviewSet:
         try:
             reviews_list = json.loads(reviews)
         except Exception as e:
-            logger.error(f"Failed to parse reviews string as JSON: {e}")
+            logger.error("Failed to parse reviews string as JSON: %s", type(e).__name__)
             return SafeReviewSet(product_id=product_id, reviews=[], reason="NO_ELIGIBLE_REVIEWS")
     elif isinstance(reviews, list):
         reviews_list = reviews
@@ -330,7 +330,7 @@ def scan_output(text: str) -> GuardrailResult:
                 reason="Response blocked: Personally identifiable information (PII) detected in output."
             )
     except Exception as e:
-        logger.warning(f"Presidio PII check on output failed. Using Regex fallback. Error: {e}")
+        logger.warning("Presidio PII check on output failed; using regex fallback: %s", type(e).__name__)
         if EMAIL_REGEX.search(text) or PHONE_REGEX.search(text) or CARD_REGEX.search(text):
             return GuardrailResult(
                 action=GuardrailAction.BLOCK,

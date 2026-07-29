@@ -293,6 +293,7 @@ services:
       - OTEL_COLLECTOR_HOST
       - FLAGD_HOST
       - FLAGD_PORT
+      - JAEGER_QUERY_URL=http://jaeger:${JAEGER_UI_PORT}/jaeger/ui
     depends_on:
       ad:
         condition: service_started
@@ -315,6 +316,8 @@ services:
       image-provider:
         condition: service_started
       flagd:
+        condition: service_started
+      jaeger:
         condition: service_started
     logging: *logging
 
@@ -631,7 +634,10 @@ services:
       - OTEL_METRIC_EXPORT_INTERVAL=1000
       - OTEL_RESOURCE_ATTRIBUTES
       - OTEL_SERVICE_NAME=product-reviews
-      - OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT=true
+      - OTEL_PYTHON_DISABLED_INSTRUMENTATIONS=botocore
+      - OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT=${OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT:-false}
+      - AI_TELEMETRY_HMAC_SECRET
+      - AI_MODEL_PRICING_JSON
       - PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION=python
       - HF_HOME=/home/appuser/.cache/huggingface
       - AI_GUARDRAIL_REQUIRE_MODEL=${AI_GUARDRAIL_REQUIRE_MODEL:-false}
@@ -698,7 +704,10 @@ services:
       - OTEL_METRIC_EXPORT_INTERVAL=1000
       - OTEL_RESOURCE_ATTRIBUTES
       - OTEL_SERVICE_NAME=shopping-copilot
-      - OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT=true
+      - OTEL_PYTHON_DISABLED_INSTRUMENTATIONS=botocore
+      - OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT=${OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT:-false}
+      - AI_TELEMETRY_HMAC_SECRET
+      - AI_MODEL_PRICING_JSON
       - PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION=python
       - HF_HOME=/home/appuser/.cache/huggingface
       - AI_GUARDRAIL_REQUIRE_MODEL=${AI_GUARDRAIL_REQUIRE_MODEL:-false}

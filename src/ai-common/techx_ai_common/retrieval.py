@@ -7,6 +7,7 @@ import re
 from statistics import fmean, pstdev
 
 from nltk.stem import SnowballStemmer
+from opentelemetry import trace
 from rank_bm25 import BM25Okapi
 from .contracts import SafeReviewSet
 
@@ -68,7 +69,7 @@ def _estimate_adaptive_k(scores: list[float], max_k: int) -> int:
     return min(upper_bound, max(_MIN_DYNAMIC_K, gaps.index(largest_gap) + 1))
 
 
-def retrieve_relevant_reviews(safe_reviews: SafeReviewSet, question: str, top_k: int = 5) -> SafeReviewSet:
+def _retrieve_relevant_reviews(safe_reviews: SafeReviewSet, question: str, top_k: int = 5) -> SafeReviewSet:
     """Retrieves top_k relevant reviews for a given question using a hybrid search of
     BERT (dense semantic) and BM25 (sparse lexical) combined using Reciprocal Rank Fusion (RRF).
     """
@@ -154,3 +155,18 @@ def retrieve_relevant_reviews(safe_reviews: SafeReviewSet, question: str, top_k:
         reviews=top_k_reviews,
         reason=safe_reviews.reason
     )
+
+
+def retrieve_relevant_reviews(
+    safe_reviews: SafeReviewSet,
+    question: str,
+    top_k: int = 5,
+) -> SafeReviewSet:
+    with trace.get_tracer("techx-ai-common").start_as_current_span(
+        "retrieval reviews",
+        attributes={"app.ai.retrieval.source": "product_reviews"},
+    ) as span:
+        result = _retrieve_relevant_reviews(safe_reviews, question, top_k)
+        span.set_attribute("app.ai.retrieval.result_count", len(result.reviews))
+        span.set_attribute("app.ai.outcome", "ok")
+        return result
