@@ -155,6 +155,8 @@ def _build_service() -> LiveExecutorService:
         deployment_gateway=gateway,
         allow_live_apply=allow_live_apply,
         cooldown_seconds=int(os.getenv("AIOPS_LIVE_EXECUTOR_COOLDOWN_SECONDS", "900")),
+        action_budget_window_seconds=int(os.getenv("AIOPS_LIVE_EXECUTOR_ACTION_BUDGET_WINDOW_SECONDS", "3600")),
+        action_budget_max_executions=int(os.getenv("AIOPS_LIVE_EXECUTOR_ACTION_BUDGET_MAX_EXECUTIONS", "10")),
         policy_id=os.getenv("AIOPS_LIVE_EXECUTOR_POLICY_ID", "phase3-scale-policy-v1"),
         policy_expires_at=os.getenv("AIOPS_LIVE_EXECUTOR_POLICY_EXPIRES_AT", "2026-08-31T23:59:59Z"),
         approval_id=os.getenv("AIOPS_LIVE_EXECUTOR_APPROVAL_ID", ""),
@@ -241,4 +243,3 @@ def create_app(service: LiveExecutorService | None = None, token: str | None = N
         return service.legacy_submit(request)
 
     return app
-
