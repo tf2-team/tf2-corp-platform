@@ -18,7 +18,7 @@ from aiops.rca.graph import GraphTraversalRca
 from aiops.rca import V001RcaEngine
 from aiops.schemas import AnomalyFinding, MetricPoint, MetricSeries, PipelineResult, PipelineRunRequest, RcaResult, RootCauseCandidate, RuntimeConfig, TelemetryCorroboration
 from aiops.shared.series import prepare_detector_series
-from aiops.shared.tail import aligned_spearman, cusum_tail_change, evaluate_tail_change, fixed_baseline_and_tail, median3, metric_group, normal_traffic_growth_decision, page_hinkley_tail_change, point_changed, slow_drift_tail_change, tail_aligned_dtw_similarity
+from aiops.shared.tail import aligned_spearman, cusum_tail_change, evaluate_tail_change, fixed_baseline_and_tail, median3, metric_group, normal_traffic_growth_decision, page_hinkley_tail_change, point_changed, significant_tail_change, slow_drift_tail_change, tail_aligned_dtw_similarity
 from scipy.stats import ConstantInputWarning
 
 
@@ -193,6 +193,20 @@ class V001AnomalyRcaTest(unittest.TestCase):
 
         self.assertFalse(evaluate_tail_change(series, 900, 29, 3, 0.3, 10.0).significant)
         self.assertTrue(cusum_tail_change(series, 900, 29, 3, 0.3, 10.0).significant)
+
+    def test_memory_small_level_shift_does_not_become_significant_via_cusum(self):
+        mib = 1024 * 1024
+        series = minute_metric("cart", "memory_usage_bytes", [133 * mib] * 30 + [135 * mib] * 30)
+
+        self.assertFalse(significant_tail_change(
+            series,
+            1800,
+            29,
+            {"memory": 6},
+            {"memory": 0.05},
+            {"memory": 10 * mib},
+            {"enabled": True, "window_seconds": 3600, "min_points": 12, "positive_bucket_ratio": 0.65, "metrics": {"memory": {"direction": "up", "min_total_change": 5 * mib}}},
+        ))
 
     def test_page_hinkley_tail_change_detects_creeping_latency_drift(self):
         series = minute_metric("payment", "p95_latency_5m", [1.0] * 30 + [1.04 + index * 0.01 for index in range(15)])

@@ -179,7 +179,7 @@ def significant_tail_change(
     )
     if change.significant or slow_drift_tail_change(metric, detection_window_seconds, start, slow_drift).significant:
         return True
-    if group not in (cusum_groups or {"cpu", "memory", "latency", "socket_io"}):
+    if group not in (cusum_groups or {"cpu", "latency", "socket_io"}):
         return False
     return (
         cusum_tail_change(
