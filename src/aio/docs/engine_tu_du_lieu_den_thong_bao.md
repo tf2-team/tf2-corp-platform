@@ -28,6 +28,77 @@ flowchart LR
     O --> N["Discord / Webhook"]
 ```
 
+### 1.1 Bản đồ thuật ngữ
+
+Các object dưới đây là những “phiếu thông tin” được truyền qua từng bước. Chúng không có cùng ý nghĩa và không nên gọi chung là alert.
+
+| Thuật ngữ | Nghĩa dễ hiểu | Được tạo ở đâu | Dùng để làm gì |
+| --- | --- | --- | --- |
+| **Signal** | Một phép đo có tên ổn định, ví dụ `checkout_error_rate_5m` | Query registry | Nối PromQL với service, metric, unit và window |
+| **Observation** | Một ảnh chụp giá trị hiện tại của signal | Instant collector | Đầu vào cho qualification và detector threshold/no-data |
+| **MetricSeries** | Lịch sử nhiều điểm của một metric | Range collector | Đầu vào cho anomaly, drift, shape và RCA |
+| **Feature** | Observation đã được gắn trạng thái và vai trò | Feature Builder | Cho detector biết dữ liệu có sẵn sàng và được phép dùng không |
+| **Detector** | Một luật hoặc thuật toán kiểm tra dữ liệu | Detector engine | Quyết định một dấu hiệu có đáng chú ý hay không |
+| **CandidateEvent** | Một sự kiện nghi ngờ, chưa phải incident cuối | Threshold/dependency/no-data detector hoặc RCA gate | Mang detector, service, severity, signal, reason, confidence, evidence và runbook sang correlation/incident store |
+| **Correlation** | Ghép các CandidateEvent có liên quan trong cùng service/flow/window | Correlator | Giảm nhiều tín hiệu rời thành một câu chuyện chung và đánh giá dependency nghi phạm |
+| **Correlated CandidateEvent** | CandidateEvent sau khi correlation bổ sung dependency, confidence và contributing signals | Correlator | Là đầu vào cho enrichment và Incident Store; đây không phải một class riêng |
+| **likely_dependency** | Dependency bị nghi đang gây ảnh hưởng cho service của candidate | Dependency detector + Correlator | Chọn nơi enrich, đặt tiêu đề/runbook, xác định fingerprint scope và hỗ trợ suppression |
+| **AnomalyFinding** | Kết quả anomaly của một `service + metric + signal_id` | Anomaly engine | Là bằng chứng đầu vào cho RCA; chưa phải incident và chưa chắc được notify |
+| **Impact finding** | Tín hiệu cho biết nơi đang chịu ảnh hưởng, thường chuyển từ SLO incident | Pipeline analysis | Cho RCA biết “hệ quả cần được giải thích” |
+| **RootCauseCandidate** | Một service được RCA xếp hạng là nguyên nhân gốc | RCA engine | Mang RCA score, root metrics và evidence sang notification gate |
+| **Evidence/Corroboration** | Bằng chứng hỗ trợ từ metric, log, trace hoặc Kubernetes | Enricher/RCA | Tăng, giảm hoặc giải thích độ tin cậy; không tự động đồng nghĩa với root cause |
+| **Incident** | Bản ghi bền vững đại diện cho một vấn đề qua nhiều lần chạy | Incident Store | Theo dõi `open/ongoing/recovered`, occurrence và dedup |
+| **Fingerprint** | Khóa ổn định nhận diện “đây có phải cùng vấn đề cũ không” | Incident Store | Tìm incident cũ mà không phụ thuộc timestamp, value hoặc trace ID |
+| **NotificationMessage** | Nội dung đã sẵn sàng gửi ra ngoài | Notification Builder | Contract chung cho Discord hoặc generic webhook |
+| **Outbox** | Hàng đợi notification lưu trong SQLite | Incident Store | Không mất thông báo khi gửi lỗi; hỗ trợ retry và suppression |
+
+### 1.2 Những khái niệm dễ nhầm
+
+#### CandidateEvent không phải Incident
+
+`CandidateEvent` chỉ nói rằng **một detector vừa thấy dấu hiệu đáng chú ý**. Nhiều CandidateEvent có thể được correlation gom lại và nhiều lần chạy có thể cập nhật cùng một Incident.
+
+```text
+Detector fire -> CandidateEvent
+CandidateEvent + fingerprint/dedup -> Incident
+Incident + notification gate/outbox -> NotificationMessage
+```
+
+#### likely_dependency không phải RCA root cause
+
+Ví dụ:
+
+```text
+service = checkout
+likely_dependency = payment
+```
+
+Ý nghĩa là: **checkout đang chịu ảnh hưởng và payment là dependency nghi phạm**. Đây là kết luận cục bộ từ dependency signal, topology và correlation.
+
+RCA root cause lại được tính từ toàn bộ anomaly, thời gian, topology, shape, downstream coverage và evidence. RCA có thể đồng ý rằng `payment` là root, nhưng cũng có thể chọn service khác hoặc không tạo root nào.
+
+```mermaid
+flowchart LR
+    D["Dependency detector"] --> L["likely_dependency = payment"]
+    L --> C["Correlated CandidateEvent của checkout"]
+    A["Anomaly nhiều service"] --> R["RCA đa tín hiệu"]
+    C --> R
+    R --> Q{"Đủ bằng chứng?"}
+    Q -- "Có" --> ROOT["RootCauseCandidate"]
+    Q -- "Không" --> U["Không kết luận root"]
+```
+
+#### Correlation không phải Anomaly Detection
+
+Correlation không đọc trực tiếp hình dạng chuỗi để phát hiện drift. Nó làm việc trên CandidateEvent đã có, nhằm:
+
+    - Gom tín hiệu cùng vụ việc.
+    - Tìm dependency nghi phạm.
+    - Tính confidence từ thời gian, topology và evidence.
+    - Giảm alert rời rạc trước khi tạo incident.
+
+Anomaly Detection làm việc trên MetricSeries và trả AnomalyFinding. Hai luồng chỉ gặp nhau khi pipeline xây dựng incident và RCA.
+
 ---
 
 ## 2. Nạp cấu hình
@@ -214,13 +285,48 @@ flowchart TD
 
 ---
 
-## 8. Correlation CandidateEvent
+## 8. Correlation của CandidateEvent
+
+### 8.1 Correlation dùng để làm gì?
+
+Giả sử trong cùng 5 phút, checkout có ba CandidateEvent:
+
+```text
+checkout latency vượt ngưỡng
+checkout error rate vượt ngưỡng
+checkout -> payment dependency signal vượt ngưỡng
+```
+
+Nếu không correlation, ba sự kiện có thể trở thành ba câu chuyện rời. Correlator gom chúng theo service/flow/window, chọn một primary event và ghi các signal còn lại vào `contributing_signals`.
+
+Kết quả vẫn là một `CandidateEvent`, nhưng đã được bổ sung:
+
+    - `likely_dependency`: dependency nghi phạm mạnh nhất, ví dụ `payment`.
+    - `confidence`: độ tin cậy của kết luận dependency.
+    - `contributing_signals`: các signal cùng đóng góp.
+    - `severity`: severity mạnh nhất trong nhóm.
+    - `correlation_components`: lý do tạo confidence.
+
+Correlated CandidateEvent được dùng để:
+
+    1. Chọn service/dependency cần query log, trace và Kubernetes.
+    2. Tạo fingerprint theo service hoặc dependency scope.
+    3. Gắn tiêu đề, runbook và evidence cho incident.
+    4. Hỗ trợ suppression các notification cùng blast radius.
+
+Nó **không trực tiếp tạo RCA score** và cũng không chứng minh quan hệ nhân quả.
+
+### 8.2 Cách gom nhóm
 
 Candidate được gom theo:
 
 ```text
 (environment, flow, service, timestamp // 300)
 ```
+
+### 8.3 Cách chọn likely_dependency
+
+Trong mỗi nhóm, event không có dependency được ưu tiên làm primary. Các dependency candidate được chấm điểm; candidate có `max(configured_confidence, component_sum)` cao nhất được chọn.
 
 Correlation score là tổng component thỏa điều kiện:
 
@@ -237,7 +343,7 @@ Correlation score là tổng component thỏa điều kiện:
 confidence = clamp(max(configured_confidence, Σ component_weight), 0, 1)
 ```
 
-Chỉ gắn dependency khi confidence đạt `0.5`.
+Chỉ gắn dependency khi confidence đạt `0.5`. Không đạt ngưỡng thì CandidateEvent vẫn được giữ, nhưng `likely_dependency = unknown` để engine không giả vờ biết dependency.
 
 ```mermaid
 flowchart TD
