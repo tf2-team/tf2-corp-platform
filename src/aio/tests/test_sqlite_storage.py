@@ -84,11 +84,11 @@ class SQLiteIncidentStoreTest(unittest.TestCase):
         self.assertEqual(same_incident.occurrence_count, 2)
         self.assertEqual(len(same_incident.events), 2)
         self.assertEqual(len(incidents), 1)
-        self.assertEqual(same_incident.state, "open")
+        self.assertEqual(same_incident.state, "ongoing")
         self.assertEqual(same_incident.last_seen, "1970-01-01T00:03:20+00:00")
         self.assertIsNone(same_incident.recovered_at)
         self.assertIsNotNone(same_incident.cooldown_until)
-        self.assertEqual(event_row[:3], ("open", "1970-01-01T00:03:20+00:00", None))
+        self.assertEqual(event_row[:3], ("ongoing", "1970-01-01T00:03:20+00:00", None))
         self.assertIsNotNone(event_row[3])
 
     def test_deduped_incident_requeues_notification_after_cooldown(self):
@@ -514,7 +514,7 @@ class SQLiteIncidentStoreTest(unittest.TestCase):
 
         self.assertEqual(breakout, {service})
 
-    def test_repeated_active_root_cause_does_not_extend_suppression_ttl(self):
+    def test_repeated_active_root_cause_extends_suppression_ttl(self):
         with tempfile.TemporaryDirectory() as tmp:
             store = SQLiteIncidentStore(Path(tmp) / "aiops.sqlite3", environment="tf2")
             store.register_active_root_cause("checkout", {"checkout", "cart"}, suppress_seconds=900)
@@ -532,8 +532,28 @@ class SQLiteIncidentStoreTest(unittest.TestCase):
             store.close()
 
         self.assertEqual(set(json.loads(row[0])), {"checkout", "cart", "payment"})
-        self.assertEqual(row[1], fixed_expiry)
+        self.assertGreater(datetime.fromisoformat(row[1]), datetime.fromisoformat(fixed_expiry))
         self.assertEqual(row[2], 2.0)
+
+    def test_incident_recovers_only_after_consecutive_absent_runs(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            store = SQLiteIncidentStore(Path(tmp) / "aiops.sqlite3", environment="tf2", recovery_consecutive_buckets=3)
+            incident = store.upsert(candidate(0.02, timestamp=100))
+
+            store.reconcile_lifecycle({incident.incident_id})
+            store.reconcile_lifecycle(set())
+            store.reconcile_lifecycle(set())
+            still_open = store.list_incidents()[0]
+            store.reconcile_lifecycle(set())
+            recovered = store.list_incidents()[0]
+            recovery = store.due_notifications()
+            store.close()
+
+        self.assertEqual(still_open.state, "open")
+        self.assertEqual(still_open.recovery_count, 2)
+        self.assertEqual(recovered.state, "recovered")
+        self.assertIsNotNone(recovered.recovered_at)
+        self.assertIn("Recovered: checkout", {message.title for message in recovery})
 
 
 if __name__ == "__main__":

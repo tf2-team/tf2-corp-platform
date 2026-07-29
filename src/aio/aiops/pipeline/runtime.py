@@ -148,6 +148,19 @@ class AiopsPipeline:
             analysis_incidents = incidents
             regular_incidents = [incident for incident in incidents if not is_slo_notification(incident.events[-1])]
             deduped_incidents = _unique_incidents(incidents)
+        if hasattr(self.store, "reconcile_lifecycle"):
+            lifecycle_incidents = self.store.reconcile_lifecycle({incident.incident_id for incident in incidents})
+            recovered_now = [
+                incident
+                for incident in lifecycle_incidents
+                if incident.state == "recovered" and incident.recovery_count == getattr(self.store, "recovery_consecutive_buckets", 6)
+            ]
+            if recovered_now:
+                direct_notifications.extend(self._flush_notifications(recovered_now, only_incidents=True))
+            analysis_incidents = _unique_incidents([
+                *analysis_incidents,
+                *(incident for incident in lifecycle_incidents if incident.state != "recovered"),
+            ])
         logger.info(
             "AIOPS_DEDUP_RESULT input_candidates=%s rca_incidents=%s incidents=%s ids=%s services=%s occurrences=%s",
             len(enriched),
@@ -377,7 +390,16 @@ class AiopsPipeline:
         kept: list[RootCauseCandidate] = []
         max_hops = int(self.correlation_hyperparameters["topology_max_hops"])
         for root in root_causes:
-            duplicate = next((item for item in kept if self._same_rca_topology_scope(root.service, item.service, max_hops)), None)
+            same_service_only = bool(self.correlation_hyperparameters.get("rca_dedup_require_same_service", True))
+            duplicate = next(
+                (
+                    item
+                    for item in kept
+                    if (root.service == item.service if same_service_only else self._same_rca_topology_scope(root.service, item.service, max_hops))
+                    and bool(set(root.root_cause_metrics) & set(item.root_cause_metrics))
+                ),
+                None,
+            )
             if duplicate is None:
                 kept.append(root)
                 continue
@@ -624,6 +646,12 @@ class AiopsPipeline:
         min_score = float(self.correlation_hyperparameters.get("suppress_min_root_score", 1.0))
         active_roots = [incident for incident in (root_incidents or []) if incident.events[-1].confidence >= min_score]
         root_services = {incident.service for incident in active_roots}
+        direct_anomaly_services = set(service_scores) if self.correlation_hyperparameters.get("allow_direct_anomaly_breakout", True) else set()
+        slo_services = {
+            incident.service
+            for incident in incidents
+            if self.correlation_hyperparameters.get("allow_slo_breakout", True) and is_slo_notification(incident.events[-1])
+        }
         affected_by_root = {
             incident.service: self.topology_graph.neighborhood(incident.service, max_hops) if self.topology_graph is not None else {incident.service}
             for incident in active_roots
@@ -654,7 +682,7 @@ class AiopsPipeline:
             if service_scores
             else set()
         )
-        exempt_services = breakout_services | root_services
+        exempt_services = breakout_services | root_services | direct_anomaly_services | slo_services
         for root_service, affected_services in affected_by_root.items():
             suppressed.update(self.store.suppress_related_notifications(incidents, root_service, affected_services, exempt_services))
         if incidents:

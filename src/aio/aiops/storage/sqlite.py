@@ -28,6 +28,7 @@ class SQLiteIncidentStore:
         slo_dedup_seconds: int = 300,
         rca_dedup_seconds: int = 300,
         incident_count_reset_seconds: int = 900,
+        recovery_consecutive_buckets: int = 6,
         notification_retry_base_seconds: int = 60,
         notification_retry_max_seconds: int = 3600,
         notification_error_max_chars: int = 512,
@@ -40,6 +41,7 @@ class SQLiteIncidentStore:
         self.slo_dedup_seconds = slo_dedup_seconds
         self.rca_dedup_seconds = rca_dedup_seconds
         self.incident_count_reset_seconds = incident_count_reset_seconds
+        self.recovery_consecutive_buckets = recovery_consecutive_buckets
         self.notification_retry_base_seconds = notification_retry_base_seconds
         self.notification_retry_max_seconds = notification_retry_max_seconds
         self.notification_error_max_chars = notification_error_max_chars
@@ -137,6 +139,9 @@ class SQLiteIncidentStore:
         else:
             incident = Incident.model_validate_json(row[0])
             previous_severity = incident.severity
+            incident.state = "open" if incident.state == "recovered" else "ongoing"
+            incident.recovered_at = None
+            incident.recovery_count = 0
             if self._count_window_expired(incident, candidate):
                 incident.occurrence_count = 1
                 incident.events = [candidate]
@@ -285,6 +290,48 @@ class SQLiteIncidentStore:
         )
         return incident
 
+    def reconcile_lifecycle(self, seen_incident_ids: set[str]) -> list[Incident]:
+        """Keep unseen incidents active until recovery is stable for N runs."""
+        incidents = self.list_incidents()
+        now = _now()
+        with self._connection:
+            for incident in incidents:
+                if incident.state == "recovered":
+                    continue
+                if incident.incident_id in seen_incident_ids:
+                    incident.recovery_count = 0
+                    if incident.occurrence_count > 1:
+                        incident.state = "ongoing"
+                else:
+                    incident.recovery_count += 1
+                    if incident.recovery_count >= self.recovery_consecutive_buckets:
+                        incident.state = "recovered"
+                        incident.recovered_at = now
+                        self._enqueue_recovery_notification(incident)
+                self._connection.execute(
+                    "UPDATE incidents SET incident_json = ? WHERE fingerprint = ?",
+                    (incident.model_dump_json(), incident.fingerprint),
+                )
+        return incidents
+
+    def _enqueue_recovery_notification(self, incident: Incident) -> None:
+        message = NotificationBuilder().build([incident])[0]
+        recovery_id = f"{incident.incident_id}:recovery"
+        message = message.model_copy(update={"incident_id": recovery_id})
+        self._connection.execute(
+            """
+            INSERT INTO notification_outbox (incident_id, fingerprint, notification_json, status, next_attempt_at)
+            VALUES (?, ?, ?, 'pending', ?)
+            ON CONFLICT(incident_id) DO UPDATE SET
+                notification_json = excluded.notification_json,
+                status = 'pending',
+                next_attempt_at = excluded.next_attempt_at,
+                updated_at = excluded.next_attempt_at
+            """,
+            (recovery_id, incident.fingerprint, message.model_dump_json(), _now()),
+        )
+        self._last_enqueued_incident_ids.add(recovery_id)
+
     def _notification_due(self, incident: Incident, is_new: bool, now: datetime) -> bool:
         if is_new or not incident.cooldown_until:
             return True
@@ -343,7 +390,6 @@ class SQLiteIncidentStore:
         ).fetchone()
         expires_at = (now + timedelta(seconds=suppress_seconds)).isoformat()
         if row is not None and datetime.fromisoformat(row[0]) > now:
-            expires_at = row[0]
             root_score = max(float(row[1]), root_score)
         with self._connection:
             self._connection.execute(
@@ -475,10 +521,11 @@ class SQLiteIncidentStore:
     def pending_notifications_for(self, incidents: list[Incident]) -> list[NotificationMessage]:
         prefixes = tuple(f"{incident.incident_id}{SUPPLEMENTAL_NOTIFICATION_SUFFIX}" for incident in incidents)
         base_ids = {incident.incident_id for incident in incidents}
+        recovery_ids = {f"{incident.incident_id}:recovery" for incident in incidents}
         incident_ids = [
             incident_id
             for incident_id in self._last_enqueued_incident_ids
-            if incident_id in base_ids or incident_id.startswith(prefixes)
+            if incident_id in base_ids or incident_id in recovery_ids or incident_id.startswith(prefixes)
         ]
         if not incident_ids:
             return []

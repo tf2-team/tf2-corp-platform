@@ -192,6 +192,7 @@ class Incident(AiopsModel):
     service: str
     likely_dependency: str
     occurrence_count: int = 1
+    recovery_count: int = 0
     events: list[CandidateEvent] = Field(default_factory=list)
 
 
