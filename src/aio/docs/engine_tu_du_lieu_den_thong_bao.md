@@ -472,6 +472,108 @@ projected_change = direction × slope × time_span
 positive_ratio = số bước đúng hướng / tổng số bước
 ```
 
+#### Ý nghĩa từng biến
+
+| Biến | Ý nghĩa | Đơn vị |
+| --- | --- | --- |
+| `x` | Timestamp của từng bucket | Giây |
+| `x̄` | Timestamp trung bình của các bucket | Giây |
+| `y` | Giá trị metric tại bucket tương ứng | Đơn vị metric, ví dụ byte hoặc millicore |
+| `ȳ` | Giá trị trung bình của metric trong cửa sổ | Đơn vị metric |
+| `Σ` | Cộng kết quả của tất cả bucket trong cửa sổ | Không có đơn vị riêng |
+| `slope` | Tốc độ thay đổi của đường xu hướng | Đơn vị metric/giây |
+| `direction` | Chiều engine quan tâm: `1` cho tăng, `-1` cho giảm | Không có đơn vị |
+| `time_span` | Timestamp cuối trừ timestamp đầu | Giây |
+| `projected_change` | Tổng mức thay đổi được ước lượng từ đường xu hướng | Đơn vị metric |
+| `positive_ratio` | Tỷ lệ bước liên tiếp đi đúng hướng cấu hình | Từ `0` đến `1` |
+| `min_total_change` | Mức thay đổi tối thiểu để coi drift có ý nghĩa | Đơn vị metric |
+
+#### `slope` nói điều gì?
+
+`slope` là độ dốc của đường thẳng đại diện tốt nhất cho toàn bộ chuỗi:
+
+    - `slope > 0`: metric có xu hướng tăng.
+    - `slope < 0`: metric có xu hướng giảm.
+    - `slope` gần `0`: chưa có xu hướng rõ ràng.
+
+Phần tử `(x-x̄)(y-ȳ)` kiểm tra thời gian và giá trị có cùng di chuyển khỏi trung bình hay không. Nếu các điểm về sau thường cao hơn, tổng này dương và slope dương. Mẫu số `Σ((x-x̄)²)` chuẩn hóa theo độ dài thời gian, để cùng một mức tăng trong 5 phút được hiểu là nhanh hơn mức tăng trong 1 giờ.
+
+#### `projected_change` nói điều gì?
+
+```text
+projected_change = direction × slope × time_span
+```
+
+Giá trị này trả lời: **“Theo đường xu hướng, metric đã thay đổi tổng cộng khoảng bao nhiêu trong cửa sổ?”**
+
+Nó không nhất thiết bằng `giá trị cuối - giá trị đầu`. Vì được tính từ đường hồi quy của toàn bộ chuỗi, một spike hoặc dip đơn lẻ ít có khả năng chi phối kết quả.
+
+`direction` giúp cùng một công thức xử lý metric cần theo dõi chiều khác nhau:
+
+    - Memory, CPU, latency: thường cấu hình `up`, nên `direction = 1`.
+    - Metric cần bắt giảm: cấu hình `down`, nên `direction = -1`.
+
+#### `positive_ratio` nói điều gì?
+
+`positive_ratio` kiểm tra xu hướng có đủ đều không:
+
+```text
+positive_ratio = số lần (y tiếp theo - y hiện tại) đi đúng direction
+                 / tổng số cặp bucket liên tiếp
+```
+
+Ví dụ chuỗi memory:
+
+```text
+100 -> 105 : tăng, đúng hướng
+105 -> 103 : giảm, sai hướng
+103 -> 110 : tăng, đúng hướng
+110 -> 115 : tăng, đúng hướng
+
+positive_ratio = 3 / 4 = 0.75
+```
+
+Nếu chỉ có một spike lớn còn phần lớn chuỗi đi ngang hoặc giảm, `projected_change` có thể cao nhưng `positive_ratio` thấp. Điều kiện thứ hai ngăn spike đó bị gọi nhầm là slow-drift.
+
+#### Ví dụ đầy đủ với memory
+
+Giả sử sau khi bucket hóa, memory có xu hướng:
+
+```text
+Thời gian:   0    10    20    30 phút
+Memory:    100   110   120   130 MiB
+```
+
+Đường xu hướng tăng khoảng:
+
+```text
+slope ≈ 1 MiB/phút
+direction = 1
+time_span = 30 phút
+
+projected_change = 1 × 1 × 30 = 30 MiB
+```
+
+Ba trên ba bước đều tăng:
+
+```text
+positive_ratio = 3 / 3 = 1.0
+```
+
+Với cấu hình memory hiện tại:
+
+```text
+min_total_change = 5 MiB
+positive_bucket_ratio = 0.45
+
+30 MiB >= 5 MiB
+1.0 >= 0.45
+```
+
+Cả hai điều kiện đều đạt, vì vậy slow-drift significant.
+
+Nếu chuỗi là `100 -> 140 -> 101 -> 100`, spike lên 140 MiB có thể rất lớn nhưng xu hướng cuối không tăng đều. `positive_ratio` thấp và slope toàn cửa sổ gần phẳng, nên slow-drift không nên trigger; spike sẽ được các detector cục bộ như EWMA hoặc Robust Drift xem xét.
+
 Significant khi:
 
 ```text
@@ -530,6 +632,165 @@ flowchart TD
 ---
 
 ## 13. Anomaly Detectors
+
+### 13.0 Feature extraction cho anomaly
+
+Trong code hiện tại không có một class `FeatureExtractor` chung. Mỗi detector tự chuyển `MetricSeries` thành loại feature mà thuật toán của nó cần. Đây là chủ ý hợp lý vì một vector đa biến của Isolation Forest không giống residual đơn biến của EWMA.
+
+#### Tiền xử lý chung
+
+Trước khi tách feature riêng cho detector, mọi series đi qua:
+
+```text
+MetricSeries thô
+-> chỉ giữ quality VERIFIED
+-> gom detector bucket
+-> growth gate ghi explained/breakout metrics
+-> significant-tail gate
+-> detector-specific feature extraction
+```
+
+| Bước | Đầu vào | Đầu ra | Mục đích |
+| --- | --- | --- | --- |
+| Quality filter | MetricSeries | Series verified | Không học từ dữ liệu missing/invalid |
+| Bucket | Các sample trong bucket | Một giá trị/bucket | Giảm phụ thuộc scrape interval |
+| Fixed baseline/tail | Toàn bộ points | Baseline + tail indexes | Tách phần “bình thường cũ” khỏi phần cần kiểm tra |
+| Tail gate | Baseline + tail | Pass/drop | Không chạy detector trên thay đổi quá nhỏ hoặc đã kết thúc |
+
+#### Feature của Robust Drift
+
+Robust Drift dùng **một metric tại một thời điểm**:
+
+```text
+Input feature tại bucket t = raw metric value y_t
+Reference features          = rolling baseline trước bucket t
+Output feature              = robust_score_t
+```
+
+Ví dụ:
+
+```text
+cart.memory_usage_bytes
+baseline: [130, 131, 130, 132, ...] MiB
+tail:     [145, 147, 149] MiB
+
+Mỗi tail value được đổi thành một robust score so với baseline trước nó.
+```
+
+Detector lấy cặp `(score, bucket_index)` lớn nhất làm raw finding.
+
+#### Feature của EWMA/STL
+
+EWMA không chấm trực tiếp raw value. Nó tạo residual:
+
+```text
+smoothed_t = EWMA(raw_values)_t
+seasonal_t = STL seasonal component, chỉ khi seasonal_period > 1
+residual_t = raw_t - smoothed_t - seasonal_t
+```
+
+Feature thực sự đưa vào z-score là `residual_t`.
+
+Ví dụ:
+
+```text
+raw latency      = 1.20 s
+EWMA dự kiến     = 0.80 s
+seasonal         = 0.05 s
+residual feature = 1.20 - 0.80 - 0.05 = 0.35 s
+```
+
+Config hiện tại có `seasonal_period = 1`, nên seasonal bằng 0 và feature chủ yếu là `raw - EWMA`.
+
+#### Feature của Isolation Forest
+
+Isolation Forest là detector đa biến cấp service. Quy trình trích xuất feature:
+
+1. Gom các MetricSeries theo service.
+2. Chỉ giữ service có ít nhất hai metric đủ `min_points`.
+3. Lấy giao timestamp giữa các metric, để mọi hàng có đủ cột.
+4. Mỗi timestamp trở thành một feature vector.
+5. Tách các hàng baseline và tail.
+6. Normalize từng cột bằng min/max của **baseline**.
+7. Fit Isolation Forest trên baseline rows.
+8. Score tail rows và chọn hàng bất thường nhất.
+
+Ví dụ service `cart` có ba metric:
+
+```text
+timestamp   cpu   memory   socket_io
+t1           15     130         20
+t2           16     131         21
+t3           55     150         80
+```
+
+Feature vector tại `t3` là:
+
+```text
+X_t3 = [55, 150, 80]
+```
+
+Mỗi cột được normalize riêng:
+
+```text
+x_norm = (x - baseline_min) / (baseline_max - baseline_min)
+```
+
+Giả sử baseline CPU nằm trong `[10, 20]`, CPU tại `t3 = 55`:
+
+```text
+cpu_norm = (55 - 10) / (20 - 10) = 4.5
+```
+
+Giá trị có thể lớn hơn 1 vì tail được so với min/max baseline và không bị clip. Điều này giúp model thấy tail đã đi xa vùng đã học.
+
+Sau khi service-level row bị đánh dấu bất thường, engine vẫn cần một metric để tạo `AnomalyFinding`. Nó chọn cột có độ lệch tuyệt đối lớn nhất so với baseline center làm metric đại diện.
+
+#### Feature của Slow-drift
+
+Slow-drift dùng hai feature tổng hợp từ toàn cửa sổ:
+
+```text
+trend feature       = projected_change
+consistency feature = positive_ratio
+```
+
+Nó không dùng một bucket cực trị. Vì vậy slow-drift phù hợp với xu hướng dài, còn Robust/EWMA phù hợp hơn với thay đổi cục bộ.
+
+#### Feature của log anomaly
+
+Log text được đổi thành template bằng Drain3 hoặc regex fallback, sau đó thành time-series:
+
+```text
+feature = số lần template xuất hiện trong mỗi bucket 60 giây
+```
+
+Ví dụ:
+
+```text
+"payment timeout order=123"
+"payment timeout order=456"
+-> template "payment timeout order=<*>"
+-> [0, 1, 2, 8, 10, ...] lần/bucket
+```
+
+Chuỗi template count được đưa vào EWMA và Isolation Forest, nhưng log finding chỉ được giữ khi gần một metric anomaly cùng service.
+
+```mermaid
+flowchart TD
+    S["Verified + bucketed MetricSeries"] --> T["Significant-tail gate"]
+    T --> R["Robust: raw value + rolling baseline"]
+    T --> E["EWMA/STL: residual feature"]
+    T --> I["IF: aligned multivariate row per service/timestamp"]
+    T --> D["Slow drift: projected change + positive ratio"]
+    L["Logs"] --> LT["Template count per 60s bucket"]
+    LT --> E
+    LT --> I
+    R --> F["Raw AnomalyFinding"]
+    E --> F
+    I --> F
+    D --> F
+```
 
 ### 13.1 Robust Drift
 
@@ -1017,6 +1278,346 @@ weighted_rrf × evidence_strength × support
 Retry:
 min(60 × 2^(attempt-1), 3600) giây
 ```
+
+### 26.1 Basic-tail
+
+```text
+baseline = median(values_before_tail)
+delta = |value - baseline|
+changed = delta >= min_absolute
+          AND delta / |baseline| >= min_relative
+```
+
+| Biến | Ý nghĩa |
+| --- | --- |
+| `values_before_tail` | Các bucket cũ dùng làm vùng bình thường |
+| `baseline` | Trung vị vùng bình thường, ít bị spike kéo lệch |
+| `value` | Giá trị bucket đang kiểm tra |
+| `delta` | Khoảng cách tuyệt đối tới baseline |
+| `min_absolute` | Chặn thay đổi rất nhỏ về đơn vị thực |
+| `min_relative` | Chặn thay đổi nhỏ so với quy mô baseline |
+
+Ví dụ memory baseline 100 MiB, value 112 MiB, absolute minimum 10 MiB, relative minimum 5%:
+
+```text
+delta = |112 - 100| = 12 MiB
+relative = 12 / 100 = 12%
+
+12 >= 10 và 12% >= 5% -> bucket changed
+```
+
+Cả hai ngưỡng cùng tồn tại để tránh hai lỗi:
+
+    - Chỉ dùng phần trăm: baseline nhỏ làm thay đổi rất nhỏ có phần trăm lớn.
+    - Chỉ dùng tuyệt đối: cùng 10 MiB có ý nghĩa khác nhau với service 100 MiB và 10 GiB.
+
+### 26.2 CUSUM
+
+```text
+base_limit = max(min_absolute, |baseline| × min_relative)
+limit = base_limit × max(2, min_buckets)
+delta_t = value_t - baseline
+cumulative_t = max(0, cumulative_(t-1) + delta_t)
+```
+
+| Biến | Ý nghĩa |
+| --- | --- |
+| `base_limit` | Độ lệch tối thiểu có ý nghĩa của một metric |
+| `min_buckets` | Số bucket dương liên tiếp bắt buộc |
+| `delta_t` | Bucket hiện tại cao hơn baseline bao nhiêu |
+| `cumulative_t` | Tổng độ lệch dương còn tích lũy |
+| `limit` | Tổng độ lệch cần đạt để trigger |
+
+Ví dụ baseline CPU 100 millicores, `base_limit = 10`, `min_buckets = 3`:
+
+```text
+limit = 10 × 3 = 30
+tail = [105, 108, 112]
+deltas = [5, 8, 12]
+cumulative = 5 + 8 + 12 = 25 < 30 -> chưa trigger
+```
+
+Nếu bucket tiếp theo là 110:
+
+```text
+cumulative = 25 + 10 = 35 >= 30
+```
+
+Khi đã đủ số bucket liên tiếp, CUSUM trigger. Nếu một delta không dương, engine reset cumulative về 0, nên các lệch rời rạc không cộng mãi.
+
+### 26.3 Page-Hinkley
+
+```text
+threshold = max(min_absolute, |baseline| × min_relative)
+tolerance = threshold / max(page_hinkley_factor, min_buckets)
+adjusted_delta_t = value_t - baseline - tolerance
+```
+
+| Biến | Ý nghĩa |
+| --- | --- |
+| `threshold` | Tổng thay đổi tối thiểu cần xác nhận |
+| `tolerance` | Phần nhiễu nhỏ bị trừ khỏi mỗi bucket |
+| `adjusted_delta_t` | Độ lệch còn lại sau khi bỏ tolerance |
+| `cumulative - minimum` | Mức mean-shift tích lũy kể từ đáy gần nhất |
+
+Ví dụ threshold 10, min buckets 5:
+
+```text
+tolerance = 10 / 5 = 2
+value - baseline = 3 mỗi bucket
+adjusted_delta = 3 - 2 = 1
+```
+
+Mỗi bucket chỉ đóng góp 1 thay vì 3. Engine cần độ lệch nhỏ này tồn tại liên tục đủ lâu mới vượt threshold. Bucket có adjusted delta không dương sẽ reset chuỗi.
+
+### 26.4 Robust score
+
+```text
+center = median(baseline)
+MAD = median(|x-center|) × 1.4826
+IQR_spread = (Q75-Q25) / 1.349
+spread = max(MAD, IQR_spread, 1)
+robust_score = |value-center| / spread
+```
+
+| Biến | Ý nghĩa |
+| --- | --- |
+| `center` | Trung tâm robust của baseline |
+| `MAD` | Độ phân tán dựa trên median absolute deviation |
+| `Q25`, `Q75` | Phân vị 25% và 75% |
+| `spread` | Độ rộng bình thường dùng làm mẫu số |
+| `robust_score` | Số “đơn vị phân tán” mà value cách baseline |
+
+Ví dụ center 100, spread 4, value 120:
+
+```text
+robust_score = |120 - 100| / 4 = 5
+5 >= threshold 4 -> Robust Drift fire
+```
+
+Hệ số `1.4826` và `1.349` đưa MAD/IQR về thang gần với standard deviation khi dữ liệu gần phân phối chuẩn, nhưng vẫn bền hơn trước outlier.
+
+### 26.5 EWMA residual z-score
+
+EWMA có thể hình dung bằng công thức lặp:
+
+```text
+EWMA_t = alpha × value_t + (1-alpha) × EWMA_(t-1)
+residual_t = value_t - EWMA_t - seasonal_t
+z_t = |residual_t - mean(baseline_residual)| / stdev(baseline_residual)
+```
+
+| Biến | Ý nghĩa |
+| --- | --- |
+| `alpha` | Mức ưu tiên dữ liệu mới; hiện là 0.1 |
+| `EWMA_t` | Mức dự kiến đã làm mượt tại thời điểm t |
+| `seasonal_t` | Thành phần chu kỳ từ STL; hiện bằng 0 vì period 1 |
+| `residual_t` | Phần raw value không được trend/seasonal giải thích |
+| `z_t` | Residual cách baseline residual bao nhiêu độ lệch chuẩn |
+
+Ví dụ:
+
+```text
+value = 1.20 s
+EWMA = 0.80 s
+seasonal = 0.05 s
+residual = 0.35 s
+
+baseline residual mean = 0.05 s
+baseline residual stdev = 0.05 s
+z = |0.35 - 0.05| / 0.05 = 6
+6 >= 4 -> EWMA/STL fire
+```
+
+`alpha = 0.1` làm đường dự kiến thay đổi chậm; spike mới sẽ tạo residual lớn. Alpha cao hơn bám dữ liệu mới nhanh hơn và thường làm residual ngắn hơn.
+
+### 26.6 Isolation Forest feature và score
+
+Normalize từng metric bằng baseline:
+
+```text
+x_norm = (x - baseline_min) / (baseline_max - baseline_min)
+```
+
+Feature vector của service tại thời điểm t:
+
+```text
+X_t = [cpu_norm_t, memory_norm_t, socket_norm_t, ...]
+```
+
+Điểm engine dùng:
+
+```text
+service_score = -IsolationForest.score_samples(X_t) × 10
+```
+
+| Biến | Ý nghĩa |
+| --- | --- |
+| `baseline_min/max` | Khoảng đã thấy trong baseline của riêng metric |
+| `X_t` | Một hàng đa biến mô tả trạng thái service tại timestamp t |
+| `score_samples` | Điểm normality do sklearn trả về; thấp hơn nghĩa là lạ hơn |
+| Dấu `-` | Đổi hướng để điểm anomaly cao hơn dễ hiểu hơn |
+| `× 10` | Đưa score về thang threshold hiện tại |
+
+Ví dụ baseline CPU `[10, 20]`, memory `[100, 120]`; tail CPU 55, memory 150:
+
+```text
+cpu_norm = (55-10)/(20-10) = 4.5
+mem_norm = (150-100)/(120-100) = 2.5
+X_tail = [4.5, 2.5]
+```
+
+Vector này nằm xa vùng baseline. Nếu model trả `score_samples = -0.62`:
+
+```text
+service_score = -(-0.62) × 10 = 6.2
+6.2 >= 5.0 -> Isolation Forest fire
+```
+
+`6.2` **không phải xác suất lỗi 62%**. Đây chỉ là điểm anomaly đã scale để so threshold.
+
+### 26.7 Weighted anomaly
+
+```text
+normalized_i = detector_score_i / detector_threshold_i
+capped_i = min(normalized_i, 1)
+anomaly_score = Σ detector_weight_i × capped_i
+```
+
+| Biến | Ý nghĩa |
+| --- | --- |
+| `detector_score_i` | Điểm thô của detector i |
+| `detector_threshold_i` | Ngưỡng fire riêng của detector i |
+| `normalized_i` | Mức detector đã đạt bao nhiêu lần ngưỡng |
+| `capped_i` | Giới hạn đóng góp tại 1 để detector cực lớn không áp đảo |
+| `detector_weight_i` | Mức đóng góp được cấu hình |
+
+Ví dụ Robust score 5, threshold 4; EWMA score 3, threshold 4:
+
+```text
+robust_norm = min(5/4, 1) = 1
+ewma_norm = min(3/4, 1) = 0.75
+
+anomaly_score = 0.8×1 + 0.8×0.75 = 1.4
+1.4 >= 1 -> tạo AnomalyFinding
+```
+
+### 26.8 Correlation confidence
+
+```text
+component_sum = Σ component_weight thỏa điều kiện
+confidence = clamp(max(configured_confidence, component_sum), 0, 1)
+```
+
+Ví dụ dependency candidate có confidence cấu hình 0.4, signal verified 0.25, topology path 0.25 và xảy ra trước 0.20:
+
+```text
+component_sum = 0.25 + 0.25 + 0.20 = 0.70
+confidence = max(0.4, 0.70) = 0.70
+0.70 >= 0.5 -> gắn likely_dependency
+```
+
+Nếu evidence stale, penalty `-0.30` được cộng vào component sum.
+
+### 26.9 Graph và timestamp score
+
+```text
+timestamp_score = 1 - (timestamp-oldest)/(newest-oldest)
+graph_raw = max_seed × (0.7×pagerank + 0.3×timestamp_score)
+graph_score = graph_raw / max(graph_raw)
+```
+
+| Biến | Ý nghĩa |
+| --- | --- |
+| `oldest/newest` | Thời điểm sớm nhất và muộn nhất trong findings |
+| `timestamp_score` | 1 cho service sớm nhất, 0 cho service muộn nhất |
+| `pagerank` | Độ quan trọng của service trong topology, được seed bằng anomaly strength |
+| `max_seed` | Anomaly strength lớn nhất dùng giữ tỷ lệ graph raw |
+| `graph_score` | Graph raw đã normalize về 0..1 |
+
+Ví dụ A đỏ lúc phút 0, B phút 5, C phút 10:
+
+```text
+timestamp_A = 1 - 0/10 = 1.0
+timestamp_B = 1 - 5/10 = 0.5
+timestamp_C = 1 - 10/10 = 0.0
+```
+
+### 26.10 Earliest drift và shape correlation
+
+```text
+earliest_score = 1 - drift_index/latest_drift_index
+shape_score = max(|Spearman(primary, candidate, lag)|)
+```
+
+`drift_index` là vị trí bucket đầu đạt robust drift. Index nhỏ hơn nghĩa là xảy ra sớm hơn.
+
+Spearman không so trực tiếp độ lớn; nó so thứ hạng tăng/giảm của hai chuỗi. Shape score gần 1 nghĩa là hình dạng biến động rất giống nhau, kể cả khác đơn vị. Engine thử lag 0..5 bucket để chấp nhận dependency phản ứng trễ.
+
+Ví dụ request latency tăng theo `[1, 2, 3, 4]`, CPU tăng theo `[10, 20, 30, 40]`: Spearman gần 1 dù hai metric khác thang đo.
+
+### 26.11 Weighted RRF
+
+```text
+RRF_raw(service) = Σ weight_ranker/(20 + rank_position)
+weighted_rrf = RRF_raw / maximum_possible
+```
+
+| Biến | Ý nghĩa |
+| --- | --- |
+| `rank_position` | Vị trí service trong từng bảng xếp hạng, bắt đầu từ 1 |
+| `20` | `rrf_k`, làm chênh lệch giữa các hạng bớt cực đoan |
+| `weight_ranker` | Trọng số graph/earliest/shape/coverage |
+| `maximum_possible` | Điểm nếu service đứng hạng 1 ở mọi ranker đang có dữ liệu |
+
+Ví dụ service đứng hạng 1 ở earliest và hạng 2 ở graph:
+
+```text
+RRF_raw = 0.55/(20+1) + 0.15/(20+2)
+        ≈ 0.02619 + 0.00682
+        ≈ 0.03301
+```
+
+RRF dùng thứ hạng để một graph score thô cực lớn không tự chi phối kết quả.
+
+### 26.12 Support và RCA score
+
+```text
+support = Σ(weight_ranker × clamp(component_score, 0, 1)) / Σ(weight_ranker)
+evidence_strength = min(1, max anomaly score của service)
+RCA score = weighted_rrf × evidence_strength × support
+```
+
+Ví dụ:
+
+```text
+weighted_rrf = 0.90
+evidence_strength = 0.80
+support = 0.40
+
+RCA score = 0.90 × 0.80 × 0.40 = 0.288
+```
+
+RRF trả lời **“service xếp hạng tốt đến đâu?”**; support trả lời **“các phương pháp có cùng đồng ý không?”**; evidence strength trả lời **“service có anomaly mạnh thật không?”**. Phép nhân buộc cả ba yếu tố cùng tồn tại.
+
+### 26.13 Retry backoff
+
+```text
+retry_seconds = min(base × 2^(attempt-1), maximum)
+```
+
+Với base 60 giây và maximum 3600 giây:
+
+```text
+attempt 1 -> 60 giây
+attempt 2 -> 120 giây
+attempt 3 -> 240 giây
+attempt 4 -> 480 giây
+...
+tối đa 3600 giây
+```
+
+Backoff tránh webhook lỗi làm pipeline gửi request liên tục, nhưng vẫn giữ notification trong outbox để thử lại.
 
 ---
 
