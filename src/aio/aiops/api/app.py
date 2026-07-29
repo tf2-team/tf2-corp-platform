@@ -110,7 +110,7 @@ def run_pipeline_with_collector(collector, settings: Settings, runtime_config, m
         topology_graph=topology_graph,
     )
     enricher = build_enricher(settings, runtime_config, hyperparameters["enrichment"])
-    notification_sender = NotificationClient(settings) if _configured_url(settings.notification_webhook_url) else None
+    notification_sender = NotificationClient(settings) if _notification_configured(settings) else None
     executor_client = None
     self_heal = None
     if settings.self_heal_enabled:
@@ -247,6 +247,17 @@ def _configured_url(value: str) -> bool:
     return _configured_secret(value) and ".example" not in value
 
 
+def _notification_configured(settings: Settings) -> bool:
+    return any(
+        _configured_url(url)
+        for url in (
+            settings.notification_dev_webhook_url,
+            settings.notification_user_webhook_url,
+            settings.notification_webhook_url,
+        )
+    )
+
+
 def _configured_secret(value: str) -> bool:
     text = value.strip().upper()
     return bool(text) and "CHANGE_ME" not in text and "<FILL_IN" not in text
@@ -277,7 +288,7 @@ def readiness(settings: Settings) -> HealthResponse:
         load_normalization_schema(settings.normalization_schema_path)
         if settings.auto_run_enabled and not _configured_url(settings.prometheus_base_url):
             raise RuntimeError("automatic runs require Prometheus")
-        if settings.auto_run_enabled and not _configured_url(settings.notification_webhook_url):
+        if settings.auto_run_enabled and not _notification_configured(settings):
             raise RuntimeError("automatic runs require an incident notification webhook")
         if settings.self_heal_enabled and settings.policy_mode != "live-approved":
             raise RuntimeError("self-heal requires live-approved policy mode")

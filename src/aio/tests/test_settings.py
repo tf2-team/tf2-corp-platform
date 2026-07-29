@@ -130,6 +130,8 @@ class SettingsTest(unittest.TestCase):
         self.assertEqual(config["incident"]["notification_retry_max_seconds"], 3600)
         self.assertEqual(config["incident"]["notification_error_max_chars"], 512)
         self.assertEqual(config["notification"]["important_evidence_limit"], 20)
+        self.assertEqual(config["notification"]["user_rca_medium_confidence_score"], 0.3)
+        self.assertEqual(config["notification"]["user_rca_high_confidence_score"], 0.42)
         self.assertIn("Trace/log enrichment", config["notification"]["important_evidence_markers"])
         self.assertIn("trace_", config["notification"]["important_evidence_markers"])
         self.assertIn("shape_correlation_score", config["notification"]["important_evidence_markers"])

@@ -10,6 +10,8 @@
     "notification_error_max_chars": 512
   },
   "notification": {
+    "user_rca_medium_confidence_score": 0.3,
+    "user_rca_high_confidence_score": 0.42,
     "important_evidence_limit": 20,
     "important_evidence_markers": [
       "Trace/log enrichment",

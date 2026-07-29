@@ -222,6 +222,68 @@ class IntegrationClientTest(unittest.TestCase):
         self.assertEqual(fields["Likely dependency"], "postgresql")
         self.assertEqual(fields["Runbook"], "RB-CHECKOUT-SLO")
 
+    def test_notification_client_sends_to_dev_and_user_discord_channels(self):
+        seen: list[httpx.Request] = []
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            seen.append(request)
+            return httpx.Response(204)
+
+        cfg = fixed_settings(
+            notification_provider="auto",
+            notification_dev_webhook_url="https://discord.com/api/webhooks/dev/token",
+            notification_user_webhook_url="https://discord.com/api/webhooks/user/token",
+        )
+        message = NotificationMessage(
+            incident_id="inc-broadcast",
+            severity="SEV2",
+            state="open",
+            title="cart incident",
+            summary="summary",
+            flow="checkout",
+            service="cart",
+            likely_dependency="unknown",
+            runbook_id="RB-CART-ERROR-RATE",
+        )
+
+        client = NotificationClient(cfg, transport=httpx.MockTransport(handler))
+        response = client.send(message)
+        client.close()
+
+        self.assertEqual(response, {"dev": {"status_code": 204}, "user": {"status_code": 204}})
+        self.assertEqual({request.url.path for request in seen}, {"/api/webhooks/dev/token", "/api/webhooks/user/token"})
+
+    def test_user_discord_rca_summary_uses_confidence_bands_without_technical_values(self):
+        descriptions = {}
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            descriptions[request.url.path] = json.loads(request.content)["embeds"][0]["description"]
+            return httpx.Response(204)
+
+        cfg = fixed_settings(notification_provider="discord", notification_user_webhook_url="https://discord.com/api/webhooks/user/token")
+        cases = (
+            (0.29, "cpu", "low confidence", "I have not found"),
+            (0.35, "cpu, memory", "fairly reliable", "Other possible root causes: cpu, memory"),
+            (0.5, "cpu, memory", "very high confidence", None),
+        )
+        for score, metrics, expected, alternatives in cases:
+            message = NotificationMessage(
+                incident_id=f"inc-{score}", severity="SEV2", state="open", title="RCA root cause: cart",
+                summary=f"Root: cart\nDetected: rca_root_cause\nMetric: {metrics}\nRCA score: {score}\nValue: 1\nThreshold: 0.24\nEvidence:\n- evidence_strength=1.000",
+                flow="checkout", service="cart", likely_dependency="unknown", runbook_id="RB-SERVICE-RESOURCE",
+            )
+            NotificationClient(cfg, transport=httpx.MockTransport(handler)).send(message)
+            description = descriptions["/api/webhooks/user/token"]
+            self.assertIn(expected, description)
+            self.assertNotIn("score", description.lower())
+            self.assertNotIn("Value", description)
+            self.assertNotIn("Threshold", description)
+            self.assertNotIn("evidence_strength", description)
+            if alternatives:
+                self.assertIn(alternatives, description)
+            else:
+                self.assertNotIn("Other possible root causes", description)
+
     def test_notification_client_hides_unknown_discord_dependency(self):
         seen: list[httpx.Request] = []
 

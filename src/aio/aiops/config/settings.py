@@ -73,6 +73,8 @@ class Settings(BaseSettings):
     kubernetes_account: str = ""
 
     notification_webhook_url: str = ""
+    notification_dev_webhook_url: str = ""
+    notification_user_webhook_url: str = ""
     notification_token: str = ""
     notification_account: str = ""
     notification_provider: Literal["auto", "generic", "grafana", "discord"] = "auto"
