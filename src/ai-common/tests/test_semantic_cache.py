@@ -176,6 +176,7 @@ class TestExactLookup:
         assert result["cache_match"] == "exact"
         assert result["cache_distance"] == 0.0
         assert result["answer_data"]["answer"] == "Great product!"
+        mock_embed.assert_not_called()
 
     @patch.object(SemanticCache, "_get_embedding")
     def test_exact_miss_empty_record(self, mock_embed, mock_valkey, fake_embedding):
@@ -363,3 +364,9 @@ class TestStoreOnlyGrounded:
             is False
         )
         client.pipeline.assert_not_called()
+
+
+def test_semantic_cache_is_exported_from_shared_package():
+    from techx_ai_common import SemanticCache as PublicSemanticCache
+
+    assert PublicSemanticCache is SemanticCache

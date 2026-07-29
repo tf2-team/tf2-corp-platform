@@ -15,18 +15,19 @@ import logging
 import uuid
 from typing import Any, Literal, Optional, TypedDict
 
-import valkey as valkeylib
 from langgraph.graph import END, START, StateGraph
 from techx_ai_common.contracts import GroundedResponse, GuardrailAction, ResponseStatus
 from techx_ai_common.guardrails import sanitize_request, scan_output
 from techx_ai_common.proto import demo_pb2_grpc
 from techx_ai_common.rate_limiter import check_rate_limit
+from techx_ai_common.semantic_cache import SemanticCache
 
 from copilot_contracts import CopilotProductResult, CopilotStatus, PendingCartAction, RetrievalHint
 import conversation_store
 import mem0_client
 import memory_extractor
 import memory_retrieval
+import shopping_cache
 from react_agent import run_react_agent
 
 logger = logging.getLogger("copilot_graph")
@@ -53,6 +54,10 @@ class CopilotState(TypedDict):
     interpreted_criteria: str
     reason: str
     error: Optional[str]
+    cache_status: Literal["hit", "miss"]
+    cache_match: Literal["exact", "semantic", "none"]
+    cache_distance: float
+    cache_eligible: bool
 
 
 class CopilotDeps:
@@ -61,16 +66,22 @@ class CopilotDeps:
         catalog_stub: demo_pb2_grpc.ProductCatalogServiceStub,
         reviews_stub: demo_pb2_grpc.ProductReviewServiceStub,
         cart_stub: demo_pb2_grpc.CartServiceStub,
-        valkey_client: valkeylib.Valkey,
+        valkey_client: Any,
+        semantic_cache: SemanticCache | None = None,
     ):
         self.catalog_stub = catalog_stub
         self.reviews_stub = reviews_stub
         self.cart_stub = cart_stub
         self.valkey_client = valkey_client
+        self.semantic_cache = semantic_cache
 
 
 def _should_stop(state: CopilotState) -> str:
     return "stop" if state.get("status") in (CopilotStatus.BLOCKED, CopilotStatus.FALLBACK) else "continue"
+
+
+def _should_use_cached(state: CopilotState) -> str:
+    return "cached" if state.get("cache_status") == "hit" else "continue"
 
 
 def make_nodes(deps: CopilotDeps):
@@ -86,6 +97,29 @@ def make_nodes(deps: CopilotDeps):
             return {**state, "status": CopilotStatus.BLOCKED, "reason": "Your request could not be processed.", "error": result.reason}
         safe_message = result.sanitized_text if result.action == GuardrailAction.SANITIZED and result.sanitized_text else state["user_message"]
         return {**state, "safe_message": safe_message}
+
+    def cache_lookup_node(state: CopilotState) -> CopilotState:
+        result = shopping_cache.lookup(
+            deps.semantic_cache,
+            state["user_id"],
+            state["conversation_id"],
+            state["safe_message"],
+            deps,
+        )
+        if result is None:
+            return state
+        try:
+            hydrated = shopping_cache.hydrate_state(state, result)
+        except Exception:
+            logger.warning("Invalid Shopping Copilot cache entry; continuing on miss")
+            shopping_cache.record_invalid_hit(result)
+            return state
+        shopping_cache.record_hit(result)
+        if state.get("conversation_id") and state.get("turn_id"):
+            conversation_store.begin_turn(
+                state["conversation_id"], state["turn_id"], deps.valkey_client
+            )
+        return hydrated
 
     def conversation_state_node(state: CopilotState) -> CopilotState:
         if not state.get("conversation_id") or not state.get("turn_id"):
@@ -175,7 +209,8 @@ def make_nodes(deps: CopilotDeps):
 
     def memory_write_node(state: CopilotState) -> CopilotState:
         if (
-            not mem0_client.write_enabled() or state.get("status") != CopilotStatus.GROUNDED
+            state.get("cache_status") == "hit"
+            or not mem0_client.write_enabled() or state.get("status") != CopilotStatus.GROUNDED
             or not state.get("conversation_id") or not state.get("turn_id")
             or conversation_store.memory_turn_written(state["conversation_id"], state["turn_id"], deps.valkey_client)
         ):
@@ -195,25 +230,56 @@ def make_nodes(deps: CopilotDeps):
             logger.warning("Memory extraction unavailable; response remains valid: %s", type(exc).__name__)
         return state
 
-    return input_guardrail_node, conversation_state_node, turn_context_node, agent_node, build_response_node, memory_write_node
+    def cache_store_node(state: CopilotState) -> CopilotState:
+        if state.get("cache_status") != "hit":
+            shopping_cache.store(deps.semantic_cache, state, deps)
+        return state
+
+    return (
+        input_guardrail_node,
+        cache_lookup_node,
+        conversation_state_node,
+        turn_context_node,
+        agent_node,
+        build_response_node,
+        memory_write_node,
+        cache_store_node,
+    )
 
 
 def build_graph(deps: CopilotDeps) -> StateGraph:
-    guard, conversation, turn_context, agent, response, memory_write = make_nodes(deps)
+    (
+        guard,
+        cache_lookup,
+        conversation,
+        turn_context,
+        agent,
+        response,
+        memory_write,
+        cache_store,
+    ) = make_nodes(deps)
     builder = StateGraph(CopilotState)
     builder.add_node("input_guardrail", guard)
+    builder.add_node("cache_lookup", cache_lookup)
     builder.add_node("conversation_state", conversation)
     builder.add_node("turn_context", turn_context)
     builder.add_node("agent", agent)
     builder.add_node("build_response", response)
     builder.add_node("memory_write", memory_write)
+    builder.add_node("cache_store", cache_store)
     builder.add_edge(START, "input_guardrail")
-    builder.add_conditional_edges("input_guardrail", _should_stop, {"stop": "build_response", "continue": "conversation_state"})
+    builder.add_conditional_edges("input_guardrail", _should_stop, {"stop": "build_response", "continue": "cache_lookup"})
+    builder.add_conditional_edges(
+        "cache_lookup",
+        _should_use_cached,
+        {"cached": "build_response", "continue": "conversation_state"},
+    )
     builder.add_edge("conversation_state", "turn_context")
     builder.add_conditional_edges("turn_context", _should_stop, {"stop": "build_response", "continue": "agent"})
     builder.add_edge("agent", "build_response")
     builder.add_edge("build_response", "memory_write")
-    builder.add_edge("memory_write", END)
+    builder.add_edge("memory_write", "cache_store")
+    builder.add_edge("cache_store", END)
     return builder.compile()
 
 
@@ -238,6 +304,8 @@ def run_copilot(user_message: str, deps: CopilotDeps, user_id: str = "anonymous"
         "conversation_context": "", "retrieval_hint": None, "tool_access": "none", "memory_context": "", "safe_message": user_message,
         "allowed_product_ids": [], "catalog_results": [], "qa_result": None, "safe_reviews": None,
         "pending_action": None, "status": CopilotStatus.GROUNDED, "interpreted_criteria": "", "reason": "", "error": None,
+        "cache_status": "miss", "cache_match": "none", "cache_distance": 0.0,
+        "cache_eligible": True,
     }
     graph = build_graph(deps)
 

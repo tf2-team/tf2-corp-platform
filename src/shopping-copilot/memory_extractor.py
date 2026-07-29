@@ -14,6 +14,7 @@ from openai import OpenAI
 
 from bedrock_runtime import converse_json, is_bedrock_provider
 from copilot_contracts import MemoryExtraction
+import metrics as copilot_metrics
 
 
 _PROMPT = """\
@@ -37,7 +38,7 @@ def extract_memories(user_message: str) -> MemoryExtraction:
         ),
         mode=instructor.Mode.JSON,
     )
-    return client.chat.completions.create(
+    parsed, completion = client.chat.completions.create_with_completion(
         model=os.environ["LLM_MODEL"],
         response_model=MemoryExtraction,
         messages=[
@@ -46,3 +47,10 @@ def extract_memories(user_message: str) -> MemoryExtraction:
         ],
         max_retries=2,
     )
+    usage = getattr(completion, "usage", None)
+    copilot_metrics.record_model_call(
+        os.environ.get("LLM_PROVIDER", "openai").lower(),
+        int(getattr(usage, "prompt_tokens", 0) or 0),
+        int(getattr(usage, "completion_tokens", 0) or 0),
+    )
+    return parsed

@@ -6,7 +6,7 @@
 """Small shared adapter for Amazon Bedrock Converse requests."""
 
 import os
-from typing import TypeVar
+from typing import Callable, TypeVar
 
 from pydantic import BaseModel, ValidationError
 
@@ -64,15 +64,22 @@ def converse_with_usage(
     return text, input_tokens, output_tokens
 
 
-def converse_json(response_model: type[T], system_prompt: str, user_prompt: str) -> T:
+def converse_json(
+    response_model: type[T],
+    system_prompt: str,
+    user_prompt: str,
+    usage_callback: Callable[[int, int], None] | None = None,
+) -> T:
     """Invoke Bedrock and validate its JSON response, retrying one malformed reply."""
     last_error: Exception | None = None
     for _ in range(2):
         try:
-            text = converse_text(
+            text, input_tokens, output_tokens = converse_with_usage(
                 f"{system_prompt}\nReturn valid JSON only; do not use Markdown fences.",
                 user_prompt,
             )
+            if usage_callback is not None:
+                usage_callback(input_tokens, output_tokens)
             start, end = text.find("{"), text.rfind("}")
             if start >= 0 and end > start:
                 text = text[start:end + 1]

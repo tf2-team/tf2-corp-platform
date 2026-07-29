@@ -12,6 +12,7 @@ from openai import OpenAI
 
 from bedrock_runtime import converse_json, is_bedrock_provider
 from copilot_contracts import RetrievalHint
+import metrics as copilot_metrics
 
 _PROMPT = """Build turn context for a shopping conversation.
 Return JSON with exactly:
@@ -51,9 +52,16 @@ def parse_retrieval_hint(user_message: str, conversation_context: str = "") -> R
         OpenAI(base_url=os.environ["LLM_BASE_URL"], api_key=os.environ["OPENAI_API_KEY"]),
         mode=instructor.Mode.JSON,
     )
-    return client.chat.completions.create(
+    parsed, completion = client.chat.completions.create_with_completion(
         model=os.environ["LLM_MODEL"],
         response_model=RetrievalHint,
         messages=[{"role": "system", "content": _PROMPT}, {"role": "user", "content": prompt}],
         max_retries=2,
     )
+    usage = getattr(completion, "usage", None)
+    copilot_metrics.record_model_call(
+        os.environ.get("LLM_PROVIDER", "openai").lower(),
+        int(getattr(usage, "prompt_tokens", 0) or 0),
+        int(getattr(usage, "completion_tokens", 0) or 0),
+    )
+    return parsed

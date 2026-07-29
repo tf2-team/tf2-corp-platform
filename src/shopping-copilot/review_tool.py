@@ -16,6 +16,7 @@ Public API:
 """
 
 import logging
+import os
 
 from bedrock_grounding import generate_grounded_summary as generate_bedrock_grounded_summary
 from bedrock_runtime import is_bedrock_provider
@@ -23,8 +24,17 @@ from techx_ai_common.contracts import GroundedResponse, ResponseStatus
 from techx_ai_common.grounding import generate_grounded_summary, validate_grounded_summary
 from techx_ai_common.guardrails import sanitize_reviews
 from techx_ai_common.proto import demo_pb2, demo_pb2_grpc
+import metrics as copilot_metrics
 
 logger = logging.getLogger("review_tool")
+
+
+def _record_grounding_usage(input_tokens: int, output_tokens: int) -> None:
+    copilot_metrics.record_model_call(
+        os.environ.get("LLM_PROVIDER", "openai").lower(),
+        input_tokens,
+        output_tokens,
+    )
 
 
 def answer_with_reviews(
@@ -84,7 +94,11 @@ def answer_with_reviews(
     draft = (
         generate_bedrock_grounded_summary(safe_reviews, question)
         if is_bedrock_provider()
-        else generate_grounded_summary(safe_reviews)
+        else generate_grounded_summary(
+            safe_reviews,
+            question=question,
+            usage_callback=_record_grounding_usage,
+        )
     )
     grounded = validate_grounded_summary(draft, safe_reviews)
 

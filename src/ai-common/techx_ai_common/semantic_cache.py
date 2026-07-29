@@ -229,12 +229,6 @@ class SemanticCache:
             question_normalized.encode("utf-8")
         ).hexdigest()
 
-        try:
-            embedding = self._get_embedding(question_normalized)
-        except Exception:
-            logger.debug("Embedding failed during lookup (fail-open)", exc_info=True)
-            return None
-
         key = self._compute_deterministic_key(
             user_scope,
             product_id,
@@ -263,6 +257,13 @@ class SemanticCache:
                 logger.debug("Exact match rejected: source_hash mismatch")
 
             # Stage 2: semantic KNN with hybrid filters
+            try:
+                embedding = self._get_embedding(question_normalized)
+            except Exception:
+                logger.debug(
+                    "Embedding failed during lookup (fail-open)", exc_info=True
+                )
+                return None
             return self._semantic_knn_lookup(
                 user_scope=user_scope,
                 product_id=product_id,
@@ -315,9 +316,6 @@ class SemanticCache:
         except Exception:
             logger.error(f"FT.SEARCH failed (fail-open), knn_query={knn_query}", exc_info=True)
             return None
-
-        logger.error(f"KNN search raw: {raw}")
-
 
         # raw: [total, key1, [field, value, ...], ...]
         if not raw or raw[0] == 0:
