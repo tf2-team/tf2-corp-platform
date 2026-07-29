@@ -23,7 +23,7 @@ jobs:
     steps:
       - name: Checkout
         # actions/checkout@v7.0.0
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
 
       - name: Setup Go
         # actions/setup-go@v6.5.0
@@ -85,7 +85,7 @@ jobs:
     steps:
       - name: Checkout
         # actions/checkout@v7.0.0
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           submodules: recursive
 
@@ -152,7 +152,7 @@ jobs:
     steps:
       - name: Checkout
         # actions/checkout@v7.0.0
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
 
       - name: Setup Python
         # actions/setup-python@v6.2.0
@@ -188,7 +188,7 @@ jobs:
     steps:
       - name: Checkout
         # actions/checkout@v7.0.0
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           fetch-depth: 0
 
@@ -325,7 +325,7 @@ jobs:
     steps:
       - name: Checkout
         # actions/checkout@v7.0.0
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           submodules: recursive
 
@@ -492,7 +492,7 @@ jobs:
     timeout-minutes: 30
     steps:
       - name: Checkout
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           fetch-depth: 0
       - name: Install pinned Semgrep
@@ -512,7 +512,7 @@ jobs:
     timeout-minutes: 20
     steps:
       - name: Checkout complete history
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           fetch-depth: 0
       - name: Install pinned TruffleHog with checksum verification
@@ -537,7 +537,7 @@ jobs:
     timeout-minutes: 20
     steps:
       - name: Checkout
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
       - name: Block HIGH and CRITICAL IaC misconfigurations
         # aquasecurity/trivy-action@v0.36.0
         uses: aquasecurity/trivy-action@a9c7b0f06e461e9d4b4d1711f154ee024b8d7ab8
@@ -560,7 +560,7 @@ jobs:
     steps:
       - name: Checkout
         # actions/checkout@v7.0.0
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
 
       - name: Setup Python
         # actions/setup-python@v6.2.0
@@ -609,7 +609,7 @@ jobs:
     steps:
       - name: Checkout
         # actions/checkout@v7.0.0
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
 
       - name: Setup Python
         # actions/setup-python@v6.2.0

@@ -109,7 +109,7 @@ jobs:
     steps:
       - name: Checkout
         # actions/checkout@v7.0.0
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           # Need enough history for git diff against github.event.before on selective rebuilds.
           fetch-depth: 0
@@ -604,7 +604,7 @@ jobs:
     steps:
       - name: Checkout
         # actions/checkout@v7.0.0
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           submodules: recursive
 
@@ -883,7 +883,7 @@ jobs:
       contents: read
     steps:
       - name: Checkout
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
       - name: Block HIGH and CRITICAL IaC misconfigurations
         # aquasecurity/trivy-action@v0.36.0
         uses: aquasecurity/trivy-action@a9c7b0f06e461e9d4b4d1711f154ee024b8d7ab8
@@ -909,7 +909,7 @@ jobs:
       contents: read
     steps:
       - name: Checkout
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           fetch-depth: 0
       - name: Install pinned Semgrep
@@ -934,7 +934,7 @@ jobs:
       contents: read
     steps:
       - name: Checkout complete history
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           fetch-depth: 0
       - name: Install pinned TruffleHog with checksum verification
@@ -1120,7 +1120,7 @@ jobs:
       - name: Checkout
         if: steps.dest.outputs.skip != 'true'
         # actions/checkout@v7.0.0
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
 
       - name: Setup Python
         if: steps.dest.outputs.skip != 'true'
@@ -1359,13 +1359,13 @@ jobs:
           fi
 
       - name: Checkout platform digest updater
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           path: platform
 
       - name: Checkout chart repository
         # actions/checkout@v7.0.0
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           repository: ${{ env.CHART_REPO }}
           ref: ${{ env.CHART_BRANCH }}
@@ -1452,13 +1452,13 @@ jobs:
           fi
 
       - name: Checkout platform digest updater
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           path: platform
 
       - name: Checkout chart repository
         # actions/checkout@v7.0.0
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           repository: ${{ env.CHART_REPO }}
           ref: ${{ env.CHART_PROD_BRANCH }}
