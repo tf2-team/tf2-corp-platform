@@ -6,6 +6,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+from aiops.remediation.catalog import ActionCatalog
 from scripts.generate_incident_history import generate
 
 
@@ -21,6 +22,17 @@ def test_generate_incident_history_seed_passes_contract() -> None:
     assert valid_actions == 7
     assert [record["incident_id"] for record in records] == sorted(record["incident_id"] for record in records)
     assert any(record["actions_taken"][0]["action_id"] == "scale_product_catalog" for record in records)
+
+def test_actions_catalog_metadata_passes_schema() -> None:
+    root = Path(__file__).resolve().parents[1]
+
+    catalog = ActionCatalog(root / "config" / "actions.json").load()
+
+    assert catalog["scale_product_catalog"].executor_supported is True
+    assert catalog["scale_product_catalog"].live_execute_supported is False
+    assert catalog["scale_product_catalog"].rollback_action_id == "restore_deployment_replicas"
+    assert catalog["restart_payment"].protected is True
+    assert catalog["restart_payment"].blocked is True
 
 
 def test_generate_incident_history_rejects_unknown_action(tmp_path: Path) -> None:

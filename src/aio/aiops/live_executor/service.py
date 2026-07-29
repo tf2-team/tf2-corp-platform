@@ -8,7 +8,16 @@ from pathlib import Path
 from typing import Any
 
 from runbooks.actions import page_oncall, plan_scale_deployment, restore_deployment_replicas, scale_deployment
-from runbooks.actions.common import ALLOWLIST, POLICY_ID, block_response, stable_hash, utc_now
+from runbooks.actions.common import (
+    ALLOWLIST,
+    POLICY_EXPIRES_AT,
+    POLICY_ID,
+    PROTECTED_NAMESPACES,
+    PROTECTED_TARGETS,
+    block_response,
+    stable_hash,
+    utc_now,
+)
 
 from aiops.live_executor.store import LiveExecutorStore, utc_now_text
 
@@ -17,18 +26,20 @@ STATUS_PLANNED = "planned"
 STATUS_RUNNING = "running"
 STATUS_BLOCKED = "blocked"
 STATUS_ROLLED_BACK = "rolled_back"
+DEFAULT_CAPABILITY_CATALOG_PATH = Path("config/executor_supported_actions.json")
 
 
 class LiveExecutorService:
-    def __init__(self, store: LiveExecutorStore):
+    def __init__(self, store: LiveExecutorStore, capability_catalog_path: Path | None = None):
         self.store = store
+        self.capability_catalog_path = capability_catalog_path or DEFAULT_CAPABILITY_CATALOG_PATH
 
     @classmethod
     def from_path(cls, path: Path) -> "LiveExecutorService":
         return cls(LiveExecutorStore(path))
 
     def catalog(self) -> list[dict[str, Any]]:
-        return list(ALLOWLIST.values())
+        return _load_capability_catalog(self.capability_catalog_path)
 
     def plan(self, request: dict[str, Any]) -> dict[str, Any]:
         cached = self._idempotent(request, "plan")
@@ -247,3 +258,44 @@ def _script_response_to_api(response: dict[str, Any], default_status: str) -> di
 
 def _assert_json_serializable(response: dict[str, Any]) -> None:
     json.dumps(response, sort_keys=True)
+
+def _load_capability_catalog(path: Path) -> list[dict[str, Any]]:
+    if path.exists():
+        catalog = json.loads(path.read_text(encoding="utf-8"))
+        if isinstance(catalog, list):
+            _assert_json_serializable({"actions": catalog})
+            return catalog
+    catalog = [_capability_from_allowlist(config) for config in ALLOWLIST.values()]
+    _assert_json_serializable({"actions": catalog})
+    return catalog
+
+def _capability_from_allowlist(config: dict[str, Any]) -> dict[str, Any]:
+    target = config["target"]
+    namespace = config["namespace"]
+    protected = target in PROTECTED_TARGETS or namespace in PROTECTED_NAMESPACES
+    return {
+        "action_id": config["action_id"],
+        "action_type": config["action_type"],
+        "target": target,
+        "target_kind": config["target_kind"],
+        "namespace": namespace,
+        "executor_supported": not protected,
+        "recommendation_only": False,
+        "audit_only": False,
+        "dry_run_supported": True,
+        "execute_supported": not protected,
+        "live_execute_supported": False,
+        "rollback_supported": not protected,
+        "rollback_action_id": config.get("rollback_action_id"),
+        "verification_query_id": config.get("verification_query_id"),
+        "policy_id": POLICY_ID,
+        "policy_expires_at": POLICY_EXPIRES_AT,
+        "policy_approval_required": True,
+        "protected": protected,
+        "blocked": protected,
+        "blocked_reason": "target or namespace is protected" if protected else None,
+        "min_replicas": config.get("min_replicas"),
+        "max_replicas": config.get("max_replicas"),
+        "target_replicas": config.get("target_replicas"),
+        "blast_radius_services": config.get("blast_radius_services", []),
+    }
