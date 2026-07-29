@@ -156,6 +156,11 @@
       "robust_drift_threshold": 4.0,
       "robust_drift_min_baseline_points": 30,
       "isolation_score_scale": 10.0,
+      "robust_scaling": {
+        "mad_scale": 1.4826,
+        "iqr_scale": 1.349,
+        "min_spread": 1.0
+      },
       "page_hinkley_min_bucket_factor": 2.0,
       "detection_window_seconds": 1800,
       "normal_growth_detection_window_seconds": 1800,

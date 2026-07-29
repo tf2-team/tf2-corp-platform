@@ -26,14 +26,13 @@ def quantile(values: list[float], q: float) -> float:
     return ordered[index]
 
 
-def robust_spread(values: list[float]) -> float:
+def robust_spread(values: list[float], mad_scale: float = 1.4826, iqr_scale: float = 1.349, min_spread: float = 1.0) -> float:
     if len(values) < 4:
-        return 1.0
+        return min_spread
     center = median(values)
-    mad = median([abs(value - center) for value in values]) * 1.4826
+    mad = median([abs(value - center) for value in values]) * mad_scale
     raw_iqr = quantile(values, 0.75) - quantile(values, 0.25)
-    spread = max(mad, raw_iqr / 1.349)
-    return spread if spread > 0 else 1.0
+    return max(mad, raw_iqr / iqr_scale, min_spread)
 
 
 def robust_score(baseline: list[float], values: list[float]) -> float:

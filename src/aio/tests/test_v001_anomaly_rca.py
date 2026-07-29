@@ -394,24 +394,22 @@ class V001AnomalyRcaTest(unittest.TestCase):
 
         self.assertEqual(findings, [])
 
-    def test_isolation_forest_normalizes_rows_before_scoring(self):
+    def test_isolation_forest_robust_scales_columns_before_scoring(self):
         detector = ServiceIsolationForestDetector(score_threshold=4.0, min_points=8)
-        rows = detector._rows(
-            [
-                metric("checkout", "cpu", [10, 10, 10, 10, 10, 10, 10, 20]),
-                metric("checkout", "memory", [10000, 10000, 10000, 10000, 10000, 10000, 10000, 20000]),
-            ]
+        rows = detector._normalized_rows(
+            [[8.0, 800.0], [9.0, 900.0], [10.0, 1000.0], [11.0, 1100.0], [12.0, 1200.0], [20.0, 2000.0]],
+            baseline_count=5,
         )
 
-        self.assertEqual(rows[-1], [20.0, 20000.0])
-        self.assertEqual(detector._normalized_rows(rows)[-1], [1.0, 1.0])
+        self.assertAlmostEqual(rows[-1][0], rows[-1][1], places=6)
+        self.assertGreater(rows[-1][0], 6.0)
 
-    def test_isolation_forest_normalization_uses_baseline_range_only(self):
+    def test_isolation_forest_robust_scaling_uses_baseline_only(self):
         detector = ServiceIsolationForestDetector(score_threshold=4.0, min_points=2)
 
-        rows = detector._normalized_rows([[0.0, 0.0], [10.0, 10.0], [100.0, 100.0]], baseline_count=2)
+        rows = detector._normalized_rows([[8.0], [9.0], [10.0], [11.0], [100.0]], baseline_count=4)
 
-        self.assertEqual(rows[-1], [10.0, 10.0])
+        self.assertGreater(rows[-1][0], 60.0)
 
     def test_isolation_forest_keeps_tail_change_after_flat_baseline(self):
         detector = ServiceIsolationForestDetector(score_threshold=4.0, min_points=2)
@@ -419,6 +417,17 @@ class V001AnomalyRcaTest(unittest.TestCase):
         rows = detector._normalized_rows([[10.0], [10.0], [20.0]], baseline_count=2)
 
         self.assertEqual(rows[-1], [10.0])
+
+    def test_isolation_forest_uses_configured_minimum_robust_spread(self):
+        detector = ServiceIsolationForestDetector(
+            score_threshold=4.0,
+            min_points=2,
+            robust_scaling={"mad_scale": 1.4826, "iqr_scale": 1.349, "min_spread": 10.0},
+        )
+
+        rows = detector._normalized_rows([[10.0], [10.0], [20.0]], baseline_count=2)
+
+        self.assertEqual(rows[-1], [1.0])
 
     def test_isolation_forest_aligns_tail_indexes_to_common_timestamps(self):
         detector = ServiceIsolationForestDetector(score_threshold=1.0, min_points=4, detection_window_seconds=2)

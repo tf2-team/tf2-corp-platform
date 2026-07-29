@@ -711,7 +711,7 @@ Isolation Forest là detector đa biến cấp service. Quy trình trích xuất
 3. Lấy giao timestamp giữa các metric, để mọi hàng có đủ cột.
 4. Mỗi timestamp trở thành một feature vector.
 5. Tách các hàng baseline và tail.
-6. Normalize từng cột bằng min/max của **baseline**.
+6. Robust-scale từng cột bằng median và robust spread của **baseline**.
 7. Fit Isolation Forest trên baseline rows.
 8. Score tail rows và chọn hàng bất thường nhất.
 
@@ -730,19 +730,32 @@ Feature vector tại `t3` là:
 X_t3 = [55, 150, 80]
 ```
 
-Mỗi cột được normalize riêng:
+Mỗi cột được robust-scale riêng:
 
 ```text
-x_norm = (x - baseline_min) / (baseline_max - baseline_min)
+x_scaled = (x - median_baseline) / robust_spread_baseline
+robust_spread = max(MAD × 1.4826, IQR / 1.349, fallback 1)
 ```
 
-Giả sử baseline CPU nằm trong `[10, 20]`, CPU tại `t3 = 55`:
+Các hệ số nằm tại `rca.anomaly.robust_scaling` trong `hyperparameters.json`:
+
+```json
+{
+  "mad_scale": 1.4826,
+  "iqr_scale": 1.349,
+  "min_spread": 1.0
+}
+```
+
+`min_spread` ngăn chia cho 0 khi baseline phẳng; tăng giá trị này sẽ làm Isolation Forest ít nhạy hơn với thay đổi nhỏ trên cột đó.
+
+Giả sử baseline CPU có median `15`, robust spread `5`, CPU tại `t3 = 55`:
 
 ```text
-cpu_norm = (55 - 10) / (20 - 10) = 4.5
+cpu_scaled = (55 - 15) / 5 = 8
 ```
 
-Giá trị có thể lớn hơn 1 vì tail được so với min/max baseline và không bị clip. Điều này giúp model thấy tail đã đi xa vùng đã học.
+Giá trị có thể lớn hơn 1 hoặc âm vì đây là số đơn vị robust spread mà tail cách median baseline. Scaler không bị một min/max outlier kéo giãn và không clip tail.
 
 Sau khi service-level row bị đánh dấu bất thường, engine vẫn cần một metric để tạo `AnomalyFinding`. Nó chọn cột có độ lệch tuyệt đối lớn nhất so với baseline center làm metric đại diện.
 
@@ -817,10 +830,10 @@ Fire khi z `>= 4.0`.
 
 ### 13.3 Isolation Forest
 
-Model dùng nhiều metric cùng service tại timestamp chung. Mỗi cột được normalize:
+Model dùng nhiều metric cùng service tại timestamp chung. Mỗi cột được robust-scale:
 
 ```text
-normalized = (value - baseline_min) / (baseline_max - baseline_min)
+scaled = (value - median_baseline) / robust_spread_baseline
 service_score = -score_samples(row) × 10
 ```
 
@@ -1433,16 +1446,17 @@ z = |0.35 - 0.05| / 0.05 = 6
 
 ### 26.6 Isolation Forest feature và score
 
-Normalize từng metric bằng baseline:
+Robust-scale từng metric bằng baseline:
 
 ```text
-x_norm = (x - baseline_min) / (baseline_max - baseline_min)
+x_scaled = (x - median_baseline) / robust_spread_baseline
+robust_spread = max(MAD × 1.4826, IQR / 1.349, fallback 1)
 ```
 
 Feature vector của service tại thời điểm t:
 
 ```text
-X_t = [cpu_norm_t, memory_norm_t, socket_norm_t, ...]
+X_t = [cpu_scaled_t, memory_scaled_t, socket_scaled_t, ...]
 ```
 
 Điểm engine dùng:
@@ -1453,18 +1467,19 @@ service_score = -IsolationForest.score_samples(X_t) × 10
 
 | Biến | Ý nghĩa |
 | --- | --- |
-| `baseline_min/max` | Khoảng đã thấy trong baseline của riêng metric |
+| `median_baseline` | Trung tâm robust của riêng metric trong baseline |
+| `robust_spread_baseline` | Độ phân tán lấy từ MAD/IQR, ít bị outlier kéo lệch |
 | `X_t` | Một hàng đa biến mô tả trạng thái service tại timestamp t |
 | `score_samples` | Điểm normality do sklearn trả về; thấp hơn nghĩa là lạ hơn |
 | Dấu `-` | Đổi hướng để điểm anomaly cao hơn dễ hiểu hơn |
 | `× 10` | Đưa score về thang threshold hiện tại |
 
-Ví dụ baseline CPU `[10, 20]`, memory `[100, 120]`; tail CPU 55, memory 150:
+Ví dụ CPU có median baseline 15, spread 5; memory có median 110, spread 10; tail CPU 55, memory 150:
 
 ```text
-cpu_norm = (55-10)/(20-10) = 4.5
-mem_norm = (150-100)/(120-100) = 2.5
-X_tail = [4.5, 2.5]
+cpu_scaled = (55-15)/5 = 8
+mem_scaled = (150-110)/10 = 4
+X_tail = [8, 4]
 ```
 
 Vector này nằm xa vùng baseline. Nếu model trả `score_samples = -0.62`:
