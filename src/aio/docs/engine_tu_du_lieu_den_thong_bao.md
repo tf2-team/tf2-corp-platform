@@ -1054,3 +1054,186 @@ Dữ liệu hợp lệ
 ```
 
 **AnomalyFinding nằm ở cấp service + metric; RCA tổng hợp lên cấp service; Incident Store quyết định có gửi notification hay không.**
+
+---
+
+## 29. Mermaid tổng hợp toàn bộ engine
+
+Sơ đồ dưới đây ghép các Mermaid nhỏ thành một luồng duy nhất. Đọc từ trên xuống; nhánh trái là detector instant, nhánh phải là anomaly/RCA.
+
+```mermaid
+flowchart TB
+    START["AIOPS_RUN_START"] --> CONFIG["Load runtime, PromQL registry, hyperparameters và topology"]
+    CONFIG --> PROM["Prometheus Collector"]
+
+    subgraph COLLECTION["1. Thu thập và kiểm tra dữ liệu"]
+        PROM --> INSTANT["Instant query -> Observation"]
+        PROM --> RANGE["Range query -> MetricSeries"]
+
+        INSTANT --> RAW_CHECK{"Có dữ liệu, cardinality và sample hợp lệ?"}
+        RAW_CHECK -- "Không" --> RAW_BAD["MISSING hoặc INVALID"]
+        RAW_CHECK -- "Có" --> NORMALIZE["Normalize label, unit và window"]
+        NORMALIZE --> QUALIFY{"Khớp registry và sample <= 300 giây?"}
+        QUALIFY -- "Không" --> QUALITY_BAD["UNQUALIFIED / INVALID / STALE"]
+        QUALIFY -- "Có" --> VERIFIED["VERIFIED"]
+        RAW_BAD --> FEATURE_UNKNOWN["Feature status = unknown"]
+        QUALITY_BAD --> FEATURE_UNKNOWN
+        VERIFIED --> FEATURE_READY["Feature status = ready"]
+
+        RANGE --> SERIES_CHECK{"Series VERIFIED và có points?"}
+        SERIES_CHECK -- "Không" --> SERIES_DROP["Bỏ khỏi anomaly/RCA"]
+        SERIES_CHECK -- "Có" --> BUCKET["Gom detector bucket: max / mean / last"]
+    end
+
+    subgraph INSTANT_PATH["2A. Đường detector instant"]
+        FEATURE_UNKNOWN --> NODATA["No-data CandidateEvent"]
+        FEATURE_READY --> ROLE{"Feature role"}
+        ROLE -- "official_slo / anomaly_input" --> THRESHOLD{"value >= threshold?"}
+        THRESHOLD -- "Không" --> NO_INSTANT["Không tạo threshold candidate"]
+        THRESHOLD -- "Có" --> SLO_CANDIDATE["Threshold/SLO CandidateEvent"]
+        ROLE -- "diagnostic / dependency_signal" --> DEP_THRESHOLD{"value > dependency threshold?"}
+        DEP_THRESHOLD -- "Không" --> NO_INSTANT
+        DEP_THRESHOLD -- "Có" --> DEP_CANDIDATE["Dependency CandidateEvent có likely_dependency"]
+
+        NODATA --> GROUP["Gom theo environment + flow + service + bucket 300 giây"]
+        SLO_CANDIDATE --> GROUP
+        DEP_CANDIDATE --> GROUP
+        GROUP --> CORRELATION["Tính confidence từ verified, thời gian, topology, operation và evidence"]
+        CORRELATION --> DEP_CONF{"Dependency confidence >= 0.5?"}
+        DEP_CONF -- "Không" --> CORRELATED_UNKNOWN["Correlated CandidateEvent; dependency unknown"]
+        DEP_CONF -- "Có" --> CORRELATED_DEP["Correlated CandidateEvent; gắn likely_dependency và contributing_signals"]
+        CORRELATED_UNKNOWN --> CANDIDATE_ENRICH["Enrich feature + Jaeger + OpenSearch + Kubernetes"]
+        CORRELATED_DEP --> CANDIDATE_ENRICH
+        CANDIDATE_ENRICH --> DIRECT_EVENT["Enriched CandidateEvent"]
+        SLO_CANDIDATE --> SLO_IMPACT["Chuyển thành SLO impact finding cho RCA"]
+    end
+
+    subgraph ANOMALY_PATH["2B. Đường time-series anomaly"]
+        BUCKET --> GROWTH["Growth Gate: so request rate với CPU và socket I/O"]
+        GROWTH --> OOM_CHECK{"OOM counter tăng gần đây?"}
+        OOM_CHECK -- "Có" --> BREAKOUT["Breakout metric; không coi là traffic hợp lệ"]
+        OOM_CHECK -- "Không" --> ERROR_CHECK{"Error tăng?"}
+        ERROR_CHECK -- "Có" --> BREAKOUT
+        ERROR_CHECK -- "Không" --> TRAFFIC_SCORE["traffic_score = weighted shape/DTW score"]
+        TRAFFIC_SCORE --> TRAFFIC_OK{"score >= 0.65 và primary >= 0.55?"}
+        TRAFFIC_OK -- "Có" --> EXPLAINED["Ghi explained_metrics để lọc RCA về sau"]
+        TRAFFIC_OK -- "Không" --> DETECT_PATH["Tiếp tục detect"]
+        BREAKOUT --> DETECT_PATH
+        EXPLAINED --> DETECT_PATH
+
+        DETECT_PATH --> TAIL_OOM{"Metric là OOM?"}
+        TAIL_OOM -- "Có" --> OOM_RECENT{"Counter tăng trong 3 bucket?"}
+        OOM_RECENT -- "Không" --> TAIL_DROP["Không qua significant-tail"]
+        OOM_RECENT -- "Có" --> TAIL_PASS["Qua significant-tail"]
+        TAIL_OOM -- "Không" --> BASIC_TAIL{"Basic-tail đủ absolute, relative và N bucket?"}
+        BASIC_TAIL -- "Có" --> TAIL_PASS
+        BASIC_TAIL -- "Không" --> SLOW_DRIFT{"Slow-drift đủ slope, total change và positive ratio?"}
+        SLOW_DRIFT -- "Có" --> TAIL_PASS
+        SLOW_DRIFT -- "Không" --> CUSUM_GROUP{"CPU, latency hoặc socket I/O?"}
+        CUSUM_GROUP -- "Không" --> TAIL_DROP
+        CUSUM_GROUP -- "Có" --> CHANGE_POINT{"CUSUM hoặc Page-Hinkley đủ lệch liên tục?"}
+        CHANGE_POINT -- "Không" --> TAIL_DROP
+        CHANGE_POINT -- "Có" --> TAIL_PASS
+
+        TAIL_PASS --> ROBUST["Robust Drift"]
+        TAIL_PASS --> EWMA["EWMA/STL"]
+        TAIL_PASS --> ISOLATION["Isolation Forest"]
+        TAIL_PASS --> SLOW_FINDING["Slow-drift finding"]
+        ROBUST --> RAW_FINDINGS["Raw findings theo service + metric + signal"]
+        EWMA --> RAW_FINDINGS
+        ISOLATION --> RAW_FINDINGS
+        SLOW_FINDING --> RAW_FINDINGS
+        RAW_FINDINGS --> ANOMALY_SUM["Weighted anomaly = sum weight x normalized score"]
+        ANOMALY_SUM --> ANOMALY_GATE{"Score >= 1 hoặc một detector mạnh gấp 2?"}
+        ANOMALY_GATE -- "Không" --> ANOMALY_DROP["Không tạo AnomalyFinding"]
+        ANOMALY_GATE -- "Có" --> ANOMALY["AnomalyFinding theo service + metric"]
+    end
+
+    subgraph RCA_PATH["3. RCA đa tín hiệu"]
+        ANOMALY --> RCA_INPUT["RCA input"]
+        SLO_IMPACT --> RCA_INPUT
+        RCA_INPUT --> GRAPH["Graph score: PageRank 0.7 + timestamp 0.3"]
+        RCA_INPUT --> EARLIEST["Earliest drift score"]
+        RCA_INPUT --> SHAPE["Shape correlation, lag 0..5 bucket"]
+        RCA_INPUT --> COVERAGE["Downstream coverage tối đa 2 hop"]
+        GRAPH --> RRF["Weighted RRF: graph .15, earliest .55, shape .15, coverage .15"]
+        EARLIEST --> RRF
+        SHAPE --> RRF
+        COVERAGE --> RRF
+        GRAPH --> SUPPORT["Weighted support score"]
+        EARLIEST --> SUPPORT
+        SHAPE --> SUPPORT
+        COVERAGE --> SUPPORT
+        ANOMALY --> EVIDENCE_STRENGTH["Evidence strength = min(1, max anomaly score)"]
+        RRF --> RCA_SCORE["RCA score = weighted RRF x evidence strength x support"]
+        SUPPORT --> RCA_SCORE
+        EVIDENCE_STRENGTH --> RCA_SCORE
+
+        RCA_SCORE --> PRELIM_ROOTS["RCA candidates, tối đa top 5"]
+        PRELIM_ROOTS --> ROOT_ENRICH["Query log/trace root đứng đầu"]
+        ROOT_ENRICH --> STRONG_ROOT{"Có hard failure?"}
+        STRONG_ROOT -- "Không" --> DEP_ENRICH["Query dependency trực tiếp"]
+        STRONG_ROOT -- "Có" --> RERANK["Gắn evidence và xếp hạng lại"]
+        DEP_ENRICH --> WEAK_RCA{"RCA < 0.45 hoặc nhiều root?"}
+        WEAK_RCA -- "Có" --> ANOMALY_ENRICH["Query thêm anomaly services; boost/penalty evidence"]
+        WEAK_RCA -- "Không" --> RERANK
+        ANOMALY_ENRICH --> RERANK
+
+        RERANK --> DOWNSTREAM_FILTER{"Có parent sớm hơn và mạnh hơn?"}
+        DOWNSTREAM_FILTER -- "Có" --> ROOT_DROP["Suppress downstream symptom"]
+        DOWNSTREAM_FILTER -- "Không" --> TRAFFIC_FILTER["Xóa traffic-explained root metrics"]
+        TRAFFIC_FILTER --> HAS_ROOT_METRIC{"Còn root metric?"}
+        HAS_ROOT_METRIC -- "Không" --> ROOT_DROP
+        HAS_ROOT_METRIC -- "Có" --> ROOT_SCORE_GATE{"RCA score >= 0.24?"}
+        ROOT_SCORE_GATE -- "Không" --> ROOT_DROP
+        ROOT_SCORE_GATE -- "Có" --> CURRENT_TAIL{"Root metric còn significant/current hoặc có OOM?"}
+        CURRENT_TAIL -- "Không" --> ROOT_DROP
+        CURRENT_TAIL -- "Có" --> CONTEXT_GATE{"Có anomaly/SLO context?"}
+        CONTEXT_GATE -- "Có" --> RCA_EVENT["RCA CandidateEvent"]
+        CONTEXT_GATE -- "Không" --> STRONG_METRIC{"metric >= 1.8 hoặc shape >= 0.95?"}
+        STRONG_METRIC -- "Không" --> ROOT_DROP
+        STRONG_METRIC -- "Có" --> RCA_EVENT
+    end
+
+    subgraph INCIDENT_PATH["4. Incident, dedup và lifecycle"]
+        DIRECT_EVENT --> UPSERT["Tính fingerprint và upsert Incident"]
+        RCA_EVENT --> UPSERT
+        UPSERT --> EXISTING{"Fingerprint đã tồn tại?"}
+        EXISTING -- "Không" --> OPEN["Incident open, occurrence = 1"]
+        EXISTING -- "Có" --> ONGOING["Incident ongoing, tăng occurrence"]
+        OPEN --> NOTIFY_DUE{"Notification đến hạn hoặc severity tăng?"}
+        ONGOING --> NOTIFY_DUE
+        NOTIFY_DUE -- "Không" --> DEDUP["Dedup theo incident cooldown"]
+        NOTIFY_DUE -- "Có" --> SERVICE_COOLDOWN{"Service/type cooldown còn hiệu lực?"}
+        SERVICE_COOLDOWN -- "Có" --> DEDUP
+        SERVICE_COOLDOWN -- "Không" --> ACTIVE_ROOT{"Thuộc blast radius của active root?"}
+        ACTIVE_ROOT -- "Có" --> SUPPRESS["Suppress notification"]
+        ACTIVE_ROOT -- "Không" --> OUTBOX["Build NotificationMessage và ghi outbox pending"]
+
+        OPEN --> RECOVERY_COUNT{"Không xuất hiện ở lần chạy sau?"}
+        ONGOING --> RECOVERY_COUNT
+        RECOVERY_COUNT -- "Có, chưa đủ 30 lần" --> ACTIVE["Giữ active, tăng recovery_count"]
+        RECOVERY_COUNT -- "Có, đủ 30 lần" --> RECOVERED["Incident recovered + recovery notification"]
+        RECOVERY_COUNT -- "Không" --> ONGOING
+    end
+
+    subgraph NOTIFICATION_PATH["5. Gửi notification"]
+        OUTBOX --> DISPATCH["Notification adapter dispatch"]
+        DISPATCH --> HTTP_OK{"HTTP thành công?"}
+        HTTP_OK -- "Có" --> SENT["Outbox status = sent"]
+        HTTP_OK -- "Không" --> RETRY["status = retry; backoff min(60 x 2^(n-1), 3600)"]
+        RETRY --> DISPATCH
+        SENT --> NEW_STRONG{"Strong log/trace xuất hiện trong 15 phút?"}
+        NEW_STRONG -- "Không" --> END["AIOPS_RUN_END"]
+        NEW_STRONG -- "Có, chưa bổ sung" --> SUPPLEMENT["Gửi một Supplemental RCA notification"]
+        SUPPLEMENT --> END
+        RECOVERED --> OUTBOX
+        DEDUP --> END
+        SUPPRESS --> END
+        SERIES_DROP --> END
+        TAIL_DROP --> END
+        ANOMALY_DROP --> END
+        ROOT_DROP --> END
+        NO_INSTANT --> END
+    end
+```
