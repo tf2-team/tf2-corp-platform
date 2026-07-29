@@ -302,9 +302,9 @@
   {
     "service": "product-catalog",
     "namespace": "techx-corp-prod",
-    "support_status": "executor_supported_simulation_only",
+    "support_status": "executor_supported_live_gated",
     "executor_supported": true,
-    "live_execute_supported": false,
+    "live_execute_supported": true,
     "protected": false,
     "supported_actions": ["scale_product_catalog"],
     "recommendation_actions": ["restart_product_catalog"],

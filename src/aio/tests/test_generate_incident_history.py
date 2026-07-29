@@ -29,7 +29,9 @@ def test_actions_catalog_metadata_passes_schema() -> None:
     catalog = ActionCatalog(root / "config" / "actions.json").load()
 
     assert catalog["scale_product_catalog"].executor_supported is True
-    assert catalog["scale_product_catalog"].live_execute_supported is False
+    assert catalog["scale_product_catalog"].live_execute_supported is True
+    assert catalog["scale_product_catalog"].verification_query_id == "product-catalog.cpu_millicores"
+    assert catalog["scale_product_catalog"].verification_signal_id == "product_catalog_cpu_millicores"
     assert catalog["scale_product_catalog"].rollback_action_id == "restore_deployment_replicas"
     assert catalog["restart_payment"].protected is True
     assert catalog["restart_payment"].blocked is True

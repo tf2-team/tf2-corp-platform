@@ -35,12 +35,13 @@ Deployment/product-catalog
 Namespace: techx-corp-prod
 ```
 
-Action này có dry-run/plan, có execute ở mức executor audit/simulation, có rollback token và rollback action `restore_deployment_replicas`. Tuy nhiên, live Kubernetes mutation vẫn đang tắt, nên `live_execute_supported=false`.
+Action này đã implement đầy đủ dry-run/plan, live execute, verification và rollback action `restore_deployment_replicas`. Capability tĩnh vì vậy là `live_execute_supported=true`. Trạng thái vận hành là một gate riêng: khi CDO chưa bật `AIOPS_LIVE_EXECUTOR_ALLOW_LIVE_APPLY`, endpoint catalog trả `live_apply_enabled=false` và execute/rollback fail closed mà không mutate Kubernetes.
 
 Vì vậy:
 
-- Nếu AI muốn chọn action có thể gọi executor ở mức plan/execute simulation: chỉ có `scale_product_catalog`.
-- Nếu AI muốn chọn action có thể mutate live Kubernetes: hiện tại chưa có action nào.
+- AI luôn có thể gọi plan cho `scale_product_catalog`.
+- Executor không cung cấp execute/rollback simulation. Khi `live_apply_enabled=false`, execute/rollback trả `allowed=false` với reason `live_apply_disabled`.
+- Khi CDO bật gate và các policy/approval hợp lệ, `scale_product_catalog` là action live duy nhất đã implement.
 - Các action `restart_*` chỉ là recommendation/history catalog, chưa phải action CDO executor chạy được.
 - Các action `page_*` chỉ ghi audit/no-op, chưa gọi paging provider thật như Slack/PagerDuty/email/SNS.
 
@@ -53,6 +54,8 @@ Authorization: Bearer <AIOPS_LIVE_EXECUTOR_TOKEN>
 X-AIOPS-Account: aiops-runtime
 X-Request-Id: <request-id>
 ```
+
+`X-AIOPS-Account` phải đúng bằng `aiops-runtime`. Với request có JSON body, `X-Request-Id` phải đúng bằng `request_id` trong body.
 
 ## Action Catalog
 
@@ -67,15 +70,15 @@ Payload trả về là danh sách action capability. Các trường chính:
 ```text
 action_id, action_type, target, target_kind, namespace,
 executor_supported, recommendation_only, audit_only,
-dry_run_supported, execute_supported, live_execute_supported,
+dry_run_supported, execute_supported, live_execute_supported, live_apply_enabled,
 rollback_supported, rollback_action_id,
-verification_query_id, policy_id, policy_approval_required,
+verification_query_id, verification_signal_id, policy_id, policy_approval_required,
 protected, blocked, blocked_reason, blast_radius_services
 ```
 
 | action_id | action_type | target | namespace | executor supported | live execute | rollback | verification | policy/approval | trạng thái |
 |---|---|---|---|---:|---:|---:|---|---|---|
-| `scale_product_catalog` | `scale_deployment` | `product-catalog` | `techx-corp-prod` | Có | Không | Có, `restore_deployment_replicas` | `product-catalog.p95_latency_5m` | `phase3-scale-policy-v1`, cần approval | Executor simulation/audit |
+| `scale_product_catalog` | `scale_deployment` | `product-catalog` | `techx-corp-prod` | Có | Có, qua CDO gate | Có, `restore_deployment_replicas` | query `product-catalog.cpu_millicores`; signal `product_catalog_cpu_millicores` | `phase3-scale-policy-v1`, cần approval | Live-capable, fail closed khi gate tắt |
 | `restart_product_catalog` | `restart` | `product-catalog` | `techx-corp-prod` | Không | Không | Không | Chưa có | Không áp dụng | Recommendation-only |
 | `restart_checkout` | `restart` | `checkout` | `techx-corp-prod` | Không | Không | Không | Chưa có | Không áp dụng | Recommendation-only |
 | `restart_cart` | `restart` | `cart` | `techx-corp-prod` | Không | Không | Không | Chưa có | Không áp dụng | Recommendation-only |
@@ -97,7 +100,7 @@ Payload trả về là danh sách service support. Các trường chính:
 
 ```text
 service, namespace, support_status, executor_supported,
-live_execute_supported, protected, supported_actions,
+live_execute_supported, live_apply_enabled, protected, supported_actions,
 recommendation_actions, fallback_action, runbooks
 ```
 
@@ -130,7 +133,7 @@ recommendation_actions, fallback_action, runbooks
 | `otel-collector` | `observability` | `observability_manual_only` | Không | Không | Không có | Không có | `page_oncall` |
 | `payment` | `techx-corp-prod` | `protected_recommendation_only` | Không | Không | Không có | `restart_payment` | `page_oncall` |
 | `postgresql` | `techx-corp-prod` | `protected_manual_only` | Không | Không | Không có | Không có | `page_data_oncall` |
-| `product-catalog` | `techx-corp-prod` | `executor_supported_simulation_only` | Có | Không | `scale_product_catalog` | `restart_product_catalog` | `page_oncall` |
+| `product-catalog` | `techx-corp-prod` | `executor_supported_live_gated` | Có | Có, qua CDO gate | `scale_product_catalog` | `restart_product_catalog` | `page_oncall` |
 | `product-reviews` | `techx-corp-prod` | `manual_runbook_only` | Không | Không | Không có | Không có | `page_oncall` |
 | `prometheus` | `observability` | `observability_manual_only` | Không | Không | Không có | Không có | `page_oncall` |
 | `quote` | `techx-corp-prod` | `manual_runbook_only` | Không | Không | Không có | Không có | `page_oncall` |
@@ -171,11 +174,13 @@ AND service.executor_supported=true
 ```text
 action.executor_supported=true
 AND action.live_execute_supported=true
+AND action.live_apply_enabled=true
 AND action.blocked=false
 AND service.live_execute_supported=true
+AND service.live_apply_enabled=true
 ```
 
-Với catalog hiện tại, tập live mutation là rỗng.
+Khi CDO chưa bật live apply, tập live mutation đang enabled là rỗng dù implementation capability đã sẵn sàng.
 
 Để tránh recommend nhầm:
 

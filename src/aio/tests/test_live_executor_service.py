@@ -173,6 +173,37 @@ def test_live_executor_idempotent_execute(tmp_path: Path) -> None:
         second = service.execute(execute_request)
         assert first == second
         assert gateway.state["resource_version"] == "12346"
+
+        replay = service.execute({**execute_request, "incident_id": "inc-other"})
+        assert replay["allowed"] is False
+        assert replay["reasons"] == ["idempotency_context_mismatch"]
+        assert gateway.state["resource_version"] == "12346"
+    finally:
+        service.close()
+
+
+def test_live_executor_rejects_plan_replay_under_another_incident(tmp_path: Path) -> None:
+    service, gateway = _live_service(tmp_path / "executor.sqlite3")
+    try:
+        plan = service.plan(_request())
+        response = service.execute(
+            _request(
+                request_id="req-20260728-replay",
+                incident_id="inc-other",
+                dry_run=False,
+                plan_hash=plan["plan_hash"],
+                rollback_token=plan["rollback"]["rollback_token"],
+                idempotency_key="sha256:1010101010101010101010101010101010101010101010101010101010101010",
+            )
+        )
+
+        assert response["allowed"] is False
+        assert response["executed"] is False
+        assert response["reasons"] == ["incident_id_mismatch"]
+        assert gateway.state["replicas"] == 2
+        assert [event["event_type"] for event in service.store.audit_events_for("inc-other")] == [
+            "execute_blocked"
+        ]
     finally:
         service.close()
 
@@ -337,7 +368,7 @@ def test_live_executor_records_runtime_verification(tmp_path: Path) -> None:
                 "incident_id": "inc-product-catalog-cpu-001",
                 "idempotency_key": "sha256:cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd",
                 "passed": True,
-                "query_id": "product_catalog_cpu_millicores",
+                "query_id": "product-catalog.cpu_millicores",
                 "message": "fresh samples recovered",
             },
         )
@@ -355,12 +386,68 @@ def test_live_executor_records_runtime_verification(tmp_path: Path) -> None:
                 "incident_id": "inc-product-catalog-cpu-001",
                 "idempotency_key": "sha256:edededededededededededededededededededededededededededededededed",
                 "passed": False,
-                "query_id": "product_catalog_cpu_millicores",
+                "query_id": "product-catalog.cpu_millicores",
             },
         )
         assert conflicting["allowed"] is False
         assert conflicting["reasons"] == ["verification_already_recorded"]
         assert service.status(execution["execution_id"])["status"] == "succeeded"
+    finally:
+        service.close()
+
+
+def test_live_executor_binds_verification_and_rollback_to_execution_context(tmp_path: Path) -> None:
+    service, gateway = _live_service(tmp_path / "executor.sqlite3")
+    try:
+        plan = service.plan(_request())
+        execution = service.execute(
+            _request(
+                request_id="req-context-execute",
+                dry_run=False,
+                plan_hash=plan["plan_hash"],
+                rollback_token=plan["rollback"]["rollback_token"],
+                idempotency_key="sha256:2020202020202020202020202020202020202020202020202020202020202020",
+            )
+        )
+
+        wrong_incident = service.record_verification(
+            execution["execution_id"],
+            {
+                "request_id": "req-context-verify-incident",
+                "incident_id": "inc-other",
+                "idempotency_key": "sha256:3030303030303030303030303030303030303030303030303030303030303030",
+                "passed": True,
+                "query_id": "product-catalog.cpu_millicores",
+            },
+        )
+        assert wrong_incident["reasons"] == ["incident_id_mismatch"]
+
+        wrong_query = service.record_verification(
+            execution["execution_id"],
+            {
+                "request_id": "req-context-verify-query",
+                "incident_id": "inc-product-catalog-cpu-001",
+                "idempotency_key": "sha256:4040404040404040404040404040404040404040404040404040404040404040",
+                "passed": True,
+                "query_id": "product-catalog.p95_latency_5m",
+            },
+        )
+        assert wrong_query["reasons"] == ["query_id_mismatch"]
+
+        wrong_rollback = service.rollback(
+            execution["execution_id"],
+            {
+                "request_id": "req-context-rollback",
+                "incident_id": "inc-other",
+                "rollback_token": execution["rollback"]["rollback_token"],
+                "reason": "verification_failed",
+                "requested_by": "aiops-runtime",
+                "idempotency_key": "sha256:5050505050505050505050505050505050505050505050505050505050505050",
+            },
+        )
+        assert wrong_rollback["reasons"] == ["incident_id_mismatch"]
+        assert gateway.state["control_replicas"] == 3
+        assert service.status(execution["execution_id"])["status"] == "running"
     finally:
         service.close()
 
@@ -383,7 +470,7 @@ def test_live_executor_rejects_success_until_requested_pods_are_ready(tmp_path: 
             "incident_id": "inc-product-catalog-cpu-001",
             "idempotency_key": "sha256:3434343434343434343434343434343434343434343434343434343434343434",
             "passed": True,
-            "query_id": "product_catalog_cpu_millicores",
+            "query_id": "product-catalog.cpu_millicores",
         }
         blocked = service.record_verification(execution["execution_id"], request)
         assert blocked["status"] == "blocked"
@@ -455,6 +542,39 @@ def test_live_executor_app_rejects_invalid_contract_input_without_500(tmp_path: 
             },
         )
         assert response.status_code == 422
+    finally:
+        service.close()
+
+
+def test_live_executor_app_rejects_spoofed_auth_context(tmp_path: Path) -> None:
+    service = LiveExecutorService.from_path(tmp_path / "executor.sqlite3")
+    app = create_app(service=service, token="test-token")
+    client = TestClient(app)
+    api_request = _request()
+    api_request.pop("kubernetes_snapshot")
+    try:
+        wrong_account = client.post(
+            "/v1/actions/plan",
+            json=api_request,
+            headers={
+                "Authorization": "Bearer test-token",
+                "X-AIOPS-Account": "another-service",
+                "X-Request-Id": api_request["request_id"],
+            },
+        )
+        assert wrong_account.status_code == 403
+
+        wrong_request_id = client.post(
+            "/v1/actions/plan",
+            json=api_request,
+            headers={
+                "Authorization": "Bearer test-token",
+                "X-AIOPS-Account": "aiops-runtime",
+                "X-Request-Id": "req-header-does-not-match",
+            },
+        )
+        assert wrong_request_id.status_code == 400
+        assert wrong_request_id.json()["detail"] == "request id header does not match body"
     finally:
         service.close()
 
@@ -595,7 +715,8 @@ def test_live_executor_catalog_endpoint_returns_action_capabilities(tmp_path: Pa
         scale = catalog["scale_product_catalog"]
         allowlist = ALLOWLIST["scale_product_catalog"]
         assert scale["executor_supported"] is True
-        assert scale["live_execute_supported"] is False
+        assert scale["live_execute_supported"] is True
+        assert scale["live_apply_enabled"] is False
         assert scale["rollback_supported"] is True
         assert scale["rollback_action_id"] == allowlist["rollback_action_id"]
         assert scale["verification_query_id"] == allowlist["verification_query_id"]
@@ -638,10 +759,35 @@ def test_live_executor_services_catalog_covers_runbook_services(tmp_path: Path) 
         assert set(service_catalog) == set(runbook_map["services"])
         assert service_catalog["product-catalog"]["executor_supported"] is True
         assert service_catalog["product-catalog"]["supported_actions"] == ["scale_product_catalog"]
-        assert service_catalog["product-catalog"]["live_execute_supported"] is False
+        assert service_catalog["product-catalog"]["live_execute_supported"] is True
+        assert service_catalog["product-catalog"]["live_apply_enabled"] is False
         assert service_catalog["checkout"]["support_status"] == "recommendation_only"
         assert service_catalog["checkout"]["supported_actions"] == []
         assert service_catalog["payment"]["protected"] is True
         assert service_catalog["postgresql"]["fallback_action"] == "page_data_oncall"
+    finally:
+        service.close()
+
+
+def test_live_executor_catalog_reports_implementation_and_runtime_gate_separately(tmp_path: Path) -> None:
+    root = Path(__file__).resolve().parents[1]
+    service = LiveExecutorService(
+        LiveExecutorStore(tmp_path / "executor.sqlite3"),
+        deployment_gateway=FakeDeploymentGateway(),
+        allow_live_apply=True,
+        approval_id="adr-live-001",
+        capability_catalog_path=root / "config" / "executor_supported_actions.json",
+        service_support_catalog_path=root / "config" / "executor_service_support.json",
+    )
+    try:
+        scale = next(item for item in service.catalog() if item["action_id"] == "scale_product_catalog")
+        product_catalog = next(
+            item for item in service.service_catalog() if item["service"] == "product-catalog"
+        )
+
+        assert scale["live_execute_supported"] is True
+        assert scale["live_apply_enabled"] is True
+        assert product_catalog["live_execute_supported"] is True
+        assert product_catalog["live_apply_enabled"] is True
     finally:
         service.close()

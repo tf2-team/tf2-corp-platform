@@ -25,9 +25,11 @@ Header bắt buộc nếu dùng token:
 
 ```http
 Authorization: Bearer <token>
-X-AIOPS-Account: <account>
-X-Request-Id: <uuid>
+X-AIOPS-Account: aiops-runtime
+X-Request-Id: <request_id trong body>
 ```
+
+Executor reject account khác `aiops-runtime` và reject request nếu `X-Request-Id` khác `request_id` trong JSON body.
 
 ## Endpoints
 
@@ -39,6 +41,7 @@ X-Request-Id: <uuid>
 | `POST` | `/v1/actions/plan` | Dry-run plan, snapshot before-state, plan hash |
 | `POST` | `/v1/actions/execute` | Execute đúng plan đã tạo |
 | `GET` | `/v1/actions/{execution_id}` | Đọc trạng thái execution |
+| `POST` | `/v1/actions/{execution_id}/verification` | Ghi kết quả verification cho đúng incident/query |
 | `POST` | `/v1/actions/{execution_id}/rollback` | Rollback bằng rollback token |
 
 ## JSON Schema
@@ -138,8 +141,13 @@ X-Request-Id: <uuid>
           "enum": ["planned", "running", "succeeded", "failed", "blocked", "rolled_back"]
         },
         "execution_id": { "type": ["string", "null"] },
+        "executed_at": { "type": ["string", "null"], "format": "date-time" },
+        "incident_id": { "type": ["string", "null"] },
         "action_id": { "type": "string" },
+        "action_type": { "type": ["string", "null"] },
         "target": { "type": "string" },
+        "target_kind": { "type": ["string", "null"] },
+        "namespace": { "type": ["string", "null"] },
         "message": { "type": "string" },
         "reasons": {
           "type": "array",
@@ -149,6 +157,7 @@ X-Request-Id: <uuid>
         "expires_at": { "type": ["string", "null"], "format": "date-time" },
         "before": { "type": ["object", "null"] },
         "after": { "type": ["object", "null"] },
+        "rollback_id": { "type": ["string", "null"] },
         "verification": {
           "type": "object",
           "additionalProperties": false,
@@ -255,7 +264,7 @@ Ví dụ response:
   "verification": {
     "defined": true,
     "passed": null,
-    "query_id": "product-catalog.p95_latency_5m",
+    "query_id": "product-catalog.cpu_millicores",
     "message": null
   },
   "rollback": {
@@ -275,7 +284,7 @@ Request dùng schema `ActionRequest` với:
 - `rollback_token` lấy từ response plan
 - cùng `idempotency_key` hoặc một key execute ổn định do AI runtime tạo
 
-Executor phải reject nếu current resource state khác `before.resource_version`.
+Executor phải reject nếu request execute không khớp stored plan về `incident_id`, action, target, namespace, policy, approval hoặc requester. Executor cũng phải reject nếu current resource state khác `before.resource_version`.
 
 Ví dụ request:
 
@@ -326,7 +335,7 @@ Ví dụ response:
   "verification": {
     "defined": true,
     "passed": null,
-    "query_id": "product-catalog.p95_latency_5m",
+    "query_id": "product-catalog.cpu_millicores",
     "message": "verification pending"
   },
   "rollback": {
@@ -365,8 +374,8 @@ Ví dụ response:
   "verification": {
     "defined": true,
     "passed": true,
-    "query_id": "product-catalog.p95_latency_5m",
-    "message": "latency and ready pods recovered"
+    "query_id": "product-catalog.cpu_millicores",
+    "message": "CPU and ready pods recovered"
   },
   "rollback": {
     "defined": true,

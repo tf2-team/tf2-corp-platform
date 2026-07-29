@@ -191,6 +191,12 @@ def create_app(service: LiveExecutorService | None = None, token: str | None = N
                 raise HTTPException(status_code=401, detail="invalid executor token")
         if expected_token and (not x_aiops_account or not x_request_id):
             raise HTTPException(status_code=400, detail="missing executor auth context")
+        if expected_token and x_aiops_account != "aiops-runtime":
+            raise HTTPException(status_code=403, detail="invalid executor account")
+
+    def require_matching_request_id(header_request_id: str, body_request_id: str) -> None:
+        if expected_token and not hmac.compare_digest(header_request_id, body_request_id):
+            raise HTTPException(status_code=400, detail="request id header does not match body")
 
     @app.get("/healthz")
     def healthz() -> dict[str, str]:
@@ -217,11 +223,13 @@ def create_app(service: LiveExecutorService | None = None, token: str | None = N
         return service.service_catalog()
 
     @app.post("/v1/actions/plan", dependencies=[Depends(require_auth)])
-    def plan(request: ActionRequest) -> dict[str, Any]:
+    def plan(request: ActionRequest, x_request_id: str = Header(default="")) -> dict[str, Any]:
+        require_matching_request_id(x_request_id, request.request_id)
         return service.plan(request.model_dump())
 
     @app.post("/v1/actions/execute", dependencies=[Depends(require_auth)])
-    def execute(request: ActionRequest) -> dict[str, Any]:
+    def execute(request: ActionRequest, x_request_id: str = Header(default="")) -> dict[str, Any]:
+        require_matching_request_id(x_request_id, request.request_id)
         return service.execute(request.model_dump())
 
     @app.get("/v1/actions/{execution_id}", dependencies=[Depends(require_auth)])
@@ -229,15 +237,26 @@ def create_app(service: LiveExecutorService | None = None, token: str | None = N
         return service.status(execution_id)
 
     @app.post("/v1/actions/{execution_id}/verification", dependencies=[Depends(require_auth)])
-    def verification(execution_id: str, request: VerificationRequest) -> dict[str, Any]:
+    def verification(
+        execution_id: str,
+        request: VerificationRequest,
+        x_request_id: str = Header(default=""),
+    ) -> dict[str, Any]:
+        require_matching_request_id(x_request_id, request.request_id)
         return service.record_verification(execution_id, request.model_dump())
 
     @app.post("/v1/actions/{execution_id}/rollback", dependencies=[Depends(require_auth)])
-    def rollback(execution_id: str, request: RollbackRequest) -> dict[str, Any]:
+    def rollback(
+        execution_id: str,
+        request: RollbackRequest,
+        x_request_id: str = Header(default=""),
+    ) -> dict[str, Any]:
+        require_matching_request_id(x_request_id, request.request_id)
         return service.rollback(execution_id, request.model_dump())
 
     @app.post("/actions", dependencies=[Depends(require_auth)])
-    def legacy_actions(request: dict[str, Any]) -> dict[str, Any]:
+    def legacy_actions(request: dict[str, Any], x_request_id: str = Header(default="")) -> dict[str, Any]:
+        require_matching_request_id(x_request_id, str(request.get("request_id") or ""))
         return service.legacy_submit(request)
 
     return app

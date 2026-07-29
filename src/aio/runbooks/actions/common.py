@@ -26,7 +26,8 @@ ALLOWLIST = {
         "min_replicas": 2,
         "max_replicas": 12,
         "blast_radius_services": ["frontend", "recommendation", "product-reviews", "checkout"],
-        "verification_query_id": "product_catalog_cpu_millicores",
+        "verification_query_id": "product-catalog.cpu_millicores",
+        "verification_signal_id": "product_catalog_cpu_millicores",
     }
 }
 
@@ -256,6 +257,21 @@ def verify_plan_context(context: dict[str, Any], config: dict[str, Any]) -> tupl
         return plan, ["plan_hash_mismatch"]
     if context.get("rollback_token") != plan.get("rollback_token"):
         return plan, ["rollback_token_mismatch"]
+    for field in (
+        "incident_id",
+        "action_id",
+        "action_type",
+        "target",
+        "target_kind",
+        "namespace",
+        "policy_id",
+        "policy_approved",
+        "policy_expires_at",
+        "approval_id",
+        "requested_by",
+    ):
+        if context.get(field) != plan.get(field):
+            return plan, [f"{field}_mismatch"]
     try:
         expires_at = parse_time(plan.get("expires_at"))
     except (AttributeError, TypeError, ValueError):

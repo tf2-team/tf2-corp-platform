@@ -662,6 +662,20 @@ class AiopsPipeline:
             return decision.model_copy(
                 update={"policy_result": "not_mutating", "policy_allowed": False, "would_execute": False}
             )
+        if self.self_heal is not None:
+            capability_reasons = _local_executor_capability_reasons(
+                action,
+                self.self_heal.config.policy_id,
+            )
+            if capability_reasons:
+                return decision.model_copy(
+                    update={
+                        "policy_result": "executor_capability_blocked",
+                        "policy_reasons": tuple(capability_reasons),
+                        "policy_allowed": False,
+                        "would_execute": False,
+                    }
+                )
         policy_decision = self.policy.evaluate(
             ActionProposal(
                 action_type=action.action_type,
@@ -973,3 +987,29 @@ def _log_count(summary: str) -> int:
 
 def _unique_incidents(incidents: list[Incident]) -> list[Incident]:
     return list({incident.incident_id: incident for incident in incidents}.values())
+
+
+def _local_executor_capability_reasons(
+    action: ActionCatalogItem,
+    policy_id: str,
+) -> list[str]:
+    checks = (
+        (action.executor_supported, "executor_not_supported"),
+        (action.dry_run_supported, "dry_run_not_supported"),
+        (action.execute_supported, "execute_not_supported"),
+        (action.live_execute_supported, "live_execute_not_supported"),
+        (not action.recommendation_only, "recommendation_only"),
+        (not action.audit_only, "audit_only"),
+        (not action.protected, "protected_action"),
+        (not action.blocked, "blocked_action"),
+        (action.verification_defined, "verification_not_defined"),
+        (bool(action.verification_query_id), "verification_query_missing"),
+        (bool(action.verification_signal_id), "verification_signal_missing"),
+        (action.rollback_defined, "rollback_not_defined"),
+        (action.rollback_supported, "rollback_not_supported"),
+        (bool(action.rollback_action_id), "rollback_action_missing"),
+        (action.approved, "action_not_approved"),
+        (action.policy_approval_required, "policy_approval_not_required"),
+        (action.policy_id == policy_id, "policy_id_mismatch"),
+    )
+    return [reason for allowed, reason in checks if not allowed]

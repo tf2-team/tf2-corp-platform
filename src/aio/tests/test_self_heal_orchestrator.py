@@ -31,8 +31,37 @@ class FakeExecutorClient:
         self.clock = clock
         self.verifications: list[dict] = []
         self.rollbacks: list[dict] = []
+        self.live_apply_enabled = True
+        self.plan_calls = 0
+
+    def catalog(self, request_id: str | None = None) -> list[dict]:
+        return [
+            {
+                "action_id": "scale_product_catalog",
+                "action_type": "scale_deployment",
+                "target": "product-catalog",
+                "target_kind": "Deployment",
+                "namespace": "techx-corp-prod",
+                "executor_supported": True,
+                "dry_run_supported": True,
+                "execute_supported": True,
+                "live_execute_supported": True,
+                "live_apply_enabled": self.live_apply_enabled,
+                "recommendation_only": False,
+                "audit_only": False,
+                "blocked": False,
+                "protected": False,
+                "rollback_supported": True,
+                "rollback_action_id": "restore_deployment_replicas",
+                "verification_query_id": "product-catalog.cpu_millicores",
+                "verification_signal_id": "product_catalog_cpu_millicores",
+                "policy_id": "phase3-scale-policy-v1",
+                "policy_approval_required": True,
+            }
+        ]
 
     def plan(self, action: dict) -> dict:
+        self.plan_calls += 1
         return {
             "allowed": True,
             "executed": False,
@@ -115,6 +144,15 @@ def _action() -> ActionCatalogItem:
         blast_radius_services=["frontend"],
         replicas=3,
         approved=True,
+        executor_supported=True,
+        execute_supported=True,
+        live_execute_supported=True,
+        rollback_supported=True,
+        rollback_action_id="restore_deployment_replicas",
+        verification_query_id="product-catalog.cpu_millicores",
+        verification_signal_id="product_catalog_cpu_millicores",
+        policy_id="phase3-scale-policy-v1",
+        policy_approval_required=True,
     )
 
 
@@ -184,6 +222,27 @@ def test_self_heal_success_requires_two_fresh_post_action_samples(tmp_path: Path
             "verification_sample",
             "verification_passed",
         ]
+    finally:
+        store.close()
+
+
+def test_self_heal_fails_closed_when_executor_live_gate_is_disabled(tmp_path: Path) -> None:
+    clock = Clock()
+    orchestrator, client, store = _orchestrator(tmp_path, clock)
+    client.live_apply_enabled = False
+    try:
+        result = orchestrator.start(_incident(), _action(), _root())
+
+        assert result["status"] == "capability_blocked"
+        assert result["reasons"] == ["live_apply_disabled"]
+        assert client.plan_calls == 0
+        assert store.self_heal_workflow("inc-product-catalog")["status"] == "capability_blocked"
+
+        client.live_apply_enabled = True
+        retried = orchestrator.start(_incident(), _action(), _root())
+        assert retried["status"] == "verifying"
+        assert retried["executed"] is True
+        assert client.plan_calls == 1
     finally:
         store.close()
 
