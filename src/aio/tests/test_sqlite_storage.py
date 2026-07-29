@@ -231,8 +231,8 @@ class SQLiteIncidentStoreTest(unittest.TestCase):
         self.assertEqual(incident.incident_id, repeated.incident_id)
         self.assertEqual(len(notifications), 1)
         self.assertTrue(notifications[0].incident_id.endswith(":supplement:1"))
-        self.assertTrue(notifications[0].title.startswith("bổ sung:"))
-        self.assertIn("bổ sung", notifications[0].summary)
+        self.assertTrue(notifications[0].title.startswith("Supplement:"))
+        self.assertIn("Supplement", notifications[0].summary)
         self.assertIn("log_classification=hard_failure", notifications[0].summary)
 
     def test_rca_supplement_expires_after_dedup_window(self):

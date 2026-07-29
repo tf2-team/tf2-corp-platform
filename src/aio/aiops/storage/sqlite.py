@@ -806,8 +806,8 @@ class SQLiteIncidentStore:
         return message.model_copy(
             update={
                 "incident_id": supplement_id,
-                "title": f"bổ sung: {message.title}",
-                "summary": f"bổ sung cho {incident.incident_id}\n{message.summary}",
+                "title": f"Supplement: {message.title}",
+                "summary": f"Supplement for {incident.incident_id}\n{message.summary}",
             }
         )
 
