@@ -58,3 +58,5 @@ def extract_memories(user_message: str) -> MemoryExtraction:
         provider=os.environ.get("LLM_PROVIDER", "openai_compatible"),
         workflow_step="memory_extraction",
     )
+
+# Change trail: @hungxqt - 2026-07-29 - Merge memory extraction onto the content-free model telemetry wrapper.

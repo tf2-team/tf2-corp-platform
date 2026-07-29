@@ -292,3 +292,5 @@ def _run_bedrock(state: dict[str, Any], deps: Any) -> str:
 def run_react_agent(state: dict[str, Any], deps: Any) -> str:
     """Run a bounded agent loop; all tool calls pass through _run_tool."""
     return _run_bedrock(state, deps) if is_bedrock_provider() else _run_openai(state, deps)
+
+# Change trail: @hungxqt - 2026-07-29 - Merge ReAct model rounds onto content-free telemetry.

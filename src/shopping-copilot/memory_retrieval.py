@@ -73,3 +73,5 @@ def parse_retrieval_hint(user_message: str, conversation_context: str = "") -> R
         provider=os.environ.get("LLM_PROVIDER", "openai_compatible"),
         workflow_step="retrieval_hint",
     )
+
+# Change trail: @hungxqt - 2026-07-29 - Merge retrieval hints onto the content-free model telemetry wrapper.
