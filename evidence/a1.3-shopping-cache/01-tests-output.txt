@@ -1,0 +1,12 @@
+Command:
+  $env:PYTHONDONTWRITEBYTECODE='1'
+  $env:PYTHONPATH='C:\tmp\phase3-shop-test;src\ai-common;src\shopping-copilot;src\product-reviews'
+  python -m pytest src/ai-common/tests/test_semantic_cache.py src/shopping-copilot/tests -q -p no:cacheprovider
+
+Measured: 2026-07-29
+
+.................................................................        [100%]
+65 passed, 265 warnings in 29.97s
+
+Warnings are LangGraph/Python deprecation warnings from the temporary local
+dependency directory. There were no test failures.
