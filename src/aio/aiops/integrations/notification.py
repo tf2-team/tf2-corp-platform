@@ -198,16 +198,27 @@ def _user_summary(message: NotificationMessage, thresholds: tuple[float, float])
     lines = message.summary.splitlines()
     score = next((float(line.split(":", 1)[1]) for line in lines if line.startswith("RCA score:")), 0.0)
     metrics = next((line.split(":", 1)[1].strip() for line in lines if line.startswith("Metric:")), "")
+    metric_line = f"Metrics: {metrics or 'unknown'}."
+    evidence = []
+    in_evidence = False
+    for line in lines:
+        if line == "Evidence:":
+            in_evidence = True
+        elif in_evidence and line.startswith(("Action:", "Runbook:")):
+            break
+        elif in_evidence and "score" not in line.lower() and "evidence_strength" not in line.lower():
+            evidence.append(line)
+    evidence_block = "\nEvidence:\n" + "\n".join(evidence) if evidence else ""
     medium_score, high_score = thresholds
     if score < medium_score:
         confidence = "This root cause has low confidence and cannot yet be confirmed."
     elif score < high_score:
         confidence = "This root cause is fairly reliable, but should still be verified."
     else:
-        return f"The root cause was identified with very high confidence: {message.service}.\nRunbook: {message.runbook_id}"
+        return f"The root cause was identified with very high confidence: {message.service}.\n{metric_line}{evidence_block}\nRunbook: {message.runbook_id}"
     alternatives = (
         f"Other possible root causes: {metrics}."
         if "," in metrics
         else "I have not found any other possible root causes."
     )
-    return f"{confidence}\nCurrent root cause: {message.service}.\n{alternatives}\nRunbook: {message.runbook_id}"
+    return f"{confidence}\nCurrent root cause: {message.service}.\n{metric_line}\n{alternatives}{evidence_block}\nRunbook: {message.runbook_id}"

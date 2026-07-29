@@ -1,7 +1,7 @@
 {
   "incident": {
     "count_reset_seconds": 900,
-    "recovery_consecutive_buckets": 6,
+    "recovery_consecutive_buckets": 30,
     "notification_cooldown_seconds": 900,
     "rca_dedup_seconds": 900,
     "slo_dedup_seconds": 900,

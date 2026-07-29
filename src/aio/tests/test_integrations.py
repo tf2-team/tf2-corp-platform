@@ -21,11 +21,13 @@ from aiops.schemas import NotificationMessage
 
 
 def settings() -> Settings:
-    return Settings()
+    return Settings(_env_file=None)
 
 
 def fixed_settings(**updates) -> Settings:
-    return settings().model_copy(update=updates)
+    return settings().model_copy(
+        update={"notification_dev_webhook_url": "", "notification_user_webhook_url": "", **updates}
+    )
 
 
 class IntegrationClientTest(unittest.TestCase):
@@ -269,12 +271,14 @@ class IntegrationClientTest(unittest.TestCase):
         for score, metrics, expected, alternatives in cases:
             message = NotificationMessage(
                 incident_id=f"inc-{score}", severity="SEV2", state="open", title="RCA root cause: cart",
-                summary=f"Root: cart\nDetected: rca_root_cause\nMetric: {metrics}\nRCA score: {score}\nValue: 1\nThreshold: 0.24\nEvidence:\n- evidence_strength=1.000",
+                summary=f"Root: cart\nDetected: rca_root_cause\nMetric: {metrics}\nRCA score: {score}\nValue: 1\nThreshold: 0.24\nEvidence:\n- trace_failure operation=POST /cart\n- evidence_strength=1.000\n- graph_score=0.900\nAction: inspect\nRunbook: RB-SERVICE-RESOURCE",
                 flow="checkout", service="cart", likely_dependency="unknown", runbook_id="RB-SERVICE-RESOURCE",
             )
             NotificationClient(cfg, transport=httpx.MockTransport(handler)).send(message)
             description = descriptions["/api/webhooks/user/token"]
             self.assertIn(expected, description)
+            self.assertIn(f"Metrics: {metrics}.", description)
+            self.assertIn("Evidence:\n- trace_failure operation=POST /cart", description)
             self.assertNotIn("score", description.lower())
             self.assertNotIn("Value", description)
             self.assertNotIn("Threshold", description)
