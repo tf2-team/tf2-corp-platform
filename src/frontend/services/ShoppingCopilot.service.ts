@@ -4,8 +4,13 @@
 import ShoppingCopilotGateway from '../gateways/rpc/ShoppingCopilot.gateway';
 
 const ShoppingCopilotService = () => ({
-  async search(userMessage: string, userId: string) {
-    const response = await ShoppingCopilotGateway.search(userMessage, userId);
+  async search(userMessage: string, userId: string, conversationId: string, turnId: string) {
+    const response = await ShoppingCopilotGateway.search(
+      userMessage,
+      userId,
+      conversationId,
+      turnId
+    );
     return response;
   },
   async confirmCartAction(pendingActionToken: string, userId: string) {

@@ -93,6 +93,8 @@ export interface SearchProductsResponse {
 export interface CopilotSearchRequest {
   userMessage: string;
   userId: string;
+  conversationId: string;
+  turnId: string;
 }
 
 export interface CopilotProduct {
@@ -1253,7 +1255,7 @@ export const SearchProductsResponse: MessageFns<SearchProductsResponse> = {
 };
 
 function createBaseCopilotSearchRequest(): CopilotSearchRequest {
-  return { userMessage: "", userId: "" };
+  return { userMessage: "", userId: "", conversationId: "", turnId: "" };
 }
 
 export const CopilotSearchRequest: MessageFns<CopilotSearchRequest> = {
@@ -1263,6 +1265,12 @@ export const CopilotSearchRequest: MessageFns<CopilotSearchRequest> = {
     }
     if (message.userId !== "") {
       writer.uint32(18).string(message.userId);
+    }
+    if (message.conversationId !== "") {
+      writer.uint32(26).string(message.conversationId);
+    }
+    if (message.turnId !== "") {
+      writer.uint32(34).string(message.turnId);
     }
     return writer;
   },
@@ -1284,6 +1292,16 @@ export const CopilotSearchRequest: MessageFns<CopilotSearchRequest> = {
           message.userId = reader.string();
           continue;
         }
+        case 3: {
+          if (tag !== 26) break;
+          message.conversationId = reader.string();
+          continue;
+        }
+        case 4: {
+          if (tag !== 34) break;
+          message.turnId = reader.string();
+          continue;
+        }
       }
       if ((tag & 7) === 4 || tag === 0) break;
       reader.skip(tag & 7);
@@ -1295,6 +1313,8 @@ export const CopilotSearchRequest: MessageFns<CopilotSearchRequest> = {
     return {
       userMessage: isSet(object.userMessage) ? globalThis.String(object.userMessage) : "",
       userId: isSet(object.userId) ? globalThis.String(object.userId) : "",
+      conversationId: isSet(object.conversationId) ? globalThis.String(object.conversationId) : "",
+      turnId: isSet(object.turnId) ? globalThis.String(object.turnId) : "",
     };
   },
 
@@ -1302,6 +1322,8 @@ export const CopilotSearchRequest: MessageFns<CopilotSearchRequest> = {
     const obj: any = {};
     if (message.userMessage !== "") obj.userMessage = message.userMessage;
     if (message.userId !== "") obj.userId = message.userId;
+    if (message.conversationId !== "") obj.conversationId = message.conversationId;
+    if (message.turnId !== "") obj.turnId = message.turnId;
     return obj;
   },
 
@@ -1312,6 +1334,8 @@ export const CopilotSearchRequest: MessageFns<CopilotSearchRequest> = {
     const message = createBaseCopilotSearchRequest();
     message.userMessage = object.userMessage ?? "";
     message.userId = object.userId ?? "";
+    message.conversationId = object.conversationId ?? "";
+    message.turnId = object.turnId ?? "";
     return message;
   },
 };

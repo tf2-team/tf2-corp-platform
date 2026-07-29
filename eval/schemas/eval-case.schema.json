@@ -31,7 +31,32 @@
         },
         "user_message": {
           "type": "string",
-          "description": "Free-text user message for copilot surface. Required when surface=copilot."
+          "description": "Free-text user message for a single-turn copilot case."
+        },
+        "conversation_id": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Stable conversation ID used by every turn in a multi-turn copilot case."
+        },
+        "turns": {
+          "type": "array",
+          "minItems": 2,
+          "description": "Ordered user turns for one copilot conversation. Shared mocks and conversation_id apply to every turn.",
+          "items": {
+            "type": "object",
+            "required": ["user_message"],
+            "additionalProperties": false,
+            "properties": {
+              "turn_id": {
+                "type": "string",
+                "minLength": 1
+              },
+              "user_message": {
+                "type": "string",
+                "minLength": 1
+              }
+            }
+          }
         },
         "mock_reviews": {
           "type": "array",
@@ -54,6 +79,11 @@
         "mock_product_description": {
           "type": "string",
           "description": "Product facts and specifications used to check factual claims."
+        },
+        "mock_memories": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 },
+          "description": "Optional Mem0 facts seeded into the same copilot conversation before its first turn."
         },
         "mock_catalog_products": {
           "type": "array",
@@ -102,6 +132,7 @@
             "hallucination",
             "unanswerable",
             "injection_user",
+            "injection_multiturn",
             "injection_review",
             "pii_in_review",
             "pii_in_question",
@@ -162,6 +193,19 @@
         "expected_pending_product_id": {
           "type": "string",
           "description": "Product ID that must be stored in the pending cart action."
+        },
+        "blocked_turn_index": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Zero-based turn index expected to be blocked in a multi-turn copilot case."
+        },
+        "expected_turn_statuses": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": ["GROUNDED", "ABSTAINED", "BLOCKED", "FALLBACK", "NO_RESULTS"]
+          },
+          "description": "Optional expected status for every ordered turn in a multi-turn Copilot case."
         }
       }
     },
@@ -200,7 +244,10 @@
     "then": {
       "properties": {
         "input": {
-          "required": ["user_message"]
+          "oneOf": [
+            { "required": ["user_message"] },
+            { "required": ["conversation_id", "turns"] }
+          ]
         }
       }
     }

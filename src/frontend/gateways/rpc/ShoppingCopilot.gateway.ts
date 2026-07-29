@@ -16,9 +16,9 @@ const client = new ShoppingCopilotServiceClient(
 );
 
 const ShoppingCopilotGateway = () => ({
-  search(userMessage: string, userId: string) {
+  search(userMessage: string, userId: string, conversationId: string, turnId: string) {
     return new Promise<CopilotSearchResponse>((resolve, reject) =>
-      client.search({ userMessage, userId }, (error, response) =>
+      client.search({ userMessage, userId, conversationId, turnId }, (error, response) =>
         error ? reject(error) : resolve(response)
       )
     );
