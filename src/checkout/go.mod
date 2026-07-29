@@ -4,7 +4,9 @@ go 1.25.5
 
 require (
 	github.com/IBM/sarama v1.46.3
+	github.com/aws/aws-sdk-go-v2 v1.42.1
 	github.com/aws/aws-sdk-go-v2/config v1.32.30
+	github.com/aws/aws-sdk-go-v2/service/cloudwatch v1.40.1
 	github.com/aws/aws-sdk-go-v2/service/dynamodb v1.60.1
 	github.com/google/uuid v1.6.0
 	github.com/open-feature/go-sdk v1.17.0
@@ -34,7 +36,6 @@ require (
 	buf.build/gen/go/open-feature/flagd/protocolbuffers/go v1.36.11-20260217192757-1388a552fc3c.1 // indirect
 	connectrpc.com/connect v1.19.1 // indirect
 	connectrpc.com/otelconnect v0.7.2 // indirect
-	github.com/aws/aws-sdk-go-v2 v1.42.1 // indirect
 	github.com/aws/aws-sdk-go-v2/credentials v1.19.29 // indirect
 	github.com/aws/aws-sdk-go-v2/feature/ec2/imds v1.18.30 // indirect
 	github.com/aws/aws-sdk-go-v2/internal/configsources v1.4.30 // indirect
@@ -71,6 +72,7 @@ require (
 	github.com/jcmturner/gofork v1.7.6 // indirect
 	github.com/jcmturner/gokrb5/v8 v8.4.4 // indirect
 	github.com/jcmturner/rpc/v2 v2.0.3 // indirect
+	github.com/jmespath/go-jmespath v0.4.0 // indirect
 	github.com/klauspost/compress v1.18.1 // indirect
 	github.com/open-feature/flagd-schemas v0.2.13 // indirect
 	github.com/open-feature/flagd/core v0.16.0 // indirect

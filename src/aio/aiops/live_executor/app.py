@@ -200,6 +200,7 @@ def create_app(service: LiveExecutorService | None = None, token: str | None = N
     def readyz() -> dict[str, str]:
         try:
             service.catalog()
+            service.service_catalog()
             ready = service.ready()
         except Exception as exc:
             raise HTTPException(status_code=503, detail="executor dependencies are not ready") from exc
@@ -210,6 +211,10 @@ def create_app(service: LiveExecutorService | None = None, token: str | None = N
     @app.get("/v1/actions/catalog", dependencies=[Depends(require_auth)])
     def catalog() -> list[dict[str, Any]]:
         return service.catalog()
+
+    @app.get("/v1/services/catalog", dependencies=[Depends(require_auth)])
+    def services_catalog() -> list[dict[str, Any]]:
+        return service.service_catalog()
 
     @app.post("/v1/actions/plan", dependencies=[Depends(require_auth)])
     def plan(request: ActionRequest) -> dict[str, Any]:

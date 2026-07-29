@@ -38,7 +38,7 @@ internal class ShippingEntity
 }
 
 [Table("orderitem", Schema = "accounting")]
-[PrimaryKey(nameof(ProductId), nameof(OrderId), nameof(TransactionType))]
+[PrimaryKey(nameof(OrderId), nameof(ProductId), nameof(TransactionType))]
 internal class OrderItemEntity
 {
     public required string ItemCostCurrencyCode { get; set; }
@@ -67,4 +67,4 @@ internal class OrderEntity
     public string Status { get; set; } = "PENDING";
 }
 
-// Change trail: @hungxqt - 2026-07-28 - Change ShippingEntity primary key to OrderId and TransactionType.
+// Change trail: @hungxqt - 2026-07-29 - Align EF key order for OrderItemEntity to (OrderId, ProductId, TransactionType).

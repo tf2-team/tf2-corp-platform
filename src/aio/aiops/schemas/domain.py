@@ -126,13 +126,28 @@ class ActionCatalogItem(AiopsModel):
     action_type: str
     target: str
     target_kind: str
+    namespace: str | None = None
     cost_min: float
     downtime_min: float
     blast_radius_services: list[str] = Field(default_factory=list)
     replicas: int = 3
     verification_defined: bool = True
+    verification_query_id: str | None = None
     rollback_defined: bool = True
+    rollback_action_id: str | None = None
     approved: bool = False
+    executor_supported: bool = False
+    recommendation_only: bool = False
+    audit_only: bool = False
+    dry_run_supported: bool = True
+    execute_supported: bool = False
+    live_execute_supported: bool = False
+    rollback_supported: bool = False
+    policy_id: str | None = None
+    policy_approval_required: bool = False
+    protected: bool = False
+    blocked: bool = False
+    blocked_reason: str | None = None
 
 
 class RemediationDecision(AiopsModel):

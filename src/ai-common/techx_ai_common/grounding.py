@@ -41,6 +41,7 @@ from .contracts import (
     SafeReviewSet,
 )
 from .bedrock import converse_json, is_bedrock_provider
+from .observability import call_model
 from .retrieval import tokenize
 
 logger = logging.getLogger("grounding")
@@ -120,17 +121,27 @@ def generate_grounded_summary(safe_reviews: SafeReviewSet, question: str = "") -
     output contract is unchanged.
     """
     if is_bedrock_provider():
-        return converse_json(GroundedDraft, _SYSTEM_PROMPT, _build_review_prompt(safe_reviews, question))
+        return converse_json(
+            GroundedDraft,
+            _SYSTEM_PROMPT,
+            _build_review_prompt(safe_reviews, question),
+            workflow_step="grounded_summary",
+        )
 
     client, model = _get_client_and_model()
     instructor_client = instructor.from_openai(client, mode=instructor.Mode.JSON)
-    return instructor_client.chat.completions.create(
+    return call_model(
+        lambda: instructor_client.chat.completions.create(
+            model=model,
+            response_model=GroundedDraft,
+            messages=[
+                {"role": "system", "content": _SYSTEM_PROMPT},
+                {"role": "user", "content": _build_review_prompt(safe_reviews, question)},
+            ],
+        ),
         model=model,
-        response_model=GroundedDraft,
-        messages=[
-            {"role": "system", "content": _SYSTEM_PROMPT},
-            {"role": "user", "content": _build_review_prompt(safe_reviews, question)},
-        ],
+        provider=os.environ.get("LLM_PROVIDER", "openai_compatible"),
+        workflow_step="grounded_summary",
     )
 
 

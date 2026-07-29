@@ -15,4 +15,5 @@ def generate_grounded_summary(safe_reviews: SafeReviewSet, question: str = "") -
         GroundedDraft,
         _SYSTEM_PROMPT,
         _build_review_prompt(safe_reviews, question),
+        workflow_step="grounded_review_answer",
     )

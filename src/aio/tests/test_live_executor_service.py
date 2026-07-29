@@ -11,6 +11,8 @@ import httpx
 from aiops.live_executor.kubernetes import KubernetesDeploymentGateway
 from aiops.live_executor.service import LiveExecutorService
 from aiops.live_executor.app import create_app
+from aiops.live_executor.store import LiveExecutorStore
+from runbooks.actions.common import ALLOWLIST
 from starlette.testclient import TestClient
 
 
@@ -565,5 +567,81 @@ def test_live_executor_store_migrates_legacy_idempotency_key(tmp_path: Path) -> 
         service.store.save_idempotency("shared", "execute", {"status": "running"})
         assert service.store.get_idempotency("shared", "plan") == {"status": "planned"}
         assert service.store.get_idempotency("shared", "execute") == {"status": "running"}
+    finally:
+        service.close()
+
+
+def test_live_executor_catalog_endpoint_returns_action_capabilities(tmp_path: Path) -> None:
+    root = Path(__file__).resolve().parents[1]
+    service = LiveExecutorService(
+        LiveExecutorStore(tmp_path / "executor.sqlite3"),
+        capability_catalog_path=root / "config" / "executor_supported_actions.json",
+        service_support_catalog_path=root / "config" / "executor_service_support.json",
+    )
+    app = create_app(service=service, token="test-token")
+    client = TestClient(app)
+    try:
+        response = client.get(
+            "/v1/actions/catalog",
+            headers={
+                "Authorization": "Bearer test-token",
+                "X-AIOPS-Account": "aiops-runtime",
+                "X-Request-Id": "req-20260729-catalog",
+            },
+        )
+        assert response.status_code == 200
+        catalog = {item["action_id"]: item for item in response.json()}
+
+        scale = catalog["scale_product_catalog"]
+        allowlist = ALLOWLIST["scale_product_catalog"]
+        assert scale["executor_supported"] is True
+        assert scale["live_execute_supported"] is False
+        assert scale["rollback_supported"] is True
+        assert scale["rollback_action_id"] == allowlist["rollback_action_id"]
+        assert scale["verification_query_id"] == allowlist["verification_query_id"]
+        assert scale["namespace"] == allowlist["namespace"]
+        assert scale["min_replicas"] == allowlist["min_replicas"]
+        assert scale["max_replicas"] == allowlist["max_replicas"]
+        assert scale["blast_radius_services"] == allowlist["blast_radius_services"]
+
+        restart_actions = [item for item in catalog.values() if item["action_type"] == "restart"]
+        assert restart_actions
+        assert all(item["executor_supported"] is False for item in restart_actions)
+        assert catalog["restart_payment"]["protected"] is True
+        assert catalog["restart_payment"]["blocked"] is True
+    finally:
+        service.close()
+
+
+def test_live_executor_services_catalog_covers_runbook_services(tmp_path: Path) -> None:
+    root = Path(__file__).resolve().parents[1]
+    service = LiveExecutorService(
+        LiveExecutorStore(tmp_path / "executor.sqlite3"),
+        capability_catalog_path=root / "config" / "executor_supported_actions.json",
+        service_support_catalog_path=root / "config" / "executor_service_support.json",
+    )
+    app = create_app(service=service, token="test-token")
+    client = TestClient(app)
+    try:
+        response = client.get(
+            "/v1/services/catalog",
+            headers={
+                "Authorization": "Bearer test-token",
+                "X-AIOPS-Account": "aiops-runtime",
+                "X-Request-Id": "req-20260729-services-catalog",
+            },
+        )
+        assert response.status_code == 200
+        service_catalog = {item["service"]: item for item in response.json()}
+        runbook_map = json.loads((root / "runbooks" / "service_runbook_map.json").read_text(encoding="utf-8"))
+
+        assert set(service_catalog) == set(runbook_map["services"])
+        assert service_catalog["product-catalog"]["executor_supported"] is True
+        assert service_catalog["product-catalog"]["supported_actions"] == ["scale_product_catalog"]
+        assert service_catalog["product-catalog"]["live_execute_supported"] is False
+        assert service_catalog["checkout"]["support_status"] == "recommendation_only"
+        assert service_catalog["checkout"]["supported_actions"] == []
+        assert service_catalog["payment"]["protected"] is True
+        assert service_catalog["postgresql"]["fallback_action"] == "page_data_oncall"
     finally:
         service.close()

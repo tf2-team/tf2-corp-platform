@@ -193,12 +193,14 @@ func Reconcile(records []DrillRecord, db DBQuerier, ddb DDBQuerier, jaeger Jaege
 				res.DurableInRDS++
 			}
 
-			if !inDDB && !inRDS {
-				res.MissingDurable++
-				res.Violations = append(res.Violations, fmt.Sprintf("Accepted order %s has no durable record in DynamoDB or RDS", rec.OrderID))
-			}
-
-			if rdsCount > 1 {
+			if !inDDB {
+				if inRDS && rdsCount == 1 {
+					// DynamoDB item absent is strictly considered ACKed only when RDS has EXACTLY one record.
+				} else {
+					res.MissingDurable++
+					res.Violations = append(res.Violations, fmt.Sprintf("Accepted order %s missing from DynamoDB outbox and not uniquely in RDS (inRDS=%v, rdsCount=%d)", rec.OrderID, inRDS, rdsCount))
+				}
+			} else if inRDS && rdsCount > 1 {
 				res.Violations = append(res.Violations, fmt.Sprintf("Accepted order %s present %d times in RDS (must be exactly once)", rec.OrderID, rdsCount))
 			}
 		} else {
@@ -337,4 +339,4 @@ func runWatchHeartbeat(logPath, ddbTable, pgConnStr, jaegerURL string) {
 	log.Printf("[WATCH] TechX/Mandate21 AcceptedOrderWithoutDurableRecord metric value: %d\n", metricValue)
 }
 
-// Change trail: @hungxqt - 2026-07-28 - Add Mandate 21 order durability reconciler and watch mode.
+// Change trail: @hungxqt - 2026-07-29 - Enforce exact single RDS record ACK rule for missing DynamoDB item.

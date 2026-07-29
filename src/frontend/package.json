@@ -5,7 +5,7 @@
   "scripts": {
     "dev": "NODE_OPTIONS='--require ./utils/telemetry/Instrumentation.js' next dev",
     "build": "next build",
-    "test:resilience": "tsx --test utils/resilience/OptionalDependency.test.mjs utils/resilience/OptionalDependency.integration.test.mjs utils/telemetry/InstrumentationMiddleware.test.mjs",
+    "test:resilience": "tsx --test utils/resilience/OptionalDependency.test.mjs utils/resilience/OptionalDependency.integration.test.mjs utils/telemetry/InstrumentationMiddleware.test.mjs pages/api/ai-traces/traceId.test.mjs",
     "start": "node --require ./Instrumentation.js server.js",
     "lint": "next lint",
     "cy:open": "cypress open",

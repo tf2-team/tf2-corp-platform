@@ -639,4 +639,37 @@ jobs:
       - name: Validate shared guardrail dependency
         run: >-
           python -c "from llm_guard.input_scanners import PromptInjection; from techx_ai_common import guardrails"
+
+  required-gate:
+    name: Mandate 10 required gate
+    if: always() && github.event_name == 'pull_request'
+    needs:
+      - lint
+      - unit-tests
+      - aio-tests
+      - pr-image-build
+      - semgrep-sast
+      - trufflehog-secrets
+      - trivy-iac-scan
+      - product-reviews-tests
+      - shopping-copilot-tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require tests, image scan, IaC scan, SAST and secret scan
+        env:
+          NEEDS_JSON: ${{ toJson(needs) }}
+        run: |
+          failures="$(
+            jq -r '
+              to_entries[]
+              | select(.value.result != "success")
+              | "\(.key)=\(.value.result)"
+            ' <<<"${NEEDS_JSON}"
+          )"
+          if [[ -n "${failures}" ]]; then
+            echo "::error::Required CI jobs did not pass:"
+            printf '%s\n' "${failures}"
+            exit 1
+          fi
+          echo "All required test and security jobs passed."
 # Change trail: @hungxqt - 2026-07-28 - Add accounting to unit-tests matrix in CI.
