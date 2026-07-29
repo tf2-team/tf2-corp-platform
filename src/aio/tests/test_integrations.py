@@ -21,11 +21,13 @@ from aiops.schemas import NotificationMessage
 
 
 def settings() -> Settings:
-    return Settings()
+    return Settings(_env_file=None)
 
 
 def fixed_settings(**updates) -> Settings:
-    return settings().model_copy(update=updates)
+    return settings().model_copy(
+        update={"notification_dev_webhook_url": "", "notification_user_webhook_url": "", **updates}
+    )
 
 
 class IntegrationClientTest(unittest.TestCase):
@@ -78,6 +80,48 @@ class IntegrationClientTest(unittest.TestCase):
         self.assertIn(("POST", "/logs-*/_search"), calls)
         self.assertIn(("GET", "/apis/apps/v1/namespaces/tf2/deployments/checkout"), calls)
         self.assertIn(("POST", "/actions"), calls)
+
+    def test_live_executor_accepts_contract_blocking_response_with_http_409(self):
+        def handler(request: httpx.Request) -> httpx.Response:
+            return httpx.Response(
+                409,
+                json={
+                    "ok": True,
+                    "allowed": False,
+                    "executed": False,
+                    "status": "blocked",
+                    "reasons": ["target_cooldown"],
+                },
+            )
+
+        client = LiveExecutorClient(
+            fixed_settings(
+                live_executor_url="https://executor.example",
+                live_executor_account="aiops-runtime",
+            ),
+            transport=httpx.MockTransport(handler),
+        )
+        response = client.execute({"request_id": "req-409"})
+
+        self.assertEqual(response["status"], "blocked")
+        self.assertEqual(response["reasons"], ["target_cooldown"])
+
+    def test_live_executor_readiness_calls_ready_endpoint(self):
+        seen: list[httpx.Request] = []
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            seen.append(request)
+            return httpx.Response(200, json={"status": "ready"})
+
+        client = LiveExecutorClient(
+            fixed_settings(live_executor_url="https://executor.example"),
+            transport=httpx.MockTransport(handler),
+        )
+        try:
+            self.assertTrue(client.ready())
+            self.assertEqual(seen[0].url.path, "/readyz")
+        finally:
+            client.close()
 
     def test_opensearch_uses_basic_auth(self):
         seen: list[httpx.Request] = []
@@ -179,6 +223,70 @@ class IntegrationClientTest(unittest.TestCase):
         fields = {field["name"]: field["value"] for field in payload["embeds"][0]["fields"]}
         self.assertEqual(fields["Likely dependency"], "postgresql")
         self.assertEqual(fields["Runbook"], "RB-CHECKOUT-SLO")
+
+    def test_notification_client_sends_to_dev_and_user_discord_channels(self):
+        seen: list[httpx.Request] = []
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            seen.append(request)
+            return httpx.Response(204)
+
+        cfg = fixed_settings(
+            notification_provider="auto",
+            notification_dev_webhook_url="https://discord.com/api/webhooks/dev/token",
+            notification_user_webhook_url="https://discord.com/api/webhooks/user/token",
+        )
+        message = NotificationMessage(
+            incident_id="inc-broadcast",
+            severity="SEV2",
+            state="open",
+            title="cart incident",
+            summary="summary",
+            flow="checkout",
+            service="cart",
+            likely_dependency="unknown",
+            runbook_id="RB-CART-ERROR-RATE",
+        )
+
+        client = NotificationClient(cfg, transport=httpx.MockTransport(handler))
+        response = client.send(message)
+        client.close()
+
+        self.assertEqual(response, {"dev": {"status_code": 204}, "user": {"status_code": 204}})
+        self.assertEqual({request.url.path for request in seen}, {"/api/webhooks/dev/token", "/api/webhooks/user/token"})
+
+    def test_user_discord_rca_summary_uses_confidence_bands_without_technical_values(self):
+        descriptions = {}
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            descriptions[request.url.path] = json.loads(request.content)["embeds"][0]["description"]
+            return httpx.Response(204)
+
+        cfg = fixed_settings(notification_provider="discord", notification_user_webhook_url="https://discord.com/api/webhooks/user/token")
+        cases = (
+            (0.29, "cpu", "low confidence", "I have not found"),
+            (0.35, "cpu, memory", "fairly reliable", "Other possible root causes: cpu, memory"),
+            (0.5, "cpu, memory", "very high confidence", None),
+        )
+        for score, metrics, expected, alternatives in cases:
+            message = NotificationMessage(
+                incident_id=f"inc-{score}", severity="SEV2", state="open", title="RCA root cause: cart",
+                summary=f"Root: cart\nDetected: rca_root_cause\nMetric: {metrics}\nRCA score: {score}\nValue: 1\nThreshold: 0.24\nEvidence:\n- trace_failure operation=POST /cart\n- evidence_strength=1.000\n- graph_score=0.900\nAction: inspect\nRunbook: RB-SERVICE-RESOURCE",
+                flow="checkout", service="cart", likely_dependency="unknown", runbook_id="RB-SERVICE-RESOURCE",
+            )
+            NotificationClient(cfg, transport=httpx.MockTransport(handler)).send(message)
+            description = descriptions["/api/webhooks/user/token"]
+            self.assertIn(expected, description)
+            self.assertIn(f"Metrics: {metrics}.", description)
+            self.assertIn("Evidence:\n- trace_failure operation=POST /cart", description)
+            self.assertNotIn("score", description.lower())
+            self.assertNotIn("Value", description)
+            self.assertNotIn("Threshold", description)
+            self.assertNotIn("evidence_strength", description)
+            if alternatives:
+                self.assertIn(alternatives, description)
+            else:
+                self.assertNotIn("Other possible root causes", description)
 
     def test_notification_client_hides_unknown_discord_dependency(self):
         seen: list[httpx.Request] = []

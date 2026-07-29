@@ -1,11 +1,12 @@
 #!/usr/bin/python
 # Copyright The OpenTelemetry Authors
 # SPDX-License-Identifier: Apache-2.0
+
 from __future__ import annotations
 
 import json
 import sqlite3
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
@@ -50,16 +51,7 @@ class LiveExecutorStore:
             )
             """
         )
-        self._connection.execute(
-            """
-            CREATE TABLE IF NOT EXISTS idempotency_keys (
-                idempotency_key TEXT PRIMARY KEY,
-                operation TEXT NOT NULL,
-                response_json TEXT NOT NULL,
-                created_at TEXT NOT NULL
-            )
-            """
-        )
+        self._ensure_idempotency_schema()
         self._connection.execute(
             """
             CREATE TABLE IF NOT EXISTS target_cooldowns (
@@ -166,13 +158,50 @@ class LiveExecutorStore:
         ).fetchone()
         return json.loads(row["response_json"]) if row else None
 
+    def execution_count_since(self, window_seconds: int) -> int:
+        since = (datetime.now(UTC) - timedelta(seconds=max(0, window_seconds))).replace(
+            microsecond=0
+        ).isoformat().replace("+00:00", "Z")
+        row = self._connection.execute(
+            """
+            SELECT COUNT(*) AS count FROM executions
+            WHERE created_at >= ? AND status IN ('running', 'succeeded', 'failed', 'rolled_back')
+            """,
+            (since,),
+        ).fetchone()
+        return int(row["count"]) if row else 0
+
+    def cooldown_active(self, target: str) -> bool:
+        row = self._connection.execute(
+            "SELECT cooldown_until FROM target_cooldowns WHERE target = ?",
+            (target,),
+        ).fetchone()
+        if row is None:
+            return False
+        return datetime.fromisoformat(str(row["cooldown_until"]).replace("Z", "+00:00")) > datetime.now(UTC)
+
+    def set_cooldown(self, target: str, seconds: int) -> None:
+        now = datetime.now(UTC)
+        cooldown_until = (now + timedelta(seconds=max(0, seconds))).replace(microsecond=0).isoformat().replace("+00:00", "Z")
+        with self._connection:
+            self._connection.execute(
+                """
+                INSERT INTO target_cooldowns (target, cooldown_until, updated_at)
+                VALUES (?, ?, ?)
+                ON CONFLICT(target) DO UPDATE SET
+                    cooldown_until = excluded.cooldown_until,
+                    updated_at = excluded.updated_at
+                """,
+                (target, cooldown_until, utc_now_text()),
+            )
+
     def save_idempotency(self, key: str, operation: str, response: dict[str, Any]) -> None:
         with self._connection:
             self._connection.execute(
                 """
                 INSERT INTO idempotency_keys (idempotency_key, operation, response_json, created_at)
                 VALUES (?, ?, ?, ?)
-                ON CONFLICT(idempotency_key) DO NOTHING
+                ON CONFLICT(idempotency_key, operation) DO NOTHING
                 """,
                 (key, operation, json.dumps(response, sort_keys=True), utc_now_text()),
             )
@@ -183,6 +212,51 @@ class LiveExecutorStore:
             (key, operation),
         ).fetchone()
         return json.loads(row["response_json"]) if row else None
+
+    def _ensure_idempotency_schema(self) -> None:
+        self._connection.execute(
+            """
+            CREATE TABLE IF NOT EXISTS idempotency_keys (
+                idempotency_key TEXT NOT NULL,
+                operation TEXT NOT NULL,
+                response_json TEXT NOT NULL,
+                created_at TEXT NOT NULL,
+                PRIMARY KEY (idempotency_key, operation)
+            )
+            """
+        )
+        columns = self._connection.execute("PRAGMA table_info(idempotency_keys)").fetchall()
+        primary_key_columns = [
+            str(row["name"])
+            for row in sorted(columns, key=lambda item: int(item["pk"]))
+            if int(row["pk"]) > 0
+        ]
+        if primary_key_columns == ["idempotency_key", "operation"]:
+            return
+
+        with self._connection:
+            self._connection.execute(
+                """
+                CREATE TABLE idempotency_keys_v2 (
+                    idempotency_key TEXT NOT NULL,
+                    operation TEXT NOT NULL,
+                    response_json TEXT NOT NULL,
+                    created_at TEXT NOT NULL,
+                    PRIMARY KEY (idempotency_key, operation)
+                )
+                """
+            )
+            self._connection.execute(
+                """
+                INSERT OR IGNORE INTO idempotency_keys_v2 (
+                    idempotency_key, operation, response_json, created_at
+                )
+                SELECT idempotency_key, operation, response_json, created_at
+                FROM idempotency_keys
+                """
+            )
+            self._connection.execute("DROP TABLE idempotency_keys")
+            self._connection.execute("ALTER TABLE idempotency_keys_v2 RENAME TO idempotency_keys")
 
     def audit(self, event: dict[str, Any]) -> None:
         with self._connection:
@@ -211,6 +285,41 @@ class LiveExecutorStore:
                     json.dumps(event.get("target", {}), sort_keys=True),
                 ),
             )
+
+    def audit_events_for(self, incident_id: str) -> list[dict[str, Any]]:
+        rows = self._connection.execute(
+            """
+            SELECT event_id, timestamp, request_id, incident_id, execution_id,
+                   action_id, event_type, actor_type, actor_id, policy_id,
+                   allowed, executed, reasons_json, target_json
+            FROM audit_events
+            WHERE incident_id = ?
+            ORDER BY timestamp, rowid
+            """,
+            (incident_id,),
+        ).fetchall()
+        return [
+            {
+                "event_id": row["event_id"],
+                "timestamp": row["timestamp"],
+                "request_id": row["request_id"],
+                "incident_id": row["incident_id"],
+                "execution_id": row["execution_id"],
+                "action_id": row["action_id"],
+                "event_type": row["event_type"],
+                "actor_type": row["actor_type"],
+                "actor_id": row["actor_id"],
+                "policy_id": row["policy_id"],
+                "allowed": bool(row["allowed"]),
+                "executed": bool(row["executed"]),
+                "reasons": json.loads(row["reasons_json"]),
+                "target": json.loads(row["target_json"]),
+            }
+            for row in rows
+        ]
+
+    def ready(self) -> bool:
+        return self._connection.execute("SELECT 1").fetchone()[0] == 1
 
     def close(self) -> None:
         self._connection.close()

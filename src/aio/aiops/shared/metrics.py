@@ -9,7 +9,7 @@ def is_error_metric(metric: str) -> bool:
 
 
 def is_oom_metric(metric: str) -> bool:
-    return "oom" in metric
+    return metric.endswith("oom_events_total")
 
 
 def is_memory_metric(metric: str) -> bool:

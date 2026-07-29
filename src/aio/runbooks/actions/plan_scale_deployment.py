@@ -1,6 +1,7 @@
 #!/usr/bin/python
 # Copyright The OpenTelemetry Authors
 # SPDX-License-Identifier: Apache-2.0
+
 from __future__ import annotations
 
 from .common import base_success, block_response, make_plan, validate_common
@@ -14,6 +15,13 @@ def run(context: dict) -> dict:
         return block_response(context, "plan requires dry_run=true", ["dry_run_required"], config)
 
     plan = make_plan(context, config)
+    if int(plan["after"]["replicas"]) <= int(plan["before"]["replicas"]):
+        return block_response(
+            context,
+            "scale deployment plan blocked",
+            ["scale_capacity_exhausted"],
+            config,
+        )
     response = base_success(
         context,
         config,

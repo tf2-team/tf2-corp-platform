@@ -251,7 +251,8 @@ class EnricherTest(unittest.TestCase):
 
         self.assertEqual(result.available_sources, {"trace"})
         self.assertFalse(result.trace_failure)
-        self.assertIsNone(result.trace_root_service)
+        self.assertEqual(result.trace_root_service, "checkout")
+        self.assertEqual(result.trace_id, "slow")
 
     def test_long_lived_control_stream_is_not_failure_corroboration(self):
         jaeger = FakeJaeger()

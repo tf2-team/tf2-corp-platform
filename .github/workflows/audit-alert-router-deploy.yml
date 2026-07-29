@@ -58,7 +58,7 @@ jobs:
             --zip-file fileb:///tmp/function.zip
           aws lambda wait function-updated \
             --function-name techx-audit-alert-router
-          
+
           CONF=$(aws lambda get-function-configuration --function-name techx-audit-alert-router --output json)
           HANDLER=$(echo "$CONF" | jq -r '.Handler')
           SHA=$(echo "$CONF" | jq -r '.CodeSha256')

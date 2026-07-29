@@ -163,11 +163,13 @@ jobs:
           cache-dependency-path: src/aio/requirements.lock
 
       - name: Install AIOps dependencies
-        run: python -m pip install -r src/aio/requirements.lock
+        run: |
+          python -m pip install -r src/aio/requirements.lock
+          python -m pip install pytest==9.1.1
 
       - name: Run AIOps unit tests
         working-directory: src/aio
-        run: python -B -m unittest discover -s tests -v
+        run: python -B -m pytest tests -v
 
   # ---------------------------------------------------------------------------
   # PR-only: bake changed release images locally, then Trivy-scan them

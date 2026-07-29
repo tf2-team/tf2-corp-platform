@@ -22,26 +22,36 @@ GET /v1/services/catalog
 
 ## Kết luận hiện tại
 
-Ở phạm vi P0/Phase 3, CDO executor chỉ có một remediation action có thể lập plan/submit qua executor:
+Ở phạm vi Phase 7, CDO executor hỗ trợ plan/execute/rollback cho 5 action scale deployment:
 
 ```text
 scale_product_catalog
+scale_frontend_proxy
+scale_frontend
+scale_checkout
+scale_cart
 ```
 
-Target của action này là:
+Các target allowlisted là:
 
 ```text
 Deployment/product-catalog
-Namespace: techx-corp-prod
+Deployment/frontend-proxy
+Deployment/frontend
+Deployment/checkout
+Deployment/cart
+Namespace: techx-corp-prod, hoặc namespace runtime được cấu hình qua AIOPS_ENVIRONMENT
 ```
 
-Action này có dry-run/plan, có execute ở mức executor audit/simulation, có rollback token và rollback action `restore_deployment_replicas`. Tuy nhiên, live Kubernetes mutation vẫn đang tắt, nên `live_execute_supported=false`.
+Mỗi action scale dùng allowlist nội bộ để resolve namespace/target/min/max replicas; caller không được tự quyết target tùy ý. Executor vẫn yêu cầu policy `phase3-scale-policy-v1`, approval id hợp lệ, idempotency key, cooldown, single-flight theo target, action budget window, optimistic concurrency bằng Kubernetes `resourceVersion`, rollback token và post-action verification do AI runtime ghi nhận.
+
+`executor_supported_actions.json` và `executor_service_support.json` đánh dấu các action này là live-capable, nhưng endpoint runtime chỉ trả `live_execute_supported=true` khi executor được khởi động với `AIOPS_LIVE_EXECUTOR_ALLOW_LIVE_APPLY=true`. Với default deploy, live mutation vẫn tắt.
 
 Vì vậy:
 
-- Nếu AI muốn chọn action có thể gọi executor ở mức plan/execute simulation: chỉ có `scale_product_catalog`.
-- Nếu AI muốn chọn action có thể mutate live Kubernetes: hiện tại chưa có action nào.
-- Các action `restart_*` chỉ là recommendation/history catalog, chưa phải action CDO executor chạy được.
+- Nếu AI muốn chọn action có thể gọi executor ở mức plan/dry-run: dùng 5 action scale allowlisted ở trên.
+- Nếu AI muốn chọn action có thể mutate live Kubernetes: chỉ dùng capability trả về từ `GET /v1/actions/catalog` và `GET /v1/services/catalog` tại runtime, không chỉ đọc static JSON.
+- Các action `restart_*` vẫn chỉ là recommendation/history catalog, chưa phải action CDO executor chạy được.
 - Các action `page_*` chỉ ghi audit/no-op, chưa gọi paging provider thật như Slack/PagerDuty/email/SNS.
 
 ## Authentication
@@ -75,7 +85,11 @@ protected, blocked, blocked_reason, blast_radius_services
 
 | action_id | action_type | target | namespace | executor supported | live execute | rollback | verification | policy/approval | trạng thái |
 |---|---|---|---|---:|---:|---:|---|---|---|
-| `scale_product_catalog` | `scale_deployment` | `product-catalog` | `techx-corp-prod` | Có | Không | Có, `restore_deployment_replicas` | `product-catalog.p95_latency_5m` | `phase3-scale-policy-v1`, cần approval | Executor simulation/audit |
+| `scale_product_catalog` | `scale_deployment` | `product-catalog` | `techx-corp-prod` | Có | Runtime-gated | Có, `restore_deployment_replicas` | `product_catalog_cpu_millicores` | `phase3-scale-policy-v1`, cần approval | Executable scale |
+| `scale_frontend_proxy` | `scale_deployment` | `frontend-proxy` | `techx-corp-prod` | Có | Runtime-gated | Có, `restore_deployment_replicas` | `frontend_proxy_p95_latency_5m` | `phase3-scale-policy-v1`, cần approval | Executable scale |
+| `scale_frontend` | `scale_deployment` | `frontend` | `techx-corp-prod` | Có | Runtime-gated | Có, `restore_deployment_replicas` | `frontend_p95_latency_5m` | `phase3-scale-policy-v1`, cần approval | Executable scale |
+| `scale_checkout` | `scale_deployment` | `checkout` | `techx-corp-prod` | Có | Runtime-gated | Có, `restore_deployment_replicas` | `checkout_p95_latency_5m` | `phase3-scale-policy-v1`, cần approval | Executable scale |
+| `scale_cart` | `scale_deployment` | `cart` | `techx-corp-prod` | Có | Runtime-gated | Có, `restore_deployment_replicas` | `cart_error_rate_5m` | `phase3-scale-policy-v1`, cần approval | Executable scale |
 | `restart_product_catalog` | `restart` | `product-catalog` | `techx-corp-prod` | Không | Không | Không | Chưa có | Không áp dụng | Recommendation-only |
 | `restart_checkout` | `restart` | `checkout` | `techx-corp-prod` | Không | Không | Không | Chưa có | Không áp dụng | Recommendation-only |
 | `restart_cart` | `restart` | `cart` | `techx-corp-prod` | Không | Không | Không | Chưa có | Không áp dụng | Recommendation-only |
@@ -109,16 +123,16 @@ recommendation_actions, fallback_action, runbooks
 | `ad` | `techx-corp-prod` | `manual_runbook_only` | Không | Không | Không có | Không có | `page_oncall` |
 | `aiops` | `techx-corp-prod` | `manual_runbook_only` | Không | Không | Không có | Không có | `page_oncall` |
 | `aws-bedrock` | Không áp dụng | `external_dependency_manual_only` | Không | Không | Không có | Không có | `page_oncall` |
-| `cart` | `techx-corp-prod` | `recommendation_only` | Không | Không | Không có | `restart_cart` | `page_oncall` |
-| `checkout` | `techx-corp-prod` | `recommendation_only` | Không | Không | Không có | `restart_checkout` | `page_oncall` |
+| `cart` | `techx-corp-prod` | `executor_supported_live_capable` | Có | Runtime-gated | `scale_cart` | `restart_cart` | `page_oncall` |
+| `checkout` | `techx-corp-prod` | `executor_supported_live_capable` | Có | Runtime-gated | `scale_checkout` | `restart_checkout` | `page_oncall` |
 | `currency` | `techx-corp-prod` | `manual_runbook_only` | Không | Không | Không có | Không có | `page_oncall` |
 | `email` | `techx-corp-prod` | `manual_runbook_only` | Không | Không | Không có | Không có | `page_oncall` |
 | `external-llm` | Không áp dụng | `external_dependency_manual_only` | Không | Không | Không có | Không có | `page_oncall` |
 | `flagd` | `techx-corp-prod` | `protected_manual_only` | Không | Không | Không có | Không có | `page_oncall` |
 | `flagd-ui` | `techx-corp-prod` | `manual_runbook_only` | Không | Không | Không có | Không có | `page_oncall` |
 | `fraud-detection` | `techx-corp-prod` | `manual_runbook_only` | Không | Không | Không có | Không có | `page_oncall` |
-| `frontend` | `techx-corp-prod` | `recommendation_only` | Không | Không | Không có | `restart_frontend` | `page_oncall` |
-| `frontend-proxy` | `techx-corp-prod` | `recommendation_only` | Không | Không | Không có | `restart_frontend_proxy` | `page_oncall` |
+| `frontend` | `techx-corp-prod` | `executor_supported_live_capable` | Có | Runtime-gated | `scale_frontend` | `restart_frontend` | `page_oncall` |
+| `frontend-proxy` | `techx-corp-prod` | `executor_supported_live_capable` | Có | Runtime-gated | `scale_frontend_proxy` | `restart_frontend_proxy` | `page_oncall` |
 | `grafana` | `observability` | `observability_manual_only` | Không | Không | Không có | Không có | `page_oncall` |
 | `image-provider` | `techx-corp-prod` | `manual_runbook_only` | Không | Không | Không có | Không có | `page_oncall` |
 | `jaeger` | `observability` | `observability_manual_only` | Không | Không | Không có | Không có | `page_oncall` |
@@ -130,7 +144,7 @@ recommendation_actions, fallback_action, runbooks
 | `otel-collector` | `observability` | `observability_manual_only` | Không | Không | Không có | Không có | `page_oncall` |
 | `payment` | `techx-corp-prod` | `protected_recommendation_only` | Không | Không | Không có | `restart_payment` | `page_oncall` |
 | `postgresql` | `techx-corp-prod` | `protected_manual_only` | Không | Không | Không có | Không có | `page_data_oncall` |
-| `product-catalog` | `techx-corp-prod` | `executor_supported_simulation_only` | Có | Không | `scale_product_catalog` | `restart_product_catalog` | `page_oncall` |
+| `product-catalog` | `techx-corp-prod` | `executor_supported_live_capable` | Có | Runtime-gated | `scale_product_catalog` | `restart_product_catalog` | `page_oncall` |
 | `product-reviews` | `techx-corp-prod` | `manual_runbook_only` | Không | Không | Không có | Không có | `page_oncall` |
 | `prometheus` | `observability` | `observability_manual_only` | Không | Không | Không có | Không có | `page_oncall` |
 | `quote` | `techx-corp-prod` | `manual_runbook_only` | Không | Không | Không có | Không có | `page_oncall` |
@@ -175,7 +189,7 @@ AND action.blocked=false
 AND service.live_execute_supported=true
 ```
 
-Với catalog hiện tại, tập live mutation là rỗng.
+Với default deploy, tập live mutation là rỗng. Khi executor được bật `AIOPS_LIVE_EXECUTOR_ALLOW_LIVE_APPLY=true` trong namespace approved, endpoint runtime có thể trả live mutation cho 5 action scale allowlisted.
 
 Để tránh recommend nhầm:
 

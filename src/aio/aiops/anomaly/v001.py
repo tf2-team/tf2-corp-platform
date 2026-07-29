@@ -285,6 +285,7 @@ class V001AnomalyEngine:
         traffic_explanation: dict | None,
         detection_window_seconds: int | None,
         normal_growth_detection_window_seconds: int | None,
+        oom_recent_buckets: int,
     ):
         self.algorithm_weights = algorithm_weights
         self.weighted_score_threshold = weighted_score_threshold
@@ -300,6 +301,7 @@ class V001AnomalyEngine:
         self.page_hinkley_min_bucket_factor = page_hinkley_min_bucket_factor
         self.detection_window_seconds = detection_window_seconds
         self.normal_growth_detection_window_seconds = normal_growth_detection_window_seconds
+        self.oom_recent_buckets = oom_recent_buckets
         self.thresholds = {
             "robust_drift": robust_drift_threshold,
             "ewma_stl": ewma_z_threshold,
@@ -356,6 +358,7 @@ class V001AnomalyEngine:
             self.min_absolute_change,
             self.slow_drift,
             self.page_hinkley_min_bucket_factor,
+            oom_recent_buckets=self.oom_recent_buckets,
         )
 
     def _slow_drift_findings(self, series: list[MetricSeries]) -> list[AnomalyFinding]:
@@ -456,6 +459,7 @@ class V001AnomalyEngine:
             self.min_absolute_change,
             self.traffic_shape_max_lag_buckets,
             self.traffic_explanation,
+            self.oom_recent_buckets,
         )
 
 
@@ -491,4 +495,5 @@ def build_v001_anomaly_engine(config: dict, **overrides) -> V001AnomalyEngine:
         traffic_explanation=anomaly["traffic_explanation"],
         detection_window_seconds=int(anomaly["detection_window_seconds"]) or None,
         normal_growth_detection_window_seconds=int(anomaly["normal_growth_detection_window_seconds"]) or None,
+        oom_recent_buckets=int(anomaly["oom_recent_buckets"]),
     )

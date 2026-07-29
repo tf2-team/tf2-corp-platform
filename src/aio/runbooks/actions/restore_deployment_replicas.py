@@ -1,6 +1,7 @@
 #!/usr/bin/python
 # Copyright The OpenTelemetry Authors
 # SPDX-License-Identifier: Apache-2.0
+
 from __future__ import annotations
 
 from datetime import UTC, datetime
@@ -14,9 +15,6 @@ def run(context: dict) -> dict:
         return block_response(context, "restore deployment replicas blocked", reasons, config)
     if context.get("dry_run") is True:
         return block_response(context, "rollback requires dry_run=false", ["rollback_requires_dry_run_false"], config)
-    if context.get("live_apply") is True:
-        return block_response(context, "live apply is not enabled for Phase 2 action scripts", ["live_apply_disabled_phase2"], config)
-
     execution = context.get("execution")
     if not isinstance(execution, dict):
         return block_response(context, "rollback requires execution snapshot", ["missing_execution"], config)

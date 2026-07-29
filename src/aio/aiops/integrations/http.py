@@ -44,13 +44,36 @@ class HttpApiClient:
         except ValueError:
             return {"status_code": response.status_code, "text": response.text}
 
-    def get(self, path: str, params: dict[str, Any] | None = None) -> Any:
-        response = self._client.get(path, params=params)
+    def get(
+        self,
+        path: str,
+        params: dict[str, Any] | None = None,
+        *,
+        headers: dict[str, str] | None = None,
+    ) -> Any:
+        response = self._client.get(path, params=params, headers=headers)
         response.raise_for_status()
         return self._decode_response(response)
 
-    def post(self, path: str, json: dict[str, Any]) -> Any:
-        response = self._client.post(path, json=json)
+    def post(
+        self,
+        path: str,
+        json: dict[str, Any],
+        *,
+        headers: dict[str, str] | None = None,
+    ) -> Any:
+        response = self._client.post(path, json=json, headers=headers)
+        response.raise_for_status()
+        return self._decode_response(response)
+
+    def patch(
+        self,
+        path: str,
+        json: dict[str, Any],
+        *,
+        headers: dict[str, str] | None = None,
+    ) -> Any:
+        response = self._client.patch(path, json=json, headers=headers)
         response.raise_for_status()
         return self._decode_response(response)
 

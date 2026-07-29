@@ -1,11 +1,13 @@
 #!/usr/bin/python
 # Copyright The OpenTelemetry Authors
 # SPDX-License-Identifier: Apache-2.0
+
 from __future__ import annotations
 
 import json
 
 from runbooks.actions import page_oncall, plan_scale_deployment, restore_deployment_replicas, scale_deployment
+from runbooks.actions.common import ALLOWLIST
 
 
 def _base_context() -> dict:
@@ -21,6 +23,7 @@ def _base_context() -> dict:
         "policy_id": "phase3-scale-policy-v1",
         "policy_approved": True,
         "policy_expires_at": "2026-08-31T23:59:59Z",
+        "approval_id": "adr-live-001",
         "idempotency_key": "sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
         "reason": "cpu_saturation",
         "root_cause_metrics": ["product_catalog_cpu_millicores"],
@@ -35,6 +38,24 @@ def _base_context() -> dict:
         },
     }
 
+
+def _context_for_action(action_id: str) -> dict:
+    action = ALLOWLIST[action_id]
+    return {
+        **_base_context(),
+        "incident_id": f"inc-{action['target']}-scale-001",
+        "action_id": action_id,
+        "target": action["target"],
+        "root_cause_metrics": [action["verification_query_id"]],
+        "kubernetes_snapshot": {
+            "kind": "Deployment",
+            "namespace": "techx-corp-prod",
+            "name": action["target"],
+            "replicas": 2,
+            "ready_replicas": 2,
+            "resource_version": "12345",
+        },
+    }
 
 def test_plan_scale_deployment_returns_dry_run_plan() -> None:
     response = plan_scale_deployment.run(_base_context())
@@ -68,6 +89,39 @@ def test_scale_deployment_executes_valid_phase2_plan() -> None:
     assert response["rollback_token"] == plan["rollback_token"]
     json.dumps(response)
 
+
+def test_ai_requested_scale_actions_plan_execute_and_rollback() -> None:
+    for action_id in ["scale_frontend_proxy", "scale_frontend", "scale_checkout", "scale_cart"]:
+        context = _context_for_action(action_id)
+        plan = plan_scale_deployment.run(context)
+        execute_context = {
+            **context,
+            "dry_run": False,
+            "plan": {**plan["plan"], "rollback_token": plan["rollback_token"]},
+            "plan_hash": plan["plan"]["plan_hash"],
+            "rollback_token": plan["rollback_token"],
+        }
+
+        execution = scale_deployment.run(execute_context)
+        rollback = restore_deployment_replicas.run(
+            {
+                **context,
+                "action_id": "restore_deployment_replicas",
+                "action_type": "restore_deployment_replicas",
+                "dry_run": False,
+                "rollback_token": execution["rollback_token"],
+                "execution": execution,
+                "kubernetes_snapshot": {"replicas": 3, "resource_version": "12346"},
+            }
+        )
+
+        assert plan["ok"] is True
+        assert plan["plan"]["after"]["replicas"] == 3
+        assert execution["executed"] is True
+        assert execution["target"] == ALLOWLIST[action_id]["target"]
+        assert rollback["executed"] is True
+        assert rollback["after"]["replicas"] == 2
+        json.dumps(rollback)
 
 def test_scale_deployment_rejects_resource_version_mismatch() -> None:
     context = _base_context()
