@@ -103,6 +103,7 @@ def run_pipeline_with_collector(collector, settings: Settings, runtime_config, m
         slo_dedup_seconds=int(hyperparameters["incident"]["slo_dedup_seconds"]),
         rca_dedup_seconds=int(hyperparameters["incident"]["rca_dedup_seconds"]),
         incident_count_reset_seconds=int(hyperparameters["incident"]["count_reset_seconds"]),
+        recovery_consecutive_buckets=int(hyperparameters["incident"]["recovery_consecutive_buckets"]),
         notification_retry_base_seconds=int(hyperparameters["incident"]["notification_retry_base_seconds"]),
         notification_retry_max_seconds=int(hyperparameters["incident"]["notification_retry_max_seconds"]),
         notification_error_max_chars=int(hyperparameters["incident"]["notification_error_max_chars"]),

@@ -1,6 +1,7 @@
 {
   "incident": {
     "count_reset_seconds": 900,
+    "recovery_consecutive_buckets": 6,
     "notification_cooldown_seconds": 900,
     "rca_dedup_seconds": 900,
     "slo_dedup_seconds": 900,
@@ -48,6 +49,9 @@
     "rca_notification_require_current_tail_change": true,
     "rca_notification_allow_default_metric_without_series": true,
     "suppress_breakout_multiplier": 1.5,
+    "allow_direct_anomaly_breakout": true,
+    "allow_slo_breakout": true,
+    "rca_dedup_require_same_service": true,
     "suppress_window_seconds": 900,
     "weights": {
       "verified_primary_signal": 0.25,
@@ -199,7 +203,7 @@
         "enabled": true,
         "window_seconds": 3600,
         "min_points": 12,
-        "positive_bucket_ratio": 0.65,
+        "positive_bucket_ratio": 0.45,
         "metrics": {
           "memory": {
             "direction": "up",
@@ -211,7 +215,8 @@
           },
           "socket_io": {
             "direction": "up",
-            "min_total_change": 1048576.0
+            "min_total_change": 512000.0,
+            "positive_bucket_ratio": 0.45
           },
           "disk": {
             "direction": "up",

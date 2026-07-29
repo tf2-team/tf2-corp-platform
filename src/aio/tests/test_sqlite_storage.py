@@ -84,11 +84,11 @@ class SQLiteIncidentStoreTest(unittest.TestCase):
         self.assertEqual(same_incident.occurrence_count, 2)
         self.assertEqual(len(same_incident.events), 2)
         self.assertEqual(len(incidents), 1)
-        self.assertEqual(same_incident.state, "open")
+        self.assertEqual(same_incident.state, "ongoing")
         self.assertEqual(same_incident.last_seen, "1970-01-01T00:03:20+00:00")
         self.assertIsNone(same_incident.recovered_at)
         self.assertIsNotNone(same_incident.cooldown_until)
-        self.assertEqual(event_row[:3], ("open", "1970-01-01T00:03:20+00:00", None))
+        self.assertEqual(event_row[:3], ("ongoing", "1970-01-01T00:03:20+00:00", None))
         self.assertIsNotNone(event_row[3])
 
     def test_deduped_incident_requeues_notification_after_cooldown(self):
@@ -230,7 +230,7 @@ class SQLiteIncidentStoreTest(unittest.TestCase):
 
         self.assertEqual(incident.incident_id, repeated.incident_id)
         self.assertEqual(len(notifications), 1)
-        self.assertTrue(notifications[0].incident_id.endswith(":supplement"))
+        self.assertTrue(notifications[0].incident_id.endswith(":supplement:1"))
         self.assertTrue(notifications[0].title.startswith("bổ sung:"))
         self.assertIn("bổ sung", notifications[0].summary)
         self.assertIn("log_classification=hard_failure", notifications[0].summary)
@@ -264,6 +264,108 @@ class SQLiteIncidentStoreTest(unittest.TestCase):
             store.close()
 
         self.assertEqual(notifications, [])
+
+    def test_strong_rca_evidence_updates_pending_notification(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            store = SQLiteIncidentStore(Path(tmp) / "aiops.sqlite3", environment="tf2", rca_dedup_seconds=900)
+            weak = service_candidate("product-reviews", "rca_root_cause").model_copy(
+                update={"signal_id": "cpu_millicores", "reason": "rca_root_cause"}
+            )
+            incident = store.upsert(weak)
+            strong = weak.model_copy(
+                update={
+                    "evidence": (
+                        EvidenceItem(source="rca", reference="product-reviews", summary="trace_id=abc status=error"),
+                    )
+                }
+            )
+            store.upsert(strong)
+            rows = store._connection.execute(
+                "SELECT incident_id, notification_json FROM notification_outbox ORDER BY incident_id"
+            ).fetchall()
+            store.close()
+
+        self.assertEqual([row[0] for row in rows], [incident.incident_id])
+        self.assertIn("trace_id=abc", rows[0][1])
+
+    def test_rca_supplement_is_once_per_notification_cycle(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            store = SQLiteIncidentStore(
+                Path(tmp) / "aiops.sqlite3",
+                environment="tf2",
+                rca_dedup_seconds=900,
+                incident_count_reset_seconds=10,
+            )
+            weak = service_candidate("product-reviews", "rca_root_cause").model_copy(
+                update={"signal_id": "cpu_millicores", "reason": "rca_root_cause", "timestamp": 100}
+            )
+            first = store.upsert(weak)
+            store.mark_notification_sent(first.incident_id)
+            strong = weak.model_copy(
+                update={
+                    "timestamp": 101,
+                    "evidence": (
+                        EvidenceItem(source="rca", reference="product-reviews", summary="trace_id=first status=error"),
+                    ),
+                }
+            )
+            store.upsert(strong)
+            store.mark_notification_sent(f"{first.incident_id}:supplement:1")
+
+            current = store.list_incidents()[0]
+            current.cooldown_until = (datetime.now(UTC) - timedelta(seconds=1)).isoformat()
+            store._connection.execute(
+                "UPDATE incidents SET incident_json = ? WHERE fingerprint = ?",
+                (current.model_dump_json(), current.fingerprint),
+            )
+            store._connection.execute(
+                "UPDATE notification_service_cooldowns SET cooldown_until = ?",
+                (current.cooldown_until,),
+            )
+            second = store.upsert(weak.model_copy(update={"timestamp": 200}))
+            store.mark_notification_sent(second.incident_id)
+            store.upsert(strong.model_copy(update={"timestamp": 201}))
+            supplements = store._connection.execute(
+                "SELECT incident_id FROM notification_outbox WHERE incident_id LIKE ? ORDER BY incident_id",
+                (f"{first.incident_id}:supplement:%",),
+            ).fetchall()
+            store.close()
+
+        self.assertEqual(supplements, [(f"{first.incident_id}:supplement:1",), (f"{first.incident_id}:supplement:2",)])
+
+    def test_severity_escalation_requeues_same_incident_immediately(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            store = SQLiteIncidentStore(Path(tmp) / "aiops.sqlite3", environment="tf2", notification_cooldown_seconds=900)
+            event = service_candidate("product-reviews", "ops_request_volume").model_copy(
+                update={"signal_id": "product_reviews_request_count_5m", "severity": "SEV2"}
+            )
+            first = store.upsert(event)
+            store.mark_notification_sent(first.incident_id)
+            escalated = store.upsert(event.model_copy(update={"severity": "SEV1"}))
+            row = store._connection.execute(
+                "SELECT status, attempt_count, last_error, cycle, notification_json FROM notification_outbox WHERE incident_id = ?",
+                (first.incident_id,),
+            ).fetchone()
+            store.close()
+
+        self.assertEqual(first.incident_id, escalated.incident_id)
+        self.assertEqual(row[:4], ("pending", 0, None, 2))
+        self.assertIn('"severity":"SEV1"', row[4])
+
+    def test_requeue_resets_delivery_state(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            store = SQLiteIncidentStore(Path(tmp) / "aiops.sqlite3", environment="tf2", slo_dedup_seconds=0)
+            first = store.upsert(candidate(0.02, timestamp=100))
+            store.mark_notification_failed(first.incident_id, "receiver down")
+            store.mark_notification_sent(first.incident_id)
+            store.upsert(candidate(0.03, timestamp=200))
+            row = store._connection.execute(
+                "SELECT status, attempt_count, last_error, cycle FROM notification_outbox WHERE incident_id = ?",
+                (first.incident_id,),
+            ).fetchone()
+            store.close()
+
+        self.assertEqual(row, ("pending", 0, None, 2))
 
     def test_sev1_bypasses_same_service_cooldown(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -327,6 +429,68 @@ class SQLiteIncidentStoreTest(unittest.TestCase):
         self.assertEqual(notifications, [])
         self.assertEqual(status, ("suppressed",))
 
+    def test_active_root_suppresses_retry_and_releases_unsent_cooldown(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            store = SQLiteIncidentStore(Path(tmp) / "aiops.sqlite3", environment="tf2")
+            store.register_active_root_cause("checkout", {"checkout", "cart"}, suppress_seconds=900)
+            event = service_candidate("cart", "ops_cart_requests").model_copy(update={"signal_id": "cart_request_count_5m"})
+            incident = store.upsert(event)
+            store.mark_notification_failed(incident.incident_id, "receiver down")
+            suppressed = store.suppress_active_root_notifications([incident])
+            status = store._connection.execute(
+                "SELECT status FROM notification_outbox WHERE incident_id = ?",
+                (incident.incident_id,),
+            ).fetchone()
+            stored = store.list_incidents()[0]
+            cooldowns = store._connection.execute("SELECT COUNT(*) FROM notification_service_cooldowns").fetchone()[0]
+            repeated = store.upsert(event)
+            notifications = store.pending_notifications_for([repeated])
+            store.close()
+
+        self.assertEqual(suppressed, {incident.incident_id})
+        self.assertEqual(status, ("suppressed",))
+        self.assertIsNone(stored.cooldown_until)
+        self.assertEqual(cooldowns, 0)
+        self.assertEqual([message.incident_id for message in notifications], [incident.incident_id])
+
+    def test_active_root_suppresses_pending_rca_supplement(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            store = SQLiteIncidentStore(Path(tmp) / "aiops.sqlite3", environment="tf2", rca_dedup_seconds=900)
+            weak = service_candidate("product-reviews", "rca_root_cause").model_copy(
+                update={"signal_id": "cpu_millicores", "reason": "rca_root_cause"}
+            )
+            incident = store.upsert(weak)
+            store.mark_notification_sent(incident.incident_id)
+            strong = weak.model_copy(
+                update={
+                    "evidence": (
+                        EvidenceItem(source="rca", reference="product-reviews", summary="trace_id=abc status=error"),
+                    )
+                }
+            )
+            repeated = store.upsert(strong)
+            store.register_active_root_cause("checkout", {"checkout", "product-reviews"}, suppress_seconds=900)
+            suppressed = store.suppress_active_root_notifications([repeated])
+            status = store._connection.execute(
+                "SELECT status FROM notification_outbox WHERE incident_id = ?",
+                (f"{incident.incident_id}:supplement:1",),
+            ).fetchone()
+            store.close()
+
+        self.assertEqual(suppressed, {incident.incident_id})
+        self.assertEqual(status, ("suppressed",))
+
+    def test_overlapping_active_roots_do_not_suppress_each_other(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            store = SQLiteIncidentStore(Path(tmp) / "aiops.sqlite3", environment="tf2")
+            store.register_active_root_cause("checkout", {"checkout", "cart"}, root_score=1.0)
+            store.register_active_root_cause("cart", {"cart"}, root_score=0.8)
+            incident = store.upsert(service_candidate("cart", "ops_cart_requests").model_copy(update={"signal_id": "cart_request_count_5m"}))
+            suppressed = store.suppress_active_root_notifications([incident])
+            store.close()
+
+        self.assertEqual(suppressed, set())
+
     def test_breakout_requires_beating_strongest_covering_root(self):
         graph = TopologyGraph(load_runtime_config(Path("config/runtime.json")))
         with tempfile.TemporaryDirectory() as tmp:
@@ -338,7 +502,19 @@ class SQLiteIncidentStoreTest(unittest.TestCase):
 
         self.assertEqual(breakout, set())
 
-    def test_repeated_active_root_cause_does_not_extend_suppression_ttl(self):
+    def test_breakout_uses_same_two_hop_scope_as_suppression(self):
+        graph = TopologyGraph(load_runtime_config(Path("config/runtime.json")))
+        two_hop = graph.neighborhood("checkout", max_hops=2) - graph.neighborhood("checkout", max_hops=1)
+        service = sorted(two_hop)[0]
+        with tempfile.TemporaryDirectory() as tmp:
+            store = SQLiteIncidentStore(Path(tmp) / "aiops.sqlite3", environment="tf2", topology_graph=graph)
+            store.register_active_root_cause("checkout", graph.neighborhood("checkout", max_hops=2), root_score=1.0)
+            breakout = store.breakout_services({service: 1.5}, 1.5, max_hops=2)
+            store.close()
+
+        self.assertEqual(breakout, {service})
+
+    def test_repeated_active_root_cause_extends_suppression_ttl(self):
         with tempfile.TemporaryDirectory() as tmp:
             store = SQLiteIncidentStore(Path(tmp) / "aiops.sqlite3", environment="tf2")
             store.register_active_root_cause("checkout", {"checkout", "cart"}, suppress_seconds=900)
@@ -348,15 +524,36 @@ class SQLiteIncidentStoreTest(unittest.TestCase):
                 (fixed_expiry, "checkout"),
             )
 
-            store.register_active_root_cause("checkout", {"checkout", "cart", "payment"}, suppress_seconds=900)
+            store.register_active_root_cause("checkout", {"checkout", "cart", "payment"}, suppress_seconds=900, root_score=2.0)
             row = store._connection.execute(
-                "SELECT affected_services_json, expires_at FROM active_root_causes WHERE root_service = ?",
+                "SELECT affected_services_json, expires_at, root_score FROM active_root_causes WHERE root_service = ?",
                 ("checkout",),
             ).fetchone()
             store.close()
 
         self.assertEqual(set(json.loads(row[0])), {"checkout", "cart", "payment"})
-        self.assertEqual(row[1], fixed_expiry)
+        self.assertGreater(datetime.fromisoformat(row[1]), datetime.fromisoformat(fixed_expiry))
+        self.assertEqual(row[2], 2.0)
+
+    def test_incident_recovers_only_after_consecutive_absent_runs(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            store = SQLiteIncidentStore(Path(tmp) / "aiops.sqlite3", environment="tf2", recovery_consecutive_buckets=3)
+            incident = store.upsert(candidate(0.02, timestamp=100))
+
+            store.reconcile_lifecycle({incident.incident_id})
+            store.reconcile_lifecycle(set())
+            store.reconcile_lifecycle(set())
+            still_open = store.list_incidents()[0]
+            store.reconcile_lifecycle(set())
+            recovered = store.list_incidents()[0]
+            recovery = store.due_notifications()
+            store.close()
+
+        self.assertEqual(still_open.state, "open")
+        self.assertEqual(still_open.recovery_count, 2)
+        self.assertEqual(recovered.state, "recovered")
+        self.assertIsNotNone(recovered.recovered_at)
+        self.assertIn("Recovered: checkout", {message.title for message in recovery})
 
     def test_verified_incident_is_persisted_recovered_and_reopens_on_new_breach(self):
         with tempfile.TemporaryDirectory() as tmp:

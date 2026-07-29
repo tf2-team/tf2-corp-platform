@@ -86,12 +86,12 @@ def cusum_tail_change(metric: MetricSeries, detection_window_seconds: int | None
     limit = max(min_absolute, abs(change.baseline) * min_relative) * max(2, min_buckets)
     cumulative = 0.0
     first_changed = None
-    positive_buckets = 0
+    consecutive_buckets = 0
     for index in change.indexes:
         delta = change.values[index] - change.baseline
-        positive_buckets += int(delta > 0)
-        cumulative = max(0.0, cumulative + delta)
-        if positive_buckets >= min_buckets and cumulative >= limit:
+        consecutive_buckets = consecutive_buckets + 1 if delta > 0 else 0
+        cumulative = max(0.0, cumulative + delta) if delta > 0 else 0.0
+        if consecutive_buckets >= min_buckets and cumulative >= limit:
             first_changed = metric.points[index].timestamp
             break
     return TailChange(
@@ -121,13 +121,17 @@ def page_hinkley_tail_change(
     cumulative = 0.0
     minimum = 0.0
     first_changed = None
-    positive_buckets = 0
+    consecutive_buckets = 0
     for index in change.indexes:
         delta = change.values[index] - change.baseline - tolerance
-        positive_buckets += int(delta > 0)
-        cumulative += delta
-        minimum = min(minimum, cumulative)
-        if positive_buckets >= min_buckets and cumulative - minimum >= threshold:
+        if delta > 0:
+            consecutive_buckets += 1
+            cumulative += delta
+            minimum = min(minimum, cumulative)
+        else:
+            consecutive_buckets = 0
+            cumulative = minimum = 0.0
+        if consecutive_buckets >= min_buckets and cumulative - minimum >= threshold:
             first_changed = metric.points[index].timestamp
             break
     return TailChange(
@@ -179,7 +183,7 @@ def significant_tail_change(
     )
     if change.significant or slow_drift_tail_change(metric, detection_window_seconds, start, slow_drift).significant:
         return True
-    if group not in (cusum_groups or {"cpu", "memory", "latency", "socket_io"}):
+    if group not in (cusum_groups or {"cpu", "latency", "socket_io"}):
         return False
     return (
         cusum_tail_change(

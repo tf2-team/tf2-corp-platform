@@ -35,7 +35,7 @@ from aiops.remediation import (
 from aiops.schemas import ActionCatalogItem, ActionProposal, CandidateEvent, Incident, RemediationDecision, VerificationResult
 from aiops.shared.metrics import is_memory_metric, is_oom_metric
 from aiops.shared.series import prepare_detector_series
-from aiops.shared.tail import evaluate_tail_change, metric_group, oom_counter_increased, point_changed
+from aiops.shared.tail import evaluate_tail_change, metric_group, oom_counter_increased, point_changed, significant_tail_change
 from aiops.topology import TopologyGraph
 from aiops.verification import VerificationEngine
 from aiops.pipeline.analysis import (
@@ -152,6 +152,19 @@ class AiopsPipeline:
             analysis_incidents = incidents
             regular_incidents = [incident for incident in incidents if not is_slo_notification(incident.events[-1])]
             deduped_incidents = _unique_incidents(incidents)
+        if hasattr(self.store, "reconcile_lifecycle"):
+            lifecycle_incidents = self.store.reconcile_lifecycle({incident.incident_id for incident in incidents})
+            recovered_now = [
+                incident
+                for incident in lifecycle_incidents
+                if incident.state == "recovered" and incident.recovery_count == getattr(self.store, "recovery_consecutive_buckets", 6)
+            ]
+            if recovered_now:
+                direct_notifications.extend(self._flush_notifications(recovered_now, only_incidents=True))
+            analysis_incidents = _unique_incidents([
+                *analysis_incidents,
+                *(incident for incident in lifecycle_incidents if incident.state != "recovered"),
+            ])
         logger.info(
             "AIOPS_DEDUP_RESULT input_candidates=%s rca_incidents=%s incidents=%s ids=%s services=%s occurrences=%s",
             len(enriched),
@@ -174,8 +187,12 @@ class AiopsPipeline:
             [root.service for root in rca_result.root_causes],
         )
         self._log_failure_conclusion(rca_result, analysis_incidents)
-        suppressed_incident_ids = self._suppress_related_notifications(_unique_incidents(regular_incidents), rca_result)
-        actionable_incidents = [incident for incident in regular_incidents if incident.incident_id not in suppressed_incident_ids]
+        suppressed_incident_ids = self._suppress_related_notifications(
+            _unique_incidents(regular_incidents),
+            rca_result,
+            _unique_incidents(root_incidents),
+        )
+        actionable_incidents = _unique_incidents(regular_incidents)
         self._record_rca_history(rca_result, incidents, enriched, metric_series or [])
         notifications = direct_notifications + self._flush_notifications(_unique_incidents(regular_incidents))
         logger.debug("AIOPS_BLOCK notify notifications=%s", len(notifications))
@@ -382,19 +399,39 @@ class AiopsPipeline:
         if not all(key in config for key in ("min_tail_anomaly_buckets", "min_relative_change_ratio", "min_absolute_change")):
             return False, "missing_tail_config"
         change = _metric_tail_change(match, detection_window_seconds, start, config)
+        significant = significant_tail_change(
+            match,
+            detection_window_seconds,
+            start,
+            config["min_tail_anomaly_buckets"],
+            config["min_relative_change_ratio"],
+            config["min_absolute_change"],
+            config.get("slow_drift", {}),
+            float(config.get("page_hinkley_min_bucket_factor", 2.0)),
+            oom_recent_buckets=int(config.get("oom_recent_buckets", 3)),
+        )
         if not bool(self.correlation_hyperparameters["rca_notification_require_current_tail_change"]):
-            return change.significant, "tail_significant" if change.significant else "tail_not_significant"
-        if not change.significant:
+            return significant, "tail_significant" if significant else "tail_not_significant"
+        if not significant:
             return False, "tail_not_significant"
         if not _tail_is_still_changed(metric, change, config):
-            return False, "tail_recovered"
+            return False, "tail_reversed"
         return True, "tail_significant_current"
 
     def _dedup_rca_root_causes(self, root_causes: list[RootCauseCandidate]) -> list[RootCauseCandidate]:
         kept: list[RootCauseCandidate] = []
         max_hops = int(self.correlation_hyperparameters["topology_max_hops"])
         for root in root_causes:
-            duplicate = next((item for item in kept if self._same_rca_topology_scope(root.service, item.service, max_hops)), None)
+            same_service_only = bool(self.correlation_hyperparameters.get("rca_dedup_require_same_service", True))
+            duplicate = next(
+                (
+                    item
+                    for item in kept
+                    if (root.service == item.service if same_service_only else self._same_rca_topology_scope(root.service, item.service, max_hops))
+                    and bool(set(root.root_cause_metrics) & set(item.root_cause_metrics))
+                ),
+                None,
+            )
             if duplicate is None:
                 kept.append(root)
                 continue
@@ -646,41 +683,60 @@ class AiopsPipeline:
             }
         )
 
-    def _suppress_related_notifications(self, incidents: list[Incident], rca_result: RcaResult) -> set[str]:
+    def _suppress_related_notifications(
+        self,
+        incidents: list[Incident],
+        rca_result: RcaResult,
+        root_incidents: list[Incident] | None = None,
+    ) -> set[str]:
         suppressed = set()
-        current_root_service = None
         service_scores = _algorithm_service_scores(rca_result.algorithm_findings)
-        affected_services: set[str] = set()
-        if self.runtime_config is not None and rca_result.root_causes:
-            root = rca_result.root_causes[0]
-            if root.score >= float(self.correlation_hyperparameters["suppress_min_root_score"]):
-                root_service = root.service
-                current_root_service = root_service
-                max_hops = int(self.correlation_hyperparameters["topology_max_hops"])
-                affected_services = self.topology_graph.neighborhood(root_service, max_hops) if self.topology_graph is not None else {root_service}
-                logger.info(
-                    "AIOPS_RCA_SUPPRESS_FILTER filter=active_root_cause source=rca root_service=%s affected_services=%s max_hops=%s suppress_seconds=%s reason=root_score_above_threshold",
-                    root_service,
-                    sorted(affected_services),
-                    max_hops,
-                    int(self.correlation_hyperparameters["suppress_window_seconds"]),
-                )
-                self.store.register_active_root_cause(
-                    root_service,
-                    affected_services,
-                    int(self.correlation_hyperparameters["suppress_window_seconds"]),
-                    service_scores.get(root_service, 0.0),
-                )
+        max_hops = int(self.correlation_hyperparameters.get("topology_max_hops", 1))
+        min_score = float(self.correlation_hyperparameters.get("suppress_min_root_score", 1.0))
+        active_roots = [incident for incident in (root_incidents or []) if incident.events[-1].confidence >= min_score]
+        root_services = {incident.service for incident in active_roots}
+        direct_anomaly_services = set(service_scores) if self.correlation_hyperparameters.get("allow_direct_anomaly_breakout", True) else set()
+        slo_services = {
+            incident.service
+            for incident in incidents
+            if self.correlation_hyperparameters.get("allow_slo_breakout", True) and is_slo_notification(incident.events[-1])
+        }
+        affected_by_root = {
+            incident.service: self.topology_graph.neighborhood(incident.service, max_hops) if self.topology_graph is not None else {incident.service}
+            for incident in active_roots
+        }
+        for incident in active_roots:
+            root_service = incident.service
+            affected_services = affected_by_root[root_service]
+            root_score = service_scores.get(root_service) or incident.events[-1].confidence
+            logger.info(
+                "AIOPS_RCA_SUPPRESS_FILTER filter=active_root_cause source=rca root_service=%s affected_services=%s max_hops=%s suppress_seconds=%s reason=notifiable_root_cause",
+                root_service,
+                sorted(affected_services),
+                max_hops,
+                int(self.correlation_hyperparameters.get("suppress_window_seconds", 900)),
+            )
+            self.store.register_active_root_cause(
+                root_service,
+                affected_services,
+                int(self.correlation_hyperparameters.get("suppress_window_seconds", 900)),
+                root_score,
+            )
         breakout_services = (
-            self.store.breakout_services(service_scores, float(self.correlation_hyperparameters["suppress_breakout_multiplier"]))
+            self.store.breakout_services(
+                service_scores,
+                float(self.correlation_hyperparameters.get("suppress_breakout_multiplier", 1.5)),
+                max_hops,
+            )
             if service_scores
             else set()
         )
-        if current_root_service:
-            suppressed.update(self.store.suppress_related_notifications(incidents, current_root_service, affected_services, breakout_services))
+        exempt_services = breakout_services | root_services | direct_anomaly_services | slo_services
+        for root_service, affected_services in affected_by_root.items():
+            suppressed.update(self.store.suppress_related_notifications(incidents, root_service, affected_services, exempt_services))
         if incidents:
             remaining = [incident for incident in incidents if incident.incident_id not in suppressed]
-            suppressed.update(self.store.suppress_active_root_notifications(remaining, breakout_services))
+            suppressed.update(self.store.suppress_active_root_notifications(remaining, exempt_services))
         return suppressed
 
     def _record_verified_history(
@@ -832,12 +888,21 @@ def _tail_is_still_changed(metric: str, change, config: dict) -> bool:
     if not change.indexes:
         return False
     group = metric_group(metric)
-    return point_changed(
-        change.values[change.indexes[-1]],
+    last = change.values[change.indexes[-1]]
+    if point_changed(
+        last,
         change.baseline,
         float(config["min_relative_change_ratio"][group]),
         float(config["min_absolute_change"][group]),
-    )
+    ):
+        return True
+    direction = config.get("slow_drift", {}).get("metrics", {}).get(group, {}).get("direction")
+    recent = change.indexes[-max(2, int(config["min_tail_anomaly_buckets"][group])) :]
+    if direction == "up":
+        return len(recent) > 1 and last > change.values[recent[0]]
+    if direction == "down":
+        return len(recent) > 1 and last < change.values[recent[0]]
+    return False
 
 
 def _passes_rca_notification_gate(

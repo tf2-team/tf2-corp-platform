@@ -45,6 +45,8 @@ class NotificationBuilder:
         last_event = incident.events[-1]
         dependency = incident.likely_dependency
         title = f"RCA root cause: {incident.service}" if last_event.detector_id == "rca_root_cause" else f"{incident.flow} incident"
+        if incident.state == "recovered":
+            title = f"Recovered: {incident.service}"
         if last_event.detector_id != "rca_root_cause" and dependency != "unknown":
             title = f"{incident.flow} likely dependency: {dependency}"
         signals = tuple(dict.fromkeys(signal for event in incident.events for signal in (event.contributing_signals or (event.signal_id,))))

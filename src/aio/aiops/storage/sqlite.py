@@ -16,7 +16,7 @@ from aiops.schemas import CandidateEvent, Incident, NotificationMessage
 from aiops.shared.evidence import STRONG_LOG_MARKER, STRONG_TRACE_MARKER
 
 logger = logging.getLogger(__name__)
-SUPPLEMENTAL_NOTIFICATION_SUFFIX = ":supplement"
+SUPPLEMENTAL_NOTIFICATION_SUFFIX = ":supplement:"
 
 
 class SQLiteIncidentStore:
@@ -29,6 +29,7 @@ class SQLiteIncidentStore:
         slo_dedup_seconds: int = 300,
         rca_dedup_seconds: int = 300,
         incident_count_reset_seconds: int = 900,
+        recovery_consecutive_buckets: int = 6,
         notification_retry_base_seconds: int = 60,
         notification_retry_max_seconds: int = 3600,
         notification_error_max_chars: int = 512,
@@ -41,6 +42,7 @@ class SQLiteIncidentStore:
         self.slo_dedup_seconds = slo_dedup_seconds
         self.rca_dedup_seconds = rca_dedup_seconds
         self.incident_count_reset_seconds = incident_count_reset_seconds
+        self.recovery_consecutive_buckets = recovery_consecutive_buckets
         self.notification_retry_base_seconds = notification_retry_base_seconds
         self.notification_retry_max_seconds = notification_retry_max_seconds
         self.notification_error_max_chars = notification_error_max_chars
@@ -81,6 +83,7 @@ class SQLiteIncidentStore:
                 attempt_count INTEGER NOT NULL DEFAULT 0,
                 next_attempt_at TEXT NOT NULL,
                 last_error TEXT,
+                cycle INTEGER NOT NULL DEFAULT 1,
                 created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
                 updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
             )
@@ -131,6 +134,7 @@ class SQLiteIncidentStore:
             """
         )
         self._ensure_event_columns()
+        self._ensure_outbox_columns()
         self._ensure_active_root_columns()
 
     def upsert(self, candidate: CandidateEvent) -> Incident:
@@ -143,6 +147,7 @@ class SQLiteIncidentStore:
         ).fetchone()
 
         is_new = row is None
+        previous_severity = None
         if is_new:
             digest = fingerprint.removeprefix("sha256:")
             incident = Incident(
@@ -158,9 +163,10 @@ class SQLiteIncidentStore:
             )
         else:
             incident = Incident.model_validate_json(row[0])
-            if incident.state == "recovered":
-                incident.state = "open"
-                incident.recovered_at = None
+            previous_severity = incident.severity
+            incident.state = "open" if incident.state == "recovered" else "ongoing"
+            incident.recovered_at = None
+            incident.recovery_count = 0
             if self._count_window_expired(incident, candidate):
                 incident.occurrence_count = 1
                 incident.events = [candidate]
@@ -174,9 +180,14 @@ class SQLiteIncidentStore:
         now = datetime.now(UTC)
         slo_notification = is_slo_notification(candidate)
         rca_notification = candidate.detector_id == "rca_root_cause"
-        notification_due = self._notification_due(incident, is_new, now)
+        severity_escalated = previous_severity is not None and _severity_rank(candidate.severity) < _severity_rank(previous_severity)
+        notification_due = self._notification_due(incident, is_new, now) or severity_escalated
         outbox_status = self._notification_outbox_status(incident.incident_id)
-        can_enqueue_incident = notification_due and (outbox_status is None or outbox_status in {"sent", "suppressed"})
+        can_enqueue_incident = notification_due and (
+            outbox_status is None
+            or outbox_status in {"sent", "suppressed"}
+            or severity_escalated and outbox_status in {"pending", "retry"}
+        )
         cooldown_key = _notification_cooldown_key(incident.service, slo_notification, rca_notification)
         service_notification_due = False
         if can_enqueue_incident:
@@ -184,7 +195,7 @@ class SQLiteIncidentStore:
                 cooldown_key,
                 incident.severity,
                 now,
-                bypass_sev1=not (slo_notification or rca_notification),
+                bypass_sev1=severity_escalated or not (slo_notification or rca_notification),
             )
         notification = (
             NotificationBuilder().build([incident])[0]
@@ -222,11 +233,22 @@ class SQLiteIncidentStore:
                     ON CONFLICT(incident_id) DO UPDATE SET
                         notification_json = excluded.notification_json,
                         status = 'pending',
+                        attempt_count = 0,
                         next_attempt_at = excluded.next_attempt_at,
+                        last_error = NULL,
+                        cycle = CASE
+                            WHEN notification_outbox.status IN ('sent', 'suppressed') THEN notification_outbox.cycle + 1
+                            ELSE notification_outbox.cycle
+                        END,
+                        created_at = CASE
+                            WHEN notification_outbox.status IN ('sent', 'suppressed') THEN excluded.next_attempt_at
+                            ELSE notification_outbox.created_at
+                        END,
                         updated_at = excluded.next_attempt_at
                     WHERE notification_outbox.status IN ('sent', 'suppressed')
+                       OR (? AND notification_outbox.status IN ('pending', 'retry'))
                     """,
-                    (incident.incident_id, fingerprint, notification.model_dump_json(), _now()),
+                    (incident.incident_id, fingerprint, notification.model_dump_json(), _now(), severity_escalated),
                 )
                 notification_enqueued = cursor.rowcount > 0
                 if notification_enqueued:
@@ -239,6 +261,7 @@ class SQLiteIncidentStore:
                         incident.severity,
                         notification.runbook_id,
                     )
+            self._refresh_pending_rca_notification(incident, candidate)
             supplemental = self._supplemental_rca_notification(incident, candidate)
             if supplemental is not None:
                 self._connection.execute(
@@ -291,6 +314,48 @@ class SQLiteIncidentStore:
             notification_enqueued,
         )
         return incident
+
+    def reconcile_lifecycle(self, seen_incident_ids: set[str]) -> list[Incident]:
+        """Keep unseen incidents active until recovery is stable for N runs."""
+        incidents = self.list_incidents()
+        now = _now()
+        with self._connection:
+            for incident in incidents:
+                if incident.state == "recovered":
+                    continue
+                if incident.incident_id in seen_incident_ids:
+                    incident.recovery_count = 0
+                    if incident.occurrence_count > 1:
+                        incident.state = "ongoing"
+                else:
+                    incident.recovery_count += 1
+                    if incident.recovery_count >= self.recovery_consecutive_buckets:
+                        incident.state = "recovered"
+                        incident.recovered_at = now
+                        self._enqueue_recovery_notification(incident)
+                self._connection.execute(
+                    "UPDATE incidents SET incident_json = ? WHERE fingerprint = ?",
+                    (incident.model_dump_json(), incident.fingerprint),
+                )
+        return incidents
+
+    def _enqueue_recovery_notification(self, incident: Incident) -> None:
+        message = NotificationBuilder().build([incident])[0]
+        recovery_id = f"{incident.incident_id}:recovery"
+        message = message.model_copy(update={"incident_id": recovery_id})
+        self._connection.execute(
+            """
+            INSERT INTO notification_outbox (incident_id, fingerprint, notification_json, status, next_attempt_at)
+            VALUES (?, ?, ?, 'pending', ?)
+            ON CONFLICT(incident_id) DO UPDATE SET
+                notification_json = excluded.notification_json,
+                status = 'pending',
+                next_attempt_at = excluded.next_attempt_at,
+                updated_at = excluded.next_attempt_at
+            """,
+            (recovery_id, incident.fingerprint, message.model_dump_json(), _now()),
+        )
+        self._last_enqueued_incident_ids.add(recovery_id)
 
     def _notification_due(self, incident: Incident, is_new: bool, now: datetime) -> bool:
         if is_new or not incident.cooldown_until:
@@ -350,8 +415,7 @@ class SQLiteIncidentStore:
         ).fetchone()
         expires_at = (now + timedelta(seconds=suppress_seconds)).isoformat()
         if row is not None and datetime.fromisoformat(row[0]) > now:
-            expires_at = row[0]
-            root_score = float(row[1])
+            root_score = max(float(row[1]), root_score)
         with self._connection:
             self._connection.execute(
                 """
@@ -372,7 +436,7 @@ class SQLiteIncidentStore:
             root_score,
         )
 
-    def breakout_services(self, service_scores: dict[str, float], multiplier: float) -> set[str]:
+    def breakout_services(self, service_scores: dict[str, float], multiplier: float, max_hops: int = 1) -> set[str]:
         if self.topology_graph is None:
             return set()
         rows = self._connection.execute(
@@ -382,7 +446,7 @@ class SQLiteIncidentStore:
         required: dict[str, float] = {}
         for root_service, root_score in rows:
             threshold = float(root_score) * multiplier
-            for service in self.topology_graph.neighborhood(root_service, max_hops=1):
+            for service in self.topology_graph.neighborhood(root_service, max_hops=max_hops):
                 if service != root_service:
                     required[service] = max(required.get(service, 0.0), threshold)
         return {service for service, score in service_scores.items() if score >= required.get(service, float("inf"))}
@@ -402,14 +466,12 @@ class SQLiteIncidentStore:
         ]
         if not suppressed:
             return set()
-        suppressed_ids = {incident.incident_id for incident in suppressed}
+        suppressed_ids = set()
         with self._connection:
             for incident in suppressed:
-                self._connection.execute(
-                    "UPDATE notification_outbox SET status = 'suppressed', updated_at = ? WHERE incident_id = ? AND status = 'pending'",
-                    (_now(), incident.incident_id),
-                )
-                self._last_enqueued_incident_ids.discard(incident.incident_id)
+                if not self._suppress_notification(incident):
+                    continue
+                suppressed_ids.add(incident.incident_id)
                 logger.info(
                     "AIOPS_NOTIFY_SUPPRESSED filter=same_blast_radius source=rca incident=%s service=%s parent_root_cause=%s reason=same_blast_radius",
                     incident.incident_id,
@@ -433,20 +495,49 @@ class SQLiteIncidentStore:
         ]
         if not rows:
             return set()
+        suppressed_ids = set()
         with self._connection:
             for incident, parent in rows:
-                self._connection.execute(
-                    "UPDATE notification_outbox SET status = 'suppressed', updated_at = ? WHERE incident_id = ? AND status = 'pending'",
-                    (_now(), incident.incident_id),
-                )
-                self._last_enqueued_incident_ids.discard(incident.incident_id)
+                if not self._suppress_notification(incident):
+                    continue
+                suppressed_ids.add(incident.incident_id)
                 logger.info(
                     "AIOPS_NOTIFY_SUPPRESSED filter=active_root_cause source=rca incident=%s service=%s parent_root_cause=%s reason=active_root_cause",
                     incident.incident_id,
                     incident.service,
                     parent,
                 )
-        return {incident.incident_id for incident, _ in rows}
+        return suppressed_ids
+
+    def _suppress_notification(self, incident: Incident) -> bool:
+        now = _now()
+        base = self._connection.execute(
+            "UPDATE notification_outbox SET status = 'suppressed', updated_at = ? WHERE incident_id = ? AND status IN ('pending', 'retry')",
+            (now, incident.incident_id),
+        )
+        supplements = self._connection.execute(
+            "UPDATE notification_outbox SET status = 'suppressed', updated_at = ? WHERE incident_id LIKE ? AND status IN ('pending', 'retry')",
+            (now, f"{incident.incident_id}{SUPPLEMENTAL_NOTIFICATION_SUFFIX}%"),
+        )
+        self._last_enqueued_incident_ids = {
+            incident_id
+            for incident_id in self._last_enqueued_incident_ids
+            if incident_id != incident.incident_id and not incident_id.startswith(f"{incident.incident_id}{SUPPLEMENTAL_NOTIFICATION_SUFFIX}")
+        }
+        if base.rowcount:
+            event = incident.events[-1]
+            key = _notification_cooldown_key(incident.service, is_slo_notification(event), event.detector_id == "rca_root_cause")
+            if incident.cooldown_until:
+                self._connection.execute(
+                    "DELETE FROM notification_service_cooldowns WHERE service = ? AND cooldown_until = ?",
+                    (key, incident.cooldown_until),
+                )
+            incident.cooldown_until = None
+            self._connection.execute(
+                "UPDATE incidents SET incident_json = ? WHERE fingerprint = ?",
+                (incident.model_dump_json(), incident.fingerprint),
+            )
+        return bool(base.rowcount or supplements.rowcount)
 
     def list_incidents(self) -> list[Incident]:
         rows = self._connection.execute("SELECT incident_json FROM incidents ORDER BY fingerprint").fetchall()
@@ -570,12 +661,14 @@ class SQLiteIncidentStore:
         return None
 
     def pending_notifications_for(self, incidents: list[Incident]) -> list[NotificationMessage]:
-        incident_ids = [incident.incident_id for incident in incidents if incident.incident_id in self._last_enqueued_incident_ids]
-        incident_ids.extend(
-            f"{incident.incident_id}{SUPPLEMENTAL_NOTIFICATION_SUFFIX}"
-            for incident in incidents
-            if f"{incident.incident_id}{SUPPLEMENTAL_NOTIFICATION_SUFFIX}" in self._last_enqueued_incident_ids
-        )
+        prefixes = tuple(f"{incident.incident_id}{SUPPLEMENTAL_NOTIFICATION_SUFFIX}" for incident in incidents)
+        base_ids = {incident.incident_id for incident in incidents}
+        recovery_ids = {f"{incident.incident_id}:recovery" for incident in incidents}
+        incident_ids = [
+            incident_id
+            for incident_id in self._last_enqueued_incident_ids
+            if incident_id in base_ids or incident_id in recovery_ids or incident_id.startswith(prefixes)
+        ]
         if not incident_ids:
             return []
         placeholders = ",".join("?" for _ in incident_ids)
@@ -597,6 +690,8 @@ class SQLiteIncidentStore:
             "SELECT root_service, affected_services_json FROM active_root_causes WHERE expires_at > ? ORDER BY root_score DESC, root_service",
             (_now(),),
         ).fetchall()
+        if service in {root_service for root_service, _ in rows}:
+            return None
         for root_service, affected_json in rows:
             if service != root_service and service in set(json.loads(affected_json)):
                 return root_service
@@ -667,20 +762,31 @@ class SQLiteIncidentStore:
             if name not in columns:
                 self._connection.execute(ddl)
 
+    def _ensure_outbox_columns(self) -> None:
+        columns = {row[1] for row in self._connection.execute("PRAGMA table_info(notification_outbox)").fetchall()}
+        if "cycle" not in columns:
+            self._connection.execute("ALTER TABLE notification_outbox ADD COLUMN cycle INTEGER NOT NULL DEFAULT 1")
+
     def _ensure_active_root_columns(self) -> None:
         columns = {row[1] for row in self._connection.execute("PRAGMA table_info(active_root_causes)").fetchall()}
         if "root_score" not in columns:
             self._connection.execute("ALTER TABLE active_root_causes ADD COLUMN root_score REAL NOT NULL DEFAULT 0")
 
+    def _refresh_pending_rca_notification(self, incident: Incident, candidate: CandidateEvent) -> None:
+        if candidate.detector_id != "rca_root_cause" or not _has_strong_trace_log_evidence(candidate):
+            return
+        message = NotificationBuilder().build([incident])[0]
+        self._connection.execute(
+            "UPDATE notification_outbox SET notification_json = ?, updated_at = ? WHERE incident_id = ? AND status IN ('pending', 'retry')",
+            (message.model_dump_json(), _now(), incident.incident_id),
+        )
+
     def _supplemental_rca_notification(self, incident: Incident, candidate: CandidateEvent) -> NotificationMessage | None:
         if candidate.detector_id != "rca_root_cause" or not _has_strong_trace_log_evidence(candidate):
             return None
-        supplement_id = f"{incident.incident_id}{SUPPLEMENTAL_NOTIFICATION_SUFFIX}"
-        if self._connection.execute("SELECT 1 FROM notification_outbox WHERE incident_id = ?", (supplement_id,)).fetchone():
-            return None
         row = self._connection.execute(
             """
-            SELECT notification_json
+            SELECT notification_json, cycle
             FROM notification_outbox
             WHERE incident_id = ?
               AND status = 'sent'
@@ -691,6 +797,9 @@ class SQLiteIncidentStore:
         if row is None:
             return None
         original = NotificationMessage.model_validate_json(row[0])
+        supplement_id = f"{incident.incident_id}{SUPPLEMENTAL_NOTIFICATION_SUFFIX}{int(row[1])}"
+        if self._connection.execute("SELECT 1 FROM notification_outbox WHERE incident_id = ?", (supplement_id,)).fetchone():
+            return None
         if _notification_has_strong_trace_log_evidence(original):
             return None
         message = NotificationBuilder().build([incident])[0]
@@ -711,6 +820,13 @@ def _candidate_seen_at(candidate: CandidateEvent) -> datetime:
     if candidate.timestamp:
         return datetime.fromtimestamp(candidate.timestamp, UTC)
     return datetime.now(UTC)
+
+
+def _severity_rank(severity: str) -> int:
+    try:
+        return int(severity.removeprefix("SEV"))
+    except ValueError:
+        return 999
 
 
 def _now() -> str:
