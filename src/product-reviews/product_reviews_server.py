@@ -46,6 +46,7 @@ from techx_ai_common.contracts import GuardrailAction, ResponseStatus
 from techx_ai_common import guardrails
 from techx_ai_common.bedrock import converse_text, is_bedrock_provider
 from techx_ai_common.grounding import generate_grounded_summary, validate_grounded_summary
+from techx_ai_common.observability import call_model, call_tool, record_fallback, telemetry_context
 from techx_ai_common.rate_limiter import check_rate_limit
 from techx_ai_common.retrieval import retrieve_relevant_reviews
 from techx_ai_common.semantic_cache import (
@@ -135,12 +136,13 @@ class ProductReviewService(demo_pb2_grpc.ProductReviewServiceServicer):
         # x-user-id: stable cache boundary (handoff §7); missing → cache bypass
         session_id = metadata.get("x-session-id", "anonymous")
         cache_user_id = metadata.get("x-user-id") or None
-        ai_assistant_response = get_ai_assistant_response(
-            request.product_id,
-            request.question,
-            session_id=session_id,
-            cache_user_id=cache_user_id,
-        )
+        with telemetry_context(surface="summary", user_id=session_id):
+            ai_assistant_response = get_ai_assistant_response(
+                request.product_id,
+                request.question,
+                session_id=session_id,
+                cache_user_id=cache_user_id,
+            )
 
         return ai_assistant_response
 
@@ -267,7 +269,8 @@ def _rate_limited_response(reason: str | None):
 def _fallback_response(error_class: str = ""):
     """gRPC response when the LLM or a dependency fails.
     Logs the error class but never raw prompts, PII, or secrets."""
-    logger.warning(f"Returning fallback response. error_class={error_class}")
+    record_fallback(error_class or "UnknownError")
+    logger.warning("Returning fallback response. error_class=%s", error_class)
     return _make_ai_response(
         status="FALLBACK",
         answer=FALLBACK_MESSAGE,
@@ -304,7 +307,11 @@ def _get_bedrock_response(
     try:
         product_review_svc_metrics["ai_cache_model_calls_total"].add(1)
         safe_reviews = guardrails.sanitize_reviews(
-            request_product_id, fetch_product_reviews(product_id=request_product_id)
+            request_product_id,
+            call_tool(
+                lambda: fetch_product_reviews(product_id=request_product_id),
+                name="fetch_product_reviews",
+            ),
         )
         # source_hash is over full sanitized set before question retrieval
         if cache_source_hash is None:
@@ -339,7 +346,6 @@ def _get_bedrock_response(
             )
     except Exception as exc:
         logger.error("Bedrock AI assistant request failed: %s", type(exc).__name__)
-        span.record_exception(exc)
         span.set_status(Status(StatusCode.ERROR, description=type(exc).__name__))
         return _fallback_response(type(exc).__name__)
 
@@ -406,8 +412,7 @@ def get_ai_assistant_response(
         if request_guard.action == GuardrailAction.SANITIZED and request_guard.sanitized_text:
             question = request_guard.sanitized_text
 
-        span.set_attribute("app.guardrail.sanitized_question", question)
-        logger.info(f"Sanitized AI Assistant question: {question}")
+        logger.info("AI Assistant question sanitized; length=%d", len(question))
 
         # Hybrid cache lookup (A1.3) — before expensive model path.
         # Requires AI_CACHE_ENABLED + stable x-user-id (not anonymous).
@@ -528,18 +533,20 @@ def get_ai_assistant_response(
                 logger.info(f"Invoking mock LLM with model: techx-llm-rate-limit")
 
                 try:
-                    initial_response = client.chat.completions.create(
+                    initial_response = call_model(
+                        lambda: client.chat.completions.create(
+                            model="techx-llm-rate-limit",
+                            messages=messages,
+                            tools=tools,
+                            tool_choice="auto",
+                        ),
                         model="techx-llm-rate-limit",
-                        messages=messages,
-                        tools=tools,
-                        tool_choice="auto"
+                        provider="openai_compatible",
+                        workflow_step="tool_selection",
                     )
                 except Exception as e:
-                    logger.error(f"Caught Exception: {e}")
-                    # Record the exception
-                    span.record_exception(e)
-                    # Set the span status to ERROR
-                    span.set_status(Status(StatusCode.ERROR, description=str(e)))
+                    logger.error("Mock LLM call failed: %s", type(e).__name__)
+                    span.set_status(Status(StatusCode.ERROR, description=type(e).__name__))
                     ai_assistant_response.response = "The system is unable to process your response. Please try again later."
                     return ai_assistant_response
 
@@ -559,12 +566,17 @@ def get_ai_assistant_response(
 
         # use the LLM to decide which tool(s) it needs
         try:
-            initial_response = client.chat.completions.create(
+            initial_response = call_model(
+                lambda: client.chat.completions.create(
+                    model=llm_model,
+                    messages=messages,
+                    tools=tools,
+                    tool_choice="auto",
+                    timeout=20.0,
+                ),
                 model=llm_model,
-                messages=messages,
-                tools=tools,
-                tool_choice="auto",
-                timeout=20.0,
+                provider=os.environ.get("LLM_PROVIDER", "openai_compatible"),
+                workflow_step="tool_selection",
             )
             response_message = initial_response.choices[0].message
             tool_calls = response_message.tool_calls
@@ -584,7 +596,6 @@ def get_ai_assistant_response(
             # Includes APITimeoutError / connection failures — never let them
             # surface as an unhandled 500 or hang until the gateway 504s.
             logger.error(f"LLM tool-selection call failed: {type(e).__name__}")
-            span.record_exception(e)
             span.set_status(Status(StatusCode.ERROR, description=type(e).__name__))
             return _fallback_response(type(e).__name__)
 
@@ -604,7 +615,7 @@ def get_ai_assistant_response(
                 function_name = tool_call.function.name
                 function_args = json.loads(tool_call.function.arguments)
 
-                logger.info(f"Processing tool call: '{function_name}' with arguments: {function_args}")
+                logger.info("Processing tool call: %s", function_name)
 
                 # --- A1.2, step 2: is this specific tool call allowed? --
                 # Blocks unknown tool names, and blocks the model trying
@@ -617,8 +628,11 @@ def get_ai_assistant_response(
                     return _blocked_response(tool_check.reason)
 
                 if function_name == "fetch_product_reviews":
-                    raw_reviews = fetch_product_reviews(
-                        product_id=function_args.get("product_id")
+                    raw_reviews = call_tool(
+                        lambda: fetch_product_reviews(
+                            product_id=function_args.get("product_id")
+                        ),
+                        name="fetch_product_reviews",
                     )
                     # A1.2 cleans reviews (PII, injection) before anything
                     # downstream — including before they go back into the
@@ -634,8 +648,11 @@ def get_ai_assistant_response(
                     logger.info(f"Function response for fetch_product_reviews loaded for product_id: {function_args.get('product_id')}")
 
                 elif function_name == "fetch_product_info":
-                    function_response = fetch_product_info(
-                        product_id=function_args.get("product_id")
+                    function_response = call_tool(
+                        lambda: fetch_product_info(
+                            product_id=function_args.get("product_id")
+                        ),
+                        name="fetch_product_info",
                     )
                     logger.info(f"Function response for fetch_product_info loaded for product_id: {function_args.get('product_id')}")
 
@@ -679,7 +696,6 @@ def get_ai_assistant_response(
                 grounded = validate_grounded_summary(draft, safe_reviews)
             except Exception as e:
                 logger.error(f"Grounding pipeline failed: {type(e).__name__}")
-                span.record_exception(e)
                 span.set_status(Status(StatusCode.ERROR, description=type(e).__name__))
                 return _fallback_response(type(e).__name__)
 
@@ -746,10 +762,15 @@ def get_ai_assistant_response(
             logger.info(f"Invoking the LLM with {len(messages)} messages")
 
             try:
-                final_response = client.chat.completions.create(
+                final_response = call_model(
+                    lambda: client.chat.completions.create(
+                        model=llm_model,
+                        messages=messages,
+                        timeout=20.0,
+                    ),
                     model=llm_model,
-                    messages=messages,
-                    timeout=20.0,
+                    provider=os.environ.get("LLM_PROVIDER", "openai_compatible"),
+                    workflow_step="final_answer",
                 )
                 candidate_text = final_response.choices[0].message.content
                 usage = getattr(final_response, "usage", None)
@@ -765,7 +786,6 @@ def get_ai_assistant_response(
                         pass
             except Exception as e:
                 logger.error(f"LLM final-answer call failed: {type(e).__name__}")
-                span.record_exception(e)
                 span.set_status(Status(StatusCode.ERROR, description=type(e).__name__))
                 return _fallback_response(type(e).__name__)
         else:

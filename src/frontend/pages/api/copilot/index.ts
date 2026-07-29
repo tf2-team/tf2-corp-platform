@@ -29,7 +29,7 @@ const handler: NextApiHandler = async (req, res) => {
       turn_id
     );
     return res.status(200).json(response);
-  } catch (error: any) {
+  } catch {
     return res.status(200).json({
       status: 'FALLBACK',
       interpretedCriteria: '',
@@ -38,7 +38,7 @@ const handler: NextApiHandler = async (req, res) => {
       sources: [],
       reason: 'Shopping Copilot service is temporarily unavailable. Please try again.',
       pendingActionToken: '',
-      error: error?.message || String(error),
+      error: 'ShoppingCopilotUnavailable',
     });
   }
 };

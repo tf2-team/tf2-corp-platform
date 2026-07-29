@@ -28,6 +28,7 @@ from opentelemetry.sdk._logs.export import BatchLogRecordProcessor
 from opentelemetry.sdk.resources import Resource
 
 from techx_ai_common.guardrails import initialize_guardrails, sanitize_reviews
+from techx_ai_common.observability import record_fallback, telemetry_context
 from techx_ai_common.proto import demo_pb2, demo_pb2_grpc
 
 from copilot_graph import CopilotDeps, run_copilot, CopilotStatus
@@ -59,16 +60,25 @@ class ShoppingCopilotServicer(demo_pb2_grpc.ShoppingCopilotServiceServicer):
         with tracer.start_as_current_span("copilot_search") as span:
             span.set_attribute("app.copilot.message_length", len(request.user_message))
 
-            state = run_copilot(
-                request.user_message,
-                self._deps,
-                request.user_id or "anonymous",
-                request.conversation_id,
-                request.turn_id,
-            )
+            with telemetry_context(
+                surface="copilot",
+                user_id=request.user_id or "anonymous",
+                session_id=request.conversation_id or None,
+            ):
+                state = run_copilot(
+                    request.user_message,
+                    self._deps,
+                    request.user_id or "anonymous",
+                    request.conversation_id,
+                    request.turn_id,
+                )
             status = state.get("status", CS.FALLBACK)
 
             span.set_attribute("app.copilot.status", status.value)
+            if status == CS.FALLBACK:
+                record_fallback(state.get("error") or "CopilotFallback", surface="copilot")
+            else:
+                span.set_attribute("app.ai.outcome", "ok")
             span.set_attribute("app.copilot.product_count", len(state.get("catalog_results", [])))
             span.set_attribute("app.copilot.cache_status", state.get("cache_status", "miss"))
             span.set_attribute("app.copilot.cache_match", state.get("cache_match", "none"))
@@ -118,7 +128,10 @@ class ShoppingCopilotServicer(demo_pb2_grpc.ShoppingCopilotServiceServicer):
                         for sr in safe_rev_set.reviews:
                             reviews_by_id[sr.source_id] = sr
                     except Exception as e:
-                        logger.error("Failed to fetch product reviews for metadata in server: %s", e)
+                        logger.error(
+                            "Failed to fetch product reviews for metadata: %s",
+                            type(e).__name__,
+                        )
 
                 for claim in qa.claims:
                     c = resp.claims.add(text=claim.text)

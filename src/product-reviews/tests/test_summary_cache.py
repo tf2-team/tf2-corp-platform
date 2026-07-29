@@ -61,7 +61,7 @@ class TestCacheStatusMetadata:
         assert body["cache_distance"] == 0.0
 
     def test_proto_top_level_cache_fields(self):
-        import demo_pb2
+        from techx_ai_common.proto import demo_pb2
 
         resp = demo_pb2.AskProductAIAssistantResponse()
         resp.response = _build_structured_response(

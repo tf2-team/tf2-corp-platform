@@ -42,6 +42,7 @@ from .contracts import (
     SafeReviewSet,
 )
 from .bedrock import converse_json, is_bedrock_provider
+from .observability import call_model
 from .retrieval import tokenize
 
 logger = logging.getLogger("grounding")
@@ -130,6 +131,7 @@ def generate_grounded_summary(
             _SYSTEM_PROMPT,
             _build_review_prompt(safe_reviews, question),
             usage_callback=usage_callback,
+            workflow_step="grounded_summary",
         )
 
     client, model = _get_client_and_model()
@@ -143,16 +145,25 @@ def generate_grounded_summary(
         ],
     }
     if usage_callback is None:
-        return instructor_client.chat.completions.create(**request)
+        return call_model(
+            lambda: instructor_client.chat.completions.create(**request),
+            model=model,
+            provider=os.environ.get("LLM_PROVIDER", "openai_compatible"),
+            workflow_step="grounded_summary",
+        )
 
-    parsed, completion = (
-        instructor_client.chat.completions.create_with_completion(**request)
+    parsed, completion = call_model(
+        lambda: instructor_client.chat.completions.create_with_completion(**request),
+        model=model,
+        provider=os.environ.get("LLM_PROVIDER", "openai_compatible"),
+        workflow_step="grounded_summary",
     )
-    usage = getattr(completion, "usage", None)
-    usage_callback(
-        int(getattr(usage, "prompt_tokens", 0) or 0),
-        int(getattr(usage, "completion_tokens", 0) or 0),
-    )
+    if usage_callback is not None:
+        usage = getattr(completion, "usage", None)
+        usage_callback(
+            int(getattr(usage, "prompt_tokens", 0) or 0),
+            int(getattr(usage, "completion_tokens", 0) or 0),
+        )
     return parsed
 
 
