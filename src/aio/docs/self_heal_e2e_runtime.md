@@ -54,11 +54,12 @@ The AIOps runtime owns post-action verification. It accepts only samples whose
 
 For the golden CPU-saturation action, the verification signal is
 `product_catalog_cpu_millicores`, measured as average CPU millicores per
-matching workload pod rather than aggregate service CPU. By default, recovery
-requires two fresh, consecutive samples at or below the incident threshold and
-the executor independently requires the requested ready-pod count. Two
-consecutive failed samples, or no conclusive telemetry before the deadline,
-triggers rollback.
+matching workload pod rather than aggregate service CPU. Recovery requires two
+fresh, consecutive samples at or below 90% of the pre-action baseline. The
+latency and error-rate scale actions use their service SLO threshold from the
+action catalog. The executor independently requires the requested ready-pod
+count. Two consecutive failed samples, or no conclusive telemetry before the
+deadline, triggers rollback.
 
 The thresholds are configurable through:
 
@@ -78,11 +79,16 @@ The combined audit chain is:
 ```text
 incident -> plan -> execute -> verification samples
          -> verification passed
-         OR verification failed -> rollback -> escalation if rollback fails
+         OR verification failed -> rollback
+            -> durable SEV1 escalation outbox event if rollback fails
 ```
 
 An incident is persisted as `recovered` only after the executor accepts a
 passing fresh-telemetry result.
+
+Rollback-failure escalation uses the same notification client and durable
+retrying SQLite outbox as incident notifications. Self-heal readiness fails
+closed unless at least one notification webhook is configured.
 
 ## Non-cluster validation
 

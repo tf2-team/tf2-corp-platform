@@ -18,7 +18,9 @@
     "protected": true,
     "blocked": true,
     "blocked_reason": "payment is a protected target; CDO executor must not mutate it",
-    "blast_radius_services": ["checkout"]
+    "blast_radius_services": [
+      "checkout"
+    ]
   },
   {
     "action_id": "restart_checkout",
@@ -39,7 +41,45 @@
     "protected": false,
     "blocked": false,
     "blocked_reason": null,
-    "blast_radius_services": ["frontend", "frontend-proxy"]
+    "blast_radius_services": [
+      "frontend",
+      "frontend-proxy"
+    ]
+  },
+  {
+    "action_id": "scale_checkout",
+    "action_type": "scale_deployment",
+    "target": "checkout",
+    "target_kind": "Deployment",
+    "namespace": "techx-corp-prod",
+    "executor_supported": true,
+    "recommendation_only": false,
+    "audit_only": false,
+    "dry_run_supported": true,
+    "execute_supported": true,
+    "live_execute_supported": true,
+    "rollback_supported": true,
+    "rollback_action_id": "restore_deployment_replicas",
+    "verification_query_id": "checkout.p95_latency_5m",
+    "verification_signal_id": "checkout_p95_latency_5m",
+    "verification_threshold": 2.0,
+    "policy_id": "phase3-scale-policy-v1",
+    "policy_approval_required": true,
+    "protected": false,
+    "blocked": false,
+    "blocked_reason": null,
+    "blast_radius_services": [
+      "frontend",
+      "frontend-proxy",
+      "cart",
+      "payment",
+      "shipping",
+      "email"
+    ],
+    "min_replicas": 1,
+    "max_replicas": 3,
+    "target_replicas": 3,
+    "owner": "checkout-owner"
   },
   {
     "action_id": "restart_cart",
@@ -60,7 +100,41 @@
     "protected": false,
     "blocked": false,
     "blocked_reason": null,
-    "blast_radius_services": ["checkout", "frontend"]
+    "blast_radius_services": [
+      "checkout",
+      "frontend"
+    ]
+  },
+  {
+    "action_id": "scale_cart",
+    "action_type": "scale_deployment",
+    "target": "cart",
+    "target_kind": "Deployment",
+    "namespace": "techx-corp-prod",
+    "executor_supported": true,
+    "recommendation_only": false,
+    "audit_only": false,
+    "dry_run_supported": true,
+    "execute_supported": true,
+    "live_execute_supported": true,
+    "rollback_supported": true,
+    "rollback_action_id": "restore_deployment_replicas",
+    "verification_query_id": "cart.error_rate_5m",
+    "verification_signal_id": "cart_error_rate_5m",
+    "verification_threshold": 0.005,
+    "policy_id": "phase3-scale-policy-v1",
+    "policy_approval_required": true,
+    "protected": false,
+    "blocked": false,
+    "blocked_reason": null,
+    "blast_radius_services": [
+      "checkout",
+      "frontend"
+    ],
+    "min_replicas": 1,
+    "max_replicas": 3,
+    "target_replicas": 3,
+    "owner": "cart-owner"
   },
   {
     "action_id": "restart_frontend",
@@ -81,7 +155,42 @@
     "protected": false,
     "blocked": false,
     "blocked_reason": null,
-    "blast_radius_services": ["frontend-proxy"]
+    "blast_radius_services": [
+      "frontend-proxy"
+    ]
+  },
+  {
+    "action_id": "scale_frontend",
+    "action_type": "scale_deployment",
+    "target": "frontend",
+    "target_kind": "Deployment",
+    "namespace": "techx-corp-prod",
+    "executor_supported": true,
+    "recommendation_only": false,
+    "audit_only": false,
+    "dry_run_supported": true,
+    "execute_supported": true,
+    "live_execute_supported": true,
+    "rollback_supported": true,
+    "rollback_action_id": "restore_deployment_replicas",
+    "verification_query_id": "frontend.p95_latency_5m",
+    "verification_signal_id": "frontend_p95_latency_5m",
+    "verification_threshold": 1.0,
+    "policy_id": "phase3-scale-policy-v1",
+    "policy_approval_required": true,
+    "protected": false,
+    "blocked": false,
+    "blocked_reason": null,
+    "blast_radius_services": [
+      "frontend-proxy",
+      "checkout",
+      "product-catalog",
+      "cart"
+    ],
+    "min_replicas": 1,
+    "max_replicas": 3,
+    "target_replicas": 3,
+    "owner": "frontend-owner"
   },
   {
     "action_id": "restart_frontend_proxy",
@@ -102,7 +211,45 @@
     "protected": false,
     "blocked": false,
     "blocked_reason": null,
-    "blast_radius_services": ["frontend", "checkout", "product-catalog", "cart"]
+    "blast_radius_services": [
+      "frontend",
+      "checkout",
+      "product-catalog",
+      "cart"
+    ]
+  },
+  {
+    "action_id": "scale_frontend_proxy",
+    "action_type": "scale_deployment",
+    "target": "frontend-proxy",
+    "target_kind": "Deployment",
+    "namespace": "techx-corp-prod",
+    "executor_supported": true,
+    "recommendation_only": false,
+    "audit_only": false,
+    "dry_run_supported": true,
+    "execute_supported": true,
+    "live_execute_supported": true,
+    "rollback_supported": true,
+    "rollback_action_id": "restore_deployment_replicas",
+    "verification_query_id": "frontend-proxy.p95_latency_5m",
+    "verification_signal_id": "frontend_proxy_p95_latency_5m",
+    "verification_threshold": 1.5,
+    "policy_id": "phase3-scale-policy-v1",
+    "policy_approval_required": true,
+    "protected": false,
+    "blocked": false,
+    "blocked_reason": null,
+    "blast_radius_services": [
+      "frontend",
+      "checkout",
+      "product-catalog",
+      "cart"
+    ],
+    "min_replicas": 1,
+    "max_replicas": 3,
+    "target_replicas": 3,
+    "owner": "platform-edge-owner"
   },
   {
     "action_id": "restart_product_catalog",
@@ -123,7 +270,12 @@
     "protected": false,
     "blocked": false,
     "blocked_reason": null,
-    "blast_radius_services": ["frontend", "recommendation", "product-reviews", "checkout"]
+    "blast_radius_services": [
+      "frontend",
+      "recommendation",
+      "product-reviews",
+      "checkout"
+    ]
   },
   {
     "action_id": "scale_product_catalog",
@@ -141,6 +293,7 @@
     "rollback_action_id": "restore_deployment_replicas",
     "verification_query_id": "product-catalog.cpu_millicores",
     "verification_signal_id": "product_catalog_cpu_millicores",
+    "verification_max_ratio": 0.9,
     "policy_id": "phase3-scale-policy-v1",
     "policy_approval_required": true,
     "protected": false,
@@ -149,7 +302,13 @@
     "min_replicas": 2,
     "max_replicas": 12,
     "target_replicas": 3,
-    "blast_radius_services": ["frontend", "recommendation", "product-reviews", "checkout"]
+    "blast_radius_services": [
+      "frontend",
+      "recommendation",
+      "product-reviews",
+      "checkout"
+    ],
+    "owner": "product-catalog-owner"
   },
   {
     "action_id": "page_data_oncall",

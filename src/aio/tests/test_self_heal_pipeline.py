@@ -59,6 +59,7 @@ class FakeExecutorClient:
                 "rollback_action_id": "restore_deployment_replicas",
                 "verification_query_id": "product-catalog.cpu_millicores",
                 "verification_signal_id": "product_catalog_cpu_millicores",
+                "verification_max_ratio": 0.9,
                 "policy_id": "phase3-scale-policy-v1",
                 "policy_approval_required": True,
             }
@@ -154,6 +155,7 @@ def test_detector_drives_execute_then_fresh_telemetry_closes_incident(tmp_path: 
                     "verification_defined": True,
                     "verification_query_id": "product-catalog.cpu_millicores",
                     "verification_signal_id": "product_catalog_cpu_millicores",
+                    "verification_max_ratio": 0.9,
                     "rollback_defined": True,
                     "rollback_action_id": "restore_deployment_replicas",
                     "rollback_supported": True,

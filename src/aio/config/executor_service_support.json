@@ -9,7 +9,12 @@
     "supported_actions": [],
     "recommendation_actions": [],
     "fallback_action": "page_oncall",
-    "runbooks": ["RB-SERVICE-ERROR-RATE", "RB-SERVICE-LATENCY", "RB-KAFKA-PIPELINE", "RB-DATASTORE-POSTGRESQL"]
+    "runbooks": [
+      "RB-SERVICE-ERROR-RATE",
+      "RB-SERVICE-LATENCY",
+      "RB-KAFKA-PIPELINE",
+      "RB-DATASTORE-POSTGRESQL"
+    ]
   },
   {
     "service": "ad",
@@ -21,7 +26,11 @@
     "supported_actions": [],
     "recommendation_actions": [],
     "fallback_action": "page_oncall",
-    "runbooks": ["RB-SERVICE-ERROR-RATE", "RB-SERVICE-LATENCY", "RB-FEATURE-FLAG-FLAGD"]
+    "runbooks": [
+      "RB-SERVICE-ERROR-RATE",
+      "RB-SERVICE-LATENCY",
+      "RB-FEATURE-FLAG-FLAGD"
+    ]
   },
   {
     "service": "aiops",
@@ -33,7 +42,10 @@
     "supported_actions": [],
     "recommendation_actions": [],
     "fallback_action": "page_oncall",
-    "runbooks": ["RB-MONITORING-LOSS", "RB-AIOPS-RUNTIME"]
+    "runbooks": [
+      "RB-MONITORING-LOSS",
+      "RB-AIOPS-RUNTIME"
+    ]
   },
   {
     "service": "aws-bedrock",
@@ -45,31 +57,51 @@
     "supported_actions": [],
     "recommendation_actions": [],
     "fallback_action": "page_oncall",
-    "runbooks": ["RB-AI-DEPENDENCY"]
+    "runbooks": [
+      "RB-AI-DEPENDENCY"
+    ]
   },
   {
     "service": "cart",
     "namespace": "techx-corp-prod",
-    "support_status": "recommendation_only",
-    "executor_supported": false,
-    "live_execute_supported": false,
+    "support_status": "executor_supported_live_capable",
+    "executor_supported": true,
+    "live_execute_supported": true,
     "protected": false,
-    "supported_actions": [],
-    "recommendation_actions": ["restart_cart"],
+    "supported_actions": [
+      "scale_cart"
+    ],
+    "recommendation_actions": [
+      "restart_cart"
+    ],
     "fallback_action": "page_oncall",
-    "runbooks": ["RB-CART-ERROR-RATE", "RB-SERVICE-LATENCY", "RB-DATASTORE-VALKEY-CART"]
+    "runbooks": [
+      "RB-CART-ERROR-RATE",
+      "RB-SERVICE-LATENCY",
+      "RB-DATASTORE-VALKEY-CART"
+    ]
   },
   {
     "service": "checkout",
     "namespace": "techx-corp-prod",
-    "support_status": "recommendation_only",
-    "executor_supported": false,
-    "live_execute_supported": false,
+    "support_status": "executor_supported_live_capable",
+    "executor_supported": true,
+    "live_execute_supported": true,
     "protected": false,
-    "supported_actions": [],
-    "recommendation_actions": ["restart_checkout"],
+    "supported_actions": [
+      "scale_checkout"
+    ],
+    "recommendation_actions": [
+      "restart_checkout"
+    ],
     "fallback_action": "page_oncall",
-    "runbooks": ["RB-CHECKOUT-SLO", "RB-CHECKOUT-DEPENDENCY", "RB-CHECKOUT-LATENCY", "RB-SERVICE-ERROR-RATE", "RB-KAFKA-PIPELINE"]
+    "runbooks": [
+      "RB-CHECKOUT-SLO",
+      "RB-CHECKOUT-DEPENDENCY",
+      "RB-CHECKOUT-LATENCY",
+      "RB-SERVICE-ERROR-RATE",
+      "RB-KAFKA-PIPELINE"
+    ]
   },
   {
     "service": "currency",
@@ -81,7 +113,10 @@
     "supported_actions": [],
     "recommendation_actions": [],
     "fallback_action": "page_oncall",
-    "runbooks": ["RB-SERVICE-ERROR-RATE", "RB-SERVICE-LATENCY"]
+    "runbooks": [
+      "RB-SERVICE-ERROR-RATE",
+      "RB-SERVICE-LATENCY"
+    ]
   },
   {
     "service": "email",
@@ -93,7 +128,10 @@
     "supported_actions": [],
     "recommendation_actions": [],
     "fallback_action": "page_oncall",
-    "runbooks": ["RB-SERVICE-ERROR-RATE", "RB-SERVICE-LATENCY"]
+    "runbooks": [
+      "RB-SERVICE-ERROR-RATE",
+      "RB-SERVICE-LATENCY"
+    ]
   },
   {
     "service": "external-llm",
@@ -105,7 +143,9 @@
     "supported_actions": [],
     "recommendation_actions": [],
     "fallback_action": "page_oncall",
-    "runbooks": ["RB-AI-DEPENDENCY"]
+    "runbooks": [
+      "RB-AI-DEPENDENCY"
+    ]
   },
   {
     "service": "flagd",
@@ -117,7 +157,9 @@
     "supported_actions": [],
     "recommendation_actions": [],
     "fallback_action": "page_oncall",
-    "runbooks": ["RB-FEATURE-FLAG-FLAGD"]
+    "runbooks": [
+      "RB-FEATURE-FLAG-FLAGD"
+    ]
   },
   {
     "service": "flagd-ui",
@@ -129,7 +171,9 @@
     "supported_actions": [],
     "recommendation_actions": [],
     "fallback_action": "page_oncall",
-    "runbooks": ["RB-FEATURE-FLAG-FLAGD"]
+    "runbooks": [
+      "RB-FEATURE-FLAG-FLAGD"
+    ]
   },
   {
     "service": "fraud-detection",
@@ -141,31 +185,53 @@
     "supported_actions": [],
     "recommendation_actions": [],
     "fallback_action": "page_oncall",
-    "runbooks": ["RB-SERVICE-ERROR-RATE", "RB-SERVICE-LATENCY", "RB-KAFKA-PIPELINE", "RB-DATASTORE-VALKEY-CART"]
+    "runbooks": [
+      "RB-SERVICE-ERROR-RATE",
+      "RB-SERVICE-LATENCY",
+      "RB-KAFKA-PIPELINE",
+      "RB-DATASTORE-VALKEY-CART"
+    ]
   },
   {
     "service": "frontend",
     "namespace": "techx-corp-prod",
-    "support_status": "recommendation_only",
-    "executor_supported": false,
-    "live_execute_supported": false,
+    "support_status": "executor_supported_live_capable",
+    "executor_supported": true,
+    "live_execute_supported": true,
     "protected": false,
-    "supported_actions": [],
-    "recommendation_actions": ["restart_frontend"],
+    "supported_actions": [
+      "scale_frontend"
+    ],
+    "recommendation_actions": [
+      "restart_frontend"
+    ],
     "fallback_action": "page_oncall",
-    "runbooks": ["RB-SERVICE-ERROR-RATE", "RB-SERVICE-LATENCY", "RB-EDGE-ROUTING", "RB-FEATURE-FLAG-FLAGD"]
+    "runbooks": [
+      "RB-SERVICE-ERROR-RATE",
+      "RB-SERVICE-LATENCY",
+      "RB-EDGE-ROUTING",
+      "RB-FEATURE-FLAG-FLAGD"
+    ]
   },
   {
     "service": "frontend-proxy",
     "namespace": "techx-corp-prod",
-    "support_status": "recommendation_only",
-    "executor_supported": false,
-    "live_execute_supported": false,
+    "support_status": "executor_supported_live_capable",
+    "executor_supported": true,
+    "live_execute_supported": true,
     "protected": false,
-    "supported_actions": [],
-    "recommendation_actions": ["restart_frontend_proxy"],
+    "supported_actions": [
+      "scale_frontend_proxy"
+    ],
+    "recommendation_actions": [
+      "restart_frontend_proxy"
+    ],
     "fallback_action": "page_oncall",
-    "runbooks": ["RB-EDGE-ROUTING", "RB-SERVICE-LATENCY", "RB-SERVICE-ERROR-RATE"]
+    "runbooks": [
+      "RB-EDGE-ROUTING",
+      "RB-SERVICE-LATENCY",
+      "RB-SERVICE-ERROR-RATE"
+    ]
   },
   {
     "service": "grafana",
@@ -177,7 +243,10 @@
     "supported_actions": [],
     "recommendation_actions": [],
     "fallback_action": "page_oncall",
-    "runbooks": ["RB-OBSERVABILITY-STACK", "RB-MONITORING-LOSS"]
+    "runbooks": [
+      "RB-OBSERVABILITY-STACK",
+      "RB-MONITORING-LOSS"
+    ]
   },
   {
     "service": "image-provider",
@@ -189,7 +258,11 @@
     "supported_actions": [],
     "recommendation_actions": [],
     "fallback_action": "page_oncall",
-    "runbooks": ["RB-SERVICE-ERROR-RATE", "RB-SERVICE-LATENCY", "RB-FEATURE-FLAG-FLAGD"]
+    "runbooks": [
+      "RB-SERVICE-ERROR-RATE",
+      "RB-SERVICE-LATENCY",
+      "RB-FEATURE-FLAG-FLAGD"
+    ]
   },
   {
     "service": "jaeger",
@@ -201,7 +274,9 @@
     "supported_actions": [],
     "recommendation_actions": [],
     "fallback_action": "page_oncall",
-    "runbooks": ["RB-OBSERVABILITY-STACK"]
+    "runbooks": [
+      "RB-OBSERVABILITY-STACK"
+    ]
   },
   {
     "service": "kafka",
@@ -213,7 +288,9 @@
     "supported_actions": [],
     "recommendation_actions": [],
     "fallback_action": "page_oncall",
-    "runbooks": ["RB-KAFKA-PIPELINE"]
+    "runbooks": [
+      "RB-KAFKA-PIPELINE"
+    ]
   },
   {
     "service": "llm",
@@ -225,7 +302,11 @@
     "supported_actions": [],
     "recommendation_actions": [],
     "fallback_action": "page_oncall",
-    "runbooks": ["RB-AI-DEPENDENCY", "RB-SERVICE-ERROR-RATE", "RB-SERVICE-LATENCY"]
+    "runbooks": [
+      "RB-AI-DEPENDENCY",
+      "RB-SERVICE-ERROR-RATE",
+      "RB-SERVICE-LATENCY"
+    ]
   },
   {
     "service": "load-generator",
@@ -237,7 +318,9 @@
     "supported_actions": [],
     "recommendation_actions": [],
     "fallback_action": "page_oncall",
-    "runbooks": ["RB-LOAD-GENERATOR"]
+    "runbooks": [
+      "RB-LOAD-GENERATOR"
+    ]
   },
   {
     "service": "mem0",
@@ -249,7 +332,10 @@
     "supported_actions": [],
     "recommendation_actions": [],
     "fallback_action": "page_oncall",
-    "runbooks": ["RB-AI-DEPENDENCY", "RB-MEM0-MEMORY-STORE"]
+    "runbooks": [
+      "RB-AI-DEPENDENCY",
+      "RB-MEM0-MEMORY-STORE"
+    ]
   },
   {
     "service": "opensearch",
@@ -261,7 +347,9 @@
     "supported_actions": [],
     "recommendation_actions": [],
     "fallback_action": "page_oncall",
-    "runbooks": ["RB-OBSERVABILITY-STACK"]
+    "runbooks": [
+      "RB-OBSERVABILITY-STACK"
+    ]
   },
   {
     "service": "otel-collector",
@@ -273,7 +361,10 @@
     "supported_actions": [],
     "recommendation_actions": [],
     "fallback_action": "page_oncall",
-    "runbooks": ["RB-MONITORING-LOSS", "RB-OBSERVABILITY-STACK"]
+    "runbooks": [
+      "RB-MONITORING-LOSS",
+      "RB-OBSERVABILITY-STACK"
+    ]
   },
   {
     "service": "payment",
@@ -283,9 +374,15 @@
     "live_execute_supported": false,
     "protected": true,
     "supported_actions": [],
-    "recommendation_actions": ["restart_payment"],
+    "recommendation_actions": [
+      "restart_payment"
+    ],
     "fallback_action": "page_oncall",
-    "runbooks": ["RB-SERVICE-ERROR-RATE", "RB-SERVICE-LATENCY", "RB-FEATURE-FLAG-FLAGD"]
+    "runbooks": [
+      "RB-SERVICE-ERROR-RATE",
+      "RB-SERVICE-LATENCY",
+      "RB-FEATURE-FLAG-FLAGD"
+    ]
   },
   {
     "service": "postgresql",
@@ -297,19 +394,30 @@
     "supported_actions": [],
     "recommendation_actions": [],
     "fallback_action": "page_data_oncall",
-    "runbooks": ["RB-DATASTORE-POSTGRESQL"]
+    "runbooks": [
+      "RB-DATASTORE-POSTGRESQL"
+    ]
   },
   {
     "service": "product-catalog",
     "namespace": "techx-corp-prod",
-    "support_status": "executor_supported_live_gated",
+    "support_status": "executor_supported_live_capable",
     "executor_supported": true,
     "live_execute_supported": true,
     "protected": false,
-    "supported_actions": ["scale_product_catalog"],
-    "recommendation_actions": ["restart_product_catalog"],
+    "supported_actions": [
+      "scale_product_catalog"
+    ],
+    "recommendation_actions": [
+      "restart_product_catalog"
+    ],
     "fallback_action": "page_oncall",
-    "runbooks": ["RB-PRODUCT-CATALOG-CPU", "RB-SERVICE-ERROR-RATE", "RB-SERVICE-LATENCY", "RB-DATASTORE-POSTGRESQL"]
+    "runbooks": [
+      "RB-PRODUCT-CATALOG-CPU",
+      "RB-SERVICE-ERROR-RATE",
+      "RB-SERVICE-LATENCY",
+      "RB-DATASTORE-POSTGRESQL"
+    ]
   },
   {
     "service": "product-reviews",
@@ -321,7 +429,12 @@
     "supported_actions": [],
     "recommendation_actions": [],
     "fallback_action": "page_oncall",
-    "runbooks": ["RB-SERVICE-ERROR-RATE", "RB-SERVICE-LATENCY", "RB-DATASTORE-POSTGRESQL", "RB-AI-DEPENDENCY"]
+    "runbooks": [
+      "RB-SERVICE-ERROR-RATE",
+      "RB-SERVICE-LATENCY",
+      "RB-DATASTORE-POSTGRESQL",
+      "RB-AI-DEPENDENCY"
+    ]
   },
   {
     "service": "prometheus",
@@ -333,7 +446,10 @@
     "supported_actions": [],
     "recommendation_actions": [],
     "fallback_action": "page_oncall",
-    "runbooks": ["RB-MONITORING-LOSS", "RB-OBSERVABILITY-STACK"]
+    "runbooks": [
+      "RB-MONITORING-LOSS",
+      "RB-OBSERVABILITY-STACK"
+    ]
   },
   {
     "service": "quote",
@@ -345,7 +461,10 @@
     "supported_actions": [],
     "recommendation_actions": [],
     "fallback_action": "page_oncall",
-    "runbooks": ["RB-SERVICE-ERROR-RATE", "RB-SERVICE-LATENCY"]
+    "runbooks": [
+      "RB-SERVICE-ERROR-RATE",
+      "RB-SERVICE-LATENCY"
+    ]
   },
   {
     "service": "recommendation",
@@ -357,7 +476,11 @@
     "supported_actions": [],
     "recommendation_actions": [],
     "fallback_action": "page_oncall",
-    "runbooks": ["RB-SERVICE-ERROR-RATE", "RB-SERVICE-LATENCY", "RB-PRODUCT-CATALOG-CPU"]
+    "runbooks": [
+      "RB-SERVICE-ERROR-RATE",
+      "RB-SERVICE-LATENCY",
+      "RB-PRODUCT-CATALOG-CPU"
+    ]
   },
   {
     "service": "shipping",
@@ -369,7 +492,11 @@
     "supported_actions": [],
     "recommendation_actions": [],
     "fallback_action": "page_oncall",
-    "runbooks": ["RB-SERVICE-ERROR-RATE", "RB-SERVICE-LATENCY", "RB-SHIPPING-QUOTE-DEPENDENCY"]
+    "runbooks": [
+      "RB-SERVICE-ERROR-RATE",
+      "RB-SERVICE-LATENCY",
+      "RB-SHIPPING-QUOTE-DEPENDENCY"
+    ]
   },
   {
     "service": "shopping-copilot",
@@ -381,7 +508,12 @@
     "supported_actions": [],
     "recommendation_actions": [],
     "fallback_action": "page_oncall",
-    "runbooks": ["RB-AI-DEPENDENCY", "RB-SERVICE-ERROR-RATE", "RB-SERVICE-LATENCY", "RB-DATASTORE-VALKEY-CART"]
+    "runbooks": [
+      "RB-AI-DEPENDENCY",
+      "RB-SERVICE-ERROR-RATE",
+      "RB-SERVICE-LATENCY",
+      "RB-DATASTORE-VALKEY-CART"
+    ]
   },
   {
     "service": "valkey-cart",
@@ -393,6 +525,8 @@
     "supported_actions": [],
     "recommendation_actions": [],
     "fallback_action": "page_oncall",
-    "runbooks": ["RB-DATASTORE-VALKEY-CART"]
+    "runbooks": [
+      "RB-DATASTORE-VALKEY-CART"
+    ]
   }
 ]

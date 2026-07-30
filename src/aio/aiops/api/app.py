@@ -91,6 +91,8 @@ def run_pipeline_with_collector(collector, settings: Settings, runtime_config, m
                 raise RuntimeError("self-heal requires a configured live executor URL")
             if not settings.self_heal_approval_id:
                 raise RuntimeError("self-heal requires a signed approval id")
+            if not _notification_configured(settings):
+                raise RuntimeError("self-heal requires an escalation notification webhook")
     except Exception:
         _close_if_supported(collector)
         raise
@@ -296,6 +298,8 @@ def readiness(settings: Settings) -> HealthResponse:
             raise RuntimeError("self-heal requires the live executor")
         if settings.self_heal_enabled and not settings.self_heal_approval_id:
             raise RuntimeError("self-heal requires an approval id")
+        if settings.self_heal_enabled and not _notification_configured(settings):
+            raise RuntimeError("self-heal requires an escalation notification webhook")
         if settings.self_heal_enabled:
             executor_client = LiveExecutorClient(settings)
             try:

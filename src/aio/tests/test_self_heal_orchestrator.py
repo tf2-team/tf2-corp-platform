@@ -33,6 +33,7 @@ class FakeExecutorClient:
         self.rollbacks: list[dict] = []
         self.live_apply_enabled = True
         self.plan_calls = 0
+        self.rollback_succeeds = True
 
     def catalog(self, request_id: str | None = None) -> list[dict]:
         return [
@@ -55,6 +56,8 @@ class FakeExecutorClient:
                 "rollback_action_id": "restore_deployment_replicas",
                 "verification_query_id": "product-catalog.cpu_millicores",
                 "verification_signal_id": "product_catalog_cpu_millicores",
+                "verification_threshold": None,
+                "verification_max_ratio": 0.9,
                 "policy_id": "phase3-scale-policy-v1",
                 "policy_approval_required": True,
             }
@@ -96,6 +99,12 @@ class FakeExecutorClient:
 
     def rollback(self, execution_id: str, request: dict) -> dict:
         self.rollbacks.append(request)
+        if not self.rollback_succeeds:
+            return {
+                "execution_id": execution_id,
+                "status": "rollback_failed",
+                "executed": False,
+            }
         return {
             "execution_id": execution_id,
             "status": "rolled_back",
@@ -151,6 +160,7 @@ def _action() -> ActionCatalogItem:
         rollback_action_id="restore_deployment_replicas",
         verification_query_id="product-catalog.cpu_millicores",
         verification_signal_id="product_catalog_cpu_millicores",
+        verification_max_ratio=0.9,
         policy_id="phase3-scale-policy-v1",
         policy_approval_required=True,
     )
@@ -279,5 +289,72 @@ def test_self_heal_rolls_back_when_fresh_telemetry_never_arrives(tmp_path: Path)
         assert result.reason == "post_action_verification_failed_rolled_back"
         assert client.verifications[-1]["message"] == "verification_inconclusive_timeout"
         assert len(client.rollbacks) == 1
+    finally:
+        store.close()
+
+
+def test_self_heal_uses_live_feature_and_relative_recovery_threshold(tmp_path: Path) -> None:
+    clock = Clock()
+    orchestrator, _, store = _orchestrator(tmp_path, clock)
+    incident = _incident().model_copy(
+        update={
+            "events": [
+                _incident().events[0].model_copy(
+                    update={
+                        "signal_id": "cpu_millicores",
+                        "threshold": 0.24,
+                        "value": 0.9,
+                        "detector_id": "rca_root_cause",
+                    }
+                )
+            ]
+        }
+    )
+    action = _action()
+    try:
+        result = orchestrator.start(
+            incident,
+            action,
+            _root(),
+            verification_features=[_feature(120, clock())],
+        )
+
+        assert result["status"] == "verifying"
+        workflow = store.self_heal_workflow(incident.incident_id)
+        assert workflow["signal_id"] == "product_catalog_cpu_millicores"
+        assert workflow["verification_baseline"] == 120
+        assert workflow["threshold"] == 108
+    finally:
+        store.close()
+
+
+def test_self_heal_enqueues_retryable_notification_when_rollback_fails(tmp_path: Path) -> None:
+    clock = Clock()
+    orchestrator, client, store = _orchestrator(tmp_path, clock)
+    client.rollback_succeeds = False
+    try:
+        orchestrator.start(_incident(), _action(), _root())
+        clock.advance(30)
+        orchestrator.reconcile([_feature(110, clock())])
+        clock.advance(30)
+        result = orchestrator.reconcile([_feature(100, clock())])[0]
+
+        assert result.reason == "post_action_verification_failed_escalated"
+        notifications = store.due_notifications()
+        assert len(notifications) == 1
+        escalation = notifications[0]
+        assert escalation.incident_id == "inc-product-catalog:self-heal-escalation:1"
+        assert escalation.severity == "SEV1"
+        assert "rollback failed" in escalation.title
+        assert escalation.runbook_id == "RB-AIOPS-RUNTIME"
+        event_types = [event["event_type"] for event in store.self_heal_audit_events("inc-product-catalog")]
+        assert event_types[-2:] == ["rollback", "escalation_enqueued"]
+
+        store.mark_notification_failed(escalation.incident_id, "temporary webhook failure")
+        row = store._connection.execute(
+            "SELECT status, attempt_count FROM notification_outbox WHERE incident_id = ?",
+            (escalation.incident_id,),
+        ).fetchone()
+        assert tuple(row) == ("retry", 1)
     finally:
         store.close()

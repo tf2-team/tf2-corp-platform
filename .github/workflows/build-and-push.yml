@@ -1472,17 +1472,22 @@ jobs:
           GH_TOKEN: ${{ secrets.CHART_REPO_TOKEN }}
         run: |
           set -euo pipefail
+          promote_args=()
+          if printf '%s' "${BUILD_SERVICES_JSON}" | jq -e 'index("aiops") != null' >/dev/null; then
+            promote_args+=(--promote-aiops-live-executor)
+          fi
           python3 ../platform/scripts/update_chart_service_digests.py \
             --directory . \
             --subdir service-digest \
             --services-json "${BUILD_SERVICES_JSON}" \
-            --digests-json "${DIGEST_MAP_JSON}"
+            --digests-json "${DIGEST_MAP_JSON}" \
+            "${promote_args[@]}"
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           safe_version="$(printf '%s' "${VERSION}" | tr -c 'A-Za-z0-9._-' '-')"
           promote_branch="promote/prod-digests-${safe_version}"
           git checkout -B "${promote_branch}"
-          git add -- 'service-digest/values-*.yaml'
+          git add -- 'service-digest/values-*.yaml' values-aiops-live-executor.yaml
           if git diff --cached --quiet; then
             echo "No rebuilt-service digest changed; no production PR required."
             exit 0
@@ -1491,7 +1496,10 @@ jobs:
             -m "Platform commit: ${PLATFORM_SHA}" \
             -m "Workflow: ${PLATFORM_RUN_URL}"
           git push --force origin "HEAD:${promote_branch}"
-          body="Promote only rebuilt service digests under service-digest/ after security scans and attestations. Platform run: ${PLATFORM_RUN_URL}"
+          body="Promote rebuilt service digests after security scans and attestations. Platform run: ${PLATFORM_RUN_URL}"
+          if printf '%s' "${BUILD_SERVICES_JSON}" | jq -e 'index("aiops") != null' >/dev/null; then
+            body="${body} The signed aiops digest is synchronized to values-aiops-live-executor.yaml."
+          fi
           existing="$(gh pr list --repo "${CHART_REPO}" --head "${promote_branch}" --base "${CHART_PROD_BRANCH}" --state open --json url --jq '.[0].url // empty')"
           if [[ -n "${existing}" ]]; then
             gh pr edit "${existing}" --repo "${CHART_REPO}" --title "chore(prod): promote rebuilt service digests (${VERSION})" --body "${body}"

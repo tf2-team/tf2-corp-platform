@@ -302,4 +302,5 @@ def validate_grounded_summary(
         answer=answer,
         claims=surviving_claims,
     )
-# Change trail: @hungxqt - 2026-07-16 - Add Apache-2.0 copyright headers for license-checker.
+
+# Change trail: @hungxqt - 2026-07-29 - Merge grounded generation onto the content-free model telemetry wrapper.

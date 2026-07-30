@@ -15,6 +15,74 @@ POLICY_EXPIRES_AT = "2026-08-31T23:59:59Z"
 PLAN_TTL_SECONDS = 600
 
 ALLOWLIST = {
+    "scale_frontend_proxy": {
+        "action_id": "scale_frontend_proxy",
+        "action_type": "scale_deployment",
+        "rollback_action_type": "restore_deployment_replicas",
+        "rollback_action_id": "restore_deployment_replicas",
+        "target": "frontend-proxy",
+        "target_kind": "Deployment",
+        "namespace": "techx-corp-prod",
+        "min_replicas": 1,
+        "max_replicas": 3,
+        "target_replicas": 3,
+        "owner": "platform-edge-owner",
+        "blast_radius_services": ["frontend", "checkout", "product-catalog", "cart"],
+        "verification_query_id": "frontend-proxy.p95_latency_5m",
+        "verification_signal_id": "frontend_proxy_p95_latency_5m",
+        "verification_threshold": 1.5,
+    },
+    "scale_frontend": {
+        "action_id": "scale_frontend",
+        "action_type": "scale_deployment",
+        "rollback_action_type": "restore_deployment_replicas",
+        "rollback_action_id": "restore_deployment_replicas",
+        "target": "frontend",
+        "target_kind": "Deployment",
+        "namespace": "techx-corp-prod",
+        "min_replicas": 1,
+        "max_replicas": 3,
+        "target_replicas": 3,
+        "owner": "frontend-owner",
+        "blast_radius_services": ["frontend-proxy", "checkout", "product-catalog", "cart"],
+        "verification_query_id": "frontend.p95_latency_5m",
+        "verification_signal_id": "frontend_p95_latency_5m",
+        "verification_threshold": 1.0,
+    },
+    "scale_checkout": {
+        "action_id": "scale_checkout",
+        "action_type": "scale_deployment",
+        "rollback_action_type": "restore_deployment_replicas",
+        "rollback_action_id": "restore_deployment_replicas",
+        "target": "checkout",
+        "target_kind": "Deployment",
+        "namespace": "techx-corp-prod",
+        "min_replicas": 1,
+        "max_replicas": 3,
+        "target_replicas": 3,
+        "owner": "checkout-owner",
+        "blast_radius_services": ["frontend", "frontend-proxy", "cart", "payment", "shipping", "email"],
+        "verification_query_id": "checkout.p95_latency_5m",
+        "verification_signal_id": "checkout_p95_latency_5m",
+        "verification_threshold": 2.0,
+    },
+    "scale_cart": {
+        "action_id": "scale_cart",
+        "action_type": "scale_deployment",
+        "rollback_action_type": "restore_deployment_replicas",
+        "rollback_action_id": "restore_deployment_replicas",
+        "target": "cart",
+        "target_kind": "Deployment",
+        "namespace": "techx-corp-prod",
+        "min_replicas": 1,
+        "max_replicas": 3,
+        "target_replicas": 3,
+        "owner": "cart-owner",
+        "blast_radius_services": ["checkout", "frontend"],
+        "verification_query_id": "cart.error_rate_5m",
+        "verification_signal_id": "cart_error_rate_5m",
+        "verification_threshold": 0.005,
+    },
     "scale_product_catalog": {
         "action_id": "scale_product_catalog",
         "action_type": "scale_deployment",
@@ -25,9 +93,12 @@ ALLOWLIST = {
         "namespace": "techx-corp-prod",
         "min_replicas": 2,
         "max_replicas": 12,
+        "target_replicas": 3,
+        "owner": "product-catalog-owner",
         "blast_radius_services": ["frontend", "recommendation", "product-reviews", "checkout"],
         "verification_query_id": "product-catalog.cpu_millicores",
         "verification_signal_id": "product_catalog_cpu_millicores",
+        "verification_max_ratio": 0.9,
     }
 }
 
@@ -100,7 +171,18 @@ def get_snapshot(context: dict[str, Any], config: dict[str, Any]) -> dict[str, A
 def resolved_config(context: dict[str, Any]) -> dict[str, Any] | None:
     action_id = context.get("action_id")
     if action_id == "restore_deployment_replicas":
-        action_id = context.get("original_action_id") or "scale_product_catalog"
+        execution = context.get("execution")
+        if isinstance(execution, dict):
+            action_id = execution.get("action_id") or context.get("original_action_id")
+        else:
+            action_id = context.get("original_action_id")
+        if not action_id:
+            target = context.get("target")
+            for candidate in ALLOWLIST.values():
+                if candidate.get("target") == target:
+                    action_id = candidate["action_id"]
+                    break
+        action_id = action_id or "scale_product_catalog"
     config = copy.deepcopy(ALLOWLIST.get(action_id))
     if config is not None:
         executor_environment = context.get("_executor_environment")
@@ -302,6 +384,9 @@ def base_success(context: dict[str, Any], config: dict[str, Any], *, executed: b
             "passed": None,
             "owner": "aiops-runtime",
             "query_id": config.get("verification_query_id"),
+            "signal_id": config.get("verification_signal_id"),
+            "threshold": config.get("verification_threshold"),
+            "max_ratio": config.get("verification_max_ratio"),
         },
         "rollback": {"defined": True, "action_type": "restore_deployment_replicas"},
     }

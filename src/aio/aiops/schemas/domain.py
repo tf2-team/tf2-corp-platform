@@ -134,6 +134,8 @@ class ActionCatalogItem(AiopsModel):
     verification_defined: bool = True
     verification_query_id: str | None = None
     verification_signal_id: str | None = None
+    verification_threshold: float | None = None
+    verification_max_ratio: float | None = Field(default=None, gt=0, lt=1)
     rollback_defined: bool = True
     rollback_action_id: str | None = None
     approved: bool = False

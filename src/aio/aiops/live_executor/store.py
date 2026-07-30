@@ -158,6 +158,19 @@ class LiveExecutorStore:
         ).fetchone()
         return json.loads(row["response_json"]) if row else None
 
+    def execution_count_since(self, window_seconds: int) -> int:
+        since = (datetime.now(UTC) - timedelta(seconds=max(0, window_seconds))).replace(
+            microsecond=0
+        ).isoformat().replace("+00:00", "Z")
+        row = self._connection.execute(
+            """
+            SELECT COUNT(*) AS count FROM executions
+            WHERE created_at >= ? AND status IN ('running', 'succeeded', 'failed', 'rolled_back')
+            """,
+            (since,),
+        ).fetchone()
+        return int(row["count"]) if row else 0
+
     def cooldown_active(self, target: str) -> bool:
         row = self._connection.execute(
             "SELECT cooldown_until FROM target_cooldowns WHERE target = ?",

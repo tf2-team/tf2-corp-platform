@@ -678,4 +678,5 @@ if __name__ == "__main__":
         f'grpc_max_workers={max_workers}'
     )
     server.wait_for_termination()
-# Change trail: @hungxqt - 2026-07-16 - Configurable gRPC max_workers to avoid health probe starvation.
+
+# Change trail: @hungxqt - 2026-07-29 - Merge review model and tool calls onto content-free telemetry wrappers.

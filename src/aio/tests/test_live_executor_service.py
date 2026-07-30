@@ -18,36 +18,52 @@ from starlette.testclient import TestClient
 
 class FakeDeploymentGateway:
     def __init__(self) -> None:
-        self.state = {
-            "kind": "Deployment",
-            "namespace": "techx-corp-prod",
-            "name": "product-catalog",
-            "replicas": 2,
-            "ready_replicas": 2,
-            "scaling_controller": "HorizontalPodAutoscaler",
-            "control_replicas": 2,
-            "autoscaler_max_replicas": 12,
-            "resource_version": "12345",
+        self.states = {
+            name: self._state(name)
+            for name in ["product-catalog", "frontend-proxy", "frontend", "checkout", "cart"]
         }
         self.closed = False
 
+    @staticmethod
+    def _state(name: str, replicas: int = 2, resource_version: str = "12345") -> dict:
+        return {
+            "kind": "Deployment",
+            "namespace": "techx-corp-prod",
+            "name": name,
+            "replicas": replicas,
+            "ready_replicas": replicas,
+            "scaling_controller": "HorizontalPodAutoscaler",
+            "control_replicas": 2,
+            "autoscaler_max_replicas": 12 if name == "product-catalog" else 3,
+            "resource_version": resource_version,
+        }
+
+    @property
+    def state(self) -> dict:
+        return self.states["product-catalog"]
+
+    @state.setter
+    def state(self, value: dict) -> None:
+        self.states["product-catalog"] = value
+
     def snapshot(self, namespace: str, name: str) -> dict:
         assert namespace == "techx-corp-prod"
-        assert name == "product-catalog"
-        return dict(self.state)
+        assert name in self.states
+        return dict(self.states[name])
 
     def scale(self, namespace: str, name: str, replicas: int, resource_version: str) -> dict:
-        assert resource_version == self.state["resource_version"]
-        observed_replicas = max(int(self.state["replicas"]), replicas)
-        observed_ready_replicas = max(int(self.state["ready_replicas"]), replicas)
-        self.state = {
-            **self.state,
+        state = self.states[name]
+        assert resource_version == state["resource_version"]
+        observed_replicas = max(int(state["replicas"]), replicas)
+        observed_ready_replicas = max(int(state["ready_replicas"]), replicas)
+        self.states[name] = {
+            **state,
             "replicas": observed_replicas,
             "ready_replicas": observed_ready_replicas,
             "control_replicas": replicas,
-            "resource_version": str(int(self.state["resource_version"]) + 1),
+            "resource_version": str(int(state["resource_version"]) + 1),
         }
-        return dict(self.state)
+        return dict(self.states[name])
 
     def close(self) -> None:
         self.closed = True
@@ -106,6 +122,33 @@ def _request(**overrides) -> dict:
     return request
 
 
+def _request_for_action(action_id: str, suffix: str, **overrides) -> dict:
+    action = ALLOWLIST[action_id]
+    request = _request(
+        request_id=f"req-20260729-{suffix[:12]}",
+        incident_id=f"inc-{action['target']}-scale-001",
+        action_id=action_id,
+        target=action["target"],
+        replicas=3,
+        idempotency_key=f"sha256:{suffix}",
+        root_cause={
+            "service": action["target"],
+            "score": 0.82,
+            "metrics": [action["verification_query_id"]],
+            "evidence_scores": {"weighted_rrf": 0.91},
+        },
+        kubernetes_snapshot={
+            "kind": "Deployment",
+            "namespace": "techx-corp-prod",
+            "name": action["target"],
+            "replicas": 2,
+            "ready_replicas": 2,
+            "resource_version": "12345",
+        },
+    )
+    request.update(overrides)
+    return request
+
 def test_live_executor_plan_execute_status_rollback(tmp_path: Path) -> None:
     service, gateway = _live_service(tmp_path / "executor.sqlite3")
     try:
@@ -157,6 +200,54 @@ def test_live_executor_plan_execute_status_rollback(tmp_path: Path) -> None:
     finally:
         service.close()
 
+
+def test_live_executor_executes_ai_requested_scale_actions(tmp_path: Path) -> None:
+    action_ids = ["scale_frontend_proxy", "scale_frontend", "scale_checkout", "scale_cart"]
+    service, gateway = _live_service(tmp_path / "executor.sqlite3")
+    try:
+        for index, action_id in enumerate(action_ids, start=1):
+            action = ALLOWLIST[action_id]
+            plan_suffix = f"{index:064x}"[-64:]
+            plan = service.plan(_request_for_action(action_id, plan_suffix))
+
+            assert plan["allowed"] is True
+            assert plan["target"] == action["target"]
+            assert plan["namespace"] == "techx-corp-prod"
+            assert plan["after"]["replicas"] == 3
+
+            execute_suffix = f"{index + 10:064x}"[-64:]
+            execution = service.execute(
+                _request_for_action(
+                    action_id,
+                    execute_suffix,
+                    request_id=f"req-20260729-execute-{index}",
+                    dry_run=False,
+                    plan_hash=plan["plan_hash"],
+                    rollback_token=plan["rollback"]["rollback_token"],
+                )
+            )
+            assert execution["allowed"] is True
+            assert execution["executed"] is True
+            assert execution["target"] == action["target"]
+            assert gateway.states[action["target"]]["control_replicas"] == 3
+
+            rollback = service.rollback(
+                execution["execution_id"],
+                {
+                    "request_id": f"req-20260729-rollback-{index}",
+                    "incident_id": execution["incident_id"],
+                    "rollback_token": execution["rollback"]["rollback_token"],
+                    "reason": "phase7_smoke_rollback",
+                    "requested_by": "aiops-runtime",
+                    "idempotency_key": f"sha256:{index + 20:064x}"[-71:],
+                },
+            )
+            assert rollback["allowed"] is True
+            assert rollback["executed"] is True
+            assert rollback["status"] == "rolled_back"
+            assert gateway.states[action["target"]]["control_replicas"] == 2
+    finally:
+        service.close()
 
 def test_live_executor_idempotent_execute(tmp_path: Path) -> None:
     service, gateway = _live_service(tmp_path / "executor.sqlite3")
@@ -285,6 +376,35 @@ def test_live_executor_blocks_stale_state(tmp_path: Path) -> None:
     finally:
         service.close()
 
+
+def test_live_executor_blocks_when_action_budget_is_exhausted(tmp_path: Path) -> None:
+    gateway = FakeDeploymentGateway()
+    service = LiveExecutorService.from_path(
+        tmp_path / "executor.sqlite3",
+        deployment_gateway=gateway,
+        allow_live_apply=True,
+        cooldown_seconds=0,
+        action_budget_max_executions=0,
+        approval_id="adr-live-001",
+    )
+    try:
+        plan = service.plan(_request())
+        response = service.execute(
+            _request(
+                request_id="req-20260729-budget",
+                dry_run=False,
+                plan_hash=plan["plan_hash"],
+                rollback_token=plan["rollback"]["rollback_token"],
+                idempotency_key="sha256:9999999999999999999999999999999999999999999999999999999999999999",
+            )
+        )
+
+        assert response["allowed"] is False
+        assert response["executed"] is False
+        assert response["reasons"] == ["action_budget_exhausted"]
+        assert gateway.state["resource_version"] == "12345"
+    finally:
+        service.close()
 
 def test_live_executor_requires_explicit_live_apply(tmp_path: Path) -> None:
     service = LiveExecutorService.from_path(tmp_path / "executor.sqlite3")
@@ -715,7 +835,8 @@ def test_live_executor_catalog_endpoint_returns_action_capabilities(tmp_path: Pa
         scale = catalog["scale_product_catalog"]
         allowlist = ALLOWLIST["scale_product_catalog"]
         assert scale["executor_supported"] is True
-        assert scale["live_execute_supported"] is True
+        assert scale["live_execute_supported"] is False
+        assert scale["live_execute_capable"] is True
         assert scale["live_apply_enabled"] is False
         assert scale["rollback_supported"] is True
         assert scale["rollback_action_id"] == allowlist["rollback_action_id"]
@@ -724,6 +845,15 @@ def test_live_executor_catalog_endpoint_returns_action_capabilities(tmp_path: Pa
         assert scale["min_replicas"] == allowlist["min_replicas"]
         assert scale["max_replicas"] == allowlist["max_replicas"]
         assert scale["blast_radius_services"] == allowlist["blast_radius_services"]
+        for action_id in ["scale_frontend_proxy", "scale_frontend", "scale_checkout", "scale_cart"]:
+            action = catalog[action_id]
+            assert action["executor_supported"] is True
+            assert action["execute_supported"] is True
+            assert action["live_execute_supported"] is False
+            assert action["live_execute_capable"] is True
+            assert action["live_apply_enabled"] is False
+            assert action["rollback_supported"] is True
+            assert action["max_replicas"] == 3
 
         restart_actions = [item for item in catalog.values() if item["action_type"] == "restart"]
         assert restart_actions
@@ -759,10 +889,22 @@ def test_live_executor_services_catalog_covers_runbook_services(tmp_path: Path) 
         assert set(service_catalog) == set(runbook_map["services"])
         assert service_catalog["product-catalog"]["executor_supported"] is True
         assert service_catalog["product-catalog"]["supported_actions"] == ["scale_product_catalog"]
-        assert service_catalog["product-catalog"]["live_execute_supported"] is True
+        assert service_catalog["product-catalog"]["live_execute_supported"] is False
+        assert service_catalog["product-catalog"]["live_execute_capable"] is True
         assert service_catalog["product-catalog"]["live_apply_enabled"] is False
-        assert service_catalog["checkout"]["support_status"] == "recommendation_only"
-        assert service_catalog["checkout"]["supported_actions"] == []
+        for service_name, action_id in {
+            "frontend-proxy": "scale_frontend_proxy",
+            "frontend": "scale_frontend",
+            "checkout": "scale_checkout",
+            "cart": "scale_cart",
+        }.items():
+            service_entry = service_catalog[service_name]
+            assert service_entry["support_status"] == "executor_supported_live_capable"
+            assert service_entry["executor_supported"] is True
+            assert service_entry["live_execute_supported"] is False
+            assert service_entry["live_execute_capable"] is True
+            assert service_entry["live_apply_enabled"] is False
+            assert action_id in service_entry["supported_actions"]
         assert service_catalog["payment"]["protected"] is True
         assert service_catalog["postgresql"]["fallback_action"] == "page_data_oncall"
     finally:

@@ -43,6 +43,8 @@ class LiveExecutorService:
         deployment_gateway: DeploymentGateway | None = None,
         allow_live_apply: bool = False,
         cooldown_seconds: int = 900,
+        action_budget_window_seconds: int = 3600,
+        action_budget_max_executions: int = 10,
         policy_id: str = POLICY_ID,
         policy_expires_at: str = "2026-08-31T23:59:59Z",
         approval_id: str = "",
@@ -54,6 +56,8 @@ class LiveExecutorService:
         self.deployment_gateway = deployment_gateway
         self.allow_live_apply = allow_live_apply
         self.cooldown_seconds = cooldown_seconds
+        self.action_budget_window_seconds = action_budget_window_seconds
+        self.action_budget_max_executions = action_budget_max_executions
         self.policy_id = policy_id
         self.policy_expires_at = policy_expires_at
         self.approval_id = approval_id
@@ -70,6 +74,8 @@ class LiveExecutorService:
         deployment_gateway: DeploymentGateway | None = None,
         allow_live_apply: bool = False,
         cooldown_seconds: int = 900,
+        action_budget_window_seconds: int = 3600,
+        action_budget_max_executions: int = 10,
         policy_id: str = POLICY_ID,
         policy_expires_at: str = "2026-08-31T23:59:59Z",
         approval_id: str = "",
@@ -82,6 +88,8 @@ class LiveExecutorService:
             deployment_gateway=deployment_gateway,
             allow_live_apply=allow_live_apply,
             cooldown_seconds=cooldown_seconds,
+            action_budget_window_seconds=action_budget_window_seconds,
+            action_budget_max_executions=action_budget_max_executions,
             policy_id=policy_id,
             policy_expires_at=policy_expires_at,
             approval_id=approval_id,
@@ -92,33 +100,13 @@ class LiveExecutorService:
 
     def catalog(self) -> list[dict[str, Any]]:
         return [
-            {
-                **action,
-                "namespace": self.environment if action.get("namespace") == "techx-corp-prod" else action.get("namespace"),
-                "live_apply_enabled": bool(
-                    self.allow_live_apply
-                    and action.get("live_execute_supported")
-                    and action.get("executor_supported")
-                    and not action.get("blocked")
-                ),
-            }
+            _action_with_runtime_state(action, self.allow_live_apply, self.environment)
             for action in _load_capability_catalog(self.capability_catalog_path)
         ]
 
     def service_catalog(self) -> list[dict[str, Any]]:
         return [
-            {
-                **service,
-                "namespace": (
-                    self.environment if service.get("namespace") == "techx-corp-prod" else service.get("namespace")
-                ),
-                "live_apply_enabled": bool(
-                    self.allow_live_apply
-                    and service.get("live_execute_supported")
-                    and service.get("executor_supported")
-                    and not service.get("protected")
-                ),
-            }
+            _service_with_runtime_state(service, self.allow_live_apply, self.environment)
             for service in _load_service_support_catalog(self.service_support_catalog_path)
         ]
 
@@ -135,8 +123,8 @@ class LiveExecutorService:
         if self.allow_live_apply:
             if self.deployment_gateway is None or not self.approval_id:
                 return False
-            action = ALLOWLIST["scale_product_catalog"]
-            self.deployment_gateway.snapshot(self.environment, action["target"])
+            for action in ALLOWLIST.values():
+                self.deployment_gateway.snapshot(self.environment, action["target"])
         return True
 
     def plan(self, request: dict[str, Any]) -> dict[str, Any]:
@@ -178,6 +166,9 @@ class LiveExecutorService:
         with self._lock:
             return self._execute(request)
 
+    def submit_execution(self, request: dict[str, Any]) -> dict[str, Any]:
+        return self.execute(request)
+
     def _execute(self, request: dict[str, Any]) -> dict[str, Any]:
         cached = self._idempotent(request, "execute")
         if cached is not None:
@@ -193,6 +184,8 @@ class LiveExecutorService:
             response = self._blocked(request, "live apply is disabled", ["live_apply_disabled"])
         elif self.store.cooldown_active(plan_response["target"]):
             response = self._blocked(request, "target is in cooldown", ["target_cooldown"])
+        elif self.store.execution_count_since(self.action_budget_window_seconds) >= self.action_budget_max_executions:
+            response = self._blocked(request, "executor action budget is exhausted", ["action_budget_exhausted"])
         else:
             running = self.store.execution_for_target(plan_response["target"])
             if running is not None:
@@ -729,6 +722,43 @@ def _load_service_support_catalog(path: Path) -> list[dict[str, Any]]:
     return []
 
 
+def _resolve_namespace(namespace: Any, environment: str) -> Any:
+    return environment if namespace == "techx-corp-prod" else namespace
+
+
+def _action_with_runtime_state(action: dict[str, Any], allow_live_apply: bool, environment: str) -> dict[str, Any]:
+    live_capable = bool(action.get("live_execute_supported"))
+    live_apply_enabled = bool(
+        allow_live_apply
+        and live_capable
+        and action.get("executor_supported")
+        and not action.get("blocked")
+    )
+    return {
+        **action,
+        "namespace": _resolve_namespace(action.get("namespace"), environment),
+        "live_execute_supported": live_capable and live_apply_enabled,
+        "live_execute_capable": live_capable,
+        "live_apply_enabled": live_apply_enabled,
+    }
+
+
+def _service_with_runtime_state(service: dict[str, Any], allow_live_apply: bool, environment: str) -> dict[str, Any]:
+    live_capable = bool(service.get("live_execute_supported"))
+    live_apply_enabled = bool(
+        allow_live_apply
+        and live_capable
+        and service.get("executor_supported")
+        and not service.get("protected")
+    )
+    return {
+        **service,
+        "namespace": _resolve_namespace(service.get("namespace"), environment),
+        "live_execute_supported": live_capable and live_apply_enabled,
+        "live_execute_capable": live_capable,
+        "live_apply_enabled": live_apply_enabled,
+    }
+
 def _capability_from_allowlist(config: dict[str, Any]) -> dict[str, Any]:
     target = config["target"]
     namespace = config["namespace"]
@@ -749,9 +779,12 @@ def _capability_from_allowlist(config: dict[str, Any]) -> dict[str, Any]:
         "rollback_action_id": config.get("rollback_action_id"),
         "verification_query_id": config.get("verification_query_id"),
         "verification_signal_id": config.get("verification_signal_id"),
+        "verification_threshold": config.get("verification_threshold"),
+        "verification_max_ratio": config.get("verification_max_ratio"),
         "policy_id": POLICY_ID,
         "policy_expires_at": POLICY_EXPIRES_AT,
         "policy_approval_required": True,
+        "owner": config.get("owner"),
         "protected": protected,
         "blocked": protected,
         "blocked_reason": "target or namespace is protected" if protected else None,
