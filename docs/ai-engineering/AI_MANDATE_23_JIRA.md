@@ -105,10 +105,76 @@ flowchart LR
     J --> K[Return response: cache=miss]
 ```
 
-### 4.2 Cache Safety Rules
+### 4.2 Caching Approach
+
+#### Caching là gì?
+
+Trong luồng không có cache, một câu hỏi luôn đi qua guardrail, tools và model dù hệ
+thống vừa trả lời đúng câu đó trước đó. Cache thêm một đường đi ngắn hơn: lưu lại một
+response đã được kiểm tra và chỉ reuse khi request mới có cùng ranh giới an toàn với
+entry cũ.
+
+Cache ở đây không phải memory:
+
+- Cache trả lại một response đã tạo trước đó để tránh gọi model lại.
+- Memory lấy context hoặc preference của user để tạo một response mới.
+
+Ví dụ, user hỏi “Recommend telescope options priced below $150” lần đầu thì hệ thống
+vẫn gọi model và lưu response đủ điều kiện. Nếu cùng user hỏi lại đúng câu đó trong
+cùng context và source chưa đổi, hệ thống có thể trả exact hit. Nếu user đổi cách diễn
+đạt thành “Find telescope options under $150”, hệ thống có thể trả semantic hit nếu độ
+tương đồng nằm trong threshold.
+
+#### Motivation và Problem cần giải quyết
+
+| Problem | Nếu không xử lý | Kỹ thuật được dùng |
+|---|---|---|
+| Request lặp vẫn gọi model | Tốn token, model call và thời gian xử lý | Exact cache |
+| User diễn đạt lại cùng intent | Exact string key luôn miss | Embedding và semantic KNN |
+| Câu giống nhau nhưng khác user | Có nguy cơ rò response giữa user | HMAC user scope |
+| Câu giống nhau nhưng khác conversation/intent | Có thể reuse sai conversational state | HMAC conversation + request scope |
+| Catalog, review hoặc memory đã đổi | Cache có thể trả dữ liệu cũ | Source snapshot/hash |
+| Prompt, model hoặc embedding thay đổi | Entry cũ có thể không còn tương thích | Version scopes và hybrid filters |
+| Entry tồn tại quá lâu | Tăng nguy cơ stale response | TTL |
+| Valkey hoặc embedding lỗi | Cache làm hỏng toàn bộ Copilot | Fail-open về model path |
+| Cart action hoặc output không grounded bị lưu | Có thể replay thao tác hoặc response không an toàn | Cacheability policy |
+
+#### Implementation đang được dùng
+
+Implementation chia thành hai lớp:
+
+- `techx_ai_common.semantic_cache.SemanticCache` là adapter dùng chung. Lớp này quản
+  lý Valkey index, deterministic exact key, embedding, filtered KNN, TTL và fail-open.
+- `shopping_cache.py` là policy của Shopping Copilot. Lớp này quyết định request nào
+  được cache, tạo conversation scope, chụp source snapshot, serialize state an toàn và
+  hydrate state khi hit.
+
+Mỗi lookup được cô lập bằng các giá trị sau:
+
+| Scope/filter | Cách tạo | Problem được giải quyết |
+|---|---|---|
+| `user_scope` | HMAC-SHA256 từ `user_id` | Không để user khác dùng cùng cache entry; không lộ raw user ID trong key. |
+| Conversation scope | HMAC từ `conversation_id` và nhóm intent như discovery, product hoặc memory | Không trộn state giữa conversation hoặc loại request. |
+| `source_hash` | SHA-256 của stable conversation state, memory fingerprint và catalog/review snapshot liên quan | Source/context đổi thì entry cũ không còn match. |
+| `prompt_scope` | `shopping-react-agent:v1` | Prompt version đổi không reuse entry cũ. |
+| `model_scope` | Provider và model đang chạy | Model đổi không reuse output không tương thích. |
+| `embedding_scope` | Tên/version embedding model | Vector từ embedding version khác không bị trộn. |
+
+#### Lookup diễn ra như thế nào?
+
+Exact lookup chạy trước vì rẻ và không cần vector search. Semantic lookup chỉ chạy khi
+exact miss. KNN lấy candidate gần nhất nhưng candidate vẫn phải khớp đồng thời user,
+conversation/resource, source, prompt, model và embedding scope. Threshold mặc định là
+`0.12`; distance càng nhỏ thì hai request càng gần nhau.
+
+Chỉ response `GROUNDED`, read-only và không có pending action mới được lưu. Anonymous
+request, cart mutation và response như `NO_RESULTS` không được biến thành reusable cache
+entry. Evidence hiện tại cho thấy hai request `NO_RESULTS` liên tiếp đều miss.
+
+### 4.3 Cache Safety Rules
 
 Các giá trị cấu hình và flow xử lý chi tiết của các quy tắc dưới đây được ghi trong
-[Caching implementation](caching/mandate-23-cache-implementation.md).
+[shared semantic cache guide](caching/semantic-cache-implementation-guide.md).
 
 | Rule | Giá trị implementation | Evidence |
 |---|---|---|
@@ -119,7 +185,7 @@ Các giá trị cấu hình và flow xử lý chi tiết của các quy tắc d�
 | Cacheable output | `[TODO: ví dụ grounded read-only answer]` | `[TODO]` |
 | Never cached | Blocked, fallback, rate-limited, mutation/pending-action responses | `[TODO]` |
 
-### 4.3 Verification Source Record
+#### Verification Source Record
 
 Đây là bản ghi được chọn để đội chạy invalidation replay và để người review có thể
 sửa an toàn khi cần xác minh lại.
