@@ -18,6 +18,7 @@ from cart_tool import create_pending_token
 from catalog_tool import get_product, search_catalog
 from copilot_contracts import CatalogSearchInput, CartActionInput, CopilotStatus, ProductInput, ReviewQuestionInput
 import conversation_store
+import metrics as copilot_metrics
 from review_tool import answer_with_reviews
 from techx_ai_common.observability import call_model
 
@@ -103,10 +104,12 @@ def _resolve_product_id(args: ProductInput, state: dict[str, Any], deps: Any) ->
 def _run_tool_impl(name: str, raw_arguments: Any, state: dict[str, Any], deps: Any) -> dict[str, Any]:
     model = _TOOL_MODELS.get(name)
     if model is None:
+        state["cache_eligible"] = False
         return {"error": "Unknown tool."}
     try:
         args = model.model_validate(raw_arguments or {})
     except ValidationError as exc:
+        state["cache_eligible"] = False
         return {"error": f"Invalid tool input: {exc.errors(include_url=False)}"}
     try:
         if name == "search_catalog":
@@ -124,11 +127,13 @@ def _run_tool_impl(name: str, raw_arguments: Any, state: dict[str, Any], deps: A
 
         product_id = _resolve_product_id(args, state, deps)
         if not product_id:
+            state["cache_eligible"] = False
             return {"error": "That product is not available or its name is ambiguous."}
 
         if name == "get_product":
             product = get_product(product_id, deps.catalog_stub)
             if not product:
+                state["cache_eligible"] = False
                 return {"error": "Product is no longer available."}
             _remember_results(state, deps, [product], product.product_id)
             return {"product": _product_data(product)}
@@ -150,8 +155,10 @@ def _run_tool_impl(name: str, raw_arguments: Any, state: dict[str, Any], deps: A
         )
         state["pending_action"] = action
         return {"prepared": True, "product_id": product_id, "quantity": args.quantity}
-    except Exception as exc:  # Tool errors are visible to the model, not fatal to the turn.
+    except Exception as exc:
         logger.warning("ReAct tool %s failed: %s", name, type(exc).__name__)
+        state["status"] = CopilotStatus.FALLBACK
+        state["cache_eligible"] = False
         return {"error": "The requested store operation is temporarily unavailable."}
 
 
@@ -222,6 +229,12 @@ def _run_openai(state: dict[str, Any], deps: Any) -> str:
             provider=os.environ.get("LLM_PROVIDER", "openai_compatible"),
             workflow_step="react_round",
         )
+        usage = getattr(response, "usage", None)
+        copilot_metrics.record_model_call(
+            os.environ.get("LLM_PROVIDER", "openai").lower(),
+            int(getattr(usage, "prompt_tokens", 0) or 0),
+            int(getattr(usage, "completion_tokens", 0) or 0),
+        )
         message = response.choices[0].message
         calls = message.tool_calls or []
         messages.append(message.model_dump(exclude_none=True))
@@ -266,6 +279,12 @@ def _run_bedrock(state: dict[str, Any], deps: Any) -> str:
             model=os.environ["BEDROCK_MODEL_ID"],
             provider="aws.bedrock",
             workflow_step="react_round",
+        )
+        usage = response.get("usage") or {}
+        copilot_metrics.record_model_call(
+            "bedrock",
+            int(usage.get("inputTokens") or usage.get("input_tokens") or 0),
+            int(usage.get("outputTokens") or usage.get("output_tokens") or 0),
         )
         assistant = response["output"]["message"]
         messages.append(assistant)

@@ -3,6 +3,7 @@
 # Copyright The OpenTelemetry Authors
 # SPDX-License-Identifier: Apache-2.0
 
+import base64
 import re
 import hashlib
 import json
@@ -97,6 +98,21 @@ COMBINATION_PATTERNS = [
     re.compile(r"\bact\s+as\b.*\b(unrestricted|dan|jailbreak)\b", re.IGNORECASE),
 ]
 
+BASE64_TOKEN = re.compile(
+    r"(?<![A-Za-z0-9+/=])[A-Za-z0-9+/]{20,}={0,2}(?![A-Za-z0-9+/=])"
+)
+
+
+def _contains_base64_injection(text: str) -> bool:
+    for match in BASE64_TOKEN.finditer(text):
+        try:
+            decoded = base64.b64decode(match.group(), validate=True).decode("utf-8").lower()
+        except (ValueError, UnicodeDecodeError):
+            continue
+        if any(keyword in decoded for keyword in HARD_INJECTION_KEYWORDS):
+            return True
+    return False
+
 @lru_cache(maxsize=1)
 def _get_presidio_engines():
     from presidio_analyzer import AnalyzerEngine
@@ -161,6 +177,10 @@ def check_prompt_injection(text: str) -> bool:
         if kw in text_clean:
             logger.info(f"Prompt injection detected by Layer 1 Hard Keyword: '{kw}'")
             return False
+
+    if _contains_base64_injection(text):
+        logger.info("Prompt injection detected by Base64-decoded hard keyword")
+        return False
 
     for pattern in COMBINATION_PATTERNS:
         if pattern.search(text):
