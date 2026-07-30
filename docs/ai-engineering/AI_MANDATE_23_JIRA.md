@@ -335,11 +335,6 @@ answer: cache hit phải là kết quả của một request thật trước đ�
 nhận `exact`, `semantic` hoặc `none`. `cache_status` được giữ lại để tương thích
 với evidence cũ và luôn có cùng giá trị với `cache`.
 
-> **Contract gap:** raw replay ngày `2026-07-29` trong
-> `03-replay-non-cacheable.jsonl` và `04-replay-cache-enabled.jsonl` mới có
-> `cache_status`, chưa có alias literal `cache`. Nếu mentor kiểm tra đúng schema
-> trong directive, cần regenerate evidence sau khi replay output bổ sung field
-> `cache`.
 
 `session_id` phải là UUID v4 hợp lệ. Service bỏ qua conversation state, cache và
 memory khi nhận một giá trị session không hợp lệ; dùng UUID khác khi tạo session mới.
