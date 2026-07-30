@@ -73,8 +73,7 @@ flowchart TB
     end
 
     subgraph LLM [LLM Providers]
-        Groq[Groq Cloud]
-        Bedrock[AWS Bedrock]
+        Bedrock[AWS Bedrock / Nova]
     end
 
     PRA & SC <-->|Check valid in/output| Guardrail
@@ -90,12 +89,12 @@ flowchart TB
 
 ![Chatbot Architecture](../ai-engineering/chatbot-c4-container.png)
 
-*Sơ đồ trên minh họa kiến trúc Container C4 cho Shopping Chatbots, mô tả chi tiết các luồng dữ liệu tương tác giữa người dùng cuối, các service e-commerce nội bộ, bộ lọc Guardrail và các nhà cung cấp LLM bên ngoài (AWS Bedrock, Groq).*
+*Sơ đồ trên minh họa kiến trúc Container C4 cho Shopping Chatbots, mô tả chi tiết các luồng dữ liệu tương tác giữa người dùng cuối, các service e-commerce nội bộ, bộ lọc Guardrail và AWS Bedrock.*
 
 ## 5. Thiết kế Chi tiết (Detailed Design)
 
 ### 5.1. Lựa chọn Model & Cấu hình (Model Selection & Configuration)
-- **Model:** Groq API (sử dụng model `openai/gpt-oss-20b` hoặc tương tự được cấu hình động thông qua biến môi trường).
+- **Model:** Amazon Bedrock (sử dụng inference profile `global.amazon.nova-2-lite-v1:0`).
 - **Lý do:** Mandate 06 nghiêm cấm việc sử dụng mock model. Một API LLM thực sự cung cấp độ trễ (latency), số lượng token giới hạn, và giới hạn rate limit (chẳng hạn như HTTP 429 Too Many Requests) thực tế. Chỉ khi đối mặt với những ràng buộc vận hành thực tế này, chúng ta mới có thể xây dựng và đánh giá chính xác độ tin cậy cũng như cơ chế dự phòng của hệ thống.
 - **Tiêu thụ Token:** Sử dụng mode JSON sẽ làm tăng khoảng 10-15% tổng token đầu ra do overhead định dạng, nhưng hoàn toàn xứng đáng với mức độ an toàn dữ liệu mà nó mang lại.
 
