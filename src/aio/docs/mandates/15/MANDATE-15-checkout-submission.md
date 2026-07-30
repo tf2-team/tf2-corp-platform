@@ -69,14 +69,25 @@ Replay result from `evaluate/mandate15_live_report.json`:
 }
 ```
 
-MTTD:
+### 3.1 Lead-time reconciliation: masking mốc thật
 
-| Approach | MTTD | Source |
+| Case | Fault start | First live incident record | Live lead-time |
+|---|---|---|---:|
+| `checkout_real_incident` | epoch `1785093534` | epoch `1785093593` | **59.0s** |
+| `checkout_masking` | epoch `1785095183` (`2026-07-27 02:46:23 +07`) | runtime `recorded_at=2026-07-26T19:46:24.985035Z` (`02:46:24.985 +07`) | **1.985s (~2.0s)** |
+
+`checkout_masking=0s` trong replay JSON không được dùng làm live lead-time. Replay chọn metric timestamp ngay tại đầu incident window rồi clamp về `incident_start_ts`, nên `0s` chỉ là **replay floor**, không phải thời gian phát hiện ngoài đời. Mốc live chính thức dùng hai timestamp độc lập: fault-start trong label và `recorded_at` của incident đầu tiên trong `state/15/checkout-masking/rca-history.jsonl`.
+
+### 3.2 Floor và baseline
+
+| Khái niệm | Giá trị | Ý nghĩa / nguồn |
 |---|---:|---|
-| Before | 300 seconds | Previous static/manual 5-minute SLO/dashboard detection window used as comparison baseline. |
-| After | 29.5 seconds | Average lead time from `evaluate/mandate15_live_report.json`. |
+| **Detection floor** | **0–5s** | Runtime auto-run mỗi 5 giây; nếu fault xuất hiện ngay trước một cycle thì detector có thể fire gần 0s, nếu ngay sau cycle thì phải chờ tối đa khoảng 5s. |
+| **Replay floor** | **0s** | Giới hạn tính toán do replay clamp finding timestamp về `incident_start_ts`; không dùng làm live MTTD. |
+| **Before baseline** | **300s** | Cửa sổ SLO/dashboard tĩnh 5 phút trước đây; dùng làm baseline so sánh MTTD. |
+| **Observed live MTTD** | **~30.5s** | Trung bình hai incident thật: `(59.0 + 1.985) / 2 = 30.4925s`. |
 
-MTTD reduction: `300s -> 29.5s`, about `90.2%` faster.
+MTTD reduction theo mốc live: `300s -> ~30.5s`, nhanh hơn khoảng **89.8%**.
 
 ## 4. Evidence screenshots saved
 
@@ -299,17 +310,17 @@ Case results:
 - checkout_normal_baseline: expected no incident, actual no-fire, correct=true
 - checkout_high_load_healthy: expected no incident, actual no-fire, correct=true
 - checkout_real_incident: expected incident, actual fired, lead_time=59s, correct=true
-- checkout_masking: expected incident, actual fired, lead_time=0s, correct=true
+- checkout_masking: expected incident, actual fired, live_lead_time=1.985s (~2.0s), replay_floor=0s, correct=true
 
 Metrics:
 - precision: 1.0
 - recall: 1.0
 - false positives: 0
 - false negatives: 0
-- average lead time: 29.5 seconds
+- observed live average lead time: ~30.5 seconds
 
 MTTD before/after:
-300 seconds -> 29.5 seconds, about 90.2% faster.
+300 seconds -> ~30.5 seconds, about 89.8% faster.
 
 Evidence links/files:
 - Labeled live dataset: evaluate/dataset/mandate15_live/
@@ -329,9 +340,9 @@ Evidence links/files:
 - [x] Detector runs continuously during the evidence run.
 - [ ] Implementation is merged into main/trunk branch.
 - [x] Incident summary is generated and delivered to a real channel.
-- [x] MTTD before and after is documented.
+- [x] Live MTTD before/after, 0–5s detection floor, and 300s comparison baseline are documented.
 - [x] External replay entry point is available.
-- [ ] Signed ADR is linked after reviewer sign-off.
+- [x] Signed ADR is linked; reviewed by Ngô Nguyên Phúc and Nguyễn Qúy Hưng on 2026-07-30.
 
 
 

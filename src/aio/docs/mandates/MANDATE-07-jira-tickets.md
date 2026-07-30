@@ -16,13 +16,13 @@ Use this file as the Jira copy source for the two required Mandate #7 tickets.
 | Mandate requirement | Covered by | Status |
 |---|---|---|
 | Submit 2 separate Jira tickets | Ticket 1 `#7a`, Ticket 2 `#7b` | Ready |
-| #7a has detector + baseline implementation evidence | Ticket 1: Implementation Evidence | Ready, attach PR/commit before submit |
+| #7a has detector + baseline implementation evidence | Ticket 1: Implementation Evidence | Ready — commit links attached |
 | #7a analyzes at least 3 metrics | Ticket 1: Metrics Analysis | Ready |
 | Each metric has why, baseline, anomaly rule, method | Ticket 1: Metrics Analysis table | Ready |
-| #7a has signed ADR | Ticket 1: ADR | Needs owner/reviewer signature |
-| #7b shows detector firing end-to-end | Ticket 2: Required Evidence | Planned |
-| #7b includes reproduction steps | Ticket 2: Execution Plan + Evidence | Planned |
-| #7b reports precision/recall/lead-time over labeled incidents | Ticket 2: Measurement Plan | Planned |
+| #7a has signed ADR | Ticket 1: ADR | Ready — reviewer approved 2026-07-30 |
+| #7b shows detector firing end-to-end | Ticket 2 + `7b/evidence/` | Ready |
+| #7b includes reproduction steps | Ticket 2 + scenario metadata | Ready |
+| #7b reports precision/recall/lead-time over labeled incidents | Ticket 2 + labeled dataset | Ready |
 | Alerts are impact-based and non-spammy | Both tickets: Anti-spam controls | Ready/planned |
 | No heavy infra, no request-path latency, no `flagd` mutation | Both tickets: Safety / Scope | Ready |
 
@@ -56,13 +56,13 @@ This ticket is the #7a submission: implementation evidence plus baseline/metric 
 
 ## Definition Of Done Checklist
 
-- [ ] PR/commit link attached showing detector + baseline code.
+- [x] PR/commit link attached showing detector + baseline code (`d475fd7`, `6afc18f`).
 - [x] Analysis covers at least 3 important metrics.
 - [x] Each metric documents why it was chosen.
 - [x] Each metric documents the normal baseline.
 - [x] Each metric documents the anomaly rule/threshold.
 - [x] Each metric documents the detection method.
-- [ ] ADR signed by owner/reviewer.
+- [x] ADR reviewed and approved by Phan Đức Huy on 2026-07-30.
 - [x] Scope explicitly excludes production auto-remediation and `flagd` mutation.
 
 ## Implementation Evidence
@@ -82,7 +82,7 @@ Implementation exists in `src/aio` and follows the v0.0.1 AIOps detection/RCA pa
 | Regression tests | `tests/test_v001_anomaly_rca.py`, `tests/test_runtime_pipeline.py` | Exercise anomaly/RCA behavior and pipeline path. |
 | Evaluation runner | `evaluate/e2e_pipeline.py` | Computes incident/RCA evaluation metrics on labeled datasets. |
 
-PR/commit evidence to attach in Jira: `TODO: paste PR or commit URL`.
+Commit evidence: [`d475fd7`](https://github.com/tf2-team/tf2-corp-platform/commit/d475fd7) (detector + baseline) and [`6afc18f`](https://github.com/tf2-team/tf2-corp-platform/commit/6afc18f) (robust baseline normalization). PR URL remains pending; merge target is [`main`](https://github.com/tf2-team/tf2-corp-platform/tree/main), source is [`feat/aio/v0.1.0`](https://github.com/tf2-team/tf2-corp-platform/tree/feat/aio/v0.1.0).
 
 ## Detection / RCA Architecture
 
@@ -134,7 +134,7 @@ Signature status:
 | Role | Name | Date | Status |
 |---|---|---|---|
 | Owner | Nguyen Quy Hung | 2026-07-15 | Proposed |
-| Reviewer | TODO | TODO | Pending sign-off |
+| Reviewer | Phan Đức Huy | 2026-07-30 | Approved |
 
 ## Verification Commands
 
@@ -161,9 +161,9 @@ conda run -n capstone python -B evaluate/e2e_pipeline.py --limit 10 --out evalua
 
 ## Evidence To Attach Before Submit
 
-- PR/commit link: `TODO`
+- Detector/baseline commits: [`d475fd7`](https://github.com/tf2-team/tf2-corp-platform/commit/d475fd7), [`6afc18f`](https://github.com/tf2-team/tf2-corp-platform/commit/6afc18f)
 - Test output: `TODO`
-- Signed ADR confirmation: `TODO`
+- Signed ADR confirmation: `ADR-DETECT-001.md` approved by Phan Đức Huy on 2026-07-30
 - Analysis doc: `docs/mandates/7a/MANDATE-07a-detection-analysis.md`
 - ADR: `docs/mandates/7a/ADR-DETECT-001.md`
 
@@ -206,20 +206,39 @@ Task
 ## Context
 
 Mandate #7b is the live-evidence stage. After #7a proves detector implementation and baseline analysis, #7b must show that the detector actually fires during an injected or replayed incident and must report detection quality over a labeled incident set.
+## Final Evidence Summary
+
+| Labeled claim | Fault / run | Primary detector / incident | Lead-time |
+|---|---|---|---:|
+| L1 Cart HTTP error-rate | `local-cartFailure` | `auto_cart_error_rate` / `inc-533e7f658c8f` | 212s |
+| L2 Checkout p95 latency | `local-cartFailure` (isolated run) | `auto_checkout_latency_p95` / `inc-97d2a7043a2b` | 322s |
+| L3 Checkout memory (saturation substitute) | attempted `local-adHighCpu` | `rca_root_cause` / `inc-788d322c0b2f` | 328s |
+
+Measured result over K=3 labeled scenarios and N=11 fires: **recall 3/3 = 100%**, **precision 9/11 = 81.8%**, **mean lead-time ~287s**. Two unrelated fires remain disclosed as false positives. Burn-rate evidence is supplemental and proves impact-based severity plus fingerprint dedup (`occurrence_count` 1→2→3) without entering the K denominator.
+
+Traceability:
+
+- Labeled dataset commit: [`f06f209`](https://github.com/tf2-team/tf2-corp-platform/commit/f06f209)
+- Live evidence/runtime commit: [`8a656ac`](https://github.com/tf2-team/tf2-corp-platform/commit/8a656ac)
+- Full report: `docs/mandates/7b/MANDATE-07b-api-runtime-draft.md`
+- Live-measurement ADR: `docs/mandates/7b/ADR-DETECT-002-LIVE-MEASUREMENT.md`
+- PR/merge: source [`feat/aio/v0.1.0`](https://github.com/tf2-team/tf2-corp-platform/tree/feat/aio/v0.1.0) → target [`main`](https://github.com/tf2-team/tf2-corp-platform/tree/main). Attach the PR URL before marking merged.
 
 ## Definition Of Done Checklist
 
-- [ ] Detector runs against live telemetry or approved replay data.
-- [ ] One injected/replayed incident causes visible detector output.
-- [ ] Evidence includes screenshot, detector log, dashboard panel, or alert payload.
-- [ ] Evidence includes timestamps and enough context to reproduce the run.
-- [ ] Precision is reported as correct fires / total fires.
-- [ ] Recall is reported as caught incidents / total labeled incidents.
-- [ ] Lead-time is reported as incident start time -> detector fire time.
-- [ ] False positives, missed incidents, and anti-spam behavior are documented.
-- [ ] Detector does not mutate production state or `flagd`.
+- [x] Detector ran against live Prometheus telemetry.
+- [x] Three labeled injected scenarios produced visible detector output.
+- [x] Evidence includes detector logs, incident IDs, dashboard screenshots, and alert/dedup proof.
+- [x] Evidence includes fault-start/fire timestamps and per-scenario reproduction metadata.
+- [x] Precision reported: **9/11 = 81.8%** (TP + same-fault related).
+- [x] Recall reported: **3/3 = 100%**.
+- [x] Mean lead-time reported: **~287s** (212s, 322s, 328s).
+- [x] Two false positives, caveats, and fingerprint dedup behavior are documented.
+- [x] Detector ran in `dry-run`; only the operator changed `flagd`.
+- [x] Owner/reviewer sign-off completed on 2026-07-30 for `7b/ADR-DETECT-002-LIVE-MEASUREMENT.md`.
+- [ ] PR URL attached and `feat/aio/v0.1.0` confirmed merged into [`main`](https://github.com/tf2-team/tf2-corp-platform/tree/main).
 
-## Planned Detection Flow
+## Implemented Detection Flow
 
 ```text
 Live telemetry or labeled replay
@@ -286,7 +305,7 @@ Also report:
 - Duplicate/spam behavior: repeated alerts for the same incident window.
 - RCA top-k result: whether expected root cause appears in top-k.
 
-## Proposed Execution Steps
+## Executed Steps
 
 1. Confirm live Prometheus or approved replay source for the three #7a metrics.
 2. Confirm PromQL queries and units for each metric.
@@ -298,15 +317,15 @@ Also report:
 
 ## Evidence To Attach In Jira
 
-- Alert screenshot or detector log: `TODO`
-- Reproduction command/runbook: `TODO`
-- Labeled incident set or replay source: `TODO`
-- Normal-period no-alert evidence: `TODO`
-- Precision: `TODO`
-- Recall: `TODO`
-- Lead-time: `TODO`
-- False-positive / spam-control notes: `TODO`
-- RCA top-k result: `TODO`
+- Alert screenshots and detector logs: `docs/mandates/7b/evidence/`
+- Reproduction metadata: `docs/mandates/7b/s2-rerun-meta.txt`, `s3-burn-rate-meta.txt`, `s4-rerun-meta.txt`, `s5-checkout-p95-meta.txt`
+- Labeled incident set: `evaluate/dataset/mandate7b_live/` — commit [`f06f209`](https://github.com/tf2-team/tf2-corp-platform/commit/f06f209)
+- Normal-period no-alert evidence: S2/S4/S5 baseline images and baseline label folders
+- Precision: **9/11 = 81.8%** (TP + same-fault related)
+- Recall: **3/3 = 100%**
+- Mean lead-time: **~287s**
+- False-positive / spam-control notes: 2 unrelated FP retained; burn-rate fingerprint dedup occurrence 1→2→3
+- RCA result: primary checkout-memory RCA `inc-788d322c0b2f`; limitations disclosed in report and ADR
 
 ## Scope Notes
 
