@@ -267,7 +267,7 @@ Phase 3: Future production readiness
 
 | Reviewer      | Area                        | Decision       | Evidence link/comment  | Date    |
 | ------------- | --------------------------- | -------------- | ---------------------- | ------- |
-| Phan Đức Huy | AIOps detector architecture | Approved | Reviewed detector architecture, baseline method, safety constraints, and linked implementation evidence. | 2026-07-30 |
+| Phan Đức Huy | AIOps detector architecture | Approved | Reviewed detector architecture, baseline method, safety constraints, and linked implementation evidence. | 2026-07-17 |
 
 
 ## Consequences

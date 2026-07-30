@@ -20,9 +20,9 @@ Evidence pack live cho `AI MANDATE #7b`. State store tách theo scenario. AIOps 
 | --- | --- | --- |
 | Labeled live dataset | [`f06f209`](https://github.com/tf2-team/tf2-corp-platform/commit/f06f209) | **Committed** — label, metric series và incident dump cho cart, checkout p95, checkout memory và burn-rate. |
 | Live detector/evidence implementation | [`8a656ac`](https://github.com/tf2-team/tf2-corp-platform/commit/8a656ac) | **Committed** — capture/replay, state tách theo scenario, runtime evidence và regression tests. |
-| Evidence report hiện tại | [`feat/aio/v0.1.0`](https://github.com/tf2-team/tf2-corp-platform/tree/feat/aio/v0.1.0/src/aio/docs/mandates/7b) | **On remote branch** — ảnh, metadata và report. |
-| ADR live measurement | [`ADR-DETECT-002-LIVE-MEASUREMENT.md`](./ADR-DETECT-002-LIVE-MEASUREMENT.md) | **Proposed** — chờ owner/reviewer ký tên. |
-| PR / merge trunk | [`main`](https://github.com/tf2-team/tf2-corp-platform/tree/main) | **Target branch** — source là `feat/aio/v0.1.0`; chỉ đánh dấu merged sau khi PR vào `main` hoàn tất. |
+| Evidence report | [`feat/aio/v0.1.0`](https://github.com/tf2-team/tf2-corp-platform/tree/feat/aio/v0.1.0/src/aio/docs/mandates/7b) | Submitted version merged by PR #141; the current 75% audit correction requires a follow-up commit/PR. |
+| ADR live measurement | [`ADR-DETECT-002-LIVE-MEASUREMENT.md`](./ADR-DETECT-002-LIVE-MEASUREMENT.md) | **Accepted** — owner và reviewer đã sign-off ngày 2026-07-30. |
+| PR / merge trunk | [`main`](https://github.com/tf2-team/tf2-corp-platform/tree/main) | **Merged** — source `feat/aio/v0.1.0` đã vào `main` qua [PR #141](https://github.com/tf2-team/tf2-corp-platform/pull/141), merge commit [`3ac92dd`](https://github.com/tf2-team/tf2-corp-platform/commit/3ac92dd). |
 
 ```text
 S2 cart error:     state/7b/s2-cart/              + cart_* dataset
@@ -39,7 +39,7 @@ Caveat S4: ad CPU không materialize; claim là **checkout memory RCA**, không 
 | --- | --- | --- |
 | Ảnh/log detector kêu e2e khi bơm fault | **PASS** | S2 `s2-rerun-*`, S5 `s5-08`/`s5-09`, S4 `s4-rerun-04`, S3 `18g` |
 | Cách chạy lại (reproduce) | **PASS** | Mục 11 + meta `s2`/`s3`/`s4`/`s5` |
-| Precision / recall / lead-time trên bộ nhãn | **PASS** | Mục 9 — Recall **3/3**; strict incident-level precision **3/5=60.0%**; fault-attributable alert precision **9/11=81.8%**; mean lead **~287s** |
+| Precision / recall / lead-time trên bộ nhãn | **PASS** | Mandate 7b subset trong `live_notification_eval_report.json`: notification **precision 3/4=75.0%**, **recall 3/3=100%**, **F1=85.7%** trên 6 case evaluated; TP=3, TN=2, FP=1, FN=0 |
 | Cảnh báo theo mức ảnh hưởng (burn-rate, không spam) | **PASS** | S3: vượt 1.0x → 1 incident fingerprint, occurrence 1→2→3+ |
 | Mở rộng thêm service | **PASS** | cart, checkout (latency + memory + burn-rate), payment dependency path trong burn-rate fault |
 
@@ -426,9 +426,12 @@ Công thức mandate: **recall** = bắt được / K; **precision** = lần kê
 | Metric | Value | Notes |
 | --- | --- | --- |
 | **Recall** | **3/3 = 100%** | cả 3 labeled primary đều fire |
-| **Strict incident-level precision (dedup + causal grouping)** | **3/5 = 60.0%** | **Primary strict metric** — 3 correct labeled incident groups / (3 correct + 2 unrelated FP groups). |
-| Raw primary-only alert precision | **3/11 = 27.3%** | Conservative lower bound: every related same-fault alert remains in the denominator but is not counted correct. |
-| Fault-attributable alert precision | **9/11 = 81.8%** | Secondary operational view: primary TP + same-fault related alerts; all 2 unrelated FP remain in denominator. |
+| **Notification precision — Mandate 7b subset** | **3/4 = 75.0%** | Current evaluator rerun over six runnable `mandate7b_live/*` cases: TP=3, FP=1. |
+| **Notification recall — Mandate 7b subset** | **3/3 = 100%** | TP=3, FN=0 across the three evaluated positive 7b cases. |
+| **Notification F1** | **85.7%** | Harmonic mean of 75.0% precision and 100% recall. |
+| Normal/noise specificity evidence | **TN=2, FP=1** | `checkout_memory_normal_baseline` emitted `RCA root cause: cart`; retained as a disclosed false positive. |
+| Coverage caveat | **6/8 Mandate 7b cases evaluated** | Two 7b burn-rate cases skipped because they do not contain `metric_series.json`; do not count them as pass or fail. |
+| RCA caveat | **root top-1 precision/recall=0%** | Notification detection is correct, but root-cause top-1 ranking is not; this remains a disclosed gap. |
 | Mean lead-time | **~287s** | (212+322+328)/3 |
 | Burn-rate (supplemental) | caught ✓ `inc-ca09d8e8a247`; store N=8 | **không** vào mẫu số K |
 
@@ -506,11 +509,11 @@ Công thức mandate: **recall** = bắt được / K; **precision** = lần kê
 | --- | --- |
 | Live evidence pack (`7b/`) | **Ready** |
 | Labeled datasets `mandate7b_live/` | **Ready** (cart, checkout_p95, checkout_memory, burn_rate) |
-| #7a ADR / PR | ADR đã có; reviewer sign-off và URL PR vẫn pending |
-| #7b ADR | `7b/ADR-DETECT-002-LIVE-MEASUREMENT.md` — proposed, chờ chữ ký owner/reviewer |
+| #7a ADR / PR | **DONE** — ADR đã được reviewer phê duyệt; nhánh đã merge vào `main` qua [PR #139](https://github.com/tf2-team/tf2-corp-platform/pull/139), merge commit [`f51a4a7`](https://github.com/tf2-team/tf2-corp-platform/commit/f51a4a74e6346e6c61ed75ca3386e093b0a1b724). |
+| #7b ADR | `7b/ADR-DETECT-002-LIVE-MEASUREMENT.md` — **Accepted**, owner/reviewer sign-off ngày 2026-07-30 |
 | Commit labeled dataset | [`f06f209`](https://github.com/tf2-team/tf2-corp-platform/commit/f06f209) |
 | Commit live evidence | [`8a656ac`](https://github.com/tf2-team/tf2-corp-platform/commit/8a656ac) |
-| PR / merge trunk | Target: [`main`](https://github.com/tf2-team/tf2-corp-platform/tree/main); source: [`feat/aio/v0.1.0`](https://github.com/tf2-team/tf2-corp-platform/tree/feat/aio/v0.1.0); điền URL PR và chỉ đổi trạng thái sau khi merge |
+| PR / merge trunk | **MERGED** — source [`feat/aio/v0.1.0`](https://github.com/tf2-team/tf2-corp-platform/tree/feat/aio/v0.1.0) vào [`main`](https://github.com/tf2-team/tf2-corp-platform/tree/main) qua [PR #141](https://github.com/tf2-team/tf2-corp-platform/pull/141), merge commit [`3ac92dd`](https://github.com/tf2-team/tf2-corp-platform/commit/3ac92dd) |
 
 ## 13. Jira Paste Block
 
@@ -529,11 +532,12 @@ State: state/7b/s2-cart, s3-burn-rate, s4-checkout-memory, s5-checkout-p95
 
 ## Metrics on labeled set K=3 (N=11 incidents across 3 stores)
 - Recall: 3/3 = 100%
-- Strict incident-level precision (dedup + causal grouping): 3/5 = 60.0%  ← primary strict
-- Raw primary-only alert precision: 3/11 = 27.3%  ← conservative lower bound
-- Fault-attributable alert precision: 9/11 = 81.8%  ← secondary operational view
+- Mandate 7b notification precision: 3/4 = 75.0% (TP=3, FP=1)
+- Mandate 7b notification recall: 3/3 = 100% (TP=3, FN=0)
+- Mandate 7b notification F1: 85.7%; TN=2; evaluated 6/8 7b cases
+- Caveat: 2 burn-rate cases skipped (missing metric_series); RCA root top-1 precision/recall remains 0%
 - Mean lead-time: ~287s
-- FP disclosed: RCA/frontend noise (see draft §8); burn-rate store excluded from K
+- FP disclosed: `checkout_memory_normal_baseline` emitted `RCA root cause: cart`; burn-rate store excluded from K because two cases lack `metric_series.json`
 
 ## Reproduce
 dry-run uvicorn :8540; Flagd operator toggle; per-scenario state paths; capture via aiops.cli

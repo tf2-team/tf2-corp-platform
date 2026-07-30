@@ -42,6 +42,7 @@ External replay entry point:
 
 ```powershell
 .\.venv\Scripts\python.exe -m aiops.cli replay --dataset evaluate/dataset/mandate15_live --out evaluate/mandate15_live_report.json
+evaluate/live_notification_eval_report.json  # cross-dataset notification evaluator
 ```
 
 ## 3. Evidence Results
@@ -56,6 +57,7 @@ Replay report:
 
 ```text
 evaluate/mandate15_live_report.json
+evaluate/live_notification_eval_report.json  # cross-dataset notification evaluator
 ```
 
 Measured results:
@@ -112,7 +114,7 @@ Tradeoffs:
 
 ## 5.1 Merge Traceability
 
-Mandate #15 implementation is present on `main` through [PR #139](https://github.com/tf2-team/tf2-corp-platform/pull/139), merge commit [`f51a4a7`](https://github.com/tf2-team/tf2-corp-platform/commit/f51a4a74e6346e6c61ed75ca3386e093b0a1b724). Later documentation refinements may travel in a separate PR and do not change the implementation merge claim.
+Mandate #15 implementation is present on `main` through [PR #141](https://github.com/tf2-team/tf2-corp-platform/pull/141), merge commit [`3ac92dd`](https://github.com/tf2-team/tf2-corp-platform/commit/3ac92dd). PR #141 proves the submitted implementation/evidence version reached trunk. The audit corrections in the current working tree still require a follow-up commit/PR before they can be described as merged.
 ## 6. Sign-off
 
 | Role | Name | Date | Status |

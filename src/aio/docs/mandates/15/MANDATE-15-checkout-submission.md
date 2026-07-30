@@ -54,6 +54,8 @@ Replay command:
 .\.venv\Scripts\python.exe -m aiops.cli replay --dataset evaluate/dataset/mandate15_live --out evaluate/mandate15_live_report.json
 ```
 
+Authoritative cross-dataset notification check: `evaluate/live_notification_eval_report.json`.
+For the Mandate 15 subset (4 cases), notification results are **TP=2, TN=2, FP=0, FN=0**, therefore **precision=100%**, **recall=100%**, and **F1=100%**. Across all 10 runnable Mandate 15 + 7b cases, notification results are **precision=83.3%**, **recall=100%**, and **F1=90.9%** (TP=5, TN=4, FP=1, FN=0); the single FP belongs to the 7b subset, while the Mandate 15 subset remains 100%. Two burn-rate cases are skipped because they lack `metric_series.json`. RCA root top-1 remains 0% and is not conflated with notification detection.
 Replay result from `evaluate/mandate15_live_report.json`:
 
 ```json
@@ -338,7 +340,7 @@ Evidence links/files:
 - [x] High-load-but-healthy traffic does not trigger a false incident.
 - [x] Detection is based on deviation from the service normal baseline.
 - [x] Detector runs continuously during the evidence run.
-- [x] Implementation merged into `main` via [PR #139](https://github.com/tf2-team/tf2-corp-platform/pull/139), merge commit [`f51a4a7`](https://github.com/tf2-team/tf2-corp-platform/commit/f51a4a74e6346e6c61ed75ca3386e093b0a1b724).
+- [x] Implementation and submitted evidence version merged into `main` via [PR #141](https://github.com/tf2-team/tf2-corp-platform/pull/141), merge commit [`3ac92dd`](https://github.com/tf2-team/tf2-corp-platform/commit/3ac92dd). Current audit corrections require a follow-up commit/PR.
 - [x] Incident summary is generated and delivered to a real channel.
 - [x] Live MTTD before/after, 0–5s detection floor, and 300s comparison baseline are documented.
 - [x] External replay entry point is available.

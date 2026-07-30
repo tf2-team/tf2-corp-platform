@@ -147,7 +147,7 @@ tf2-corp-platform/src/aio/
 | Branch chứa submission hiện tại    | `[feat/aio/v0.1.0](https://github.com/tf2-team/tf2-corp-platform/tree/feat/aio/v0.1.0)` | Chứa code, report và evidence Mandate #7 tại thời điểm chốt tài liệu.                                 |
 
 
-> **Trạng thái merge:** các commit trên đã tồn tại trên remote branch `feat/aio/v0.1.0`. Branch đích (trunk) là [`main`](https://github.com/tf2-team/tf2-corp-platform/tree/main). Cần gắn URL PR vào Jira và chỉ đánh dấu “Merged” sau khi `feat/aio/v0.1.0` thực sự được merge vào `main`.
+> **Trạng thái merge: MERGED.** Nhánh `feat/aio/v0.1.0` đã được merge vào [`main`](https://github.com/tf2-team/tf2-corp-platform/tree/main) qua [PR #139](https://github.com/tf2-team/tf2-corp-platform/pull/139), merge commit [`f51a4a7`](https://github.com/tf2-team/tf2-corp-platform/commit/f51a4a74e6346e6c61ed75ca3386e093b0a1b724).
 
 ---
 
@@ -538,10 +538,10 @@ ADR file: `docs/aiops/adr/ADR-DETECT-001.md`
 ### Người ký
 
 
-| Vai trò  | Tên         | Ngày        |
-| -------- | ----------- | ----------- |
-| Owner    | ___________ | ___/07/2026 |
-| Reviewer | ___________ | ___/07/2026 |
+| Vai trò | Tên | Trạng thái | Ngày |
+| --- | --- | --- | --- |
+| Owner | Nguyễn Qúy Hưng | Done | 2026-07-15 |
+| Reviewer | Phan Đức Huy | Approved | 2026-07-17 |
 
 
 > **Điều kiện revisit:** Khi có dữ liệu thật từ EKS ≥ 1 tuần, tune lại α/threshold dựa trên precision/recall thực đo → cập nhật ADR-DETECT-001 revision 2.
@@ -619,7 +619,7 @@ curl -X POST http://localhost:8090/api/v1/pipeline/run \
 | 3   | Pull/capture metrics tự động từ Prometheus          | **DONE** — `aiops/capture.py`, `aiops/cli.py`; labeled snapshots đã commit.                                                                    |
 | 4   | Scheduler chạy pipeline liên tục                    | **DONE** — runtime auto-run mỗi 5 giây trong live run.                                                                                         |
 | 5   | Chạy e2e với incident thật và chụp evidence         | **DONE** — S2/S4/S5 và burn-rate S3 trong `7b/evidence/`.                                                                                      |
-| 6   | Đo precision/recall/lead-time trên bộ sự cố có nhãn | **DONE** — recall 100%, precision 81.8%, mean lead-time ~287s.                                                                                 |
+| 6   | Đo precision/recall/lead-time trên bộ sự cố có nhãn | **DONE** — Mandate 7b notification subset: precision 75.0%, recall 100%, F1 85.7% (TP=3, TN=2, FP=1, FN=0 over 6 evaluated 7b cases); see `evaluate/live_notification_eval_report.json`.                                                                                 |
 | 7   | Thêm burn-rate alerting và no-spam                  | **DONE** — threshold 1.0x, cùng fingerprint, occurrence 1→2→3.                                                                                 |
 | 8   | Mở rộng thêm service                                | **DONE** — cart, checkout và payment dependency; các service khác vẫn cần tuning noise.                                                        |
 
