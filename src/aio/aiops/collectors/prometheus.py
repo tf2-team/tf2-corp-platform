@@ -157,7 +157,16 @@ class PrometheusCollector(Collector):
             result = self.client.query(query.promql, time=str(int(self.captured_at.timestamp()))).get("data", {}).get("result", [])
         except Exception as exc:
             return _missing_observation(query.signal_id, query.unit, query.window, labels, type(exc).__name__)
-        return _observation_from_result(query.signal_id, query.unit, query.window, labels, result, query.max_series, SignalQuality.VERIFIED)
+        return _observation_from_result(
+            query.signal_id,
+            query.unit,
+            query.window,
+            labels,
+            result,
+            query.max_series,
+            SignalQuality.VERIFIED,
+            query.promql,
+        )
 
     def _collect_plan_series(self, query: PrometheusMetricSeriesQuery) -> MetricSeries:
         end = int(self.captured_at.timestamp())
@@ -174,6 +183,7 @@ class PrometheusCollector(Collector):
             query.step_seconds,
             query.detector_bucket_seconds,
             query.max_series,
+            query.promql,
         )
 
     def _collect_runtime_series(self, signal) -> MetricSeries:
@@ -206,6 +216,7 @@ class PrometheusCollector(Collector):
             spec.step_seconds,
             spec.detector_bucket_seconds,
             spec.max_series,
+            spec.promql,
         )
         if fresh.quality != SignalQuality.VERIFIED:
             return fresh
@@ -229,16 +240,27 @@ class PrometheusCollector(Collector):
             result = self.client.query(promql).get("data", {}).get("result", [])
         except Exception as exc:
             return _missing_observation(signal.id, signal.unit, signal.window, labels, type(exc).__name__)
-        return _observation_from_result(signal.id, signal.unit, signal.window, labels, result, spec.max_series, SignalQuality.UNQUALIFIED)
+        return _observation_from_result(
+            signal.id,
+            signal.unit,
+            signal.window,
+            labels,
+            result,
+            spec.max_series,
+            SignalQuality.UNQUALIFIED,
+            promql,
+        )
 
 
-def _observation_from_result(signal_id, unit, window, labels, result, max_series, success_quality) -> Observation:
+def _observation_from_result(signal_id, unit, window, labels, result, max_series, success_quality, promql) -> Observation:
     labels = {**labels, "series_count": str(len(result))}
     if not result:
         return _missing_observation(signal_id, unit, window, labels)
     if len(result) > max_series:
         return Observation(signal_id=signal_id, value=None, unit=unit, window=window, quality=SignalQuality.INVALID, labels={**labels, "error": "CardinalityExceeded"})
     sample = result[0]
+    if _is_synthetic_zero_fallback(promql, sample):
+        return _missing_observation(signal_id, unit, window, labels, "SyntheticZeroFallback")
     metric_labels = {key: str(value) for key, value in sample.get("metric", {}).items()}
     value = sample.get("value", [None, None])
     try:
@@ -269,12 +291,23 @@ def _missing_observation(signal_id, unit, window, labels, error: str | None = No
     )
 
 
-def _series_from_result(service, metric, signal_id, result, step_seconds, detector_bucket_seconds, max_series) -> MetricSeries:
+def _series_from_result(service, metric, signal_id, result, step_seconds, detector_bucket_seconds, max_series, promql) -> MetricSeries:
     labels = {"series_count": str(len(result))}
     if not result:
         return _invalid_series(service, metric, signal_id, step_seconds, detector_bucket_seconds, SignalQuality.MISSING, "NoData", labels=labels)
     if len(result) > max_series:
         return _invalid_series(service, metric, signal_id, step_seconds, detector_bucket_seconds, SignalQuality.INVALID, "CardinalityExceeded", labels=labels)
+    if _is_synthetic_zero_fallback(promql, result[0]):
+        return _invalid_series(
+            service,
+            metric,
+            signal_id,
+            step_seconds,
+            detector_bucket_seconds,
+            SignalQuality.MISSING,
+            "SyntheticZeroFallback",
+            labels=labels,
+        )
     labels.update({key: str(value) for key, value in result[0].get("metric", {}).items()})
     try:
         points = [MetricPoint(timestamp=int(float(timestamp)), value=float(value)) for timestamp, value in result[0].get("values", [])]
@@ -298,6 +331,18 @@ def _series_from_result(service, metric, signal_id, result, step_seconds, detect
         step_seconds=step_seconds,
         detector_bucket_seconds=detector_bucket_seconds,
     )
+
+
+def _is_synthetic_zero_fallback(promql: str, sample: dict) -> bool:
+    if "or on() vector(0)" not in promql or sample.get("metric"):
+        return False
+    values = [sample["value"]] if "value" in sample else sample.get("values", [])
+    if not values:
+        return False
+    try:
+        return all(float(value[1]) == 0.0 for value in values)
+    except (IndexError, TypeError, ValueError):
+        return False
 
 
 def _invalid_series(service, metric, signal_id, step_seconds, detector_bucket_seconds, quality, error, points=None, labels=None) -> MetricSeries:
