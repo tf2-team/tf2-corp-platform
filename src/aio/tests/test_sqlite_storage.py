@@ -50,6 +50,33 @@ def service_candidate(service: str, detector_id: str) -> CandidateEvent:
 
 
 class SQLiteIncidentStoreTest(unittest.TestCase):
+    def test_list_incidents_backfills_legacy_event_unit_and_window(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            store = SQLiteIncidentStore(Path(tmp) / "aiops.sqlite3", environment="tf2")
+            incident = store.upsert(service_candidate("checkout", "ops03_checkout_error_rate"))
+            legacy = json.loads(incident.model_dump_json())
+            legacy["events"][0].pop("unit")
+            legacy["events"][0].pop("window")
+            store._connection.execute(
+                "UPDATE incidents SET incident_json = ? WHERE fingerprint = ?",
+                (json.dumps(legacy), incident.fingerprint),
+            )
+            store._connection.commit()
+
+            loaded = store.list_incidents()[0]
+            stored = json.loads(
+                store._connection.execute(
+                    "SELECT incident_json FROM incidents WHERE fingerprint = ?",
+                    (incident.fingerprint,),
+                ).fetchone()[0]
+            )
+            store.close()
+
+        self.assertEqual(loaded.events[0].unit, "count")
+        self.assertEqual(loaded.events[0].window, "unknown")
+        self.assertEqual(stored["events"][0]["unit"], "count")
+        self.assertEqual(stored["events"][0]["window"], "unknown")
+
     def test_persists_and_deduplicates_incidents(self):
         with tempfile.TemporaryDirectory() as tmp:
             db_path = Path(tmp) / "aiops.sqlite3"

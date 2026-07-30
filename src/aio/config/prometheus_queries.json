@@ -474,6 +474,56 @@
       "metric": "memory_used_bytes",
       "feature_role": "anomaly_input",
       "required_for_monitoring": false
+    },
+    "llm.token_usage": {
+      "query_id_template": "llm.token_usage_5m",
+      "signal_id_template": "llm_token_usage_5m",
+      "promql": "sum(increase(app_ai_model_tokens_total[5m]))",
+      "unit": "tokens",
+      "window": "5m",
+      "metric": "token_usage_5m",
+      "feature_role": "anomaly_input",
+      "result": {"on_empty": "zero"}
+    },
+    "llm.cost_usd": {
+      "query_id_template": "llm.cost_usd_5m",
+      "signal_id_template": "llm_cost_usd_5m",
+      "promql": "sum(increase(app_ai_model_cost_usd_USD_total[5m]))",
+      "unit": "usd",
+      "window": "5m",
+      "metric": "cost_usd_5m",
+      "feature_role": "anomaly_input",
+      "result": {"on_empty": "zero"}
+    },
+    "llm.p95_latency": {
+      "query_id_template": "llm.p95_latency_5m",
+      "signal_id_template": "llm_p95_latency_5m",
+      "promql": "histogram_quantile(0.95, sum by (le) (rate(traces_span_metrics_duration_milliseconds_bucket{app_ai_surface=~\"summary|copilot\"}[5m])))",
+      "unit": "milliseconds",
+      "window": "5m",
+      "metric": "p95_latency_5m",
+      "feature_role": "anomaly_input",
+      "result": {"on_empty": "zero"}
+    },
+    "llm.fallback_rate": {
+      "query_id_template": "llm.fallback_rate_5m",
+      "signal_id_template": "llm_fallback_rate_5m",
+      "promql": "sum(rate(traces_span_metrics_calls_total{app_ai_outcome=\"fallback\"}[5m]))",
+      "unit": "requests_per_second",
+      "window": "5m",
+      "metric": "fallback_rate_5m",
+      "feature_role": "anomaly_input",
+      "result": {"on_empty": "zero"}
+    },
+    "llm.model_error_rate": {
+      "query_id_template": "llm.model_error_rate_5m",
+      "signal_id_template": "llm_model_error_rate_5m",
+      "promql": "((sum(rate(traces_span_metrics_calls_total{gen_ai_operation_name=\"chat\",app_ai_outcome=\"error\"}[5m])) or 0 * sum(rate(traces_span_metrics_calls_total{gen_ai_operation_name=\"chat\"}[5m]))) / clamp_min(sum(rate(traces_span_metrics_calls_total{gen_ai_operation_name=\"chat\"}[5m])), 0.000000001))",
+      "unit": "ratio",
+      "window": "5m",
+      "metric": "model_error_rate_5m",
+      "feature_role": "anomaly_input",
+      "result": {"on_empty": "zero"}
     }
   },
   "service_groups": [
@@ -635,6 +685,36 @@
       "signal_id": "valkey_cart_socket_io_bytes_per_second",
       "template_id": "managed.valkey.socket_io",
       "service": "valkey-cart"
+    },
+    {
+      "query_id": "llm.token_usage_5m",
+      "signal_id": "llm_token_usage_5m",
+      "template_id": "llm.token_usage",
+      "service": "llm"
+    },
+    {
+      "query_id": "llm.cost_usd_5m",
+      "signal_id": "llm_cost_usd_5m",
+      "template_id": "llm.cost_usd",
+      "service": "llm"
+    },
+    {
+      "query_id": "llm.p95_latency_5m",
+      "signal_id": "llm_p95_latency_5m",
+      "template_id": "llm.p95_latency",
+      "service": "llm"
+    },
+    {
+      "query_id": "llm.fallback_rate_5m",
+      "signal_id": "llm_fallback_rate_5m",
+      "template_id": "llm.fallback_rate",
+      "service": "llm"
+    },
+    {
+      "query_id": "llm.model_error_rate_5m",
+      "signal_id": "llm_model_error_rate_5m",
+      "template_id": "llm.model_error_rate",
+      "service": "llm"
     }
   ]
 }

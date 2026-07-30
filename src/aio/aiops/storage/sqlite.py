@@ -540,8 +540,18 @@ class SQLiteIncidentStore:
         return bool(base.rowcount or supplements.rowcount)
 
     def list_incidents(self) -> list[Incident]:
-        rows = self._connection.execute("SELECT incident_json FROM incidents ORDER BY fingerprint").fetchall()
-        return [Incident.model_validate_json(row[0]) for row in rows]
+        rows = self._connection.execute("SELECT fingerprint, incident_json FROM incidents ORDER BY fingerprint").fetchall()
+        incidents = []
+        with self._connection:
+            for fingerprint, incident_json in rows:
+                incident, changed = _incident_from_json(incident_json)
+                incidents.append(incident)
+                if changed:
+                    self._connection.execute(
+                        "UPDATE incidents SET incident_json = ? WHERE fingerprint = ?",
+                        (incident.model_dump_json(), fingerprint),
+                    )
+        return incidents
 
     def save_self_heal_workflow(self, workflow: dict) -> None:
         now = _now()
@@ -843,6 +853,19 @@ class SQLiteIncidentStore:
 
 def _seen_at(candidate: CandidateEvent) -> str:
     return _candidate_seen_at(candidate).isoformat()
+
+
+def _incident_from_json(payload: str) -> tuple[Incident, bool]:
+    data = json.loads(payload)
+    changed = False
+    for event in data.get("events", []):
+        if "unit" not in event:
+            event["unit"] = "count"
+            changed = True
+        if "window" not in event:
+            event["window"] = "unknown"
+            changed = True
+    return Incident.model_validate(data), changed
 
 
 def _candidate_seen_at(candidate: CandidateEvent) -> datetime:

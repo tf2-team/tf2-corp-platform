@@ -1,0 +1,49 @@
+{
+  "acceptance_criteria": {
+    "incident_from_real_metrics": {
+      "details": {},
+      "passed": false
+    },
+    "rca_returns_root_cause_candidates": {
+      "details": {},
+      "passed": false
+    },
+    "remediation_is_dry_run_or_page_oncall": {
+      "details": {},
+      "passed": false
+    },
+    "report_exists_for_run": {
+      "details": {
+        "contains_error": true,
+        "contains_run_id": true,
+        "contains_timestamps": true
+      },
+      "passed": true
+    }
+  },
+  "artifact": {
+    "format": "json",
+    "path": "evidence/e2e/aio-e2e-20260717T064858Z-419ed58a.json",
+    "written": true
+  },
+  "completed_at": "2026-07-17T06:48:58.282502+00:00",
+  "error": {
+    "message": "[Errno 2] No such file or directory: 'config/runtime.json'",
+    "type": "FileNotFoundError"
+  },
+  "mode": "dry-run",
+  "run_id": "aio-e2e-20260717T064858Z-419ed58a",
+  "safety": {
+    "live_execution_enabled": false,
+    "live_executor_called": false,
+    "policy_mode": "dry-run"
+  },
+  "schema_version": "1.0",
+  "source": {
+    "collection_plan_path": "/home/duckq1ulaptop/Documents/aiops-4g/tf2-corp-platform/src/aio/config/prometheus_e2e.json",
+    "endpoint": "http://localhost:9090",
+    "type": "prometheus"
+  },
+  "started_at": "2026-07-17T06:48:58.282163+00:00",
+  "status": "error"
+}
