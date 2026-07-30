@@ -200,6 +200,7 @@ def _orchestrator(tmp_path: Path, clock: Clock, **config_overrides):
         "policy_expires_at": "2026-08-31T23:59:59Z",
         "approval_id": "ADR-LIVE-001",
         "protected_targets": frozenset({"payment", "postgresql"}),
+        "rollback_failure_runbook_id": "RB-AIOPS-RUNTIME",
         "verification_deadline_seconds": 120,
         "min_fresh_samples": 2,
         "consecutive_passes": 2,

@@ -11,6 +11,8 @@ from datetime import UTC, datetime, timedelta
 from typing import Any, Callable, Protocol
 from uuid import uuid4
 
+from runbooks.actions.common import AUTHORIZED_REQUESTER
+
 from aiops.schemas import (
     ActionCatalogItem,
     CandidateEvent,
@@ -65,6 +67,7 @@ class SelfHealConfig:
     policy_expires_at: str
     approval_id: str
     protected_targets: frozenset[str]
+    rollback_failure_runbook_id: str
     verification_deadline_seconds: int = 300
     min_fresh_samples: int = 2
     consecutive_passes: int = 2
@@ -272,7 +275,7 @@ class SelfHealOrchestrator:
             "rollback_token": None,
             "idempotency_key": _idempotency_key(incident.incident_id, action.action_id, f"plan-{attempt}"),
             "reason": event.reason,
-            "requested_by": "aiops-runtime",
+            "requested_by": AUTHORIZED_REQUESTER,
             "dry_run": True,
             "root_cause": {
                 "service": root_cause.service if root_cause else incident.service,
@@ -504,7 +507,7 @@ class SelfHealOrchestrator:
             "passed": True,
             "query_id": workflow["verification_query_id"],
             "message": "fresh telemetry met the post-action recovery rule",
-            "requested_by": "aiops-runtime",
+            "requested_by": AUTHORIZED_REQUESTER,
         }
         try:
             response = self.client.record_verification(workflow["execution_id"], request)
@@ -556,7 +559,7 @@ class SelfHealOrchestrator:
             "passed": False,
             "query_id": workflow["verification_query_id"],
             "message": reason,
-            "requested_by": "aiops-runtime",
+            "requested_by": AUTHORIZED_REQUESTER,
         }
         try:
             response = self.client.record_verification(workflow["execution_id"], request)
@@ -575,7 +578,7 @@ class SelfHealOrchestrator:
             "incident_id": workflow["incident_id"],
             "rollback_token": workflow.get("rollback_token"),
             "reason": reason,
-            "requested_by": "aiops-runtime",
+            "requested_by": AUTHORIZED_REQUESTER,
             "policy_id": self.config.policy_id,
             "policy_approved": True,
             "policy_expires_at": self.config.policy_expires_at,
@@ -603,7 +606,11 @@ class SelfHealOrchestrator:
         else:
             workflow["status"] = "rollback_failed"
             workflow["rollback"] = response
-            escalation = _rollback_failure_notification(workflow, response)
+            escalation = _rollback_failure_notification(
+                workflow,
+                response,
+                self.config.rollback_failure_runbook_id,
+            )
             try:
                 self.store.enqueue_notification(escalation)
             except Exception as exc:
@@ -746,6 +753,7 @@ def _verification_threshold(
 def _rollback_failure_notification(
     workflow: dict[str, Any],
     response: dict[str, Any],
+    runbook_id: str,
 ) -> NotificationMessage:
     attempt = int(workflow.get("attempt", 1))
     notification_id = f"{workflow['incident_id']}:self-heal-escalation:{attempt}"
@@ -763,9 +771,9 @@ def _rollback_failure_notification(
             "Action required: stop further mutation, inspect executor audit, and restore the previous replica state manually."
         ),
         flow=str(workflow.get("flow") or "operations"),
-        service=str(workflow.get("service") or workflow.get("target") or "aiops-runtime"),
+        service=str(workflow.get("service") or workflow.get("target") or AUTHORIZED_REQUESTER),
         likely_dependency="unknown",
-        runbook_id="RB-AIOPS-RUNTIME",
+        runbook_id=runbook_id,
     )
 
 

@@ -12,7 +12,8 @@
   "self_heal": {
     "min_incident_occurrences": 3,
     "min_incident_score": 0.24,
-    "rollback_after_executions": 3
+    "rollback_after_executions": 3,
+    "rollback_failure_runbook_id": "RB-AIOPS-RUNTIME"
   },
   "notification": {
     "user_rca_medium_confidence_score": 0.3,
@@ -121,6 +122,44 @@
     "max_sample_age_seconds": 300
   },
   "remediation": {
+    "fallback_action_id": "page_oncall",
+    "fallback_target": "platform-team",
+    "rca_reason_default": "rca_root_cause",
+    "rca_reason_rules": [
+      {
+        "service": "product-catalog",
+        "metric_group": "cpu",
+        "reason": "cpu_saturation"
+      }
+    ],
+    "rca_runbook_default": "RB-SERVICE-RESOURCE",
+    "rca_runbook_rules": [
+      {
+        "service": "cart",
+        "metric_group": "error",
+        "runbook_id": "RB-CART-ERROR-RATE"
+      },
+      {
+        "service": "*",
+        "metric_group": "error",
+        "runbook_id": "RB-SERVICE-ERROR-RATE"
+      },
+      {
+        "service": "checkout",
+        "metric_group": "latency",
+        "runbook_id": "RB-CHECKOUT-LATENCY"
+      },
+      {
+        "service": "*",
+        "metric_group": "latency",
+        "runbook_id": "RB-SERVICE-LATENCY"
+      },
+      {
+        "service": "product-catalog",
+        "metric_group": "cpu",
+        "runbook_id": "RB-PRODUCT-CATALOG-CPU"
+      }
+    ],
     "history_top_k": 3,
     "ood_threshold": 0.2,
     "confidence_threshold": 0.7,

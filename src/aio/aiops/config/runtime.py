@@ -166,6 +166,7 @@ def _signal_from_spec(spec: CompiledPrometheusQuery) -> dict:
 
 
 def _expand_detector_signal_groups(raw: dict) -> None:
+    runbooks = raw.get("auto_detector_runbooks", {})
     required_query_ids = {
         query_id
         for query_id, spec in raw.get("prometheus_query_specs", {}).items()
@@ -191,7 +192,7 @@ def _expand_detector_signal_groups(raw: dict) -> None:
             "flow": spec["flow"],
             "service": spec["service"],
             "severity": "SEV2",
-            "runbook_id": "RB-SERVICE-ERROR-RATE",
+            "runbook_id": runbooks["error_rate_default"],
         }
         for spec in raw.get("prometheus_query_specs", {}).values()
         if spec.get("metric") == "error_rate_5m" and spec.get("signal_id") not in existing_signal_ids
@@ -205,7 +206,10 @@ def _expand_detector_signal_groups(raw: dict) -> None:
             "flow": spec["flow"],
             "service": spec["service"],
             "severity": "SEV1",
-            "runbook_id": "RB-CHECKOUT-LATENCY" if spec["service"] == "checkout" else "RB-SERVICE-LATENCY",
+            "runbook_id": runbooks.get("latency_service_overrides", {}).get(
+                spec["service"],
+                runbooks["latency_default"],
+            ),
         }
         for spec in raw.get("prometheus_query_specs", {}).values()
         if spec.get("metric") in {"p95_latency_5m", "p99_latency_5m"} and spec.get("signal_id") not in existing_signal_ids
@@ -219,7 +223,7 @@ def _expand_detector_signal_groups(raw: dict) -> None:
             "flow": spec["flow"],
             "service": spec["service"],
             "severity": "SEV1",
-            "runbook_id": "RB-SERVICE-ERROR-RATE",
+            "runbook_id": runbooks["burn_rate_default"],
         }
         for spec in raw.get("prometheus_query_specs", {}).values()
         if spec.get("metric") == "error_budget_burn_rate_24h" and spec.get("signal_id") not in existing_signal_ids

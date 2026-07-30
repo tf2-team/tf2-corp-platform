@@ -71,6 +71,7 @@ class AiopsPipeline:
         qualification_dev: bool = False,
         qualification_max_sample_age_seconds: int = 300,
         correlation_hyperparameters: dict | None = None,
+        remediation_hyperparameters: dict | None = None,
         remediation: RemediationComponents | None = None,
         enricher: Enricher | None = None,
         notification_sender=None,
@@ -103,6 +104,7 @@ class AiopsPipeline:
         self.runtime_config = runtime_config
         self.rca_hyperparameters = rca_hyperparameters or {}
         self.correlation_hyperparameters = correlation_hyperparameters or {}
+        self.remediation_hyperparameters = remediation_hyperparameters or {}
         self.remediation = remediation
         self.notification_sender = notification_sender
         self.rca_history_path = rca_history_path
@@ -368,8 +370,16 @@ class AiopsPipeline:
                         window="rca",
                         threshold=threshold,
                         quality=SignalQuality.FALLBACK_ONLY,
-                        reason="rca_root_cause",
-                        runbook_id=_rca_runbook_id(root),
+                        reason=_rca_remediation_reason(
+                            root,
+                            self.remediation_hyperparameters.get("rca_reason_rules", []),
+                            str(self.remediation_hyperparameters["rca_reason_default"]),
+                        ),
+                        runbook_id=_rca_runbook_id(
+                            root,
+                            self.remediation_hyperparameters.get("rca_runbook_rules", []),
+                            str(self.remediation_hyperparameters["rca_runbook_default"]),
+                        ),
                         likely_dependency="unknown",
                         confidence=root.score,
                         contributing_signals=tuple(root.root_cause_metrics),
@@ -985,15 +995,40 @@ def _score(value: float | None) -> str:
     return "NA" if value is None else f"{value:.3f}"
 
 
-def _rca_runbook_id(root: RootCauseCandidate) -> str:
-    metrics = " ".join(root.root_cause_metrics).lower()
-    if "error" in metrics:
-        return "RB-CART-ERROR-RATE" if root.service == "cart" else "RB-SERVICE-ERROR-RATE"
-    if "latency" in metrics or "duration" in metrics:
-        return "RB-CHECKOUT-LATENCY" if root.service == "checkout" else "RB-SERVICE-LATENCY"
-    if root.service == "product-catalog" and "cpu" in metrics:
-        return "RB-PRODUCT-CATALOG-CPU"
-    return "RB-SERVICE-RESOURCE"
+def _rca_runbook_id(
+    root: RootCauseCandidate,
+    rules: list[dict],
+    default_runbook_id: str,
+) -> str:
+    return _root_rule_value(root, rules, "runbook_id", default_runbook_id)
+
+
+def _rca_remediation_reason(
+    root: RootCauseCandidate,
+    rules: list[dict],
+    default_reason: str,
+) -> str:
+    return _root_rule_value(root, rules, "reason", default_reason)
+
+
+def _root_rule_value(
+    root: RootCauseCandidate,
+    rules: list[dict],
+    value_field: str,
+    default_value: str,
+) -> str:
+    root_metric_groups = {metric_group(metric) for metric in root.root_cause_metrics}
+    for rule in rules:
+        service = str(rule.get("service", ""))
+        configured_metric_group = str(rule.get("metric_group", ""))
+        value = str(rule.get(value_field, ""))
+        if (
+            service in {"*", root.service}
+            and configured_metric_group in {"*", *root_metric_groups}
+            and value
+        ):
+            return value
+    return default_value
 
 
 def _log_excerpts(summary: str, max_events: int) -> list[str]:

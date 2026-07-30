@@ -1,0 +1,30 @@
+{
+  "schema_version": "1.0",
+  "policy_id": "phase3-scale-policy-v1",
+  "policy_expires_at": "2026-08-31T23:59:59Z",
+  "plan_ttl_seconds": 600,
+  "default_environment": "techx-corp-prod",
+  "kubernetes_api_url": "https://kubernetes.default.svc",
+  "kubernetes_ca_cert_path": "/var/run/secrets/kubernetes.io/serviceaccount/ca.crt",
+  "authorized_requester": "aiops-runtime",
+  "mock_resource_version": "phase2-mock-resource-version",
+  "protected_targets": [
+    "postgresql",
+    "kafka",
+    "valkey-cart",
+    "redis",
+    "flagd",
+    "openfeature",
+    "aiops-runtime",
+    "observability",
+    "payment"
+  ],
+  "protected_namespaces": [
+    "kube-system",
+    "kube-public",
+    "kube-node-lease",
+    "linkerd",
+    "monitoring",
+    "observability"
+  ]
+}

@@ -133,6 +133,7 @@ def run_pipeline_with_collector(collector, settings: Settings, runtime_config, m
                 min_incident_occurrences=int(hyperparameters["self_heal"]["min_incident_occurrences"]),
                 min_incident_score=float(hyperparameters["self_heal"]["min_incident_score"]),
                 rollback_after_executions=int(hyperparameters["self_heal"]["rollback_after_executions"]),
+                rollback_failure_runbook_id=str(hyperparameters["self_heal"]["rollback_failure_runbook_id"]),
             ),
         )
     pipeline = AiopsPipeline(
@@ -155,6 +156,7 @@ def run_pipeline_with_collector(collector, settings: Settings, runtime_config, m
         qualification_max_sample_age_seconds=int(hyperparameters["qualification"]["max_sample_age_seconds"]),
         rca_hyperparameters=hyperparameters["rca"],
         correlation_hyperparameters=hyperparameters["correlation"],
+        remediation_hyperparameters=hyperparameters["remediation"],
         enricher=enricher,
         remediation=(
             RemediationFeatureExtractor(),
@@ -170,6 +172,8 @@ def run_pipeline_with_collector(collector, settings: Settings, runtime_config, m
                 confidence_threshold=hyperparameters["remediation"]["confidence_threshold"],
                 downtime_cost_multiplier=hyperparameters["remediation"]["downtime_cost_multiplier"],
                 outcome_weights=hyperparameters["remediation"]["outcome_weights"],
+                fallback_action_id=hyperparameters["remediation"]["fallback_action_id"],
+                fallback_target=hyperparameters["remediation"]["fallback_target"],
             ),
             ActionCatalog(settings.actions_catalog_path),
             IncidentHistoryStore(settings.incidents_history_path),
@@ -224,11 +228,13 @@ def print_rca_result(result: PipelineResult) -> None:
 
 async def auto_run_loop(settings: Settings) -> None:
     while True:
+        started = asyncio.get_running_loop().time()
         try:
             await asyncio.to_thread(run_live_pipeline, settings)
         except Exception:
             logger.exception("AIOps live pipeline run failed")
-        await asyncio.sleep(settings.auto_run_interval_seconds)
+        elapsed = asyncio.get_running_loop().time() - started
+        await asyncio.sleep(max(0.0, settings.auto_run_interval_seconds - elapsed))
 
 
 def build_enricher(settings: Settings, runtime_config, enrichment_hyperparameters: dict | None = None) -> Enricher:
@@ -295,6 +301,14 @@ def readiness(settings: Settings) -> HealthResponse:
             raise RuntimeError("automatic runs require Prometheus")
         if settings.auto_run_enabled and not _notification_configured(settings):
             raise RuntimeError("automatic runs require an incident notification webhook")
+        if settings.auto_run_enabled:
+            prometheus_client = PrometheusClient(settings)
+            try:
+                response = prometheus_client.query("vector(1)")
+                if response.get("status") != "success" or not (response.get("data") or {}).get("result"):
+                    raise RuntimeError("Prometheus query dependency is not ready")
+            finally:
+                prometheus_client.close()
         if settings.self_heal_enabled and settings.policy_mode != "live-approved":
             raise RuntimeError("self-heal requires live-approved policy mode")
         if settings.self_heal_enabled and not _configured_url(settings.live_executor_url):

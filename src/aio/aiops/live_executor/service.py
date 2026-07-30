@@ -12,6 +12,8 @@ from typing import Any
 from runbooks.actions import plan_scale_deployment, restore_deployment_replicas, scale_deployment
 from runbooks.actions.common import (
     ALLOWLIST,
+    AUTHORIZED_REQUESTER,
+    DEFAULT_ENVIRONMENT,
     POLICY_EXPIRES_AT,
     POLICY_ID,
     PROTECTED_NAMESPACES,
@@ -47,9 +49,9 @@ class LiveExecutorService:
         action_budget_window_seconds: int = 3600,
         action_budget_max_executions: int = 10,
         policy_id: str = POLICY_ID,
-        policy_expires_at: str = "2026-08-31T23:59:59Z",
+        policy_expires_at: str = POLICY_EXPIRES_AT,
         approval_id: str = "",
-        environment: str = "techx-corp-prod",
+        environment: str = DEFAULT_ENVIRONMENT,
         capability_catalog_path: Path | None = None,
         service_support_catalog_path: Path | None = None,
     ):
@@ -78,9 +80,9 @@ class LiveExecutorService:
         action_budget_window_seconds: int = 3600,
         action_budget_max_executions: int = 10,
         policy_id: str = POLICY_ID,
-        policy_expires_at: str = "2026-08-31T23:59:59Z",
+        policy_expires_at: str = POLICY_EXPIRES_AT,
         approval_id: str = "",
-        environment: str = "techx-corp-prod",
+        environment: str = DEFAULT_ENVIRONMENT,
         capability_catalog_path: Path | None = None,
         service_support_catalog_path: Path | None = None,
     ) -> "LiveExecutorService":
@@ -420,7 +422,7 @@ class LiveExecutorService:
                 "_executor_approval_id": self.approval_id,
                 "idempotency_key": request.get("idempotency_key"),
                 "reason": request.get("reason", "rollback_requested"),
-                "requested_by": request.get("requested_by", "aiops-runtime"),
+                "requested_by": request.get("requested_by", AUTHORIZED_REQUESTER),
                 "root_cause_metrics": [],
                 "rollback_token": request.get("rollback_token"),
                 "execution": script_execution,
@@ -580,7 +582,7 @@ class LiveExecutorService:
                 "action_id": response.get("action_id"),
                 "event_type": event_type,
                 "actor_type": "service",
-                "actor_id": request.get("requested_by", "aiops-runtime"),
+                "actor_id": request.get("requested_by", AUTHORIZED_REQUESTER),
                 "policy_id": request.get("policy_id"),
                 "allowed": response.get("allowed", False),
                 "executed": response.get("executed", False),
@@ -625,7 +627,7 @@ def _request_to_script_context(request: dict[str, Any], plan_response: dict[str,
         "dry_run": False,
         "policy_id": request.get("policy_id"),
         "policy_approved": request.get("policy_approved"),
-        "policy_expires_at": request.get("policy_expires_at", "2026-08-31T23:59:59Z"),
+        "policy_expires_at": request.get("policy_expires_at") or request.get("_executor_policy_expires_at"),
         "approval_id": request.get("approval_id"),
         "_executor_policy_id": request.get("_executor_policy_id"),
         "_executor_policy_expires_at": request.get("_executor_policy_expires_at"),
@@ -633,7 +635,7 @@ def _request_to_script_context(request: dict[str, Any], plan_response: dict[str,
         "_executor_environment": request.get("_executor_environment"),
         "idempotency_key": request.get("idempotency_key"),
         "reason": request.get("reason"),
-        "requested_by": request.get("requested_by", "aiops-runtime"),
+        "requested_by": request.get("requested_by", AUTHORIZED_REQUESTER),
         "root_cause_metrics": (request.get("root_cause") or {}).get("metrics", []),
         "plan": plan,
         "plan_hash": request.get("plan_hash"),
@@ -712,7 +714,7 @@ def _load_service_support_catalog(path: Path) -> list[dict[str, Any]]:
 
 
 def _resolve_namespace(namespace: Any, environment: str) -> Any:
-    return environment if namespace == "techx-corp-prod" else namespace
+    return environment if namespace is not None else None
 
 
 def _action_with_runtime_state(action: dict[str, Any], allow_live_apply: bool, environment: str) -> dict[str, Any]:
