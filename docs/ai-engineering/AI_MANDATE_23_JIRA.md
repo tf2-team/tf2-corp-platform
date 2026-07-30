@@ -17,7 +17,6 @@ vì đánh dấu đạt.
 
 Chi tiết kỹ thuật nằm tại
 [shared semantic cache guide](caching/semantic-cache-implementation-guide.md),
-[Shopping Copilot cache runbook](caching/shopping-copilot-dod-evidence-runbook.md)
 và [Shopping Copilot Mem0 integration](memory/shopping-copilot-mem0-integration-plan.md).
 
 ## 2. Why this Change Matters
