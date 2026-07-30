@@ -118,6 +118,37 @@ class SQLiteIncidentStoreTest(unittest.TestCase):
         self.assertEqual(event_row[:3], ("ongoing", "1970-01-01T00:03:20+00:00", None))
         self.assertIsNotNone(event_row[3])
 
+    def test_pending_notification_is_returned_only_once_without_sender(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            store = SQLiteIncidentStore(Path(tmp) / "aiops.sqlite3", environment="tf2")
+            incident = store.upsert(candidate(0.02, timestamp=100))
+            first = store.pending_notifications_for([incident])
+            repeated = store.upsert(candidate(0.03, timestamp=200))
+            second = store.pending_notifications_for([repeated])
+            store.close()
+
+        self.assertEqual([message.incident_id for message in first], [incident.incident_id])
+        self.assertEqual(second, [])
+
+    def test_direct_incident_is_returned_before_dependency_notification(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            store = SQLiteIncidentStore(Path(tmp) / "aiops.sqlite3", environment="tf2")
+            dependency = store.upsert(
+                service_candidate("checkout", "ops03_checkout_payment_dependency").model_copy(
+                    update={
+                        "signal_id": "checkout_payment_error_rate_5m",
+                        "reason": "dependency_signal_breached",
+                        "likely_dependency": "payment",
+                        "runbook_id": "RB-CHECKOUT-DEPENDENCY",
+                    }
+                )
+            )
+            direct = store.upsert(service_candidate("payment", "auto_payment_error_rate"))
+            notifications = store.pending_notifications_for([dependency, direct])
+            store.close()
+
+        self.assertEqual([message.incident_id for message in notifications], [direct.incident_id, dependency.incident_id])
+
     def test_deduped_incident_requeues_notification_after_cooldown(self):
         with tempfile.TemporaryDirectory() as tmp:
             store = SQLiteIncidentStore(Path(tmp) / "aiops.sqlite3", environment="tf2", slo_dedup_seconds=0)

@@ -688,7 +688,8 @@ class SQLiteIncidentStore:
             f"SELECT notification_json FROM notification_outbox WHERE status = 'pending' AND incident_id IN ({placeholders}) ORDER BY created_at, rowid",
             incident_ids,
         ).fetchall()
-        return [NotificationMessage.model_validate_json(row[0]) for row in rows]
+        self._last_enqueued_incident_ids.difference_update(incident_ids)
+        return _ordered_notifications(rows)
 
     def enqueue_notification(self, message: NotificationMessage) -> None:
         now = _now()
@@ -749,7 +750,7 @@ class SQLiteIncidentStore:
             """,
             (_now(), limit),
         ).fetchall()
-        return [NotificationMessage.model_validate_json(row[0]) for row in rows]
+        return _ordered_notifications(rows)
 
     def mark_notification_sent(self, incident_id: str) -> None:
         row = self._connection.execute(
@@ -874,6 +875,11 @@ def _candidate_seen_at(candidate: CandidateEvent) -> datetime:
     if candidate.timestamp:
         return datetime.fromtimestamp(candidate.timestamp, UTC)
     return datetime.now(UTC)
+
+
+def _ordered_notifications(rows: list[tuple[str]]) -> list[NotificationMessage]:
+    messages = [NotificationMessage.model_validate_json(row[0]) for row in rows]
+    return sorted(messages, key=lambda message: message.likely_dependency != "unknown")
 
 
 def _severity_rank(severity: str) -> int:
