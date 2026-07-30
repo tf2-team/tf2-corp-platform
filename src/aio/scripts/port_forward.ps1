@@ -10,7 +10,8 @@ param(
 
 $ErrorActionPreference = "Stop"
 if ([string]::IsNullOrWhiteSpace($Namespace)) {
-    $Namespace = "techx-corp-prod"
+    $runtimeConfigPath = Join-Path (Split-Path -Parent $PSScriptRoot) "config/runtime.json"
+    $Namespace = [string](Get-Content -Raw -LiteralPath $runtimeConfigPath | ConvertFrom-Json).environment
 }
 
 $allForwards = @(

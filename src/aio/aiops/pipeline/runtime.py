@@ -71,6 +71,7 @@ class AiopsPipeline:
         qualification_dev: bool = False,
         qualification_max_sample_age_seconds: int = 300,
         correlation_hyperparameters: dict | None = None,
+        remediation_hyperparameters: dict | None = None,
         remediation: RemediationComponents | None = None,
         enricher: Enricher | None = None,
         notification_sender=None,
@@ -103,6 +104,7 @@ class AiopsPipeline:
         self.runtime_config = runtime_config
         self.rca_hyperparameters = rca_hyperparameters or {}
         self.correlation_hyperparameters = correlation_hyperparameters or {}
+        self.remediation_hyperparameters = remediation_hyperparameters or {}
         self.remediation = remediation
         self.notification_sender = notification_sender
         self.rca_history_path = rca_history_path
@@ -126,7 +128,7 @@ class AiopsPipeline:
             len(features),
             _counts(feature.status for feature in features),
         )
-        self_heal_verification = self.self_heal.reconcile(features) if self.self_heal is not None else []
+        self_heal_verification: list[VerificationResult] = []
         candidates = self.detector_engine.evaluate(features)
         (logger.info if candidates else logger.debug)("AIOPS_BLOCK detect candidates=%s ids=%s", len(candidates), [candidate.detector_id for candidate in candidates])
         correlated = self.correlator.correlate(candidates)
@@ -139,10 +141,9 @@ class AiopsPipeline:
         deduped_incidents = _unique_incidents(incidents)
         logger.debug("AIOPS_BLOCK incident persisted=%s ids=%s", len(incidents), [incident.incident_id for incident in analysis_incidents])
 
-        direct_notifications = self._flush_notifications(
-            _unique_incidents([incident for incident in incidents if is_slo_notification(incident.events[-1])]),
-            only_incidents=True,
-        )
+        # Persist SLO breaches immediately, but wait for RCA before dispatching so
+        # graph-related symptoms can be suppressed behind the actual root cause.
+        direct_notifications: list[NotificationMessage] = []
 
         input_metric_series = metric_series or []
         rca_result = self._run_v001_rca(input_metric_series, analysis_incidents)
@@ -165,6 +166,28 @@ class AiopsPipeline:
                 *analysis_incidents,
                 *(incident for incident in lifecycle_incidents if incident.state != "recovered"),
             ])
+        if self.self_heal is not None:
+            self_heal_verification = self.self_heal.reconcile(features)
+            recovered_ids = {
+                result.incident_id
+                for result in self_heal_verification
+                if result.status == "recovered"
+            }
+            self.self_heal.sync_queue({incident.incident_id for incident in incidents} - recovered_ids)
+            if recovered_ids:
+                persisted = {incident.incident_id: incident for incident in self.store.list_incidents()}
+                incidents = [persisted.get(incident.incident_id, incident) for incident in incidents]
+                analysis_incidents = [persisted.get(incident.incident_id, incident) for incident in analysis_incidents]
+                present_ids = {incident.incident_id for incident in incidents}
+                incidents.extend(persisted[incident_id] for incident_id in recovered_ids - present_ids if incident_id in persisted)
+                analysis_ids = {incident.incident_id for incident in analysis_incidents}
+                analysis_incidents.extend(persisted[incident_id] for incident_id in recovered_ids - analysis_ids if incident_id in persisted)
+                regular_incidents = [
+                    incident
+                    for incident in incidents
+                    if incident.state != "recovered" and not is_slo_notification(incident.events[-1])
+                ]
+                deduped_incidents = _unique_incidents(incidents)
         logger.info(
             "AIOPS_DEDUP_RESULT input_candidates=%s rca_incidents=%s incidents=%s ids=%s services=%s occurrences=%s",
             len(enriched),
@@ -188,13 +211,13 @@ class AiopsPipeline:
         )
         self._log_failure_conclusion(rca_result, analysis_incidents)
         suppressed_incident_ids = self._suppress_related_notifications(
-            _unique_incidents(regular_incidents),
+            _unique_incidents(incidents),
             rca_result,
             _unique_incidents(root_incidents),
         )
         actionable_incidents = _unique_incidents(regular_incidents)
         self._record_rca_history(rca_result, incidents, enriched, metric_series or [])
-        notifications = direct_notifications + self._flush_notifications(_unique_incidents(regular_incidents))
+        notifications = direct_notifications + self._flush_notifications(_unique_incidents(incidents))
         logger.debug("AIOPS_BLOCK notify notifications=%s", len(notifications))
         decisions: list[PolicyDecision] = []
         for incident in actionable_incidents:
@@ -202,7 +225,12 @@ class AiopsPipeline:
             if proposal is not None:
                 decisions.append(self.policy.evaluate(proposal))
         logger.debug("AIOPS_BLOCK policy decisions=%s results=%s suppressed=%s", len(decisions), [decision.result for decision in decisions], len(suppressed_incident_ids))
-        remediation_decisions = self._run_remediation_strategy(actionable_incidents, rca_result, features)
+        remediation_decisions = self._run_remediation_strategy(
+            actionable_incidents,
+            rca_result,
+            features,
+            suppressed_incident_ids,
+        )
         if self.self_heal is not None and remediation_decisions:
             decisions = [
                 PolicyDecision(
@@ -214,7 +242,7 @@ class AiopsPipeline:
                 for decision in remediation_decisions
             ]
         for decision in remediation_decisions:
-            if decision.execution_status != "verifying":
+            if decision.execution_status != "verifying" or not decision.would_execute:
                 continue
             verification_results = [
                 result for result in verification_results if result.incident_id != decision.incident_id
@@ -364,8 +392,16 @@ class AiopsPipeline:
                         window="rca",
                         threshold=threshold,
                         quality=SignalQuality.FALLBACK_ONLY,
-                        reason="rca_root_cause",
-                        runbook_id=_rca_runbook_id(root),
+                        reason=_rca_remediation_reason(
+                            root,
+                            self.remediation_hyperparameters.get("rca_reason_rules", []),
+                            str(self.remediation_hyperparameters["rca_reason_default"]),
+                        ),
+                        runbook_id=_rca_runbook_id(
+                            root,
+                            self.remediation_hyperparameters.get("rca_runbook_rules", []),
+                            str(self.remediation_hyperparameters["rca_runbook_default"]),
+                        ),
                         likely_dependency="unknown",
                         confidence=root.score,
                         contributing_signals=tuple(root.root_cause_metrics),
@@ -374,9 +410,6 @@ class AiopsPipeline:
                 )
             )
         return rows
-
-    def _rca_root_metric_can_notify(self, service: str, metric: str, metric_series: list[MetricSeries]) -> bool:
-        return self._rca_root_metric_notify_reason(service, metric, metric_series)[0]
 
     def _rca_root_metric_notify_reason(self, service: str, metric: str, metric_series: list[MetricSeries]) -> tuple[bool, str]:
         if not is_root_cause_metric(metric):
@@ -621,6 +654,7 @@ class AiopsPipeline:
         incidents: list[Incident],
         rca_result: RcaResult,
         verification_features: list[Feature],
+        suppressed_incident_ids: set[str] | None = None,
     ) -> list[RemediationDecision]:
         if self.remediation is None:
             return []
@@ -628,12 +662,20 @@ class AiopsPipeline:
         records = history.load()
         actions = catalog.load()
         decisions = []
+        suppressed_incident_ids = suppressed_incident_ids or set()
+        if self.self_heal is not None:
+            incidents = self.self_heal.prioritize(incidents)
         for incident in incidents:
             features = extractor.extract(incident, rca_result)
             decision = decider.decide(incident.incident_id, features, retriever.top_matches(features, records), actions)
             decision = self._apply_remediation_policy(decision, actions)
             action = actions.get(decision.selected_action)
-            if self.self_heal is not None and decision.policy_allowed and action is not None:
+            if (
+                self.self_heal is not None
+                and decision.policy_allowed
+                and action is not None
+                and incident.incident_id not in suppressed_incident_ids
+            ):
                 root_cause = next(
                     (root for root in rca_result.root_causes if root.service == action.target),
                     rca_result.root_causes[0] if rca_result.root_causes else None,
@@ -652,6 +694,18 @@ class AiopsPipeline:
                         "execution_reasons": execution.get("reasons", []),
                         "decision": "executed" if execution["executed"] else decision.decision,
                     }
+                )
+            elif (
+                self.self_heal is not None
+                and decision.policy_allowed
+                and action is not None
+                and incident.incident_id in suppressed_incident_ids
+            ):
+                logger.info(
+                    "AIOPS_SELF_HEAL_SUPPRESSED incident=%s service=%s action=%s filter=rca_dedup reason=dedup_breakout_not_met",
+                    incident.incident_id,
+                    incident.service,
+                    action.action_id,
                 )
             logger.info(
                 "AIOPS_BLOCK remediation_decide incident=%s action=%s decision=%s policy=%s execution=%s reasons=%s policy_reasons=%s",
@@ -720,14 +774,14 @@ class AiopsPipeline:
         min_score = float(self.correlation_hyperparameters.get("suppress_min_root_score", 1.0))
         active_roots = [incident for incident in (root_incidents or []) if incident.events[-1].confidence >= min_score]
         root_services = {incident.service for incident in active_roots}
-        direct_anomaly_services = set(service_scores) if self.correlation_hyperparameters.get("allow_direct_anomaly_breakout", True) else set()
+        direct_anomaly_services = set(service_scores) if self.correlation_hyperparameters.get("allow_direct_anomaly_breakout", False) else set()
         slo_services = {
             incident.service
             for incident in incidents
-            if self.correlation_hyperparameters.get("allow_slo_breakout", True) and is_slo_notification(incident.events[-1])
+            if self.correlation_hyperparameters.get("allow_slo_breakout", False) and is_slo_notification(incident.events[-1])
         }
         affected_by_root = {
-            incident.service: self.topology_graph.neighborhood(incident.service, max_hops) if self.topology_graph is not None else {incident.service}
+            incident.service: self.topology_graph.blast_radius(incident.service, max_hops) if self.topology_graph is not None else {incident.service}
             for incident in active_roots
         }
         for incident in active_roots:
@@ -963,15 +1017,40 @@ def _score(value: float | None) -> str:
     return "NA" if value is None else f"{value:.3f}"
 
 
-def _rca_runbook_id(root: RootCauseCandidate) -> str:
-    metrics = " ".join(root.root_cause_metrics).lower()
-    if "error" in metrics:
-        return "RB-CART-ERROR-RATE" if root.service == "cart" else "RB-SERVICE-ERROR-RATE"
-    if "latency" in metrics or "duration" in metrics:
-        return "RB-CHECKOUT-LATENCY" if root.service == "checkout" else "RB-SERVICE-LATENCY"
-    if root.service == "product-catalog" and "cpu" in metrics:
-        return "RB-PRODUCT-CATALOG-CPU"
-    return "RB-SERVICE-RESOURCE"
+def _rca_runbook_id(
+    root: RootCauseCandidate,
+    rules: list[dict],
+    default_runbook_id: str,
+) -> str:
+    return _root_rule_value(root, rules, "runbook_id", default_runbook_id)
+
+
+def _rca_remediation_reason(
+    root: RootCauseCandidate,
+    rules: list[dict],
+    default_reason: str,
+) -> str:
+    return _root_rule_value(root, rules, "reason", default_reason)
+
+
+def _root_rule_value(
+    root: RootCauseCandidate,
+    rules: list[dict],
+    value_field: str,
+    default_value: str,
+) -> str:
+    root_metric_groups = {metric_group(metric) for metric in root.root_cause_metrics}
+    for rule in rules:
+        service = str(rule.get("service", ""))
+        configured_metric_group = str(rule.get("metric_group", ""))
+        value = str(rule.get(value_field, ""))
+        if (
+            service in {"*", root.service}
+            and configured_metric_group in {"*", *root_metric_groups}
+            and value
+        ):
+            return value
+    return default_value
 
 
 def _log_excerpts(summary: str, max_events: int) -> list[str]:

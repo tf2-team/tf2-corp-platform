@@ -151,7 +151,11 @@ class EnricherTest(unittest.TestCase):
         self.assertIn("[REDACTED_EMAIL]", by_source["log"].summary)
         self.assertIn("pod_restarts=3", by_source["kubernetes"].summary)
         self.assertEqual(jaeger.calls, [{"service": "payment", "limit": 1, "start": 700000000, "end": 1000000000}])
-        self.assertEqual(opensearch.calls[0][1]["query"]["bool"]["must"][1]["range"]["@timestamp"], {"gte": "1970-01-01T00:11:40Z", "lte": "1970-01-01T00:16:40Z"})
+        log_query = opensearch.calls[0][1]
+        self.assertEqual(log_query["query"]["bool"]["filter"][0]["range"]["@timestamp"], {"gte": "1970-01-01T00:11:40Z", "lte": "1970-01-01T00:16:40Z"})
+        self.assertEqual(log_query["size"], 100)
+        self.assertIn("WARNING", str(log_query))
+        self.assertIn("log_template severity=ERROR", by_source["log"].summary)
         self.assertEqual(kubernetes.deployment_calls, [("techx-corp-prod", "payment")])
 
     def test_external_clients_are_only_called_when_candidate_exists(self):
@@ -209,8 +213,28 @@ class EnricherTest(unittest.TestCase):
         self.assertEqual(result.trace_status, "ERROR")
         self.assertEqual(result.trace_duration_ms, 12.0)
         query = opensearch.calls[0][1]
-        self.assertEqual(query["query"]["bool"]["filter"][0]["range"]["@timestamp"], {"gte": "1970-01-01T00:01:40Z", "lte": "1970-01-01T00:16:40Z"})
+        self.assertEqual(query["query"]["bool"]["filter"][0]["range"]["@timestamp"], {"gte": "1970-01-01T00:11:40Z", "lte": "1970-01-01T00:16:40Z"})
         self.assertIn("exception", str(query).lower())
+
+    def test_log_enrichment_groups_with_drain3_and_ranks_error_before_warning(self):
+        opensearch = FakeOpenSearch()
+        opensearch.search = lambda index, body: {
+            "hits": {
+                "total": {"value": 3},
+                "hits": [
+                    {"_index": "logs", "_id": "1", "_source": {"@timestamp": "1970-01-01T00:15:00Z", "severity_text": "ERROR", "message": "payment failed order=123 status=500"}},
+                    {"_index": "logs", "_id": "2", "_source": {"@timestamp": "1970-01-01T00:14:30Z", "severity_text": "ERROR", "message": "payment failed order=456 status=500"}},
+                    {"_index": "logs", "_id": "3", "_source": {"@timestamp": "1970-01-01T00:14:00Z", "severity_text": "WARNING", "message": "payment retry scheduled"}},
+                ],
+            }
+        }
+
+        evidence = Enricher(opensearch=opensearch).enrich([self.candidate()], [])[0].evidence
+        logs = [item for item in evidence if item.source == "log"]
+
+        self.assertEqual(len(logs), 2)
+        self.assertIn("severity=ERROR count=2", logs[0].summary)
+        self.assertIn("severity=WARNING count=1", logs[1].summary)
 
     def test_corroboration_prefers_root_most_failed_span(self):
         jaeger = FakeJaeger()

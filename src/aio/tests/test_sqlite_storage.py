@@ -118,6 +118,37 @@ class SQLiteIncidentStoreTest(unittest.TestCase):
         self.assertEqual(event_row[:3], ("ongoing", "1970-01-01T00:03:20+00:00", None))
         self.assertIsNotNone(event_row[3])
 
+    def test_pending_notification_is_returned_only_once_without_sender(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            store = SQLiteIncidentStore(Path(tmp) / "aiops.sqlite3", environment="tf2")
+            incident = store.upsert(candidate(0.02, timestamp=100))
+            first = store.pending_notifications_for([incident])
+            repeated = store.upsert(candidate(0.03, timestamp=200))
+            second = store.pending_notifications_for([repeated])
+            store.close()
+
+        self.assertEqual([message.incident_id for message in first], [incident.incident_id])
+        self.assertEqual(second, [])
+
+    def test_direct_incident_is_returned_before_dependency_notification(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            store = SQLiteIncidentStore(Path(tmp) / "aiops.sqlite3", environment="tf2")
+            dependency = store.upsert(
+                service_candidate("checkout", "ops03_checkout_payment_dependency").model_copy(
+                    update={
+                        "signal_id": "checkout_payment_error_rate_5m",
+                        "reason": "dependency_signal_breached",
+                        "likely_dependency": "payment",
+                        "runbook_id": "RB-CHECKOUT-DEPENDENCY",
+                    }
+                )
+            )
+            direct = store.upsert(service_candidate("payment", "auto_payment_error_rate"))
+            notifications = store.pending_notifications_for([dependency, direct])
+            store.close()
+
+        self.assertEqual([message.incident_id for message in notifications], [direct.incident_id, dependency.incident_id])
+
     def test_deduped_incident_requeues_notification_after_cooldown(self):
         with tempfile.TemporaryDirectory() as tmp:
             store = SQLiteIncidentStore(Path(tmp) / "aiops.sqlite3", environment="tf2", slo_dedup_seconds=0)
@@ -175,6 +206,17 @@ class SQLiteIncidentStoreTest(unittest.TestCase):
         self.assertEqual(reset.incident_id, incident.incident_id)
         self.assertEqual(reset.occurrence_count, 1)
         self.assertEqual(len(reset.events), 1)
+
+    def test_incident_count_uses_sliding_window(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            store = SQLiteIncidentStore(Path(tmp) / "aiops.sqlite3", environment="tf2", incident_count_reset_seconds=900)
+            store.upsert(candidate(0.02, timestamp=100))
+            store.upsert(candidate(0.03, timestamp=940))
+            incident = store.upsert(candidate(0.04, timestamp=1060))
+            store.close()
+
+        self.assertEqual([event.timestamp for event in incident.events], [940, 1060])
+        self.assertEqual(incident.occurrence_count, 2)
 
     def test_slo_notification_bypasses_service_cooldown(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -531,11 +573,11 @@ class SQLiteIncidentStoreTest(unittest.TestCase):
 
     def test_breakout_uses_same_two_hop_scope_as_suppression(self):
         graph = TopologyGraph(load_runtime_config(Path("config/runtime.json")))
-        two_hop = graph.neighborhood("checkout", max_hops=2) - graph.neighborhood("checkout", max_hops=1)
+        two_hop = graph.blast_radius("checkout", max_hops=2) - graph.blast_radius("checkout", max_hops=1)
         service = sorted(two_hop)[0]
         with tempfile.TemporaryDirectory() as tmp:
             store = SQLiteIncidentStore(Path(tmp) / "aiops.sqlite3", environment="tf2", topology_graph=graph)
-            store.register_active_root_cause("checkout", graph.neighborhood("checkout", max_hops=2), root_score=1.0)
+            store.register_active_root_cause("checkout", graph.blast_radius("checkout", max_hops=2), root_score=1.0)
             breakout = store.breakout_services({service: 1.5}, 1.5, max_hops=2)
             store.close()
 

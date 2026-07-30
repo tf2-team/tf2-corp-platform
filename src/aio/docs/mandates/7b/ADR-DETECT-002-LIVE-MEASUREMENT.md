@@ -35,7 +35,11 @@ Burn-rate detection is supplemental impact/no-spam proof and is excluded from th
 ## Measurement Contract
 
 - **Recall:** caught labeled primary incidents / total labeled primary incidents (`3/3 = 100%`).
-- **Precision:** fault-attributable fires / all fires in the three isolated stores (`9/11 = 81.8%`).
+- **Mandate 7b notification precision:** TP / (TP + FP) = `3/4 = 75.0%` over the evaluated `mandate7b_live/*` subset.
+- **Mandate 7b notification recall:** TP / (TP + FN) = `3/3 = 100%`.
+- **Mandate 7b notification F1:** `85.7%`; negative coverage is TN=2, FP=1. The false positive is `checkout_memory_normal_baseline` → `RCA root cause: cart`.
+- **Coverage caveat:** 6/8 Mandate 7b cases evaluated; two 7b burn-rate cases are skipped for missing `metric_series.json`.
+- **RCA caveat:** root top-1 precision/recall is `0%`; notification accuracy must not be presented as RCA accuracy.
 - **Lead-time:** first detector-fire timestamp minus recorded fault-start timestamp (mean approximately `287s`).
 - **Duplicate control:** repeated breaches with the same fingerprint increment `occurrence_count`; they do not create a new incident.
 - **False positives:** retain and disclose unrelated detector/RCA fires in the denominator rather than silently removing them.

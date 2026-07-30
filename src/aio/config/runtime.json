@@ -1,6 +1,14 @@
 {
   "schema_version": "1.0",
   "environment": "techx-corp-prod",
+  "auto_detector_runbooks": {
+    "error_rate_default": "RB-SERVICE-ERROR-RATE",
+    "burn_rate_default": "RB-SERVICE-ERROR-RATE",
+    "latency_default": "RB-SERVICE-LATENCY",
+    "latency_service_overrides": {
+      "checkout": "RB-CHECKOUT-LATENCY"
+    }
+  },
   "topology": {
     "services": [
       {
@@ -349,6 +357,9 @@
       "monitoring",
       "observability",
       "testing"
+    ],
+    "rca_allowed_protected_roots": [
+      "postgresql"
     ]
   },
   "rca": {

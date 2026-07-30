@@ -1,12 +1,12 @@
 {
   "metrics": {
     "notification": {
-      "precision": 1.0,
+      "precision": 0.8333333333333334,
       "recall": 1.0,
-      "f1": 1.0,
+      "f1": 0.9090909090909091,
       "tp": 5,
-      "fp": 0,
-      "tn": 5,
+      "fp": 1,
+      "tn": 4,
       "fn": 0
     },
     "root_top1": {
@@ -35,14 +35,14 @@
       "max_detection_latency_seconds": 836
     },
     "skipped_cases": [
-      "mandate7b_live/burn_rate_normal_baseline",
-      "mandate7b_live/burn_rate_real_incident"
+      "mandate7b_live\\burn_rate_normal_baseline",
+      "mandate7b_live\\burn_rate_real_incident"
     ]
   },
   "case_count": 12,
   "cases": [
     {
-      "case_id": "mandate15_live/checkout_high_load_healthy",
+      "case_id": "mandate15_live\\checkout_high_load_healthy",
       "scenario_type": "high_load_healthy",
       "expected_incident": false,
       "predicted_notification": false,
@@ -52,58 +52,30 @@
       "notification_services": [],
       "root_causes": [
         {
-          "service": "product-catalog",
-          "score": 0.2304273711027343,
-          "root_cause_metrics": [
-            "cpu_millicores"
-          ],
-          "evidence": [
-            "graph_score=1.000",
-            "earliest_drift_score=0.025",
-            "shape_correlation_score=0.575",
-            "downstream_coverage_score=0.000",
-            "weighted_rrf_score=0.922",
-            "evidence_strength=1.000",
-            "support_score=0.250",
-            "cpu_millicores anomaly_score=1.800"
-          ],
-          "evidence_scores": {
-            "graph": 1.0,
-            "earliest_drift": 0.025000000000000022,
-            "shape_correlation": 0.5750620113524173,
-            "downstream_coverage": 0.0,
-            "weighted_rrf": 0.9216751918158568,
-            "evidence_strength": 1.0,
-            "support": 0.2500093017028626
-          },
-          "metric_scores": {
-            "cpu_millicores": 1.8
-          }
-        },
-        {
           "service": "frontend-proxy",
-          "score": 0.20074395886121713,
+          "score": 0.2266039258264011,
           "root_cause_metrics": [
             "cpu_millicores"
           ],
           "evidence": [
-            "graph_score=0.944",
+            "graph_score=0.959",
             "earliest_drift_score=0.025",
-            "shape_correlation_score=0.427",
+            "shape_correlation_score=0.586",
             "downstream_coverage_score=0.000",
-            "weighted_rrf_score=0.915",
+            "weighted_rrf_score=0.923",
             "evidence_strength=1.000",
-            "support_score=0.219",
-            "cpu_millicores anomaly_score=1.800"
+            "support_score=0.245",
+            "cpu_millicores anomaly_score=1.800",
+            "Trace/log enrichment: queried root/dependencies, no hard failure found"
           ],
           "evidence_scores": {
-            "graph": 0.9444176797531363,
+            "graph": 0.9587083977253886,
             "earliest_drift": 0.025000000000000022,
-            "shape_correlation": 0.42678888458577546,
+            "shape_correlation": 0.5861977789529349,
             "downstream_coverage": 0.0,
-            "weighted_rrf": 0.9148387096774193,
+            "weighted_rrf": 0.923083164300203,
             "evidence_strength": 1.0,
-            "support": 0.21943098465083677
+            "support": 0.24548592650174852
           },
           "metric_scores": {
             "cpu_millicores": 1.8
@@ -111,28 +83,59 @@
         },
         {
           "service": "frontend",
-          "score": 0.18519417937331287,
+          "score": 0.1987652487152435,
           "root_cause_metrics": [
             "cpu_millicores"
           ],
           "evidence": [
-            "graph_score=0.965",
+            "graph_score=0.980",
             "earliest_drift_score=0.025",
-            "shape_correlation_score=0.332",
+            "shape_correlation_score=0.403",
             "downstream_coverage_score=0.000",
-            "weighted_rrf_score=0.889",
+            "weighted_rrf_score=0.898",
             "evidence_strength=1.000",
-            "support_score=0.208",
-            "cpu_millicores anomaly_score=1.600"
+            "support_score=0.221",
+            "cpu_millicores anomaly_score=1.600",
+            "Trace/log enrichment: queried root/dependencies, no hard failure found"
           ],
           "evidence_scores": {
-            "graph": 0.9647525478441212,
+            "graph": 0.9804420470175825,
             "earliest_drift": 0.025000000000000022,
-            "shape_correlation": 0.3323050578825757,
+            "shape_correlation": 0.40285563194077206,
             "downstream_coverage": 0.0,
-            "weighted_rrf": 0.8890374331550802,
+            "weighted_rrf": 0.8983957219251337,
             "evidence_strength": 1.0,
-            "support": 0.20830864085900455
+            "support": 0.2212446518437532
+          },
+          "metric_scores": {
+            "cpu_millicores": 1.6
+          }
+        },
+        {
+          "service": "product-catalog",
+          "score": 0.21128927947837448,
+          "root_cause_metrics": [
+            "cpu_millicores"
+          ],
+          "evidence": [
+            "graph_score=1.000",
+            "earliest_drift_score=0.025",
+            "shape_correlation_score=0.497",
+            "downstream_coverage_score=0.000",
+            "weighted_rrf_score=0.887",
+            "evidence_strength=1.000",
+            "support_score=0.238",
+            "cpu_millicores anomaly_score=1.600",
+            "Trace/log enrichment: queried root/dependencies, no hard failure found"
+          ],
+          "evidence_scores": {
+            "graph": 1.0,
+            "earliest_drift": 0.025000000000000022,
+            "shape_correlation": 0.49672131147540977,
+            "downstream_coverage": 0.0,
+            "weighted_rrf": 0.8868080191403349,
+            "evidence_strength": 1.0,
+            "support": 0.2382581967213115
           },
           "metric_scores": {
             "cpu_millicores": 1.6
@@ -141,7 +144,7 @@
       ],
       "expected_root_service": null,
       "predicted_root_services": [
-        "product-catalog"
+        "frontend-proxy"
       ],
       "root_hit": false,
       "detection_timestamp": null,
@@ -149,49 +152,58 @@
       "early_by_seconds": null
     },
     {
-      "case_id": "mandate15_live/checkout_masking",
+      "case_id": "mandate15_live\\checkout_masking",
       "scenario_type": "masking",
       "expected_incident": true,
       "predicted_notification": true,
-      "notification_count": 3,
+      "notification_count": 7,
       "skipped": null,
       "notification_titles": [
         "checkout incident",
         "checkout incident",
-        "RCA root cause: accounting"
+        "RCA root cause: payment",
+        "RCA root cause: quote",
+        "RCA root cause: email",
+        "RCA root cause: accounting",
+        "RCA root cause: product-catalog"
       ],
       "notification_services": [
         "cart",
         "checkout",
-        "accounting"
+        "payment",
+        "quote",
+        "email",
+        "accounting",
+        "product-catalog"
       ],
       "root_causes": [
         {
           "service": "payment",
-          "score": 0.5217029369064552,
+          "score": 0.5474046361438435,
           "root_cause_metrics": [
             "memory_usage_bytes",
             "cpu_millicores"
           ],
           "evidence": [
-            "graph_score=0.961",
+            "graph_score=0.981",
             "earliest_drift_score=0.311",
             "shape_correlation_score=0.817",
-            "downstream_coverage_score=0.889",
-            "weighted_rrf_score=0.914",
+            "downstream_coverage_score=1.000",
+            "weighted_rrf_score=0.927",
             "evidence_strength=1.000",
-            "support_score=0.571",
+            "support_score=0.591",
             "memory_usage_bytes anomaly_score=2.800",
-            "cpu_millicores anomaly_score=1.600"
+            "cpu_millicores anomaly_score=1.600",
+            "Trace/log enrichment: queried root/dependencies, no hard failure found"
           ],
           "evidence_scores": {
-            "graph": 0.9608258943778736,
+            "graph": 0.9810401983145843,
             "earliest_drift": 0.31092436974789917,
             "shape_correlation": 0.8173256106774112,
-            "downstream_coverage": 0.888888888888889,
-            "weighted_rrf": 0.913562252964427,
+            "downstream_coverage": 1.0,
+            "weighted_rrf": 0.9266057312252964,
             "evidence_strength": 1.0,
-            "support": 0.5710644624529706
+            "support": 0.5907632747101438
           },
           "metric_scores": {
             "memory_usage_bytes": 2.8,
@@ -200,7 +212,7 @@
         },
         {
           "service": "quote",
-          "score": 0.4765427012439225,
+          "score": 0.4850373373970133,
           "root_cause_metrics": [
             "memory_usage_bytes"
           ],
@@ -209,17 +221,18 @@
             "earliest_drift_score=0.311",
             "shape_correlation_score=0.777",
             "downstream_coverage_score=1.000",
-            "weighted_rrf_score=0.811",
+            "weighted_rrf_score=0.825",
             "evidence_strength=1.000",
             "support_score=0.588",
-            "memory_usage_bytes anomaly_score=1.600"
+            "memory_usage_bytes anomaly_score=1.600",
+            "Trace/log enrichment: queried root/dependencies, no hard failure found"
           ],
           "evidence_scores": {
             "graph": 1.0,
             "earliest_drift": 0.31092436974789917,
             "shape_correlation": 0.7772699228760557,
             "downstream_coverage": 1.0,
-            "weighted_rrf": 0.8109999999999999,
+            "weighted_rrf": 0.8254565217391303,
             "evidence_strength": 1.0,
             "support": 0.5875988917927528
           },
@@ -228,108 +241,101 @@
           }
         },
         {
+          "service": "email",
+          "score": 0.4562389922207878,
+          "root_cause_metrics": [
+            "memory_usage_bytes"
+          ],
+          "evidence": [
+            "graph_score=0.979",
+            "earliest_drift_score=0.311",
+            "shape_correlation_score=0.623",
+            "downstream_coverage_score=1.000",
+            "weighted_rrf_score=0.813",
+            "evidence_strength=1.000",
+            "support_score=0.561",
+            "memory_usage_bytes anomaly_score=2.600",
+            "Trace/log enrichment: queried root/dependencies, no hard failure found"
+          ],
+          "evidence_scores": {
+            "graph": 0.9785024512851392,
+            "earliest_drift": 0.31092436974789917,
+            "shape_correlation": 0.6230247170566537,
+            "downstream_coverage": 1.0,
+            "weighted_rrf": 0.8129161176987264,
+            "evidence_strength": 1.0,
+            "support": 0.5612374786126135
+          },
+          "metric_scores": {
+            "memory_usage_bytes": 2.6
+          }
+        },
+        {
           "service": "accounting",
-          "score": 0.31038581569866025,
+          "score": 0.32706606004990113,
           "root_cause_metrics": [
             "memory_usage_bytes",
             "cpu_millicores",
             "socket_io_bytes_per_second"
           ],
           "evidence": [
-            "graph_score=0.594",
+            "graph_score=0.695",
             "earliest_drift_score=0.420",
             "shape_correlation_score=0.654",
             "downstream_coverage_score=0.000",
-            "weighted_rrf_score=0.742",
+            "weighted_rrf_score=0.755",
             "evidence_strength=1.000",
-            "support_score=0.418",
-            "memory_usage_bytes anomaly_score=1.800",
+            "support_score=0.433",
+            "memory_usage_bytes anomaly_score=2.800",
             "cpu_millicores anomaly_score=1.600",
-            "socket_io_bytes_per_second anomaly_score=1.600"
+            "socket_io_bytes_per_second anomaly_score=2.600",
+            "Trace/log enrichment: queried root/dependencies, no hard failure found"
           ],
           "evidence_scores": {
-            "graph": 0.5936619660502348,
+            "graph": 0.6947005987450082,
             "earliest_drift": 0.4201680672268907,
             "shape_correlation": 0.6535463806408358,
             "downstream_coverage": 0.0,
-            "weighted_rrf": 0.7422413793103448,
+            "weighted_rrf": 0.7547745358090184,
             "evidence_strength": 1.0,
-            "support": 0.4181736889784505
+            "support": 0.4333294838826665
           },
           "metric_scores": {
-            "memory_usage_bytes": 1.8,
+            "memory_usage_bytes": 2.8,
             "cpu_millicores": 1.6,
-            "socket_io_bytes_per_second": 1.6
+            "socket_io_bytes_per_second": 2.6
           }
         },
         {
-          "service": "frontend",
-          "score": 0.23269461126591043,
+          "service": "product-catalog",
+          "score": 0.27388254135745965,
           "root_cause_metrics": [
-            "memory_usage_bytes",
-            "cpu_millicores",
-            "socket_io_bytes_per_second",
-            "workload_ready_pods"
+            "memory_usage_bytes"
           ],
           "evidence": [
-            "graph_score=0.116",
-            "earliest_drift_score=0.311",
-            "shape_correlation_score=0.908",
-            "downstream_coverage_score=0.000",
-            "weighted_rrf_score=0.717",
+            "graph_score=0.134",
+            "earliest_drift_score=0.303",
+            "shape_correlation_score=0.587",
+            "downstream_coverage_score=0.625",
+            "weighted_rrf_score=0.744",
             "evidence_strength=1.000",
-            "support_score=0.325",
-            "memory_usage_bytes anomaly_score=2.600",
-            "cpu_millicores anomaly_score=1.600",
-            "socket_io_bytes_per_second anomaly_score=1.800",
-            "workload_ready_pods anomaly_score=1.600"
+            "support_score=0.368",
+            "memory_usage_bytes anomaly_score=1.600",
+            "cpu_millicores anomaly_score=1.000",
+            "Trace/log enrichment: queried root/dependencies, no hard failure found"
           ],
           "evidence_scores": {
-            "graph": 0.11633537457144948,
-            "earliest_drift": 0.31092436974789917,
-            "shape_correlation": 0.9082780363524158,
-            "downstream_coverage": 0.0,
-            "weighted_rrf": 0.7166440217391304,
+            "graph": 0.13444452099366325,
+            "earliest_drift": 0.3025210084033614,
+            "shape_correlation": 0.5866485582834178,
+            "downstream_coverage": 0.625,
+            "weighted_rrf": 0.7436387652947719,
             "evidence_strength": 1.0,
-            "support": 0.3247004149999243
+            "support": 0.3683005165134109
           },
           "metric_scores": {
-            "memory_usage_bytes": 2.6,
-            "cpu_millicores": 1.6,
-            "socket_io_bytes_per_second": 1.8,
-            "workload_ready_pods": 1.6
-          }
-        },
-        {
-          "service": "recommendation",
-          "score": 0.26216927077404045,
-          "root_cause_metrics": [
-            "memory_usage_bytes",
-            "cpu_millicores"
-          ],
-          "evidence": [
-            "graph_score=0.701",
-            "earliest_drift_score=0.311",
-            "shape_correlation_score=0.688",
-            "downstream_coverage_score=0.000",
-            "weighted_rrf_score=0.691",
-            "evidence_strength=1.000",
-            "support_score=0.379",
-            "memory_usage_bytes anomaly_score=1.800",
-            "cpu_millicores anomaly_score=1.600"
-          ],
-          "evidence_scores": {
-            "graph": 0.701161444614666,
-            "earliest_drift": 0.31092436974789917,
-            "shape_correlation": 0.6875432831479693,
-            "downstream_coverage": 0.0,
-            "weighted_rrf": 0.6911666666666666,
-            "evidence_strength": 1.0,
-            "support": 0.3793141125257398
-          },
-          "metric_scores": {
-            "memory_usage_bytes": 1.8,
-            "cpu_millicores": 1.6
+            "memory_usage_bytes": 1.6,
+            "cpu_millicores": 1.0
           }
         }
       ],
@@ -343,7 +349,7 @@
       "early_by_seconds": -206
     },
     {
-      "case_id": "mandate15_live/checkout_normal_baseline",
+      "case_id": "mandate15_live\\checkout_normal_baseline",
       "scenario_type": "normal",
       "expected_incident": false,
       "predicted_notification": false,
@@ -360,47 +366,52 @@
       "early_by_seconds": null
     },
     {
-      "case_id": "mandate15_live/checkout_real_incident",
+      "case_id": "mandate15_live\\checkout_real_incident",
       "scenario_type": "real_incident",
       "expected_incident": true,
       "predicted_notification": true,
-      "notification_count": 2,
+      "notification_count": 4,
       "skipped": null,
       "notification_titles": [
         "checkout incident",
-        "checkout incident"
+        "checkout incident",
+        "RCA root cause: frontend",
+        "RCA root cause: cart"
       ],
       "notification_services": [
         "payment",
-        "checkout"
+        "checkout",
+        "frontend",
+        "cart"
       ],
       "root_causes": [
         {
           "service": "frontend",
-          "score": 0.21602451683570453,
+          "score": 0.3070173470361214,
           "root_cause_metrics": [
             "cpu_millicores",
             "memory_usage_bytes"
           ],
           "evidence": [
-            "graph_score=0.807",
-            "earliest_drift_score=0.044",
+            "graph_score=0.984",
+            "earliest_drift_score=0.097",
             "shape_correlation_score=0.488",
-            "downstream_coverage_score=0.235",
-            "weighted_rrf_score=0.851",
+            "downstream_coverage_score=0.471",
+            "weighted_rrf_score=0.890",
             "evidence_strength=1.000",
-            "support_score=0.254",
+            "support_score=0.345",
             "cpu_millicores anomaly_score=1.600",
-            "memory_usage_bytes anomaly_score=1.000"
+            "memory_usage_bytes anomaly_score=1.000",
+            "Trace/log enrichment: queried root/dependencies, no hard failure found"
           ],
           "evidence_scores": {
-            "graph": 0.8066947431300553,
-            "earliest_drift": 0.044117647058823484,
+            "graph": 0.9838696316921915,
+            "earliest_drift": 0.09722222222222221,
             "shape_correlation": 0.4884273569246426,
-            "downstream_coverage": 0.23529411764705882,
-            "weighted_rrf": 0.8510694249649368,
+            "downstream_coverage": 0.47058823529411764,
+            "weighted_rrf": 0.890150452632921,
             "evidence_strength": 1.0,
-            "support": 0.2538271385376164
+            "support": 0.34490500580886496
           },
           "metric_scores": {
             "cpu_millicores": 1.6,
@@ -408,29 +419,62 @@
           }
         },
         {
+          "service": "cart",
+          "score": 0.3528477925648759,
+          "root_cause_metrics": [
+            "memory_usage_bytes"
+          ],
+          "evidence": [
+            "graph_score=0.960",
+            "earliest_drift_score=0.069",
+            "shape_correlation_score=0.513",
+            "downstream_coverage_score=1.000",
+            "weighted_rrf_score=0.862",
+            "evidence_strength=1.000",
+            "support_score=0.409",
+            "cpu_millicores anomaly_score=1.800",
+            "memory_usage_bytes anomaly_score=1.000",
+            "Trace/log enrichment: queried root/dependencies, no hard failure found"
+          ],
+          "evidence_scores": {
+            "graph": 0.9600281531307463,
+            "earliest_drift": 0.06944444444444442,
+            "shape_correlation": 0.5128664578180295,
+            "downstream_coverage": 1.0,
+            "weighted_rrf": 0.8624372909698997,
+            "evidence_strength": 1.0,
+            "support": 0.40912863608676076
+          },
+          "metric_scores": {
+            "cpu_millicores": 1.8,
+            "memory_usage_bytes": 1.0
+          }
+        },
+        {
           "service": "product-catalog",
-          "score": 0.16865899514040344,
+          "score": 0.21947405705317155,
           "root_cause_metrics": [
             "cpu_millicores"
           ],
           "evidence": [
-            "graph_score=0.823",
-            "earliest_drift_score=0.044",
+            "graph_score=1.000",
+            "earliest_drift_score=0.097",
             "shape_correlation_score=0.516",
             "downstream_coverage_score=0.000",
-            "weighted_rrf_score=0.749",
+            "weighted_rrf_score=0.781",
             "evidence_strength=1.000",
-            "support_score=0.225",
-            "cpu_millicores anomaly_score=1.600"
+            "support_score=0.281",
+            "cpu_millicores anomaly_score=1.600",
+            "Trace/log enrichment: queried root/dependencies, no hard failure found"
           ],
           "evidence_scores": {
-            "graph": 0.8231512937801433,
-            "earliest_drift": 0.044117647058823484,
+            "graph": 1.0,
+            "earliest_drift": 0.09722222222222221,
             "shape_correlation": 0.5163638053722494,
             "downstream_coverage": 0.0,
-            "weighted_rrf": 0.7489565217391305,
+            "weighted_rrf": 0.7812499999999999,
             "evidence_strength": 1.0,
-            "support": 0.2251919707552118
+            "support": 0.2809267930280596
           },
           "metric_scores": {
             "cpu_millicores": 1.6
@@ -438,62 +482,32 @@
         },
         {
           "service": "payment",
-          "score": 0.09480852957145275,
+          "score": 0.048878885813880654,
           "root_cause_metrics": [
             "cpu_millicores"
           ],
           "evidence": [
-            "graph_score=0.065",
-            "earliest_drift_score=0.015",
+            "graph_score=0.071",
+            "earliest_drift_score=0.000",
             "shape_correlation_score=0.491",
-            "downstream_coverage_score=0.235",
-            "weighted_rrf_score=0.748",
+            "downstream_coverage_score=0.000",
+            "weighted_rrf_score=0.580",
             "evidence_strength=1.000",
-            "support_score=0.127",
-            "cpu_millicores anomaly_score=1.800"
+            "support_score=0.084",
+            "cpu_millicores anomaly_score=1.800",
+            "Trace/log enrichment: queried root/dependencies, no hard failure found"
           ],
           "evidence_scores": {
-            "graph": 0.0645522663454681,
-            "earliest_drift": 0.014705882352941124,
+            "graph": 0.07080376438569218,
+            "earliest_drift": 0.0,
             "shape_correlation": 0.49102250933707403,
-            "downstream_coverage": 0.23529411764705882,
-            "weighted_rrf": 0.7481818181818183,
+            "downstream_coverage": 0.0,
+            "weighted_rrf": 0.58,
             "evidence_strength": 1.0,
-            "support": 0.12671856929355774
+            "support": 0.08427394105841493
           },
           "metric_scores": {
             "cpu_millicores": 1.8
-          }
-        },
-        {
-          "service": "recommendation",
-          "score": 0.13517542844066596,
-          "root_cause_metrics": [
-            "memory_usage_bytes"
-          ],
-          "evidence": [
-            "graph_score=0.685",
-            "earliest_drift_score=0.044",
-            "shape_correlation_score=0.507",
-            "downstream_coverage_score=0.000",
-            "weighted_rrf_score=0.666",
-            "evidence_strength=1.000",
-            "support_score=0.203",
-            "memory_usage_bytes anomaly_score=1.800",
-            "cpu_millicores anomaly_score=1.600"
-          ],
-          "evidence_scores": {
-            "graph": 0.6850110974333835,
-            "earliest_drift": 0.044117647058823484,
-            "shape_correlation": 0.5065399993247394,
-            "downstream_coverage": 0.0,
-            "weighted_rrf": 0.6658974358974359,
-            "evidence_strength": 1.0,
-            "support": 0.20299737039607135
-          },
-          "metric_scores": {
-            "memory_usage_bytes": 1.8,
-            "cpu_millicores": 1.6
           }
         }
       ],
@@ -507,7 +521,7 @@
       "early_by_seconds": -195
     },
     {
-      "case_id": "mandate7b_live/burn_rate_normal_baseline",
+      "case_id": "mandate7b_live\\burn_rate_normal_baseline",
       "scenario_type": "normal",
       "expected_incident": false,
       "predicted_notification": false,
@@ -515,7 +529,7 @@
       "skipped": "missing_metric_series"
     },
     {
-      "case_id": "mandate7b_live/burn_rate_real_incident",
+      "case_id": "mandate7b_live\\burn_rate_real_incident",
       "scenario_type": "real_incident",
       "expected_incident": true,
       "predicted_notification": false,
@@ -523,7 +537,7 @@
       "skipped": "missing_metric_series"
     },
     {
-      "case_id": "mandate7b_live/cart_normal_baseline",
+      "case_id": "mandate7b_live\\cart_normal_baseline",
       "scenario_type": "normal",
       "expected_incident": false,
       "predicted_notification": false,
@@ -540,177 +554,191 @@
       "early_by_seconds": null
     },
     {
-      "case_id": "mandate7b_live/cart_real_incident",
+      "case_id": "mandate7b_live\\cart_real_incident",
       "scenario_type": "real_incident",
       "expected_incident": true,
       "predicted_notification": true,
-      "notification_count": 4,
+      "notification_count": 7,
       "skipped": null,
       "notification_titles": [
-        "web incident",
+        "checkout incident",
         "checkout incident",
         "edge incident",
-        "checkout incident"
+        "web incident",
+        "RCA root cause: product-reviews",
+        "RCA root cause: cart",
+        "RCA root cause: checkout"
       ],
       "notification_services": [
-        "frontend",
         "cart",
+        "checkout",
         "frontend-proxy",
+        "frontend",
+        "product-reviews",
+        "cart",
         "checkout"
       ],
       "root_causes": [
         {
           "service": "recommendation",
-          "score": 0.5186137934026899,
-          "root_cause_metrics": [
-            "memory_usage_bytes"
-          ],
-          "evidence": [
-            "graph_score=0.856",
-            "earliest_drift_score=0.327",
-            "shape_correlation_score=0.856",
-            "downstream_coverage_score=0.680",
-            "weighted_rrf_score=0.962",
-            "evidence_strength=1.000",
-            "support_score=0.539",
-            "memory_usage_bytes anomaly_score=1.800"
-          ],
-          "evidence_scores": {
-            "graph": 0.8562050205504845,
-            "earliest_drift": 0.327433628318584,
-            "shape_correlation": 0.8558441722641118,
-            "downstream_coverage": 0.68,
-            "weighted_rrf": 0.9623636363636363,
-            "evidence_strength": 1.0,
-            "support": 0.5388958744974106
-          },
-          "metric_scores": {
-            "memory_usage_bytes": 1.8
-          }
-        },
-        {
-          "service": "product-reviews",
-          "score": 0.2948740788340178,
-          "root_cause_metrics": [
-            "memory_usage_bytes",
-            "socket_io_bytes_per_second"
-          ],
-          "evidence": [
-            "graph_score=0.523",
-            "earliest_drift_score=0.062",
-            "shape_correlation_score=0.816",
-            "downstream_coverage_score=0.680",
-            "weighted_rrf_score=0.875",
-            "evidence_strength=1.000",
-            "support_score=0.337",
-            "memory_usage_bytes anomaly_score=1.600",
-            "socket_io_bytes_per_second anomaly_score=1.800"
-          ],
-          "evidence_scores": {
-            "graph": 0.5227968844585482,
-            "earliest_drift": 0.06194690265486724,
-            "shape_correlation": 0.8155525617296983,
-            "downstream_coverage": 0.68,
-            "weighted_rrf": 0.8754565217391305,
-            "evidence_strength": 1.0,
-            "support": 0.3368232133884139
-          },
-          "metric_scores": {
-            "memory_usage_bytes": 1.6,
-            "socket_io_bytes_per_second": 1.8
-          }
-        },
-        {
-          "service": "currency",
-          "score": 0.3618100585304773,
+          "score": 0.5963799940033376,
           "root_cause_metrics": [
             "memory_usage_bytes"
           ],
           "evidence": [
             "graph_score=1.000",
-            "earliest_drift_score=0.062",
-            "shape_correlation_score=0.595",
+            "earliest_drift_score=0.327",
+            "shape_correlation_score=0.856",
             "downstream_coverage_score=1.000",
-            "weighted_rrf_score=0.855",
+            "weighted_rrf_score=0.980",
             "evidence_strength=1.000",
-            "support_score=0.423",
-            "memory_usage_bytes anomaly_score=1.800"
+            "support_score=0.608",
+            "memory_usage_bytes anomaly_score=2.800",
+            "Trace/log enrichment: queried root/dependencies, no hard failure found"
           ],
           "evidence_scores": {
             "graph": 1.0,
-            "earliest_drift": 0.06194690265486724,
-            "shape_correlation": 0.595157452106456,
+            "earliest_drift": 0.327433628318584,
+            "shape_correlation": 0.8558441722641118,
             "downstream_coverage": 1.0,
-            "weighted_rrf": 0.8546470588235293,
+            "weighted_rrf": 0.9801383399209485,
             "evidence_strength": 1.0,
-            "support": 0.42334441427614533
+            "support": 0.608465121414838
           },
           "metric_scores": {
-            "memory_usage_bytes": 1.8
+            "memory_usage_bytes": 2.8
+          }
+        },
+        {
+          "service": "product-reviews",
+          "score": 0.34765607880365124,
+          "root_cause_metrics": [
+            "memory_usage_bytes",
+            "socket_io_bytes_per_second"
+          ],
+          "evidence": [
+            "graph_score=0.605",
+            "earliest_drift_score=0.062",
+            "shape_correlation_score=0.816",
+            "downstream_coverage_score=1.000",
+            "weighted_rrf_score=0.875",
+            "evidence_strength=1.000",
+            "support_score=0.397",
+            "memory_usage_bytes anomaly_score=2.600",
+            "socket_io_bytes_per_second anomaly_score=1.800",
+            "Trace/log enrichment: queried root/dependencies, no hard failure found"
+          ],
+          "evidence_scores": {
+            "graph": 0.6047357484223828,
+            "earliest_drift": 0.06194690265486724,
+            "shape_correlation": 0.8155525617296983,
+            "downstream_coverage": 1.0,
+            "weighted_rrf": 0.8754565217391305,
+            "evidence_strength": 1.0,
+            "support": 0.39711404298298913
+          },
+          "metric_scores": {
+            "memory_usage_bytes": 2.6,
+            "socket_io_bytes_per_second": 1.8
           }
         },
         {
           "service": "cart",
-          "score": 0.22733490966834896,
+          "score": 0.2785920816442421,
           "root_cause_metrics": [
             "cpu_millicores",
             "memory_usage_bytes",
             "socket_io_bytes_per_second"
           ],
           "evidence": [
-            "graph_score=0.086",
+            "graph_score=0.097",
             "earliest_drift_score=0.062",
             "shape_correlation_score=0.841",
-            "downstream_coverage_score=0.680",
-            "weighted_rrf_score=0.826",
+            "downstream_coverage_score=1.000",
+            "weighted_rrf_score=0.858",
             "evidence_strength=1.000",
-            "support_score=0.275",
-            "cpu_millicores anomaly_score=1.600",
-            "memory_usage_bytes anomaly_score=1.600",
-            "socket_io_bytes_per_second anomaly_score=1.600"
+            "support_score=0.325",
+            "cpu_millicores anomaly_score=2.600",
+            "memory_usage_bytes anomaly_score=2.600",
+            "socket_io_bytes_per_second anomaly_score=1.800",
+            "Trace/log enrichment: queried root/dependencies, no hard failure found"
           ],
           "evidence_scores": {
-            "graph": 0.0863134490523671,
+            "graph": 0.09717757308183596,
             "earliest_drift": 0.06194690265486724,
             "shape_correlation": 0.8414136092444229,
-            "downstream_coverage": 0.68,
-            "weighted_rrf": 0.8259820123775242,
+            "downstream_coverage": 1.0,
+            "weighted_rrf": 0.8575772113943028,
             "evidence_strength": 1.0,
-            "support": 0.27522985520469545
+            "support": 0.32485947380911584
           },
           "metric_scores": {
-            "cpu_millicores": 1.6,
-            "memory_usage_bytes": 1.6,
-            "socket_io_bytes_per_second": 1.6
+            "cpu_millicores": 2.6,
+            "memory_usage_bytes": 2.6,
+            "socket_io_bytes_per_second": 1.8
+          }
+        },
+        {
+          "service": "checkout",
+          "score": 0.24382373114822734,
+          "root_cause_metrics": [
+            "memory_usage_bytes",
+            "cpu_millicores"
+          ],
+          "evidence": [
+            "graph_score=0.082",
+            "earliest_drift_score=0.053",
+            "shape_correlation_score=0.749",
+            "downstream_coverage_score=1.000",
+            "weighted_rrf_score=0.803",
+            "evidence_strength=1.000",
+            "support_score=0.304",
+            "memory_usage_bytes anomaly_score=2.600",
+            "cpu_millicores anomaly_score=1.600",
+            "Trace/log enrichment: queried root/dependencies, no hard failure found"
+          ],
+          "evidence_scores": {
+            "graph": 0.08152921570013769,
+            "earliest_drift": 0.053097345132743334,
+            "shape_correlation": 0.7492728624005879,
+            "downstream_coverage": 1.0,
+            "weighted_rrf": 0.802516754079254,
+            "evidence_strength": 1.0,
+            "support": 0.30382385153811764
+          },
+          "metric_scores": {
+            "memory_usage_bytes": 2.6,
+            "cpu_millicores": 1.6
           }
         },
         {
           "service": "product-catalog",
-          "score": 0.2060045651710202,
+          "score": 0.20799802741430568,
           "root_cause_metrics": [
             "memory_usage_bytes"
           ],
           "evidence": [
-            "graph_score=0.508",
+            "graph_score=0.588",
             "earliest_drift_score=0.053",
             "shape_correlation_score=0.712",
-            "downstream_coverage_score=0.360",
-            "weighted_rrf_score=0.774",
+            "downstream_coverage_score=0.263",
+            "weighted_rrf_score=0.789",
             "evidence_strength=1.000",
-            "support_score=0.266",
-            "memory_usage_bytes anomaly_score=1.800"
+            "support_score=0.264",
+            "memory_usage_bytes anomaly_score=2.800",
+            "Trace/log enrichment: queried root/dependencies, no hard failure found"
           ],
           "evidence_scores": {
-            "graph": 0.508397779855727,
+            "graph": 0.5877001641477192,
             "earliest_drift": 0.053097345132743334,
             "shape_correlation": 0.7123744050766789,
-            "downstream_coverage": 0.36,
-            "weighted_rrf": 0.7735245358090186,
+            "downstream_coverage": 0.2631578947368421,
+            "weighted_rrf": 0.7888023135867963,
             "evidence_strength": 1.0,
-            "support": 0.2663193675628697
+            "support": 0.26368840941719485
           },
           "metric_scores": {
-            "memory_usage_bytes": 1.8
+            "memory_usage_bytes": 2.8
           }
         }
       ],
@@ -724,184 +752,127 @@
       "early_by_seconds": -372
     },
     {
-      "case_id": "mandate7b_live/checkout_memory_normal_baseline",
+      "case_id": "mandate7b_live\\checkout_memory_normal_baseline",
       "scenario_type": "normal",
       "expected_incident": false,
-      "predicted_notification": false,
-      "notification_count": 0,
+      "predicted_notification": true,
+      "notification_count": 1,
       "skipped": null,
-      "notification_titles": [],
-      "notification_services": [],
+      "notification_titles": [
+        "RCA root cause: cart"
+      ],
+      "notification_services": [
+        "cart"
+      ],
       "root_causes": [
         {
-          "service": "checkout",
-          "score": 0.2836570582670172,
-          "root_cause_metrics": [
-            "cpu_millicores",
-            "memory_usage_bytes"
-          ],
-          "evidence": [
-            "graph_score=0.395",
-            "earliest_drift_score=0.116",
-            "shape_correlation_score=0.746",
-            "downstream_coverage_score=0.471",
-            "weighted_rrf_score=0.928",
-            "evidence_strength=1.000",
-            "support_score=0.306",
-            "cpu_millicores anomaly_score=1.600",
-            "memory_usage_bytes anomaly_score=1.000"
-          ],
-          "evidence_scores": {
-            "graph": 0.3947183578652434,
-            "earliest_drift": 0.1159420289855072,
-            "shape_correlation": 0.746452449663179,
-            "downstream_coverage": 0.47058823529411764,
-            "weighted_rrf": 0.9284038461538461,
-            "evidence_strength": 1.0,
-            "support": 0.30553197236540997
-          },
-          "metric_scores": {
-            "cpu_millicores": 1.6,
-            "memory_usage_bytes": 1.0
-          }
-        },
-        {
           "service": "product-reviews",
-          "score": 0.3931546768933621,
+          "score": 0.4443907075523961,
           "root_cause_metrics": [
-            "memory_usage_bytes",
             "socket_io_bytes_per_second"
           ],
           "evidence": [
-            "graph_score=0.813",
-            "earliest_drift_score=0.116",
-            "shape_correlation_score=0.724",
-            "downstream_coverage_score=1.000",
-            "weighted_rrf_score=0.885",
-            "evidence_strength=1.000",
-            "support_score=0.444",
-            "memory_usage_bytes anomaly_score=1.000",
-            "socket_io_bytes_per_second anomaly_score=1.600"
-          ],
-          "evidence_scores": {
-            "graph": 0.8129812972667446,
-            "earliest_drift": 0.1159420289855072,
-            "shape_correlation": 0.7239395122770753,
-            "downstream_coverage": 1.0,
-            "weighted_rrf": 0.8848731884057971,
-            "evidence_strength": 1.0,
-            "support": 0.444306237373602
-          },
-          "metric_scores": {
-            "memory_usage_bytes": 1.0,
-            "socket_io_bytes_per_second": 1.6
-          }
-        },
-        {
-          "service": "product-catalog",
-          "score": 0.30724123869361875,
-          "root_cause_metrics": [
-            "memory_usage_bytes"
-          ],
-          "evidence": [
-            "graph_score=0.747",
-            "earliest_drift_score=0.116",
-            "shape_correlation_score=0.720",
-            "downstream_coverage_score=0.471",
-            "weighted_rrf_score=0.867",
-            "evidence_strength=1.000",
-            "support_score=0.354",
-            "memory_usage_bytes anomaly_score=1.000"
-          ],
-          "evidence_scores": {
-            "graph": 0.7468053628210208,
-            "earliest_drift": 0.1159420289855072,
-            "shape_correlation": 0.71975925768413,
-            "downstream_coverage": 0.47058823529411764,
-            "weighted_rrf": 0.8670777591973243,
-            "evidence_strength": 1.0,
-            "support": 0.35434104431191926
-          },
-          "metric_scores": {
-            "memory_usage_bytes": 1.0
-          }
-        },
-        {
-          "service": "recommendation",
-          "score": 0.39861242811313924,
-          "root_cause_metrics": [
-            "memory_usage_bytes"
-          ],
-          "evidence": [
             "graph_score=1.000",
-            "earliest_drift_score=0.116",
-            "shape_correlation_score=0.651",
-            "downstream_coverage_score=1.000",
-            "weighted_rrf_score=0.864",
+            "earliest_drift_score=0.187",
+            "shape_correlation_score=0.783",
+            "downstream_coverage_score=0.556",
+            "weighted_rrf_score=0.980",
             "evidence_strength=1.000",
-            "support_score=0.461",
-            "memory_usage_bytes anomaly_score=1.000"
+            "support_score=0.453",
+            "socket_io_bytes_per_second anomaly_score=1.800",
+            "Trace/log enrichment: queried root/dependencies, no hard failure found"
           ],
           "evidence_scores": {
             "graph": 1.0,
-            "earliest_drift": 0.1159420289855072,
-            "shape_correlation": 0.6512956107879427,
-            "downstream_coverage": 1.0,
-            "weighted_rrf": 0.8638025078369906,
+            "earliest_drift": 0.18666666666666665,
+            "shape_correlation": 0.7826393523743991,
+            "downstream_coverage": 0.5555555555555556,
+            "weighted_rrf": 0.9801383399209485,
             "evidence_strength": 1.0,
-            "support": 0.4614624575602204
+            "support": 0.4533959028561598
           },
           "metric_scores": {
-            "memory_usage_bytes": 1.0
+            "socket_io_bytes_per_second": 1.8
           }
         },
         {
           "service": "cart",
-          "score": 0.236537509182794,
+          "score": 0.4027547569197191,
           "root_cause_metrics": [
             "cpu_millicores",
             "memory_usage_bytes",
             "socket_io_bytes_per_second"
           ],
           "evidence": [
-            "graph_score=0.199",
-            "earliest_drift_score=0.116",
-            "shape_correlation_score=0.855",
-            "downstream_coverage_score=0.471",
-            "weighted_rrf_score=0.809",
+            "graph_score=0.257",
+            "earliest_drift_score=0.187",
+            "shape_correlation_score=0.910",
+            "downstream_coverage_score=1.000",
+            "weighted_rrf_score=0.942",
             "evidence_strength=1.000",
-            "support_score=0.292",
-            "cpu_millicores anomaly_score=1.600",
+            "support_score=0.428",
+            "cpu_millicores anomaly_score=2.600",
             "memory_usage_bytes anomaly_score=1.000",
-            "socket_io_bytes_per_second anomaly_score=1.600"
+            "socket_io_bytes_per_second anomaly_score=1.800",
+            "Trace/log enrichment: queried root/dependencies, no hard failure found"
           ],
           "evidence_scores": {
-            "graph": 0.19860252457781266,
-            "earliest_drift": 0.1159420289855072,
-            "shape_correlation": 0.8554412561587675,
-            "downstream_coverage": 0.47058823529411764,
-            "weighted_rrf": 0.8087777777777777,
+            "graph": 0.2571863650638043,
+            "earliest_drift": 0.18666666666666665,
+            "shape_correlation": 0.9097303014278157,
+            "downstream_coverage": 1.0,
+            "weighted_rrf": 0.9416666666666668,
             "evidence_strength": 1.0,
-            "support": 0.2924629183466336
+            "support": 0.42770416664040967
           },
           "metric_scores": {
-            "cpu_millicores": 1.6,
+            "cpu_millicores": 2.6,
             "memory_usage_bytes": 1.0,
-            "socket_io_bytes_per_second": 1.6
+            "socket_io_bytes_per_second": 1.8
+          }
+        },
+        {
+          "service": "accounting",
+          "score": 0.1349192663044113,
+          "root_cause_metrics": [
+            "socket_io_bytes_per_second"
+          ],
+          "evidence": [
+            "graph_score=0.082",
+            "earliest_drift_score=0.147",
+            "shape_correlation_score=0.716",
+            "downstream_coverage_score=0.000",
+            "weighted_rrf_score=0.673",
+            "evidence_strength=1.000",
+            "support_score=0.200",
+            "socket_io_bytes_per_second anomaly_score=1.800",
+            "Trace/log enrichment: queried root/dependencies, no hard failure found"
+          ],
+          "evidence_scores": {
+            "graph": 0.08238192056332842,
+            "earliest_drift": 0.1466666666666666,
+            "shape_correlation": 0.7164603820716249,
+            "downstream_coverage": 0.0,
+            "weighted_rrf": 0.6729375000000001,
+            "evidence_strength": 1.0,
+            "support": 0.20049301206190961
+          },
+          "metric_scores": {
+            "socket_io_bytes_per_second": 1.8
           }
         }
       ],
       "expected_root_service": null,
       "predicted_root_services": [
-        "checkout"
+        "product-reviews"
       ],
       "root_hit": false,
-      "detection_timestamp": null,
+      "detection_timestamp": 1785077923,
       "detection_latency_seconds": null,
       "early_by_seconds": null
     },
     {
-      "case_id": "mandate7b_live/checkout_memory_real_incident",
+      "case_id": "mandate7b_live\\checkout_memory_real_incident",
       "scenario_type": "real_incident",
       "expected_incident": true,
       "predicted_notification": true,
@@ -916,31 +887,32 @@
       "root_causes": [
         {
           "service": "product-catalog",
-          "score": 0.3034751982755839,
+          "score": 0.3039294262024065,
           "root_cause_metrics": [
             "memory_usage_bytes"
           ],
           "evidence": [
-            "graph_score=0.496",
+            "graph_score=0.500",
             "earliest_drift_score=0.086",
             "shape_correlation_score=0.466",
             "downstream_coverage_score=1.000",
             "weighted_rrf_score=0.888",
             "evidence_strength=1.000",
             "support_score=0.342",
-            "memory_usage_bytes anomaly_score=1.800"
+            "memory_usage_bytes anomaly_score=2.800",
+            "Trace/log enrichment: queried root/dependencies, no hard failure found"
           ],
           "evidence_scores": {
-            "graph": 0.4963402659675916,
+            "graph": 0.49975037482395146,
             "earliest_drift": 0.08620689655172409,
             "shape_correlation": 0.4659029509976222,
             "downstream_coverage": 1.0,
             "weighted_rrf": 0.8880027900488259,
             "evidence_strength": 1.0,
-            "support": 0.34175027564823035
+            "support": 0.34226179197668427
           },
           "metric_scores": {
-            "memory_usage_bytes": 1.8
+            "memory_usage_bytes": 2.8
           }
         },
         {
@@ -957,8 +929,9 @@
             "weighted_rrf_score=0.850",
             "evidence_strength=1.000",
             "support_score=0.390",
-            "memory_usage_bytes anomaly_score=1.800",
-            "workload_ready_pods anomaly_score=1.000"
+            "memory_usage_bytes anomaly_score=2.800",
+            "workload_ready_pods anomaly_score=1.000",
+            "Trace/log enrichment: queried root/dependencies, no hard failure found"
           ],
           "evidence_scores": {
             "graph": 1.0,
@@ -970,34 +943,35 @@
             "support": 0.3900862068965517
           },
           "metric_scores": {
-            "memory_usage_bytes": 1.8,
+            "memory_usage_bytes": 2.8,
             "workload_ready_pods": 1.0
           }
         },
         {
           "service": "recommendation",
-          "score": 0.03783710128534299,
+          "score": 0.03721808053597894,
           "root_cause_metrics": [
             "cpu_millicores"
           ],
           "evidence": [
-            "graph_score=0.418",
+            "graph_score=0.401",
             "earliest_drift_score=0.000",
             "shape_correlation_score=0.609",
             "downstream_coverage_score=0.000",
             "weighted_rrf_score=0.246",
             "evidence_strength=1.000",
-            "support_score=0.154",
-            "cpu_millicores anomaly_score=1.600"
+            "support_score=0.152",
+            "cpu_millicores anomaly_score=1.600",
+            "Trace/log enrichment: queried root/dependencies, no hard failure found"
           ],
           "evidence_scores": {
-            "graph": 0.4180526097901129,
+            "graph": 0.40124809860469096,
             "earliest_drift": 0.0,
             "shape_correlation": 0.6091084222539968,
             "downstream_coverage": 0.0,
             "weighted_rrf": 0.24557721139430283,
             "evidence_strength": 1.0,
-            "support": 0.15407415480661646
+            "support": 0.15155347812880315
           },
           "metric_scores": {
             "cpu_millicores": 1.6
@@ -1005,30 +979,31 @@
         },
         {
           "service": "cart",
-          "score": 0.024875955114542863,
+          "score": 0.024212478987300456,
           "root_cause_metrics": [
             "cpu_millicores",
             "memory_usage_bytes"
           ],
           "evidence": [
-            "graph_score=0.086",
+            "graph_score=0.079",
             "earliest_drift_score=0.000",
             "shape_correlation_score=0.638",
             "downstream_coverage_score=0.000",
-            "weighted_rrf_score=0.229",
+            "weighted_rrf_score=0.225",
             "evidence_strength=1.000",
-            "support_score=0.109",
+            "support_score=0.107",
             "cpu_millicores anomaly_score=1.000",
-            "memory_usage_bytes anomaly_score=1.000"
+            "memory_usage_bytes anomaly_score=1.000",
+            "Trace/log enrichment: queried root/dependencies, no hard failure found"
           ],
           "evidence_scores": {
-            "graph": 0.08589831854010316,
+            "graph": 0.07872589488780293,
             "earliest_drift": 0.0,
             "shape_correlation": 0.6377658302465984,
             "downstream_coverage": 0.0,
-            "weighted_rrf": 0.22916666666666663,
+            "weighted_rrf": 0.22528735632183908,
             "evidence_strength": 1.0,
-            "support": 0.10854962231800523
+            "support": 0.10747375877016019
           },
           "metric_scores": {
             "cpu_millicores": 1.0,
@@ -1046,7 +1021,7 @@
       "early_by_seconds": -836
     },
     {
-      "case_id": "mandate7b_live/checkout_p95_normal_baseline",
+      "case_id": "mandate7b_live\\checkout_p95_normal_baseline",
       "scenario_type": "normal",
       "expected_incident": false,
       "predicted_notification": false,
@@ -1063,47 +1038,50 @@
       "early_by_seconds": null
     },
     {
-      "case_id": "mandate7b_live/checkout_p95_real_incident",
+      "case_id": "mandate7b_live\\checkout_p95_real_incident",
       "scenario_type": "real_incident",
       "expected_incident": true,
       "predicted_notification": true,
-      "notification_count": 3,
+      "notification_count": 4,
       "skipped": null,
       "notification_titles": [
         "checkout incident",
         "edge incident",
-        "checkout incident"
+        "checkout incident",
+        "RCA root cause: shopping-copilot"
       ],
       "notification_services": [
         "cart",
         "frontend-proxy",
-        "checkout"
+        "checkout",
+        "shopping-copilot"
       ],
       "root_causes": [
         {
           "service": "shopping-copilot",
-          "score": 0.4199948750722809,
+          "score": 0.4006359400329186,
           "root_cause_metrics": [
             "memory_usage_bytes"
           ],
           "evidence": [
             "graph_score=0.750",
-            "earliest_drift_score=0.434",
+            "earliest_drift_score=0.390",
             "shape_correlation_score=0.621",
             "downstream_coverage_score=0.000",
-            "weighted_rrf_score=0.945",
+            "weighted_rrf_score=0.953",
             "evidence_strength=1.000",
-            "support_score=0.444",
-            "memory_usage_bytes anomaly_score=1.800"
+            "support_score=0.420",
+            "memory_usage_bytes anomaly_score=1.800",
+            "Trace/log enrichment: queried root/dependencies, no hard failure found"
           ],
           "evidence_scores": {
-            "graph": 0.7502826531580574,
-            "earliest_drift": 0.4336283185840708,
+            "graph": 0.7502834965801488,
+            "earliest_drift": 0.3904761904761904,
             "shape_correlation": 0.6212977227928385,
             "downstream_coverage": 0.0,
-            "weighted_rrf": 0.9454390451832907,
+            "weighted_rrf": 0.9527629233511586,
             "evidence_strength": 1.0,
-            "support": 0.44423263161387333
+            "support": 0.4204990876678528
           },
           "metric_scores": {
             "memory_usage_bytes": 1.8
@@ -1111,28 +1089,29 @@
         },
         {
           "service": "frontend",
-          "score": 0.262624941733624,
+          "score": 0.2289302239850394,
           "root_cause_metrics": [
             "memory_usage_bytes"
           ],
           "evidence": [
             "graph_score=1.000",
-            "earliest_drift_score=0.097",
+            "earliest_drift_score=0.029",
             "shape_correlation_score=0.609",
             "downstream_coverage_score=0.000",
             "weighted_rrf_score=0.891",
             "evidence_strength=1.000",
-            "support_score=0.295",
-            "memory_usage_bytes anomaly_score=2.800"
+            "support_score=0.257",
+            "memory_usage_bytes anomaly_score=2.800",
+            "Trace/log enrichment: queried root/dependencies, no hard failure found"
           ],
           "evidence_scores": {
             "graph": 1.0,
-            "earliest_drift": 0.09734513274336287,
+            "earliest_drift": 0.02857142857142858,
             "shape_correlation": 0.6085449682048941,
             "downstream_coverage": 0.0,
             "weighted_rrf": 0.8907928388746803,
             "evidence_strength": 1.0,
-            "support": 0.29482156823958366
+            "support": 0.2569960309450198
           },
           "metric_scores": {
             "memory_usage_bytes": 2.8
@@ -1140,91 +1119,100 @@
         },
         {
           "service": "recommendation",
-          "score": 0.19388607943918287,
+          "score": 0.1670878098155664,
           "root_cause_metrics": [
             "memory_usage_bytes"
           ],
           "evidence": [
-            "graph_score=0.589",
-            "earliest_drift_score=0.097",
+            "graph_score=0.617",
+            "earliest_drift_score=0.029",
             "shape_correlation_score=0.604",
             "downstream_coverage_score=0.000",
-            "weighted_rrf_score=0.834",
+            "weighted_rrf_score=0.840",
             "evidence_strength=1.000",
-            "support_score=0.232",
-            "memory_usage_bytes anomaly_score=1.800",
-            "cpu_millicores anomaly_score=1.600"
+            "support_score=0.199",
+            "memory_usage_bytes anomaly_score=2.800",
+            "cpu_millicores anomaly_score=1.600",
+            "Trace/log enrichment: queried root/dependencies, no hard failure found"
           ],
           "evidence_scores": {
-            "graph": 0.5890560817684586,
-            "earliest_drift": 0.09734513274336287,
+            "graph": 0.617180535586934,
+            "earliest_drift": 0.02857142857142858,
             "shape_correlation": 0.6039416292585921,
             "downstream_coverage": 0.0,
-            "weighted_rrf": 0.8339563567362428,
+            "weighted_rrf": 0.8401328273244781,
             "evidence_strength": 1.0,
-            "support": 0.23248947966290717
+            "support": 0.1988826104411146
           },
           "metric_scores": {
-            "memory_usage_bytes": 1.8,
+            "memory_usage_bytes": 2.8,
             "cpu_millicores": 1.6
           }
         },
         {
-          "service": "currency",
-          "score": 0.21255600033739805,
+          "service": "checkout",
+          "score": 0.1650228948994947,
           "root_cause_metrics": [
             "memory_usage_bytes"
           ],
           "evidence": [
-            "graph_score=0.857",
-            "earliest_drift_score=0.097",
-            "shape_correlation_score=0.512",
+            "graph_score=0.621",
+            "earliest_drift_score=0.000",
+            "shape_correlation_score=0.692",
             "downstream_coverage_score=0.000",
-            "weighted_rrf_score=0.821",
+            "weighted_rrf_score=0.838",
             "evidence_strength=1.000",
-            "support_score=0.259",
-            "memory_usage_bytes anomaly_score=1.600"
+            "support_score=0.197",
+            "memory_usage_bytes anomaly_score=1.000",
+            "Trace/log enrichment: queried root/dependencies, no hard failure found"
           ],
           "evidence_scores": {
-            "graph": 0.8569091260221644,
-            "earliest_drift": 0.09734513274336287,
-            "shape_correlation": 0.5122036602572869,
+            "graph": 0.6207452274530647,
+            "earliest_drift": 0.0,
+            "shape_correlation": 0.6918330859178343,
             "downstream_coverage": 0.0,
-            "weighted_rrf": 0.8209751494180559,
+            "weighted_rrf": 0.8381615187881173,
             "evidence_strength": 1.0,
-            "support": 0.25890674095076727
-          },
-          "metric_scores": {
-            "memory_usage_bytes": 1.6
-          }
-        },
-        {
-          "service": "product-catalog",
-          "score": 0.2002971108589083,
-          "root_cause_metrics": [
-            "memory_usage_bytes"
-          ],
-          "evidence": [
-            "graph_score=0.689",
-            "earliest_drift_score=0.062",
-            "shape_correlation_score=0.736",
-            "downstream_coverage_score=0.000",
-            "weighted_rrf_score=0.808",
-            "evidence_strength=1.000",
-            "support_score=0.248",
-            "memory_usage_bytes anomaly_score=1.000"
-          ],
-          "evidence_scores": {
-            "graph": 0.6888524326033781,
-            "earliest_drift": 0.06194690265486724,
-            "shape_correlation": 0.7363082231703902,
-            "downstream_coverage": 0.0,
-            "weighted_rrf": 0.8081550802139037,
-            "evidence_strength": 1.0,
-            "support": 0.24784489482624222
+            "support": 0.19688674700563485
           },
           "metric_scores": {
             "memory_usage_bytes": 1.0
+          }
+        },
+        {
+          "service": "cart",
+          "score": 0.10521646355079985,
+          "root_cause_metrics": [
+            "cpu_millicores",
+            "memory_usage_bytes",
+            "socket_io_bytes_per_second"
+          ],
+          "evidence": [
+            "graph_score=0.135",
+            "earliest_drift_score=0.029",
+            "shape_correlation_score=0.617",
+            "downstream_coverage_score=0.000",
+            "weighted_rrf_score=0.818",
+            "evidence_strength=1.000",
+            "support_score=0.129",
+            "cpu_millicores anomaly_score=2.600",
+            "memory_usage_bytes anomaly_score=2.600",
+            "socket_io_bytes_per_second anomaly_score=1.800",
+            "Trace/log enrichment: queried root/dependencies, no hard failure found"
+          ],
+          "evidence_scores": {
+            "graph": 0.13539019584007853,
+            "earliest_drift": 0.02857142857142858,
+            "shape_correlation": 0.6169216151322187,
+            "downstream_coverage": 0.0,
+            "weighted_rrf": 0.8184162895927601,
+            "evidence_strength": 1.0,
+            "support": 0.1285610573601303
+          },
+          "metric_scores": {
+            "cpu_millicores": 2.6,
+            "memory_usage_bytes": 2.6,
+            "socket_io_bytes_per_second": 1.8
           }
         }
       ],

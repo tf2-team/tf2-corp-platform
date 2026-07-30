@@ -73,6 +73,7 @@ def prod_pipeline(root: Path, sender: FakeNotificationSender, repeat_seconds: in
         qualification_max_sample_age_seconds=hyperparameters["qualification"]["max_sample_age_seconds"],
         rca_hyperparameters=hyperparameters["rca"],
         correlation_hyperparameters=correlation_hyperparameters,
+        remediation_hyperparameters=hyperparameters["remediation"],
         notification_sender=sender,
         rca_history_path=root / "rca_history.jsonl",
     )

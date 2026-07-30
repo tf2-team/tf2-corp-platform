@@ -19,7 +19,7 @@ Use this file as the Jira copy source for the two required Mandate #7 tickets.
 | #7a has detector + baseline implementation evidence | Ticket 1: Implementation Evidence | Ready — commit links attached |
 | #7a analyzes at least 3 metrics | Ticket 1: Metrics Analysis | Ready |
 | Each metric has why, baseline, anomaly rule, method | Ticket 1: Metrics Analysis table | Ready |
-| #7a has signed ADR | Ticket 1: ADR | Ready — reviewer approved 2026-07-30 |
+| #7a has signed ADR | Ticket 1: ADR | Ready — reviewer approved 2026-07-17 |
 | #7b shows detector firing end-to-end | Ticket 2 + `7b/evidence/` | Ready |
 | #7b includes reproduction steps | Ticket 2 + scenario metadata | Ready |
 | #7b reports precision/recall/lead-time over labeled incidents | Ticket 2 + labeled dataset | Ready |
@@ -62,7 +62,7 @@ This ticket is the #7a submission: implementation evidence plus baseline/metric 
 - [x] Each metric documents the normal baseline.
 - [x] Each metric documents the anomaly rule/threshold.
 - [x] Each metric documents the detection method.
-- [x] ADR reviewed and approved by Phan Đức Huy on 2026-07-30.
+- [x] ADR reviewed and approved by Phan Đức Huy on 2026-07-17.
 - [x] Scope explicitly excludes production auto-remediation and `flagd` mutation.
 
 ## Implementation Evidence
@@ -82,7 +82,7 @@ Implementation exists in `src/aio` and follows the v0.0.1 AIOps detection/RCA pa
 | Regression tests | `tests/test_v001_anomaly_rca.py`, `tests/test_runtime_pipeline.py` | Exercise anomaly/RCA behavior and pipeline path. |
 | Evaluation runner | `evaluate/e2e_pipeline.py` | Computes incident/RCA evaluation metrics on labeled datasets. |
 
-Commit evidence: [`d475fd7`](https://github.com/tf2-team/tf2-corp-platform/commit/d475fd7) (detector + baseline) and [`6afc18f`](https://github.com/tf2-team/tf2-corp-platform/commit/6afc18f) (robust baseline normalization). PR URL remains pending; merge target is [`main`](https://github.com/tf2-team/tf2-corp-platform/tree/main), source is [`feat/aio/v0.1.0`](https://github.com/tf2-team/tf2-corp-platform/tree/feat/aio/v0.1.0).
+Commit evidence: [`d475fd7`](https://github.com/tf2-team/tf2-corp-platform/commit/d475fd7) (detector + baseline) and [`6afc18f`](https://github.com/tf2-team/tf2-corp-platform/commit/6afc18f) (robust baseline normalization). Source branch [`feat/aio/v0.1.0`](https://github.com/tf2-team/tf2-corp-platform/tree/feat/aio/v0.1.0) was merged into [`main`](https://github.com/tf2-team/tf2-corp-platform/tree/main) via [PR #139](https://github.com/tf2-team/tf2-corp-platform/pull/139), merge commit [`f51a4a7`](https://github.com/tf2-team/tf2-corp-platform/commit/f51a4a74e6346e6c61ed75ca3386e093b0a1b724).
 
 ## Detection / RCA Architecture
 
@@ -133,8 +133,8 @@ Signature status:
 
 | Role | Name | Date | Status |
 |---|---|---|---|
-| Owner | Nguyen Quy Hung | 2026-07-15 | Proposed |
-| Reviewer | Phan Đức Huy | 2026-07-30 | Approved |
+| Owner | Nguyen Quy Hung | 2026-07-15 | Done |
+| Reviewer | Phan Đức Huy | 2026-07-17 | Approved |
 
 ## Verification Commands
 
@@ -162,8 +162,7 @@ conda run -n capstone python -B evaluate/e2e_pipeline.py --limit 10 --out evalua
 ## Evidence To Attach Before Submit
 
 - Detector/baseline commits: [`d475fd7`](https://github.com/tf2-team/tf2-corp-platform/commit/d475fd7), [`6afc18f`](https://github.com/tf2-team/tf2-corp-platform/commit/6afc18f)
-- Test output: `TODO`
-- Signed ADR confirmation: `ADR-DETECT-001.md` approved by Phan Đức Huy on 2026-07-30
+- Signed ADR confirmation: `ADR-DETECT-001.md` approved by Phan Đức Huy on 2026-07-17
 - Analysis doc: `docs/mandates/7a/MANDATE-07a-detection-analysis.md`
 - ADR: `docs/mandates/7a/ADR-DETECT-001.md`
 
@@ -214,7 +213,7 @@ Mandate #7b is the live-evidence stage. After #7a proves detector implementation
 | L2 Checkout p95 latency | `local-cartFailure` (isolated run) | `auto_checkout_latency_p95` / `inc-97d2a7043a2b` | 322s |
 | L3 Checkout memory (saturation substitute) | attempted `local-adHighCpu` | `rca_root_cause` / `inc-788d322c0b2f` | 328s |
 
-Measured result over K=3 labeled scenarios and N=11 fires: **recall 3/3 = 100%**, **precision 9/11 = 81.8%**, **mean lead-time ~287s**. Two unrelated fires remain disclosed as false positives. Burn-rate evidence is supplemental and proves impact-based severity plus fingerprint dedup (`occurrence_count` 1→2→3) without entering the K denominator.
+Authoritative Mandate 7b notification subset from `evaluate/live_notification_eval_report.json`: **precision 3/4 = 75.0%**, **recall 3/3 = 100%**, **F1 = 85.7%**, with TP=3, TN=2, FP=1, FN=0 across six evaluated `mandate7b_live/*` cases. Two burn-rate cases are skipped because `metric_series.json` is absent; RCA root top-1 precision/recall remains **0%** and is disclosed separately. The legacy raw incident dump still discloses two unrelated fan-out records for auditability; they are not notification-level FP in this evaluator. Burn-rate evidence is supplemental and proves impact-based severity plus fingerprint dedup (`occurrence_count` 1→2→3); its two state-only cases are skipped from notification metrics because `metric_series.json` is absent.
 
 Traceability:
 
@@ -222,7 +221,7 @@ Traceability:
 - Live evidence/runtime commit: [`8a656ac`](https://github.com/tf2-team/tf2-corp-platform/commit/8a656ac)
 - Full report: `docs/mandates/7b/MANDATE-07b-api-runtime-draft.md`
 - Live-measurement ADR: `docs/mandates/7b/ADR-DETECT-002-LIVE-MEASUREMENT.md`
-- PR/merge: source [`feat/aio/v0.1.0`](https://github.com/tf2-team/tf2-corp-platform/tree/feat/aio/v0.1.0) → target [`main`](https://github.com/tf2-team/tf2-corp-platform/tree/main). Attach the PR URL before marking merged.
+- PR/merge: source [`feat/aio/v0.1.0`](https://github.com/tf2-team/tf2-corp-platform/tree/feat/aio/v0.1.0) → target [`main`](https://github.com/tf2-team/tf2-corp-platform/tree/main), merged via [PR #141](https://github.com/tf2-team/tf2-corp-platform/pull/141), merge commit [`3ac92dd`](https://github.com/tf2-team/tf2-corp-platform/commit/3ac92dd).
 
 ## Definition Of Done Checklist
 
@@ -230,13 +229,13 @@ Traceability:
 - [x] Three labeled injected scenarios produced visible detector output.
 - [x] Evidence includes detector logs, incident IDs, dashboard screenshots, and alert/dedup proof.
 - [x] Evidence includes fault-start/fire timestamps and per-scenario reproduction metadata.
-- [x] Precision reported: **9/11 = 81.8%** (TP + same-fault related).
+- [x] Mandate 7b notification subset reported from `live_notification_eval_report.json`: precision **3/4 = 75.0%**, recall **3/3 = 100%**, F1 **85.7%**; TP=3, TN=2, FP=1, FN=0.
 - [x] Recall reported: **3/3 = 100%**.
 - [x] Mean lead-time reported: **~287s** (212s, 322s, 328s).
 - [x] Two false positives, caveats, and fingerprint dedup behavior are documented.
 - [x] Detector ran in `dry-run`; only the operator changed `flagd`.
 - [x] Owner/reviewer sign-off completed on 2026-07-30 for `7b/ADR-DETECT-002-LIVE-MEASUREMENT.md`.
-- [ ] PR URL attached and `feat/aio/v0.1.0` confirmed merged into [`main`](https://github.com/tf2-team/tf2-corp-platform/tree/main).
+- [x] PR URL attached; `feat/aio/v0.1.0` confirmed merged into [`main`](https://github.com/tf2-team/tf2-corp-platform/tree/main) via [PR #141](https://github.com/tf2-team/tf2-corp-platform/pull/141), merge commit [`3ac92dd`](https://github.com/tf2-team/tf2-corp-platform/commit/3ac92dd).
 
 ## Implemented Detection Flow
 
@@ -321,7 +320,10 @@ Also report:
 - Reproduction metadata: `docs/mandates/7b/s2-rerun-meta.txt`, `s3-burn-rate-meta.txt`, `s4-rerun-meta.txt`, `s5-checkout-p95-meta.txt`
 - Labeled incident set: `evaluate/dataset/mandate7b_live/` — commit [`f06f209`](https://github.com/tf2-team/tf2-corp-platform/commit/f06f209)
 - Normal-period no-alert evidence: S2/S4/S5 baseline images and baseline label folders
-- Precision: **9/11 = 81.8%** (TP + same-fault related)
+- Mandate 7b notification precision: **3/4 = 75.0%**
+- Mandate 7b notification recall: **3/3 = 100%**
+- Mandate 7b notification F1: **85.7%**; TP=3, TN=2, FP=1, FN=0
+- Coverage caveat: 6/8 Mandate 7b cases evaluated; 2 burn-rate cases skipped; RCA root top-1 precision/recall = 0%
 - Recall: **3/3 = 100%**
 - Mean lead-time: **~287s**
 - False-positive / spam-control notes: 2 unrelated FP retained; burn-rate fingerprint dedup occurrence 1→2→3

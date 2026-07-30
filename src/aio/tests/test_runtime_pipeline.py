@@ -27,7 +27,7 @@ from aiops.schemas import (
 )
 from aiops.pipeline import AiopsPipeline
 from aiops.notifications import is_slo_notification
-from aiops.pipeline.runtime import _add_trace_log_enrichment_fallback, _algorithm_service_scores, _apply_corroboration, _filter_normal_growth_root_metrics, _slo_impact_findings
+from aiops.pipeline.runtime import _add_trace_log_enrichment_fallback, _algorithm_service_scores, _apply_corroboration, _filter_normal_growth_root_metrics, _rca_remediation_reason, _slo_impact_findings
 from aiops.remediation import (
     ActionCatalog,
     HistoryRetriever,
@@ -79,6 +79,7 @@ def runtime_kwargs(settings: Settings) -> dict:
         "qualification_dev": settings.qualification_gate_dev,
         "qualification_max_sample_age_seconds": hyperparameters["qualification"]["max_sample_age_seconds"],
         "correlation_hyperparameters": hyperparameters["correlation"],
+        "remediation_hyperparameters": hyperparameters["remediation"],
     }
 
 
@@ -276,6 +277,25 @@ class RecordingCorroborator:
 
 
 class RuntimePipelineTest(unittest.TestCase):
+    def test_rca_remediation_reason_is_selected_from_configuration(self):
+        reason = _rca_remediation_reason(
+            RootCauseCandidate(
+                service="inventory",
+                score=0.8,
+                root_cause_metrics=["memory_usage_bytes"],
+            ),
+            [
+                {
+                    "service": "inventory",
+                    "metric_group": "memory",
+                    "reason": "inventory_memory_pressure",
+                }
+            ],
+            "generic_root_cause",
+        )
+
+        self.assertEqual(reason, "inventory_memory_pressure")
+
     def test_pipeline_wraps_same_service_signals_into_one_notification(self):
         settings = Settings()
         with TemporaryDirectory() as tmp:
@@ -748,7 +768,7 @@ class RuntimePipelineTest(unittest.TestCase):
         self.assertEqual([incident.service for incident in incidents], ["checkout", "payment", "ad"])
         self.assertEqual([message.service for message in notifications], ["checkout", "payment", "ad"])
 
-    def test_pipeline_keeps_slo_notification_and_adds_rca_root_notification(self):
+    def test_pipeline_suppresses_slo_symptom_when_rca_root_is_notifiable(self):
         settings = Settings()
         sender = FakeNotificationSender()
         with TemporaryDirectory() as tmp:
@@ -776,7 +796,7 @@ class RuntimePipelineTest(unittest.TestCase):
             )
 
             def run_rca(metric_series, incidents):
-                self.assertEqual([message.service for message in sender.sent], ["checkout"])
+                self.assertEqual(sender.sent, [])
                 return RcaResult(
                     anomalies=[
                         AnomalyFinding(
@@ -798,8 +818,8 @@ class RuntimePipelineTest(unittest.TestCase):
 
         self.assertEqual([incident.service for incident in result.incidents], ["checkout", "payment"])
         self.assertEqual(result.incidents[1].likely_dependency, "unknown")
-        self.assertEqual([message.service for message in result.notifications], ["checkout", "payment"])
-        self.assertEqual(result.notifications[1].likely_dependency, "unknown")
+        self.assertEqual([message.service for message in result.notifications], ["payment"])
+        self.assertEqual(result.notifications[0].likely_dependency, "unknown")
 
     def test_pipeline_does_not_notify_invalid_rca_roots(self):
         settings = Settings()
@@ -1609,7 +1629,7 @@ class RuntimePipelineTest(unittest.TestCase):
         self.assertEqual(rows[0]["series_point_count"]["max"], 60)
         self.assertEqual(rows[0]["root_causes"][0]["service"], result.rca_result.root_causes[0].service)
 
-    def test_pipeline_does_not_suppress_slo_notification_in_blast_radius(self):
+    def test_pipeline_suppresses_slo_symptoms_in_root_blast_radius(self):
         settings = Settings()
         with TemporaryDirectory() as tmp:
             root = Path(tmp)
@@ -1630,8 +1650,8 @@ class RuntimePipelineTest(unittest.TestCase):
             outbox_rows = store._connection.execute("SELECT incident_id, status FROM notification_outbox ORDER BY incident_id").fetchall()
             store.close()
 
-        self.assertEqual([message.service for message in result.notifications], ["cart", "checkout", "valkey-cart", "valkey-cart"])
-        self.assertEqual([status for _, status in outbox_rows].count("suppressed"), 0)
+        self.assertEqual([message.service for message in result.notifications], ["valkey-cart", "valkey-cart"])
+        self.assertEqual([status for _, status in outbox_rows].count("suppressed"), 2)
         self.assertEqual([decision.result for decision in result.policy_decisions], ["blocked"])
 
     def test_pipeline_does_not_suppress_children_for_low_confidence_root_cause(self):
@@ -1733,7 +1753,7 @@ class RuntimePipelineTest(unittest.TestCase):
 
         self.assertEqual(active, [("ad", 0.7), ("checkout", 0.8)])
 
-    def test_pipeline_suppresses_current_child_root_without_breakout_score(self):
+    def test_pipeline_suppresses_child_when_new_root_fails_notification_gate(self):
         settings = Settings()
         with TemporaryDirectory() as tmp:
             store = SQLiteIncidentStore(Path(tmp) / "aiops.sqlite3", environment=settings.environment)
@@ -1752,13 +1772,13 @@ class RuntimePipelineTest(unittest.TestCase):
             result = pipeline.run_once()
             store.close()
 
-        self.assertIn("cart", {message.service for message in result.notifications})
+        self.assertNotIn("cart", {message.service for message in result.notifications})
 
-    def test_pipeline_allows_direct_slo_to_break_out_of_active_root(self):
+    def test_pipeline_suppresses_direct_slo_below_active_root(self):
         settings = Settings()
         with TemporaryDirectory() as tmp:
             store = SQLiteIncidentStore(Path(tmp) / "aiops.sqlite3", environment=settings.environment)
-            store.register_active_root_cause("checkout", {"checkout", "cart"}, suppress_seconds=300, root_score=1.0)
+            store.register_active_root_cause("valkey-cart", {"valkey-cart", "cart"}, suppress_seconds=300, root_score=1.0)
             incident = store.upsert(
                 CandidateEvent(
                     detector_id="auto_cart_error_rate",
@@ -1790,14 +1810,14 @@ class RuntimePipelineTest(unittest.TestCase):
             ).fetchone()
             store.close()
 
-        self.assertEqual(suppressed, set())
-        self.assertEqual(status, ("pending",))
+        self.assertEqual(suppressed, {incident.incident_id})
+        self.assertEqual(status, ("suppressed",))
 
     def test_pipeline_allows_one_hop_service_at_one_point_five_times_root_score(self):
         settings = Settings()
         with TemporaryDirectory() as tmp:
             store = SQLiteIncidentStore(Path(tmp) / "aiops.sqlite3", environment=settings.environment)
-            store.register_active_root_cause("checkout", {"checkout", "cart"}, suppress_seconds=300, root_score=1.0)
+            store.register_active_root_cause("valkey-cart", {"valkey-cart", "cart"}, suppress_seconds=300, root_score=1.0)
             incident = store.upsert(
                 CandidateEvent(
                     detector_id="auto_cart_error_rate",
@@ -1859,11 +1879,11 @@ class RuntimePipelineTest(unittest.TestCase):
         self.assertEqual(suppressed, set())
         self.assertEqual([message.service for message in notifications], ["cart"])
 
-    def test_pipeline_allows_direct_anomaly_below_score_breakout(self):
+    def test_pipeline_suppresses_direct_anomaly_below_score_breakout(self):
         settings = Settings()
         with TemporaryDirectory() as tmp:
             store = SQLiteIncidentStore(Path(tmp) / "aiops.sqlite3", environment=settings.environment)
-            store.register_active_root_cause("checkout", {"checkout", "cart"}, suppress_seconds=300, root_score=1.0)
+            store.register_active_root_cause("valkey-cart", {"valkey-cart", "cart"}, suppress_seconds=300, root_score=1.0)
             incident = store.upsert(
                 CandidateEvent(
                     detector_id="auto_cart_error_rate",
@@ -1921,7 +1941,7 @@ class RuntimePipelineTest(unittest.TestCase):
             )
             store.close()
 
-        self.assertEqual(suppressed, set())
+        self.assertEqual(suppressed, {incident.incident_id})
 
     def test_pipeline_suppresses_sev1_non_slo_caller_notifications(self):
         settings = Settings()
@@ -1954,7 +1974,7 @@ class RuntimePipelineTest(unittest.TestCase):
             result = pipeline.run_once(metric_series=[cpu_ramp_metric("valkey-cart")])
             store.close()
 
-        self.assertEqual({message.service for message in result.notifications}, {"checkout", "valkey-cart"})
+        self.assertEqual({message.service for message in result.notifications}, {"valkey-cart"})
         self.assertEqual(len(result.policy_decisions), 2)
 
     def test_dry_run_remediation_is_not_added_to_success_history(self):
@@ -2039,6 +2059,8 @@ class RuntimePipelineTest(unittest.TestCase):
                         confidence_threshold=hyperparameters["remediation"]["confidence_threshold"],
                         downtime_cost_multiplier=hyperparameters["remediation"]["downtime_cost_multiplier"],
                         outcome_weights=hyperparameters["remediation"]["outcome_weights"],
+                        fallback_action_id=hyperparameters["remediation"]["fallback_action_id"],
+                        fallback_target=hyperparameters["remediation"]["fallback_target"],
                     ),
                     ActionCatalog(actions_path),
                     IncidentHistoryStore(history_path),

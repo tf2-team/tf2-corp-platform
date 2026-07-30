@@ -139,6 +139,8 @@ class SQLiteIncidentStore:
 
     def upsert(self, candidate: CandidateEvent) -> Incident:
         self._validate_runbook(candidate.runbook_id)
+        if not candidate.timestamp:
+            candidate = candidate.model_copy(update={"timestamp": int(datetime.now(UTC).timestamp())})
         fingerprint = incident_fingerprint(self.environment, candidate, self.topology_graph)
         seen_at = _seen_at(candidate)
         row = self._connection.execute(
@@ -167,14 +169,13 @@ class SQLiteIncidentStore:
             incident.state = "open" if incident.state == "recovered" else "ongoing"
             incident.recovered_at = None
             incident.recovery_count = 0
-            if self._count_window_expired(incident, candidate):
-                incident.occurrence_count = 1
-                incident.events = [candidate]
-                incident.severity = candidate.severity
-            else:
-                incident.occurrence_count += 1
-                incident.events.append(candidate)
-                incident.severity = min(incident.severity, candidate.severity)
+            incident.events = _events_in_window(
+                incident.events,
+                candidate,
+                self.incident_count_reset_seconds,
+            ) + [candidate]
+            incident.occurrence_count = len(incident.events)
+            incident.severity = min(event.severity for event in incident.events)
             incident.last_seen = seen_at
 
         now = datetime.now(UTC)
@@ -362,17 +363,6 @@ class SQLiteIncidentStore:
             return True
         return datetime.fromisoformat(incident.cooldown_until) <= now
 
-    def _count_window_expired(self, incident: Incident, candidate: CandidateEvent) -> bool:
-        if self.incident_count_reset_seconds <= 0 or not incident.events:
-            return True
-        first_seen = _candidate_seen_at(incident.events[0])
-        current_seen = _candidate_seen_at(candidate)
-        return current_seen - first_seen >= timedelta(seconds=self.incident_count_reset_seconds)
-
-    def _can_enqueue_notification(self, incident_id: str) -> bool:
-        status = self._notification_outbox_status(incident_id)
-        return status is None or status in {"sent", "suppressed"}
-
     def _notification_outbox_status(self, incident_id: str) -> str | None:
         row = self._connection.execute(
             "SELECT status FROM notification_outbox WHERE incident_id = ?",
@@ -446,7 +436,7 @@ class SQLiteIncidentStore:
         required: dict[str, float] = {}
         for root_service, root_score in rows:
             threshold = float(root_score) * multiplier
-            for service in self.topology_graph.neighborhood(root_service, max_hops=max_hops):
+            for service in self.topology_graph.blast_radius(root_service, max_hops=max_hops):
                 if service != root_service:
                     required[service] = max(required.get(service, 0.0), threshold)
         return {service for service, score in service_scores.items() if score >= required.get(service, float("inf"))}
@@ -589,6 +579,12 @@ class SQLiteIncidentStore:
         ).fetchall()
         return [json.loads(row[0]) for row in rows]
 
+    def queued_self_heal_workflows(self) -> list[dict]:
+        rows = self._connection.execute(
+            "SELECT workflow_json FROM self_heal_workflows WHERE status = 'queued' ORDER BY created_at"
+        ).fetchall()
+        return [json.loads(row[0]) for row in rows]
+
     def self_heal_workflow(self, incident_id: str) -> dict | None:
         row = self._connection.execute(
             "SELECT workflow_json FROM self_heal_workflows WHERE incident_id = ?",
@@ -667,6 +663,7 @@ class SQLiteIncidentStore:
                     """,
                     (recovered_at, fingerprint),
                 )
+                self._enqueue_recovery_notification(incident)
             return incident
         return None
 
@@ -686,7 +683,8 @@ class SQLiteIncidentStore:
             f"SELECT notification_json FROM notification_outbox WHERE status = 'pending' AND incident_id IN ({placeholders}) ORDER BY created_at, rowid",
             incident_ids,
         ).fetchall()
-        return [NotificationMessage.model_validate_json(row[0]) for row in rows]
+        self._last_enqueued_incident_ids.difference_update(incident_ids)
+        return _ordered_notifications(rows)
 
     def enqueue_notification(self, message: NotificationMessage) -> None:
         now = _now()
@@ -747,7 +745,7 @@ class SQLiteIncidentStore:
             """,
             (_now(), limit),
         ).fetchall()
-        return [NotificationMessage.model_validate_json(row[0]) for row in rows]
+        return _ordered_notifications(rows)
 
     def mark_notification_sent(self, incident_id: str) -> None:
         row = self._connection.execute(
@@ -872,6 +870,19 @@ def _candidate_seen_at(candidate: CandidateEvent) -> datetime:
     if candidate.timestamp:
         return datetime.fromtimestamp(candidate.timestamp, UTC)
     return datetime.now(UTC)
+
+
+def _events_in_window(events: list[CandidateEvent], candidate: CandidateEvent, window_seconds: int) -> list[CandidateEvent]:
+    if window_seconds <= 0:
+        return []
+    current = _candidate_seen_at(candidate)
+    window = timedelta(seconds=window_seconds)
+    return [event for event in events if timedelta(0) <= current - _candidate_seen_at(event) < window]
+
+
+def _ordered_notifications(rows: list[tuple[str]]) -> list[NotificationMessage]:
+    messages = [NotificationMessage.model_validate_json(row[0]) for row in rows]
+    return sorted(messages, key=lambda message: message.likely_dependency != "unknown")
 
 
 def _severity_rank(severity: str) -> int:

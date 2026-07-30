@@ -154,7 +154,12 @@ def test_detector_drives_execute_then_fresh_telemetry_closes_incident(tmp_path: 
                     "target_kind": "Deployment",
                     "cost_min": 2,
                     "downtime_min": 0,
-                    "blast_radius_services": ["frontend"],
+                    "blast_radius_services": [
+                        "frontend",
+                        "recommendation",
+                        "product-reviews",
+                        "checkout",
+                    ],
                     "replicas": 3,
                     "verification_defined": True,
                     "verification_query_id": "product-catalog.cpu_millicores",
@@ -208,10 +213,12 @@ def test_detector_drives_execute_then_fresh_telemetry_closes_incident(tmp_path: 
             policy_expires_at="2026-08-31T23:59:59Z",
             approval_id="ADR-LIVE-001",
             protected_targets=frozenset({"payment", "postgresql"}),
+            rollback_failure_runbook_id="RB-AIOPS-RUNTIME",
             verification_deadline_seconds=180,
             min_fresh_samples=2,
             consecutive_passes=2,
             failure_samples=2,
+            min_incident_occurrences=1,
         ),
         clock=clock,
     )
@@ -243,6 +250,8 @@ def test_detector_drives_execute_then_fresh_telemetry_closes_incident(tmp_path: 
                 confidence_threshold=0.5,
                 downtime_cost_multiplier=1,
                 outcome_weights={"success": 1, "partial": 0.5, "failed": 0},
+                fallback_action_id="page_oncall",
+                fallback_target="platform-team",
             ),
             ActionCatalog(actions_path),
             IncidentHistoryStore(history_path),
@@ -260,15 +269,16 @@ def test_detector_drives_execute_then_fresh_telemetry_closes_incident(tmp_path: 
         assert first.policy_decisions[0].executed is True
 
         clock.advance(60)
-        collector._observations = [_observation(70, clock())]
+        collector._observations = [_observation(100, clock())]
         second = pipeline.run_once()
         assert second.verification_results[0].status == "not_recovered"
 
         clock.advance(60)
-        collector._observations = [_observation(60, clock())]
+        collector._observations = [_observation(90, clock())]
         third = pipeline.run_once()
         assert third.verification_results[0].status == "recovered"
         assert store.self_heal_workflow(first.incidents[0].incident_id)["status"] == "succeeded"
         assert store.list_incidents()[0].state == "recovered"
+        assert any(notification.title == "Recovered: product-catalog" for notification in third.notifications)
     finally:
         store.close()

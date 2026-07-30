@@ -42,6 +42,7 @@ External replay entry point:
 
 ```powershell
 .\.venv\Scripts\python.exe -m aiops.cli replay --dataset evaluate/dataset/mandate15_live --out evaluate/mandate15_live_report.json
+evaluate/live_notification_eval_report.json  # cross-dataset notification evaluator
 ```
 
 ## 3. Evidence Results
@@ -56,6 +57,7 @@ Replay report:
 
 ```text
 evaluate/mandate15_live_report.json
+evaluate/live_notification_eval_report.json  # cross-dataset notification evaluator
 ```
 
 Measured results:
@@ -110,6 +112,9 @@ Tradeoffs:
 - No mutation of `flagd` or Kubernetes state by the detector is required for the evidence run.
 - Synthetic/demo datasets are out of scope for Jira evidence.
 
+## 5.1 Merge Traceability
+
+Mandate #15 implementation is present on `main` through [PR #141](https://github.com/tf2-team/tf2-corp-platform/pull/141), merge commit [`3ac92dd`](https://github.com/tf2-team/tf2-corp-platform/commit/3ac92dd). PR #141 proves the submitted implementation/evidence version reached trunk. The audit corrections in the current working tree still require a follow-up commit/PR before they can be described as merged.
 ## 6. Sign-off
 
 | Role | Name | Date | Status |
