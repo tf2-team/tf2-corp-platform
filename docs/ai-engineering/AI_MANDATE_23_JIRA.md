@@ -533,7 +533,7 @@ Jira; các link kỹ thuật chỉ giải thích cách implementation thực hi�
 
 ### 6.2 Technical References
 
-- [Shared semantic cache guide](caching/semantic-cache-implementation-guide.md)
+- [Caching Implementation](caching/mandate-23-cache-implementation.md)
 - [Shopping Copilot cache runbook](caching/shopping-copilot-dod-evidence-runbook.md)
 - [Memory implementation](memory/mandate-23-memory-implementation.md)
 - [Directive #23 — normative requirement](MANDATE-23-genai-caching-memory.md)
