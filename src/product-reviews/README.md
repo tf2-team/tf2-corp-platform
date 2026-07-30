@@ -21,28 +21,21 @@ docker compose build product-reviews
 
 ## LLM Configuration
 
-Local Docker Compose runs use GroqCloud through `.env`:
+Use Amazon Bedrock Nova through `.env`:
 
 ``` yaml
-LLM_BASE_URL=https://api.groq.com/openai/v1
-LLM_MODEL=openai/gpt-oss-20b
-OPENAI_API_KEY=replace-with-groq-api-key
+LLM_PROVIDER=bedrock
+AWS_REGION=us-east-1
+BEDROCK_MODEL_ID=global.amazon.nova-2-lite-v1:0
+BEDROCK_MAX_TOKENS=1024
 ```
 
-Replace the API key placeholder locally, then start the stack:
+Supply AWS credentials locally (or an IRSA role in Kubernetes), then start the
+stack:
 
 ```sh
 docker compose up -d
 ```
 
-Never commit a real API key. The `OPENAI_API_KEY` variable name remains
-unchanged because the service uses the OpenAI-compatible interface for every
-provider.
-
-The selected model must support local tool calling because the service reads
-`message.tool_calls` and uses `tool_choice="auto"`.
-
-For a future Amazon Bedrock migration, `.env` includes a commented
-configuration using the OpenAI-compatible `bedrock-mantle` endpoint. Confirm
-that the chosen Bedrock model supports Chat Completions and client-side tool
-use before enabling it.
+The runtime uses the Bedrock Converse API. Never commit long-lived AWS
+credentials; use an AWS profile locally and IRSA in Kubernetes.
