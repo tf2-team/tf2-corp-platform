@@ -16,9 +16,9 @@ các tuyên bố đã được kiểm chứng; những case chưa có live evide
 vì đánh dấu đạt.
 
 Chi tiết kỹ thuật nằm tại
-[shared semantic cache guide](caching/semantic-cache-implementation-guide.md),
-[Shopping Copilot cache runbook](caching/shopping-copilot-dod-evidence-runbook.md)
-và [Shopping Copilot Mem0 integration](memory/shopping-copilot-mem0-integration-plan.md).
+[Caching Implementation](caching/mandate-23-cache-implementation.md),
+[Shopping Copilot cache runbook](caching/shopping-copilot-dod-evidence-runbook.md),
+và [Memory implementation](memory/mandate-23-memory-implementation.md).
 
 ## 2. Why this Change Matters
 
@@ -73,7 +73,7 @@ và hai phạm vi dữ liệu riêng:
 Chỉ durable fact tối thiểu mới được lưu. PII bị từ chối hoặc sanitize theo policy.
 Memory khi truy hồi luôn được xem là untrusted data, không phải instruction.
 Chi tiết storage, retrieval, retention và PII guard nằm trong
-[Shopping Copilot Mem0 integration](memory/shopping-copilot-mem0-integration-plan.md).
+[Memory implementation](memory/mandate-23-memory-implementation.md).
 
 ## 4. Design Summary
 
@@ -287,7 +287,7 @@ vụ review, expiry và deletion.
 | Safe writes | Chỉ persist candidate đủ policy sau turn hợp lệ; cache hit không tự tạo durable memory mới. |
 
 Chi tiết schema, retrieval filter, retention và PII guard được mô tả trong
-[Shopping Copilot Mem0 integration](memory/shopping-copilot-mem0-integration-plan.md).
+[Memory implementation](memory/mandate-23-memory-implementation.md).
 Scenario B, C và D ở mục 5 lần lượt chứng minh session continuity, recall ở session mới
 và không rò dữ liệu sang user khác.
 
@@ -441,11 +441,6 @@ artifact model-call suppression xác nhận counter Bedrock không tăng `16 →
 *Câu paraphrase “Find telescope options under $150” trả cùng tập sản
 phẩm và Network response hiển thị semantic hit với distance khoảng `0.0846951`.*
 
-> **Evidence gap:** các screenshot và raw replay chứng minh cold miss, exact hit,
-> semantic hit và model-call suppression. Pack hiện tại chưa có ảnh/live artifact
-> cho bước sửa source A → B và restore; vì vậy phần invalidation ở Scenario A
-> chưa được đánh dấu hoàn thành.
-
 ### Scenario B — Context Across Three Turns
 
 **Mục tiêu:** chứng minh session continuity mà user không phải nhắc lại constraint.
@@ -540,5 +535,5 @@ Jira; các link kỹ thuật chỉ giải thích cách implementation thực hi�
 
 - [Shared semantic cache guide](caching/semantic-cache-implementation-guide.md)
 - [Shopping Copilot cache runbook](caching/shopping-copilot-dod-evidence-runbook.md)
-- [Shopping Copilot Mem0 integration](memory/shopping-copilot-mem0-integration-plan.md)
+- [Memory implementation](memory/mandate-23-memory-implementation.md)
 - [Directive #23 — normative requirement](MANDATE-23-genai-caching-memory.md)
