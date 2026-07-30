@@ -13,7 +13,13 @@ import metrics as copilot_metrics
 is_bedrock_provider = _shared_bedrock.is_bedrock_provider
 
 
-def converse_json(response_model, system_prompt: str, user_prompt: str):
+def converse_json(
+    response_model,
+    system_prompt: str,
+    user_prompt: str,
+    *,
+    workflow_step: str = "structured_generation",
+):
     return _shared_bedrock.converse_json(
         response_model,
         system_prompt,
@@ -23,4 +29,5 @@ def converse_json(response_model, system_prompt: str, user_prompt: str):
                 "bedrock", input_tokens, output_tokens
             )
         ),
+        workflow_step=workflow_step,
     )

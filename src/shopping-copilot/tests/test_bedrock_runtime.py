@@ -52,3 +52,23 @@ def test_converse_json_accepts_explanatory_text_around_json(monkeypatch):
     result = bedrock_runtime.converse_json(RetrievalHint, "system", "user")
 
     assert result.semantic_query == "telescope"
+
+
+def test_converse_json_forwards_workflow_step(monkeypatch):
+    import bedrock_runtime
+
+    seen = {}
+
+    def fake_converse_json(*args, **kwargs):
+        seen["workflow_step"] = kwargs["workflow_step"]
+        return RetrievalHint(semantic_query="telescope")
+
+    monkeypatch.setattr(
+        bedrock_runtime._shared_bedrock, "converse_json", fake_converse_json
+    )
+
+    bedrock_runtime.converse_json(
+        RetrievalHint, "system", "user", workflow_step="retrieval_hint"
+    )
+
+    assert seen["workflow_step"] == "retrieval_hint"
