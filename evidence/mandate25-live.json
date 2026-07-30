@@ -9,7 +9,7 @@
       "pending_action": false,
       "surface": "product-reviews",
       "workflow_step": "grounded_summary",
-      "fault_sequence": "server_error,server_error",
+      "fault_sequence": "timeout,timeout",
       "configured_attempts": 2,
       "real_review_count": 5,
       "output_valid": true
@@ -80,7 +80,7 @@
     {
       "scenario": "product_review_malformed_json_rejected_then_recovered",
       "status": "GROUNDED",
-      "latency_ms": 22885.9,
+      "latency_ms": 18413.66,
       "product_count": 0,
       "claim_count": 2,
       "pending_action": false,

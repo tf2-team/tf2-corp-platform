@@ -230,6 +230,26 @@ python src/product-reviews/tests/test_mandate25.py `
   ShoppingCopilotMandate25Tests.test_01_single_provider_failure_falls_back
 ```
 
+**Kết quả**
+
+```powershell
+ShoppingCopilotMandate25Tests.test_01_single_provider_failure_falls_back": [
+    {
+      "scenario": "shopping_copilot_single_provider_failure",
+      "status": "FALLBACK",
+      "latency_ms": 9111.45,
+      "product_count": 0,
+      "claim_count": 0,
+      "pending_action": false,
+      "surface": "shopping-copilot",
+      "workflow_step": "retrieval_hint",
+      "fault_sequence": "timeout,timeout",
+      "configured_attempts": 2,
+      "output_valid": true
+    }
+  ],
+```
+
 ### Scenario B — Shopping Copilot sustained provider failure and breaker recovery
 
 **Mô tả ngắn:** Ép sáu timeout rồi một `pass` tại `retrieval_hint` để mở
@@ -252,6 +272,67 @@ python src/product-reviews/tests/test_mandate25.py `
   ShoppingCopilotMandate25Tests.test_02_sustained_failure_opens_breaker_then_recovers
 ```
 
+**Kết quả**
+
+```powershell
+ShoppingCopilotMandate25Tests.test_02_sustained_failure_opens_breaker_then_recovers": [
+    {
+      "scenario": "shopping_copilot_sustained_failure_1",
+      "status": "FALLBACK",
+      "latency_ms": 11872.47,
+      "product_count": 0,
+      "claim_count": 0,
+      "pending_action": false,
+      "surface": "shopping-copilot",
+      "failure_threshold": 3,
+      "output_valid": true
+    },
+    {
+      "scenario": "shopping_copilot_sustained_failure_2",
+      "status": "FALLBACK",
+      "latency_ms": 4825.91,
+      "product_count": 0,
+      "claim_count": 0,
+      "pending_action": false,
+      "surface": "shopping-copilot",
+      "failure_threshold": 3,
+      "output_valid": true
+    },
+    {
+      "scenario": "shopping_copilot_sustained_failure_3",
+      "status": "FALLBACK",
+      "latency_ms": 4630.09,
+      "product_count": 0,
+      "claim_count": 0,
+      "pending_action": false,
+      "surface": "shopping-copilot",
+      "failure_threshold": 3,
+      "output_valid": true
+    },
+    {
+      "scenario": "shopping_copilot_open_breaker_rejection",
+      "status": "FALLBACK",
+      "latency_ms": 4568.9,
+      "product_count": 0,
+      "claim_count": 0,
+      "pending_action": false,
+      "surface": "shopping-copilot",
+      "next_fault_plan_outcome": "pass_not_consumed",
+      "output_valid": true
+    },
+    {
+      "scenario": "shopping_copilot_half_open_recovery",
+      "status": "GROUNDED",
+      "latency_ms": 20740.81,
+      "product_count": 1,
+      "claim_count": 0,
+      "pending_action": false,
+      "surface": "shopping-copilot",
+      "bedrock_call": "real",
+      "output_valid": true
+    }
+  ],
+```
 ### Scenario C — Shopping Copilot malformed tool call is blocked
 
 **Mô tả ngắn:** Ép Bedrock trả `prepare_cart_action` có input sai schema tại
@@ -273,6 +354,26 @@ python src/product-reviews/tests/test_mandate25.py `
   ShoppingCopilotMandate25Tests.test_03_malformed_tool_call_is_blocked
 ```
 
+**Kết quả**
+
+```powershell
+ShoppingCopilotMandate25Tests.test_03_malformed_tool_call_is_blocked": [
+    {
+      "scenario": "shopping_copilot_malformed_tool_call_blocked",
+      "status": "FALLBACK",
+      "latency_ms": 18500.43,
+      "product_count": 0,
+      "claim_count": 0,
+      "pending_action": false,
+      "surface": "shopping-copilot",
+      "cart_unchanged": true,
+      "pending_action_created": false,
+      "real_catalog_product": "Solar System Color Imager",
+      "real_review_count": 5,
+      "output_valid": true
+    }
+  ]
+```
 ### Scenario D — Product Reviews single provider failure
 
 **Mô tả ngắn:** Ép hai `server_error` tại `grounded_summary` để làm cạn hai
@@ -291,6 +392,27 @@ exception provider, và không trả claim bịa.
 ```powershell
 python src/product-reviews/tests/test_mandate25.py `
   ProductReviewMandate25Tests.test_01_single_provider_failure_falls_back
+```
+
+**Kết quả**
+
+```powershell
+ProductReviewMandate25Tests.test_01_single_provider_failure_falls_back": [
+    {
+      "scenario": "product_review_single_provider_failure",
+      "status": "FALLBACK",
+      "latency_ms": 14987.33,
+      "product_count": 0,
+      "claim_count": 0,
+      "pending_action": false,
+      "surface": "product-reviews",
+      "workflow_step": "grounded_summary",
+      "fault_sequence": "timeout,timeout",
+      "configured_attempts": 2,
+      "real_review_count": 5,
+      "output_valid": true
+    }
+  ],
 ```
 
 ### Scenario E — Product Reviews sustained failure and breaker recovery
@@ -315,6 +437,72 @@ python src/product-reviews/tests/test_mandate25.py `
   ProductReviewMandate25Tests.test_02_sustained_failure_opens_breaker_then_recovers
 ```
 
+**Kết quả**
+
+```powershell
+ProductReviewMandate25Tests.test_02_sustained_failure_opens_breaker_then_recovers": [
+    {
+      "scenario": "product_review_sustained_failure_1",
+      "status": "FALLBACK",
+      "latency_ms": 11506.01,
+      "product_count": 0,
+      "claim_count": 0,
+      "pending_action": false,
+      "surface": "product-reviews",
+      "failure_threshold": 3,
+      "workflow_step": "grounded_summary",
+      "output_valid": true
+    },
+    {
+      "scenario": "product_review_sustained_failure_2",
+      "status": "FALLBACK",
+      "latency_ms": 3697.16,
+      "product_count": 0,
+      "claim_count": 0,
+      "pending_action": false,
+      "surface": "product-reviews",
+      "failure_threshold": 3,
+      "workflow_step": "grounded_summary",
+      "output_valid": true
+    },
+    {
+      "scenario": "product_review_sustained_failure_3",
+      "status": "FALLBACK",
+      "latency_ms": 3087.76,
+      "product_count": 0,
+      "claim_count": 0,
+      "pending_action": false,
+      "surface": "product-reviews",
+      "failure_threshold": 3,
+      "workflow_step": "grounded_summary",
+      "output_valid": true
+    },
+    {
+      "scenario": "product_review_open_breaker_rejection",
+      "status": "FALLBACK",
+      "latency_ms": 3744.79,
+      "product_count": 0,
+      "claim_count": 0,
+      "pending_action": false,
+      "surface": "product-reviews",
+      "next_fault_plan_outcome": "pass_not_consumed",
+      "output_valid": true
+    },
+    {
+      "scenario": "product_review_half_open_recovery",
+      "status": "GROUNDED",
+      "latency_ms": 12944.84,
+      "product_count": 0,
+      "claim_count": 2,
+      "pending_action": false,
+      "surface": "product-reviews",
+      "bedrock_call": "real",
+      "workflow_step": "grounded_summary",
+      "output_valid": true
+    }
+  ],
+```
+
 ### Scenario F — Product Reviews malformed JSON is rejected and recovered
 
 **Mô tả ngắn:** Ép một JSON sai schema tại `grounded_summary`; schema retry sau
@@ -334,6 +522,28 @@ reject output sai ở biên schema và chỉ trả response sau khi output mới
 ```powershell
 python src/product-reviews/tests/test_mandate25.py `
   ProductReviewMandate25Tests.test_03_malformed_json_is_rejected_then_recovers
+```
+
+**Kết quả**
+
+```powershell
+ProductReviewMandate25Tests.test_03_malformed_json_is_rejected_then_recovers": [
+    {
+      "scenario": "product_review_malformed_json_rejected_then_recovered",
+      "status": "GROUNDED",
+      "latency_ms": 18413.66,
+      "product_count": 0,
+      "claim_count": 2,
+      "pending_action": false,
+      "surface": "product-reviews",
+      "injected_fault": "malformed_json",
+      "workflow_step": "grounded_summary",
+      "configured_schema_attempts": 2,
+      "schema_recovery": true,
+      "bedrock_call_after_rejection": "real",
+      "output_valid": true
+    }
+  ],
 ```
 
 Sau khi đã chạy xong tất cả scenario, tất cả các kết quả của 6 kịch bản trên được lưu trong [evidence/mandate25-live.json](https://github.com/tf2-team/tf2-corp-platform/blob/feat/aie-resilience-fallback-v2/evidence/mandate25-live.json)
