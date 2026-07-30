@@ -1,9 +1,5 @@
 # AI MANDATE #23 — GenAI Caching and Memory
 
-> **Status:** `DRAFT — evidence pending`
->
-> Đây là dàn ý body Jira. Thay mọi `[TODO]` bằng link, số đo thực tế hoặc `N/A`
-> trước khi chuyển trạng thái sang `PASS`.
 
 ## 1. Outcome at a Glance
 
@@ -15,11 +11,14 @@ grounding thay đổi, các cache entry bị ảnh hưởng không còn hợp l�
 Phạm vi cache gồm Review Summary và Shopping Copilot; phần memory được kiểm chứng trên
 Shopping Copilot. Mục tiêu không phải chỉ làm câu trả lời nhanh hơn: mỗi cache hit phải
 chỉ ra được là kết quả cũ vẫn an toàn để tái sử dụng, còn dữ liệu đã đổi thì phải buộc hệ
-thống tạo câu trả lời mới. Các scenario ở mục 5 và số đo ở mục 6 là bằng chứng cho các
-tuyên bố này.
+thống tạo câu trả lời mới. Các scenario và raw artifact ở mục 5 là bằng chứng cho
+các tuyên bố đã được kiểm chứng; những case chưa có live evidence được ghi rõ thay
+vì đánh dấu đạt.
 
-Chi tiết approach triển khai nằm tại [Caching implementation](caching/mandate-23-cache-implementation.md)
-và [Memory implementation](memory/mandate-23-memory-implementation.md).
+Chi tiết kỹ thuật nằm tại
+[shared semantic cache guide](caching/semantic-cache-implementation-guide.md),
+[Shopping Copilot cache runbook](caching/shopping-copilot-dod-evidence-runbook.md)
+và [Shopping Copilot Mem0 integration](memory/shopping-copilot-mem0-integration-plan.md).
 
 ## 2. Why this Change Matters
 
@@ -59,7 +58,7 @@ mentor cung cấp; production path ánh xạ chúng từ identity đã được 
 | Source version/hash | Phiên bản catalog/review/source dùng để trả lời | Source thay đổi làm response cũ không còn đủ điều kiện dùng lại. |
 
 Cache key, thứ tự lookup và cách source version tham gia vào cache scope được mô tả trong
-[Caching implementation](caching/mandate-23-cache-implementation.md).
+[shared semantic cache guide](caching/semantic-cache-implementation-guide.md).
 
 ### 3.2 Memory Continuity and User Isolation
 
@@ -74,7 +73,7 @@ và hai phạm vi dữ liệu riêng:
 Chỉ durable fact tối thiểu mới được lưu. PII bị từ chối hoặc sanitize theo policy.
 Memory khi truy hồi luôn được xem là untrusted data, không phải instruction.
 Chi tiết storage, retrieval, retention và PII guard nằm trong
-[Memory implementation](memory/mandate-23-memory-implementation.md).
+[Shopping Copilot Mem0 integration](memory/shopping-copilot-mem0-integration-plan.md).
 
 ## 4. Design Summary
 
@@ -108,24 +107,23 @@ flowchart LR
 ### 4.2 Caching Approach
 
 #### Caching là gì?
-
-Trong luồng không có cache, một câu hỏi luôn đi qua guardrail, tools và model dù hệ
-thống vừa trả lời đúng câu đó trước đó. Cache thêm một đường đi ngắn hơn: lưu lại một
-response đã được kiểm tra và chỉ reuse khi request mới có cùng ranh giới an toàn với
-entry cũ.
+Trong luồng không có cache, một câu hỏi luôn đi qua guardrail, tools và model dù
+hệ thống vừa trả lời đúng câu đó trước đó. Cache thêm một đường đi ngắn hơn: lưu
+lại một response đã được kiểm tra và chỉ reuse khi request mới có cùng ranh giới
+an toàn với entry cũ.
 
 Cache ở đây không phải memory:
 
-- Cache trả lại một response đã tạo trước đó để tránh gọi model lại.
-- Memory lấy context hoặc preference của user để tạo một response mới.
+- **Cache** trả lại một response đã tạo trước đó để tránh gọi model lại.
+- **Memory** lấy context hoặc preference của user để tạo một response mới.
 
-Ví dụ, user hỏi “Recommend telescope options priced below $150” lần đầu thì hệ thống
-vẫn gọi model và lưu response đủ điều kiện. Nếu cùng user hỏi lại đúng câu đó trong
-cùng context và source chưa đổi, hệ thống có thể trả exact hit. Nếu user đổi cách diễn
-đạt thành “Find telescope options under $150”, hệ thống có thể trả semantic hit nếu độ
-tương đồng nằm trong threshold.
+Ví dụ, user hỏi “Recommend telescope options priced below $150” lần đầu thì hệ
+thống vẫn gọi model và lưu response đủ điều kiện. Nếu cùng user hỏi lại đúng câu
+đó trong cùng context và source chưa đổi, hệ thống có thể trả exact hit. Nếu user
+đổi cách diễn đạt thành “Find telescope options under $150”, hệ thống có thể trả
+semantic hit nếu độ tương đồng nằm trong threshold.
 
-#### Motivation và Problem cần giải quyết
+#### Motivation và problem cần giải quyết
 
 | Problem | Nếu không xử lý | Kỹ thuật được dùng |
 |---|---|---|
@@ -143,49 +141,93 @@ tương đồng nằm trong threshold.
 
 Implementation chia thành hai lớp:
 
-- `techx_ai_common.semantic_cache.SemanticCache` là adapter dùng chung. Lớp này quản
-  lý Valkey index, deterministic exact key, embedding, filtered KNN, TTL và fail-open.
-- `shopping_cache.py` là policy của Shopping Copilot. Lớp này quyết định request nào
-  được cache, tạo conversation scope, chụp source snapshot, serialize state an toàn và
-  hydrate state khi hit.
+1. `techx_ai_common.semantic_cache.SemanticCache` là adapter dùng chung. Lớp này
+   quản lý Valkey index, deterministic exact key, embedding, filtered KNN, TTL
+   và fail-open.
+2. `shopping_cache.py` là policy của Shopping Copilot. Lớp này quyết định request
+   nào được cache, tạo conversation scope, chụp source snapshot, serialize state
+   an toàn và hydrate state khi hit.
 
 Mỗi lookup được cô lập bằng các giá trị sau:
 
 | Scope/filter | Cách tạo | Problem được giải quyết |
 |---|---|---|
-| `user_scope` | HMAC-SHA256 từ `user_id` | Không để user khác dùng cùng cache entry; không lộ raw user ID trong key. |
-| Conversation scope | HMAC từ `conversation_id` và nhóm intent như discovery, product hoặc memory | Không trộn state giữa conversation hoặc loại request. |
-| `source_hash` | SHA-256 của stable conversation state, memory fingerprint và catalog/review snapshot liên quan | Source/context đổi thì entry cũ không còn match. |
-| `prompt_scope` | `shopping-react-agent:v1` | Prompt version đổi không reuse entry cũ. |
-| `model_scope` | Provider và model đang chạy | Model đổi không reuse output không tương thích. |
-| `embedding_scope` | Tên/version embedding model | Vector từ embedding version khác không bị trộn. |
+| `user_scope` | HMAC-SHA256 từ `user_id` | Không để user khác dùng cùng cache entry; không lộ raw user ID trong key |
+| Conversation scope | HMAC từ `conversation_id` và nhóm intent như discovery, product hoặc memory | Không trộn state giữa conversation hoặc loại request |
+| `source_hash` | SHA-256 của stable conversation state, memory fingerprint và catalog/review snapshot liên quan | Source/context đổi thì entry cũ không còn match |
+| `prompt_scope` | `shopping-react-agent:v1` | Prompt version đổi không reuse entry cũ |
+| `model_scope` | Provider và model đang chạy | Model đổi không reuse output không tương thích |
+| `embedding_scope` | Tên/version embedding model | Vector từ embedding version khác không bị trộn |
 
 #### Lookup diễn ra như thế nào?
 
-Exact lookup chạy trước vì rẻ và không cần vector search. Semantic lookup chỉ chạy khi
-exact miss. KNN lấy candidate gần nhất nhưng candidate vẫn phải khớp đồng thời user,
-conversation/resource, source, prompt, model và embedding scope. Threshold mặc định là
-`0.12`; distance càng nhỏ thì hai request càng gần nhau.
+```mermaid
+flowchart TD
+    A[Request đã qua identity và safety check] --> B[Normalize request]
+    B --> C[Build HMAC user and conversation scopes]
+    C --> D[Build current source snapshot]
+    D --> E[Exact deterministic lookup]
+    E --> F{Exact entry hợp lệ?}
+    F -- Có --> G[Hydrate state and return exact hit]
+    F -- Không --> H[Create request embedding]
+    H --> I[Filtered KNN in Valkey]
+    I --> J{All hybrid filters match and distance <= 0.12?}
+    J -- Có --> K[Hydrate state and return semantic hit]
+    J -- Không --> L[Continue to ReAct agent and model]
+    L --> M{Output is grounded, read-only and cache eligible?}
+    M -- Có --> N[Store response with TTL 3600 seconds]
+    M -- Không --> O[Return without storing]
+```
 
-Chỉ response `GROUNDED`, read-only và không có pending action mới được lưu. Anonymous
-request, cart mutation và response như `NO_RESULTS` không được biến thành reusable cache
-entry. Evidence hiện tại cho thấy hai request `NO_RESULTS` liên tiếp đều miss.
+Exact lookup chạy trước vì rẻ và không cần vector search. Semantic lookup chỉ
+chạy khi exact miss. KNN lấy candidate gần nhất nhưng candidate vẫn phải khớp
+đồng thời user, conversation/resource, source, prompt, model và embedding scope.
+Threshold mặc định là `0.12`; distance càng nhỏ thì hai request càng gần nhau.
+
+Chỉ response `GROUNDED`, read-only và không có pending action mới được lưu.
+Anonymous request, cart mutation và response như `NO_RESULTS` không được biến
+thành reusable cache entry. Evidence hiện tại cho thấy hai request `NO_RESULTS`
+liên tiếp đều miss.
+
 
 ### 4.3 Cache Safety Rules
 
-Các giá trị cấu hình và flow xử lý chi tiết của các quy tắc dưới đây được ghi trong
-[shared semantic cache guide](caching/semantic-cache-implementation-guide.md).
+Bảng này tách hai loại bằng chứng:
 
-| Rule | Giá trị implementation | Evidence |
-|---|---|---|
-| Cache scope | `user_id` scope + resource/session scope + normalized request + source version + prompt/model version | `[TODO]` |
-| Match modes | `[TODO: exact; semantic nếu bật]` | `[TODO]` |
-| TTL | `[TODO: giá trị và configuration]` | `[TODO]` |
-| Invalidation | Source version/hash được kiểm tra trước lookup | `[TODO]` |
-| Cacheable output | `[TODO: ví dụ grounded read-only answer]` | `[TODO]` |
-| Never cached | Blocked, fallback, rate-limited, mutation/pending-action responses | `[TODO]` |
+- **Code reference** chỉ ra chính xác logic nằm ở file và dòng nào.
+- **Runtime/test evidence** chứng minh logic đó đã chạy hoặc được test như thế nào.
 
-#### Verification Source Record
+| Rule | Giá trị implementation | Code reference | Runtime/test evidence |
+|---|---|---|---|
+| Cache scope | Key vật lý dùng namespace `ai:cache:copilot:{sha256}`. Exact key gồm HMAC user scope, conversation/request scope, source hash, prompt/model/embedding version và question hash. Raw user ID, conversation ID và prompt không xuất hiện trong key name. | [`_compute_user_scope()` và deterministic key](../../src/ai-common/techx_ai_common/semantic_cache.py#L163-L195); [conversation/request scope](../../src/shopping-copilot/shopping_cache.py#L81-L108) | [Valkey index and TTL](../../evidence/a1.3-shopping-cache/02-valkey-index-and-ttl.txt); [user/key unit tests](../../src/ai-common/tests/test_semantic_cache.py#L71-L113); [conversation isolation tests](../../src/shopping-copilot/tests/test_shopping_cache.py#L245-L277) |
+| Match modes | Exact lookup chạy trước. Exact miss mới tạo embedding và chạy filtered KNN; semantic candidate chỉ được nhận khi distance không vượt threshold. | [exact → semantic lookup](../../src/ai-common/techx_ai_common/semantic_cache.py#L209-L278); [hybrid KNN và distance gate](../../src/ai-common/techx_ai_common/semantic_cache.py#L280-L342) | [Cache-enabled replay](../../evidence/a1.3-shopping-cache/04-replay-cache-enabled.jsonl); [summary](../../evidence/a1.3-shopping-cache/07-summary-table.md) |
+| TTL | TTL mặc định đọc từ `AI_CACHE_TTL_SECONDS=3600`; mỗi HASH được gắn `EXPIRE` trong cùng pipeline khi store. | [Shopping Copilot cache config](../../src/shopping-copilot/shopping_cache.py#L53-L66); [`HSET` + `EXPIRE`](../../src/ai-common/techx_ai_common/semantic_cache.py#L411-L415) | Hai entry đo được còn `3348 s` và `3456 s`: [Valkey index and TTL](../../evidence/a1.3-shopping-cache/02-valkey-index-and-ttl.txt); [store/expire unit test](../../src/ai-common/tests/test_semantic_cache.py#L335-L353) |
+| Invalidation | Trước lookup, Copilot hash stable conversation state, memory fingerprint và catalog/review snapshot hiện tại. `source_hash` tham gia exact key, được kiểm tra lại trên exact hit và là filter bắt buộc của KNN. Source đổi làm request miss logic; entry cũ chờ TTL hết hạn. | [`compute_source_snapshot()`](../../src/shopping-copilot/shopping_cache.py#L111-L192); [snapshot được tạo trước lookup](../../src/shopping-copilot/shopping_cache.py#L195-L223); [exact source check và KNN source filter](../../src/ai-common/techx_ai_common/semantic_cache.py#L246-L299) | Catalog/review đổi làm snapshot đổi: [Shopping cache test](../../src/shopping-copilot/tests/test_shopping_cache.py#L280-L326). Source hash khác tạo exact key khác và stale hash bị reject: [shared cache tests](../../src/ai-common/tests/test_semantic_cache.py#L105-L113), [mismatch test](../../src/ai-common/tests/test_semantic_cache.py#L202-L220). Live source-mutation replay vẫn cần bổ sung. |
+| Cacheable output | Chỉ state `GROUNDED`, `cache_eligible`, không có pending action, có conversation và là read-only question mới được store. Shared adapter kiểm tra lại status trước persistence. | [Copilot store gate](../../src/shopping-copilot/shopping_cache.py#L304-L332); [shared GROUNDED gate](../../src/ai-common/techx_ai_common/semantic_cache.py#L344-L365) | Grounded discovery được lưu và hit: [cache-enabled replay](../../evidence/a1.3-shopping-cache/04-replay-cache-enabled.jsonl); [grounded store test](../../src/ai-common/tests/test_semantic_cache.py#L335-L353) |
+| Never cached | Anonymous/missing identity, cart mutation, pending action, tool error hoặc status khác `GROUNDED` đều bypass hoặc không store. Replay hiện tại chứng minh riêng `NO_RESULTS` không được lưu. | [lookup bypass và action policy](../../src/shopping-copilot/shopping_cache.py#L45-L108); [Copilot store rejection](../../src/shopping-copilot/shopping_cache.py#L304-L317); [shared status rejection](../../src/ai-common/techx_ai_common/semantic_cache.py#L355-L368) | [Non-cacheable replay](../../evidence/a1.3-shopping-cache/03-replay-non-cacheable.jsonl); [cart/tool-error tests](../../src/shopping-copilot/tests/test_shopping_cache.py#L203-L242); [abstained test](../../src/ai-common/tests/test_semantic_cache.py#L355-L370) |
+
+#### Invalidation hoạt động như thế nào?
+
+Implementation dùng **logical invalidation theo version**, không xóa tất cả key
+ngay khi source thay đổi:
+
+1. Trước mỗi lookup, Shopping Copilot đọc state ổn định của conversation, memory
+   liên quan, catalog và review của các product liên quan rồi tạo `source_hash`.
+2. Exact key chứa `source_hash`. Khi source đổi, hash mới tạo ra key mới nên
+   entry cũ không thể exact hit. Code còn so sánh `stored_source == source_hash`
+   như một lớp kiểm tra phòng thủ.
+3. Semantic lookup bắt buộc filter `@source_hash:{current_hash}` cùng user,
+   conversation/resource, prompt, model và embedding scope. Vì vậy một vector
+   gần về ngữ nghĩa nhưng thuộc source cũ vẫn bị loại trước khi xét distance.
+4. Entry cũ không còn được đọc nhưng vẫn có thể tồn tại vật lý cho tới khi TTL
+   hết hạn. Cách này tránh phải scan/delete hàng loạt key trong request path.
+
+Unit test đã chứng minh thay đổi catalog hoặc review làm snapshot đổi, source hash
+khác tạo deterministic key khác và exact record có stale hash bị reject. Phần còn
+thiếu là live replay sửa một source record thật rồi chụp `miss` cùng response mới;
+đó là thiếu artifact runtime, không phải thiếu logic invalidation trong code.
+
+### 4.4 Verification Source Record
 
 Đây là bản ghi được chọn để đội chạy invalidation replay và để người review có thể
 sửa an toàn khi cần xác minh lại.
@@ -243,6 +285,12 @@ answer: cache hit phải là kết quả của một request thật trước đ�
 nhận `exact`, `semantic` hoặc `none`. `cache_status` được giữ lại để tương thích
 với evidence cũ và luôn có cùng giá trị với `cache`.
 
+> **Contract gap:** raw replay ngày `2026-07-29` trong
+> `03-replay-non-cacheable.jsonl` và `04-replay-cache-enabled.jsonl` mới có
+> `cache_status`, chưa có alias literal `cache`. Nếu mentor kiểm tra đúng schema
+> trong directive, cần regenerate evidence sau khi replay output bổ sung field
+> `cache`.
+
 `session_id` phải là UUID v4 hợp lệ. Service bỏ qua conversation state, cache và
 memory khi nhận một giá trị session không hợp lệ; dùng UUID khác khi tạo session mới.
 
@@ -276,9 +324,9 @@ python src/shopping-copilot/scripts/replay_shopping_cache.py `
 **Expected output:** Mỗi request tạo một JSONL row gồm `sequence`, `request`,
 `user_id`, `session_id`, `status`, `cache`, `cache_status`, `cache_match`,
 `cache_distance`, `latency_ms` và `product_ids`. Raw JSONL là bằng chứng cache
-flag; nội dung response/source đã đổi được chụp ở Screenshot A. `model_calls`,
-token và cost được lấy từ metric tổng để điền mục 6, không phải từ một row replay.
-Lệnh invalidation dùng source record ở mục 4.3 và luôn có bước restore.
+flag; nội dung response/source đã đổi phải được chụp ở Scenario A. `model_calls`
+và token là metric tổng, không phải field của một replay row. Lệnh invalidation
+dùng source record ở mục 4.4 và luôn có bước restore.
 
 **Memory replay pattern:** dùng ba `--request` khác nhau cùng `--user-id` và
 `--session-id` cho Scenario B. Chạy lại lệnh với cùng `--user-id` nhưng
@@ -306,11 +354,47 @@ User A và Session A đã sẵn sàng.
 | 4 | Gửi lại Q | `cache=miss`; answer có value B, không còn value A. |
 | 5 | Restore source record | Test data quay về giá trị ban đầu. |
 
-> **Screenshot A — [TODO: đính kèm ảnh replay cache và source mutation]**
->
-> *Caption: Q lần đầu trả `cache=miss`; Q lặp lại trả `cache=hit` mà model-call
-> count không tăng. Sau khi source đổi từ A sang B, Q trả `cache=miss` và answer
-> phản ánh value B.*
+**Evidence đã có**
+
+- Cold request: `cache_status=miss`, `cache_match=none`, latency
+  `88746.88 ms`.
+- Exact repeat: `cache_status=hit`, `cache_match=exact`, distance `0`,
+  latency `71974.53 ms`, cùng ba product ID với cold request.
+- Safe paraphrase: `cache_status=hit`, `cache_match=semantic`, distance
+  `0.08469510078430176`, latency `49209.23 ms`, cùng ba product ID.
+- Dedicated exact-hit check giữ nguyên Bedrock model-call counter `16 → 16`.
+- Valkey có hai entry với TTL dương `3348–3456 s`, gần cấu hình `3600 s`.
+- Test suite: `65 passed` trong `29.97 s`.
+
+Raw artifacts:
+[cache-enabled replay](../../evidence/a1.3-shopping-cache/04-replay-cache-enabled.jsonl),
+[model-call suppression](../../evidence/a1.3-shopping-cache/05-model-call-suppression.txt),
+[Valkey/TTL](../../evidence/a1.3-shopping-cache/02-valkey-index-and-ttl.txt),
+[metrics snapshot](../../evidence/a1.3-shopping-cache/06-metrics-snapshot.txt),
+[test output](../../evidence/a1.3-shopping-cache/01-tests-output.txt) và
+[summary table](../../evidence/a1.3-shopping-cache/07-summary-table.md).
+
+![Cold request đi qua cache miss](../../evidence/assets/image6.png)
+
+*Request “Recommend telescope options priced below $150” trả response
+grounded. Network response hiển thị `cacheStatus: "miss"`,
+`cacheMatch: "none"` và `cacheDistance: 0`, xác nhận cold path chưa reuse cache.*
+
+![Request lặp tạo exact cache hit](../../evidence/assets/image7.png)
+
+*Request giống hệt được gửi lại và trả cùng danh sách sản phẩm. Network
+response hiển thị `cacheStatus: "hit"`, `cacheMatch: "exact"` và distance `0`;
+artifact model-call suppression xác nhận counter Bedrock không tăng `16 → 16`.*
+
+![Request paraphrase tạo semantic cache hit](../../evidence/assets/image8.png)
+
+*Câu paraphrase “Find telescope options under $150” trả cùng tập sản
+phẩm và Network response hiển thị semantic hit với distance khoảng `0.0846951`.*
+
+> **Evidence gap:** các screenshot và raw replay chứng minh cold miss, exact hit,
+> semantic hit và model-call suppression. Pack hiện tại chưa có ảnh/live artifact
+> cho bước sửa source A → B và restore; vì vậy phần invalidation ở Scenario A
+> chưa được đánh dấu hoàn thành.
 
 ### Scenario B — Context Across Three Turns
 
@@ -322,10 +406,25 @@ User A và Session A đã sẵn sàng.
 | 2 | Hỏi theo ngữ cảnh, ví dụ: “Tìm lựa chọn phù hợp với nhu cầu đó.” | Copilot áp dụng nhu cầu và mức $150 mà không hỏi lại. |
 | 3 | Tham chiếu kết quả trước, ví dụ: “So sánh sản phẩm đầu tiên với lựa chọn khác.” | Copilot hiểu “sản phẩm đầu tiên” từ đúng session. |
 
-> **Screenshot B — [TODO: đính kèm ảnh ba lượt cùng session]**
->
-> *Caption: Ba request dùng cùng `user_id` và `session_id`. Turn 2 kế thừa nhu
-> cầu/ngân sách ở turn 1; turn 3 hiểu đúng tham chiếu tới kết quả trước đó.*
+![Ba lượt hội thoại phụ thuộc ngữ cảnh](../../evidence/assets/image1.png)
+
+*User nêu nhu cầu astronomy gear cho camping, cần portable, quan sát
+planet và ngân sách `$200`; lượt sau hỏi hệ thống nhớ gì và Copilot nhắc lại
+đúng các constraint; lượt tiếp theo “Find an option for me” dùng context đó để
+đưa ra Red Flashlight giá `$57.08`.*
+
+![Tham chiếu this product trong cùng hội thoại](../../evidence/assets/image2.png)
+
+*Sau khi Red Flashlight được chọn ở lượt trước, câu “Show me this product
+in detail” được resolve đúng sang Red Flashlight và trả tên, giá `$57.08` cùng
+mô tả chi tiết mà user không phải nhắc lại product name.*
+
+![Recall chủ đề trong cùng conversation](../../evidence/assets/image9.png)
+
+*Sau yêu cầu tìm telescope dưới `$150`, user hỏi “what do you remember
+about my shopping needs?”. Copilot nhận ra đúng chủ đề telescope từ conversation
+hiện tại. Ảnh này hỗ trợ session continuity; nó không hiển thị `user_id` hoặc
+`session_id`, nên identity contract vẫn cần raw replay nếu dùng để chấm tự động.*
 
 ### Scenario C — Durable Recall in a New Session
 
@@ -338,11 +437,21 @@ session.
 | 2 | Hỏi lựa chọn mà không nhắc lại durable preference/constraint | Copilot truy hồi và áp dụng đúng fact được phép từ Session A. |
 | 3 | Xác nhận temporary reference của Session A không tồn tại | Copilot không xem “sản phẩm đầu tiên” của Session A là đã biết ở Session B. |
 
-> **Screenshot C — [TODO: đính kèm ảnh recall ở session mới]**
->
-> *Caption: Session B dùng `session_id` mới nhưng cùng `user_id` với Session A;
-> Copilot truy hồi đúng durable fact mà không mang theo temporary reference của
-> Session A.*
+![Lưu durable budget preference](../../evidence/assets/image3.png)
+
+*Ở conversation ban đầu, user yêu cầu ghi nhớ maximum budget cho telescope
+là `$110`; Copilot xác nhận đã ghi nhận constraint này cho các lần tìm kiếm sau.*
+
+![Recall budget ở conversation mới](../../evidence/assets/image4.png)
+
+*Conversation “Show me telescope options” được mở riêng và user không
+nhắc lại `$110`; Copilot vẫn lọc kết quả trong ngân sách, trả Solar Filter
+`$69.95` và National Park Foundation Explorascope `$101.96`.*
+
+
+> **Evidence gap:** các screenshot store/recall trên UI không hiển thị UUID
+> session hoặc user identity. Cần raw replay
+> với cùng `user_id`, session A/B khác nhau để dùng làm bằng chứng máy kiểm tra.
 
 ### Scenario D — Cross-User Isolation and PII Boundary
 
@@ -359,52 +468,27 @@ session.
 > *Caption: User B không nhận cache response, durable memory hoặc PII của User A;
 > fact có PII bị reject hoặc sanitize theo policy.*
 
-## 6. Measured Results
-
-Phần này trả lời câu hỏi cache có thực sự giảm lời gọi model, latency và cost hay không.
-Baseline và cache-enabled chạy cùng request set, model configuration và source snapshot;
-cache-enabled bắt đầu với cache rỗng để request đầu là miss thật. Request set có cả request
-không lặp và request lặp; hit-rate vì vậy được tính trên toàn bộ tập chạy, không chỉ chọn
-những request dễ hit. Raw replay output, thời điểm chạy và công thức cost được đính kèm
-cùng bảng khi điền số thực tế.
-
-| Metric | Baseline (cache off) | Cache enabled | Change |
-|---|---:|---:|---:|
-| Requests | `[TODO]` | `[TODO]` | — |
-| Repeated requests | `[TODO]` | `[TODO]` | — |
-| Cache hits | `0` | `[TODO]` | `[TODO]` |
-| Hit-rate | `0%` | `[TODO]` | `[TODO: pp]` |
-| Model calls | `[TODO]` | `[TODO]` | `[TODO]` |
-| Input tokens | `[TODO]` | `[TODO]` | `[TODO]` |
-| Output tokens | `[TODO]` | `[TODO]` | `[TODO]` |
-| Model cost | `[TODO: currency]` | `[TODO: currency]` | `[TODO: currency / %]` |
-| Mean latency | `[TODO: ms]` | `[TODO: ms]` | `[TODO: ms / %]` |
-| p95 latency | `[TODO: ms]` | `[TODO: ms]` | `[TODO: ms / %]` |
-
-**Cost calculation và price source:** `[TODO: model, region, price source, date,
-và formula]`
-
-## 7. Decisions, Ownership, and References
+## 6. Decisions, Ownership, and References
 
 Mục này ghi lại ai chịu trách nhiệm cho implementation và các quyết định không được thay
 đổi âm thầm sau khi evidence đã được chụp. Phần ADR bên dưới là record ký trực tiếp trên
 Jira; các link kỹ thuật chỉ giải thích cách implementation thực hiện các quyết định đó.
 
 **Implementation PR:** [tf2-team/tf2-corp-platform#140](https://github.com/tf2-team/tf2-corp-platform/pull/140)
-**Commit:** `[TODO]`
-**Design owner:** `[TODO]`
-**Reviewers/sign-off date:** `[TODO]`
+**Design owner:** Trần Quang Minh
+**Reviewers/sign-off date:** Lê Duy Khánh,28/07/2026
 
-### 7.1 ADR Record and Sign-off
+### 6.1 ADR Record and Sign-off
 
 | Decision | Status | Sign-off |
 |---|---|---|
-| Cache key luôn chứa user boundary, source version và TTL; hit không gọi model. | `Accepted` | `[TODO: name, date]` |
-| Session context dùng `user_id + session_id`; durable memory chỉ truy hồi trong cùng `user_id`. | `Accepted` | `[TODO: name, date]` |
-| Chỉ durable fact được policy cho phép mới được lưu; PII bị reject hoặc sanitize trước persistence. | `Accepted` | `[TODO: name, date]` |
+| Cache key luôn chứa user boundary, source version và TTL; hit không gọi model. | `Accepted` | Trần Quang Minh,28/07/2026 |
+| Session context dùng `user_id + session_id`; durable memory chỉ truy hồi trong cùng `user_id`. | `Accepted` | Trần Quang Minh,28/07/2026 |
+| Chỉ durable fact được policy cho phép mới được lưu; PII bị reject hoặc sanitize trước persistence. | `Accepted` | Trần Quang Minh,28/07/2026 |
 
-### 7.2 Technical References
+### 6.2 Technical References
 
-- [Caching implementation](caching/mandate-23-cache-implementation.md)
-- [Memory implementation](memory/mandate-23-memory-implementation.md)
-- `[TODO: Directive #23 — normative requirement]`
+- [Shared semantic cache guide](caching/semantic-cache-implementation-guide.md)
+- [Shopping Copilot cache runbook](caching/shopping-copilot-dod-evidence-runbook.md)
+- [Shopping Copilot Mem0 integration](memory/shopping-copilot-mem0-integration-plan.md)
+- [Directive #23 — normative requirement](MANDATE-23-genai-caching-memory.md)
