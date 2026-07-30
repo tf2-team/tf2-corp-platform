@@ -1,9 +1,9 @@
 # 07 - Baseline vs Cache-enabled summary (A1.3)
 
-**Date measured:** 2026-07-27  
-**Stack:** docker compose + `docker-compose.ai-dev.yml`  
-**Model:** Bedrock `us.amazon.nova-2-lite-v1:0` (`LLM_PROVIDER=bedrock`, region `us-east-1`)  
-**Cache config:** `AI_CACHE_TTL_SECONDS=3600`, `AI_CACHE_MAX_DISTANCE=0.40`  
+**Date measured:** 2026-07-27
+**Stack:** docker compose + `docker-compose.ai-dev.yml`
+**Model:** Bedrock `us.amazon.nova-2-lite-v1:0` (`LLM_PROVIDER=bedrock`, region `us-east-1`)
+**Cache config:** `AI_CACHE_TTL_SECONDS=3600`, `AI_CACHE_MAX_DISTANCE=0.40`
 **Replay script:** `src/product-reviews/scripts/replay_summary_cache.py` (7 requests / set)
 
 ## Comparison table

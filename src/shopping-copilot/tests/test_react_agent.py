@@ -37,6 +37,14 @@ def test_context_does_not_expose_tool_availability():
     assert "Shopping tools are available" not in context
 
 
+def test_final_text_unwraps_json_response_fence():
+    import react_agent
+
+    assert react_agent._final_text(
+        '```json {"response":"I found suitable portable astronomy gear."} ```'
+    ) == "I found suitable portable astronomy gear."
+
+
 def test_cart_tool_resolves_exact_product_name(monkeypatch):
     import react_agent
     from copilot_contracts import PendingCartAction

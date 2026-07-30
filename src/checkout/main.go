@@ -16,9 +16,14 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"syscall"
 	"time"
 
+	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/config"
+	"github.com/aws/aws-sdk-go-v2/service/cloudwatch"
+	cwtypes "github.com/aws/aws-sdk-go-v2/service/cloudwatch/types"
 	"golang.org/x/sync/errgroup"
 
 	"go.opentelemetry.io/otel/attribute"
@@ -68,6 +73,7 @@ import (
 var logger *slog.Logger
 var tracer trace.Tracer
 var resource *sdkresource.Resource
+var acceptedOrderWithoutDurableRecordCounter uint64
 var initResourcesOnce sync.Once
 
 func initResource() *sdkresource.Resource {
@@ -303,6 +309,8 @@ func main() {
 			logger.Info("durable checkout outbox worker started", "table", outboxTable)
 		}
 	}
+
+	go startCloudWatchMetricReporter(workerCtx, logger)
 
 	logger.Info(fmt.Sprintf("service config: %+v", svc))
 
@@ -1253,4 +1261,55 @@ func parseOrderCancelledBytes(data []byte) (string, string, error) {
 	return orderID, reason, nil
 }
 
-// Change trail: @hungxqt - 2026-07-28 - Reorder checkout to prepare outbox before payment and activate after payment.
+func startCloudWatchMetricReporter(ctx context.Context, logger *slog.Logger) {
+	ticker := time.NewTicker(1 * time.Minute)
+	defer ticker.Stop()
+
+	cfg, err := config.LoadDefaultConfig(ctx)
+	if err != nil {
+		logger.Error("failed to load AWS config for CloudWatch metric reporter", "error", err)
+	}
+	var cwClient *cloudwatch.Client
+	if err == nil {
+		cwClient = cloudwatch.NewFromConfig(cfg)
+	}
+
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			count := atomic.LoadUint64(&acceptedOrderWithoutDurableRecordCounter)
+			if cwClient != nil {
+				_, err := cwClient.PutMetricData(ctx, &cloudwatch.PutMetricDataInput{
+					Namespace: aws.String("TechX/Mandate21"),
+					MetricData: []cwtypes.MetricDatum{
+						{
+							MetricName: aws.String("AcceptedOrderWithoutDurableRecord"),
+							Value:      aws.Float64(float64(count)),
+							Unit:       cwtypes.StandardUnitCount,
+							Dimensions: []cwtypes.Dimension{
+								{
+									Name:  aws.String("Environment"),
+									Value: aws.String("production"),
+								},
+							},
+						},
+					},
+				})
+				if err != nil {
+					logger.Error("failed to publish AcceptedOrderWithoutDurableRecord metric to CloudWatch", "count", count, "error", err)
+				} else {
+					if count > 0 {
+						atomic.StoreUint64(&acceptedOrderWithoutDurableRecordCounter, 0)
+					}
+					logger.Info("published AcceptedOrderWithoutDurableRecord metric to CloudWatch", "count", count)
+				}
+			} else {
+				logger.Error("CloudWatch client unavailable, metric not published", "count", count)
+			}
+		}
+	}
+}
+
+// Change trail: @hungxqt - 2026-07-29 - Enforce mandatory production outbox guard and 1-minute CloudWatch metric reporter for AcceptedOrderWithoutDurableRecord.

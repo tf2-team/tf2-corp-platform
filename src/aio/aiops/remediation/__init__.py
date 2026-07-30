@@ -4,6 +4,7 @@
 from aiops.remediation.audit import RemediationAuditLog
 from aiops.remediation.catalog import ActionCatalog
 from aiops.remediation.decision import RemediationDecisionEngine
+from aiops.remediation.executor import SelfHealConfig, SelfHealOrchestrator
 from aiops.remediation.features import RemediationFeatureExtractor
 from aiops.remediation.history import IncidentHistoryStore
 from aiops.remediation.policy import PolicyEngine
@@ -17,4 +18,6 @@ __all__ = [
     "RemediationAuditLog",
     "RemediationDecisionEngine",
     "RemediationFeatureExtractor",
+    "SelfHealConfig",
+    "SelfHealOrchestrator",
 ]

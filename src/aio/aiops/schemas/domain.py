@@ -126,13 +126,32 @@ class ActionCatalogItem(AiopsModel):
     action_type: str
     target: str
     target_kind: str
+    namespace: str | None = None
     cost_min: float
     downtime_min: float
     blast_radius_services: list[str] = Field(default_factory=list)
     replicas: int = 3
     verification_defined: bool = True
+    verification_query_id: str | None = None
+    verification_signal_id: str | None = None
+    verification_threshold: float | None = None
+    verification_max_ratio: float | None = Field(default=None, gt=0, lt=1)
     rollback_defined: bool = True
+    rollback_action_id: str | None = None
     approved: bool = False
+    executor_supported: bool = False
+    recommendation_only: bool = False
+    audit_only: bool = False
+    dry_run_supported: bool = True
+    execute_supported: bool = False
+    live_execute_supported: bool = False
+    live_apply_enabled: bool = False
+    rollback_supported: bool = False
+    policy_id: str | None = None
+    policy_approval_required: bool = False
+    protected: bool = False
+    blocked: bool = False
+    blocked_reason: str | None = None
 
 
 class RemediationDecision(AiopsModel):
@@ -149,6 +168,9 @@ class RemediationDecision(AiopsModel):
     policy_reasons: tuple[str, ...] = ()
     policy_allowed: bool = False
     would_execute: bool = False
+    execution_id: str | None = None
+    execution_status: str | None = None
+    execution_reasons: list[str] = Field(default_factory=list)
 
 
 class EvidenceItem(AiopsModel):
@@ -192,6 +214,7 @@ class Incident(AiopsModel):
     service: str
     likely_dependency: str
     occurrence_count: int = 1
+    recovery_count: int = 0
     events: list[CandidateEvent] = Field(default_factory=list)
 
 

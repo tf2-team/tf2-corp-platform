@@ -1,6 +1,7 @@
 #!/usr/bin/python
 # Copyright The OpenTelemetry Authors
 # SPDX-License-Identifier: Apache-2.0
+
 from __future__ import annotations
 
 from datetime import UTC, datetime
@@ -14,9 +15,6 @@ def run(context: dict) -> dict:
         return block_response(context, "scale deployment blocked", reasons, config)
     if context.get("dry_run") is True:
         return block_response(context, "execute requires dry_run=false", ["execute_requires_dry_run_false"], config)
-    if context.get("live_apply") is True:
-        return block_response(context, "live apply is not enabled for Phase 2 action scripts", ["live_apply_disabled_phase2"], config)
-
     plan, plan_reasons = verify_plan_context(context, config)
     if plan_reasons:
         return block_response(context, "scale deployment plan validation failed", plan_reasons, config)

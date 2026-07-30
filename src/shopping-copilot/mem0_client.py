@@ -14,6 +14,8 @@ from datetime import date, timedelta
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
+from opentelemetry import trace
+
 
 logger = logging.getLogger("mem0_client")
 AGENT_ID = "shopping-copilot"
@@ -50,25 +52,33 @@ def search(query: str, conversation_id: str) -> list[dict]:
     """Return scoped active memories; every transport/schema failure is a miss."""
     if not read_enabled() or not query or not conversation_id:
         return []
-    try:
-        response = _request(
-            "/search",
-            {
-                "query": query[:500],
-                "filters": {
-                    "run_id": conversation_id,
-                    "agent_id": os.environ.get("MEM0_AGENT_ID", AGENT_ID),
-                    "schema_version": SCHEMA_VERSION,
+    with trace.get_tracer("shopping-copilot").start_as_current_span(
+        "retrieval mem0",
+        attributes={"app.ai.retrieval.source": "mem0"},
+    ) as span:
+        try:
+            response = _request(
+                "/search",
+                {
+                    "query": query[:500],
+                    "filters": {
+                        "run_id": conversation_id,
+                        "agent_id": os.environ.get("MEM0_AGENT_ID", AGENT_ID),
+                        "schema_version": SCHEMA_VERSION,
+                    },
+                    "top_k": int(os.environ.get("MEM0_TOP_K", "5")),
+                    "show_expired": False,
                 },
-                "top_k": int(os.environ.get("MEM0_TOP_K", "5")),
-                "show_expired": False,
-            },
-        )
-        results = response.get("results", [])
-        return [item for item in results if isinstance(item, dict)]
-    except (HTTPError, URLError, TimeoutError, ValueError, json.JSONDecodeError) as exc:
-        logger.warning("Mem0 search unavailable: %s", type(exc).__name__)
-        return []
+            )
+            results = [item for item in response.get("results", []) if isinstance(item, dict)]
+            span.set_attribute("app.ai.retrieval.result_count", len(results))
+            span.set_attribute("app.ai.outcome", "ok")
+            return results
+        except (HTTPError, URLError, TimeoutError, ValueError, json.JSONDecodeError) as exc:
+            span.set_attribute("app.ai.outcome", "error")
+            span.set_attribute("error.type", type(exc).__name__)
+            logger.warning("Mem0 search unavailable: %s", type(exc).__name__)
+            return []
 
 
 def add(

@@ -1,4 +1,4 @@
-﻿=== Source invalidation evidence ===
+=== Source invalidation evidence ===
 Date: 2026-07-27 13:29:07
 Product: OLJCESPC7Z
 User: user_invalidation
@@ -18,7 +18,7 @@ STEP_B_HIT cache_status=hit cache_match=exact response_status=GROUNDED latency_m
 STEP_B_HIT answer_preview=Perfect for camping trips. It's lightweight and portable, making it easy to take anywhere. The views are surprisingly good for its size. Great entry-level telescope! Easy to set up
 --- STEP C: SQL edit ---
 UPDATE 1
- id | product_id |                                                 tail                                                 
+ id | product_id |                                                 tail
 ----+------------+------------------------------------------------------------------------------------------------------
   1 | OLJCESPC7Z |  for new astronomers. [edited for cache invalidation test 20260727132840] [edited INV20260727132918]
 (1 row)

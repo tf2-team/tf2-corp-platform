@@ -80,7 +80,7 @@ Failing **local Trivy** never reaches ECR push for that service (AWS login happe
 | Environment | After `release-ready` |
 |---|---|
 | `development` | Job **update-chart-dev** writes only selected `service-digest/values-<service>.yaml` files on branch `techx-dev-corp` |
-| `production` | Job **create-chart-prod-pr** opens a PR containing only selected service digest overlays on base `main` (no auto-merge) |
+| `production` | Job **create-chart-prod-pr** opens a PR containing selected service digest overlays on base `main` (no auto-merge). When `aiops` is rebuilt, the same signed digest is also synchronized to `values-aiops-live-executor.yaml` |
 
 The workflow does **not** deploy Helm resources, call Argo CD APIs, or merge production chart PRs. Dev promotion relies on Argo CD auto-sync after the direct push; prod deploy still requires a human to merge the chart PR.
 
@@ -157,6 +157,12 @@ CI uploads to `${MEM0_FASTEMBED_ARTIFACT_S3_URI}/${VERSION}/`. The chart compose
 `requested_services` is validated against the release catalog and cannot be combined
 with `force_full_rebuild=true`. This is the operator path for rebuilding only artifacts
 that are missing a trustworthy signature or attestation without modifying service source.
+
+When the production `BUILD_SET` contains `aiops`, the chart promotion updates
+both `service-digest/values-aiops.yaml` and
+`values-aiops-live-executor.yaml` with the same signed digest. Development
+promotion does not modify the production live-executor overlay. The generated
+production chart PR and its human merge remain the rollout approval gate.
 
 ### Environment mapping (Build & Push)
 

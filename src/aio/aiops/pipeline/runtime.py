@@ -18,7 +18,7 @@ from aiops.enrichment import Enricher
 from aiops.features import FeatureBuilder
 from aiops.anomaly import build_v001_anomaly_engine
 from aiops.rca import V001RcaEngine, is_root_cause_metric
-from aiops.schemas import AnomalyFinding, EvidenceItem, MetricSeries, NotificationMessage, PipelineResult, PolicyDecision, RcaResult, RootCauseCandidate, RuntimeConfig, SignalQuality
+from aiops.schemas import AnomalyFinding, EvidenceItem, MetricSeries, NotificationMessage, PipelineResult, PolicyDecision, RcaResult, RootCauseCandidate, RuntimeConfig, SignalQuality, TelemetryCorroboration
 from aiops.normalization import Normalizer
 from aiops.notifications import is_slo_notification
 from aiops.qualification import QualificationGate
@@ -30,11 +30,12 @@ from aiops.remediation import (
     RemediationAuditLog,
     RemediationDecisionEngine,
     RemediationFeatureExtractor,
+    SelfHealOrchestrator,
 )
 from aiops.schemas import ActionCatalogItem, ActionProposal, CandidateEvent, Incident, RemediationDecision, VerificationResult
 from aiops.shared.metrics import is_memory_metric, is_oom_metric
 from aiops.shared.series import prepare_detector_series
-from aiops.shared.tail import evaluate_tail_change, metric_group, oom_counter_increased, point_changed
+from aiops.shared.tail import evaluate_tail_change, metric_group, oom_counter_increased, point_changed, significant_tail_change
 from aiops.topology import TopologyGraph
 from aiops.verification import VerificationEngine
 from aiops.pipeline.analysis import (
@@ -74,6 +75,7 @@ class AiopsPipeline:
         enricher: Enricher | None = None,
         notification_sender=None,
         rca_history_path: Path | None = None,
+        self_heal: SelfHealOrchestrator | None = None,
     ):
         self.collector = collector
         self.qualification = QualificationGate(
@@ -104,6 +106,7 @@ class AiopsPipeline:
         self.remediation = remediation
         self.notification_sender = notification_sender
         self.rca_history_path = rca_history_path
+        self.self_heal = self_heal
 
     def run_once(self, metric_series: list[MetricSeries] | None = None) -> PipelineResult:
         run_number = next(_RUN_COUNTER)
@@ -123,6 +126,7 @@ class AiopsPipeline:
             len(features),
             _counts(feature.status for feature in features),
         )
+        self_heal_verification = self.self_heal.reconcile(features) if self.self_heal is not None else []
         candidates = self.detector_engine.evaluate(features)
         (logger.info if candidates else logger.debug)("AIOPS_BLOCK detect candidates=%s ids=%s", len(candidates), [candidate.detector_id for candidate in candidates])
         correlated = self.correlator.correlate(candidates)
@@ -148,6 +152,19 @@ class AiopsPipeline:
             analysis_incidents = incidents
             regular_incidents = [incident for incident in incidents if not is_slo_notification(incident.events[-1])]
             deduped_incidents = _unique_incidents(incidents)
+        if hasattr(self.store, "reconcile_lifecycle"):
+            lifecycle_incidents = self.store.reconcile_lifecycle({incident.incident_id for incident in incidents})
+            recovered_now = [
+                incident
+                for incident in lifecycle_incidents
+                if incident.state == "recovered" and incident.recovery_count == getattr(self.store, "recovery_consecutive_buckets", 6)
+            ]
+            if recovered_now:
+                direct_notifications.extend(self._flush_notifications(recovered_now, only_incidents=True))
+            analysis_incidents = _unique_incidents([
+                *analysis_incidents,
+                *(incident for incident in lifecycle_incidents if incident.state != "recovered"),
+            ])
         logger.info(
             "AIOPS_DEDUP_RESULT input_candidates=%s rca_incidents=%s incidents=%s ids=%s services=%s occurrences=%s",
             len(enriched),
@@ -158,6 +175,11 @@ class AiopsPipeline:
             [incident.occurrence_count for incident in deduped_incidents],
         )
         verification_results = self.verification.verify(analysis_incidents, features)
+        if self_heal_verification:
+            reconciled_ids = {result.incident_id for result in self_heal_verification}
+            verification_results = [
+                result for result in verification_results if result.incident_id not in reconciled_ids
+            ] + self_heal_verification
         logger.debug("AIOPS_BLOCK verify results=%s statuses=%s", len(verification_results), [result.status for result in verification_results])
         logger.info(
             "AIOPS_BLOCK rca anomalies=%s root_causes=%s",
@@ -165,8 +187,12 @@ class AiopsPipeline:
             [root.service for root in rca_result.root_causes],
         )
         self._log_failure_conclusion(rca_result, analysis_incidents)
-        suppressed_incident_ids = self._suppress_related_notifications(_unique_incidents(regular_incidents), rca_result)
-        actionable_incidents = [incident for incident in regular_incidents if incident.incident_id not in suppressed_incident_ids]
+        suppressed_incident_ids = self._suppress_related_notifications(
+            _unique_incidents(regular_incidents),
+            rca_result,
+            _unique_incidents(root_incidents),
+        )
+        actionable_incidents = _unique_incidents(regular_incidents)
         self._record_rca_history(rca_result, incidents, enriched, metric_series or [])
         notifications = direct_notifications + self._flush_notifications(_unique_incidents(regular_incidents))
         logger.debug("AIOPS_BLOCK notify notifications=%s", len(notifications))
@@ -176,7 +202,30 @@ class AiopsPipeline:
             if proposal is not None:
                 decisions.append(self.policy.evaluate(proposal))
         logger.debug("AIOPS_BLOCK policy decisions=%s results=%s suppressed=%s", len(decisions), [decision.result for decision in decisions], len(suppressed_incident_ids))
-        remediation_decisions = self._run_remediation_strategy(actionable_incidents, rca_result)
+        remediation_decisions = self._run_remediation_strategy(actionable_incidents, rca_result, features)
+        if self.self_heal is not None and remediation_decisions:
+            decisions = [
+                PolicyDecision(
+                    allowed=decision.policy_allowed,
+                    result=decision.policy_result,
+                    reasons=decision.policy_reasons,
+                    executed=decision.would_execute,
+                )
+                for decision in remediation_decisions
+            ]
+        for decision in remediation_decisions:
+            if decision.execution_status != "verifying":
+                continue
+            verification_results = [
+                result for result in verification_results if result.incident_id != decision.incident_id
+            ]
+            verification_results.append(
+                VerificationResult(
+                    incident_id=decision.incident_id,
+                    status="inconclusive",
+                    reason="awaiting_fresh_post_action_telemetry",
+                )
+            )
         logger.debug(
             "AIOPS_BLOCK remediation decisions=%s selected=%s",
             len(remediation_decisions),
@@ -254,29 +303,53 @@ class AiopsPipeline:
         valid_roots = []
         for root in rca_result.root_causes:
             if root.score < threshold:
+                logger.info(
+                    "AIOPS_RCA_NOTIFY_SKIPPED filter=rca_notification_score source=rca service=%s score=%.3f threshold=%.3f reason=root_score_below_threshold",
+                    root.service,
+                    root.score,
+                    threshold,
+                )
                 continue
+            metric_reasons = {
+                metric: self._rca_root_metric_notify_reason(root.service, metric, metric_series or [])
+                for metric in root.root_cause_metrics
+            }
             filtered = root.model_copy(
                 update={
                     "root_cause_metrics": [
                         metric
                         for metric in root.root_cause_metrics
-                        if self._rca_root_metric_can_notify(root.service, metric, metric_series or [])
+                        if metric_reasons[metric][0]
                     ]
                 }
             )
             if not filtered.root_cause_metrics:
+                logger.info(
+                    "AIOPS_RCA_NOTIFY_SKIPPED filter=rca_metric_tail_gate source=rca service=%s metrics=%s reason=no_root_metric_can_notify",
+                    root.service,
+                    {metric: reason for metric, (_, reason) in metric_reasons.items()},
+                )
                 continue
             if _passes_rca_notification_gate(
                 root,
                 min_metric_score,
                 strong_shape_correlation_score,
                 has_anomaly_context or has_slo_context,
-                _root_has_oom_bypass(root, metric_series or [], self.rca_hyperparameters),
             ):
                 valid_roots.append(filtered)
+            else:
+                logger.info(
+                    "AIOPS_RCA_NOTIFY_SKIPPED filter=rca_notification_gate source=rca service=%s metric_scores=%s shape_correlation=%.3f min_metric_score=%.3f strong_shape_correlation_score=%.3f reason=weak_metric_evidence",
+                    root.service,
+                    root.metric_scores,
+                    root.evidence_scores.get("shape_correlation", 0.0),
+                    min_metric_score,
+                    strong_shape_correlation_score,
+                )
         rows = []
         for root in self._dedup_rca_root_causes(valid_roots):
             metric = root.root_cause_metrics[0]
+            signal_id = _canonical_signal_id(self.runtime_config, root.service, metric)
             flow = next((service.flow for service in self.runtime_config.topology.services if service.name == root.service), "unknown") if self.runtime_config else "unknown"
             rows.append(
                 self.store.upsert(
@@ -285,7 +358,7 @@ class AiopsPipeline:
                         flow=flow,
                         service=root.service,
                         severity=severity,
-                        signal_id=metric,
+                        signal_id=signal_id,
                         value=root.score,
                         unit="score",
                         window="rca",
@@ -303,34 +376,68 @@ class AiopsPipeline:
         return rows
 
     def _rca_root_metric_can_notify(self, service: str, metric: str, metric_series: list[MetricSeries]) -> bool:
+        return self._rca_root_metric_notify_reason(service, metric, metric_series)[0]
+
+    def _rca_root_metric_notify_reason(self, service: str, metric: str, metric_series: list[MetricSeries]) -> tuple[bool, str]:
         if not is_root_cause_metric(metric):
-            return False
+            return False, "not_root_cause_metric"
         config = self.rca_hyperparameters.get("anomaly", {})
         combined = self.rca_hyperparameters.get("combined", {})
         detection_window_seconds = int(combined.get("detection_window_seconds", 0)) or None
         start = int(self.rca_hyperparameters.get("min_points", combined.get("drift_min_points", 1))) - 1
-        if (is_memory_metric(metric) or is_oom_metric(metric)) and _service_oom_counter_increased(service, metric_series, detection_window_seconds, start):
-            return True
+        if (is_memory_metric(metric) or is_oom_metric(metric)) and _service_oom_counter_increased(
+            service,
+            metric_series,
+            detection_window_seconds,
+            start,
+            int(config.get("oom_recent_buckets", 3)),
+        ):
+            return True, "oom_counter_increased"
         match = next((item for item in metric_series if item.service == service and item.metric == metric), None)
         if match is None:
-            return bool(self.correlation_hyperparameters["rca_notification_allow_default_metric_without_series"]) and metric_group(metric) == "default"
+            allowed = bool(self.correlation_hyperparameters["rca_notification_allow_default_metric_without_series"]) and metric_group(metric) == "default"
+            return allowed, "default_metric_without_series" if allowed else "missing_metric_series"
         if not all(key in config for key in ("min_tail_anomaly_buckets", "min_relative_change_ratio", "min_absolute_change")):
-            return False
+            return False, "missing_tail_config"
         change = _metric_tail_change(match, detection_window_seconds, start, config)
+        significant = significant_tail_change(
+            match,
+            detection_window_seconds,
+            start,
+            config["min_tail_anomaly_buckets"],
+            config["min_relative_change_ratio"],
+            config["min_absolute_change"],
+            config.get("slow_drift", {}),
+            float(config.get("page_hinkley_min_bucket_factor", 2.0)),
+            oom_recent_buckets=int(config.get("oom_recent_buckets", 3)),
+        )
         if not bool(self.correlation_hyperparameters["rca_notification_require_current_tail_change"]):
-            return change.significant
-        return change.significant and _tail_is_still_changed(metric, change, config)
+            return significant, "tail_significant" if significant else "tail_not_significant"
+        if not significant:
+            return False, "tail_not_significant"
+        if not _tail_is_still_changed(metric, change, config):
+            return False, "tail_reversed"
+        return True, "tail_significant_current"
 
     def _dedup_rca_root_causes(self, root_causes: list[RootCauseCandidate]) -> list[RootCauseCandidate]:
         kept: list[RootCauseCandidate] = []
         max_hops = int(self.correlation_hyperparameters["topology_max_hops"])
         for root in root_causes:
-            duplicate = next((item for item in kept if self._same_rca_topology_scope(root.service, item.service, max_hops)), None)
+            same_service_only = bool(self.correlation_hyperparameters.get("rca_dedup_require_same_service", True))
+            duplicate = next(
+                (
+                    item
+                    for item in kept
+                    if (root.service == item.service if same_service_only else self._same_rca_topology_scope(root.service, item.service, max_hops))
+                    and bool(set(root.root_cause_metrics) & set(item.root_cause_metrics))
+                ),
+                None,
+            )
             if duplicate is None:
                 kept.append(root)
                 continue
             logger.info(
-                "AIOPS_RCA_DEDUP_SUPPRESSED service=%s kept_service=%s reason=topology_scope",
+                "AIOPS_RCA_DEDUP_SUPPRESSED filter=rca_topology_scope source=rca service=%s kept_service=%s reason=topology_scope",
                 root.service,
                 duplicate.service,
             )
@@ -365,17 +472,8 @@ class AiopsPipeline:
             )
             return RcaResult()
         anomaly_engine = build_v001_anomaly_engine(config)
-        findings = anomaly_engine.evaluate(detector_series, logs=log_messages) if log_messages else anomaly_engine.evaluate(detector_series)
+        anomaly_findings = anomaly_engine.evaluate(detector_series, logs=log_messages) if log_messages else anomaly_engine.evaluate(detector_series)
         anomaly_config = config["anomaly"]
-        corroboration = self.enricher.corroborate(impact_findings + findings, int(anomaly_config["evidence_window_seconds"]))
-        findings = impact_findings + _apply_corroboration(
-            findings,
-            detector_series,
-            corroboration,
-            float(anomaly_config["no_evidence_multiplier"]),
-            float(anomaly_config["single_evidence_bonus"]),
-            float(anomaly_config["dual_evidence_bonus"]),
-        )
         rca_engine = V001RcaEngine(
             self.runtime_config,
             config["graph"],
@@ -385,18 +483,64 @@ class AiopsPipeline:
         breakout_metrics = getattr(anomaly_engine, "last_normal_growth_breakout_metrics", {})
         normal_growth_metrics = getattr(anomaly_engine, "last_normal_growth_metrics", {})
         top_k = int(config["top_k"])
-        result = rca_engine.rank(
-            findings,
-            detector_series,
-            top_k=top_k + len(normal_growth_metrics),
-            corroboration=corroboration,
+        findings = impact_findings + anomaly_findings
+        rank_args = {
+            "top_k": top_k + len(normal_growth_metrics),
             **({"breakout_metrics": breakout_metrics} if breakout_metrics else {}),
+        }
+        result = rca_engine.rank(findings, detector_series, corroboration={}, **rank_args)
+        corroboration = self._staged_rca_corroboration(
+            result,
+            findings,
+            anomaly_findings,
+            detector_series,
+            int(anomaly_config["evidence_window_seconds"]),
         )
+        if _should_boost_from_anomaly_enrichment(result, float(self.correlation_hyperparameters["suppress_min_root_score"])):
+            anomaly_findings = _apply_corroboration(
+                anomaly_findings,
+                detector_series,
+                corroboration,
+                float(anomaly_config["no_evidence_multiplier"]),
+                float(anomaly_config["single_evidence_bonus"]),
+                float(anomaly_config["dual_evidence_bonus"]),
+            )
+            findings = impact_findings + anomaly_findings
+        if corroboration:
+            result = rca_engine.rank(findings, detector_series, corroboration=corroboration, **rank_args)
         if normal_growth_metrics:
             result = result.model_copy(update={"root_causes": _filter_normal_growth_root_metrics(result.root_causes, normal_growth_metrics, top_k)})
+        result = _add_trace_log_enrichment_fallback(result, corroboration)
         algorithm_findings = list(getattr(anomaly_engine, "last_algorithm_findings", []) or [])
         _log_final_root_cause_algorithm_scores(result, algorithm_findings)
         return result.model_copy(update={"algorithm_findings": algorithm_findings})
+
+    def _staged_rca_corroboration(
+        self,
+        result: RcaResult,
+        findings: list[AnomalyFinding],
+        anomaly_findings: list[AnomalyFinding],
+        series: list[MetricSeries],
+        window_seconds: int,
+    ) -> dict[str, TelemetryCorroboration]:
+        if not result.root_causes:
+            return {}
+        root = result.root_causes[0]
+        root_finding = _service_context_finding(root.service, findings, series, root)
+        corroboration = self.enricher.corroborate([root_finding], window_seconds)
+        logger.info("AIOPS_RCA_ENRICH stage=root service=%s strong=%s", root.service, _has_strong_corroboration(corroboration.values()))
+        if not _has_strong_corroboration(corroboration.values()):
+            dependencies = _direct_dependencies(self.topology_graph, root.service)
+            if dependencies:
+                dependency_findings = [_service_context_finding(service, findings, series, root) for service in dependencies]
+                corroboration.update(self.enricher.corroborate(dependency_findings, window_seconds))
+                logger.info("AIOPS_RCA_ENRICH stage=dependency_path root_service=%s services=%s strong=%s", root.service, sorted(dependencies), _has_strong_corroboration(corroboration.values()))
+        if _should_boost_from_anomaly_enrichment(result, float(self.correlation_hyperparameters["suppress_min_root_score"])):
+            missing = {finding.service for finding in anomaly_findings} - set(corroboration)
+            if missing:
+                corroboration.update(self.enricher.corroborate([_service_context_finding(service, findings, series, root) for service in missing], window_seconds))
+                logger.info("AIOPS_RCA_ENRICH stage=anomaly_boost services=%s reason=low_score_or_multiple_roots", sorted(missing))
+        return corroboration
 
     def _record_rca_history(
         self,
@@ -472,7 +616,12 @@ class AiopsPipeline:
                         messages.append((service, event.timestamp, text))
         return messages
 
-    def _run_remediation_strategy(self, incidents: list[Incident], rca_result: RcaResult) -> list[RemediationDecision]:
+    def _run_remediation_strategy(
+        self,
+        incidents: list[Incident],
+        rca_result: RcaResult,
+        verification_features: list[Feature],
+    ) -> list[RemediationDecision]:
         if self.remediation is None:
             return []
         extractor, retriever, decider, catalog, history, audit = self.remediation
@@ -483,12 +632,34 @@ class AiopsPipeline:
             features = extractor.extract(incident, rca_result)
             decision = decider.decide(incident.incident_id, features, retriever.top_matches(features, records), actions)
             decision = self._apply_remediation_policy(decision, actions)
+            action = actions.get(decision.selected_action)
+            if self.self_heal is not None and decision.policy_allowed and action is not None:
+                root_cause = next(
+                    (root for root in rca_result.root_causes if root.service == action.target),
+                    rca_result.root_causes[0] if rca_result.root_causes else None,
+                )
+                execution = self.self_heal.start(
+                    incident,
+                    action,
+                    root_cause,
+                    verification_features=verification_features,
+                )
+                decision = decision.model_copy(
+                    update={
+                        "would_execute": bool(execution["executed"]),
+                        "execution_id": execution.get("execution_id"),
+                        "execution_status": execution["status"],
+                        "execution_reasons": execution.get("reasons", []),
+                        "decision": "executed" if execution["executed"] else decision.decision,
+                    }
+                )
             logger.info(
-                "AIOPS_BLOCK remediation_decide incident=%s action=%s decision=%s policy=%s reasons=%s policy_reasons=%s",
+                "AIOPS_BLOCK remediation_decide incident=%s action=%s decision=%s policy=%s execution=%s reasons=%s policy_reasons=%s",
                 incident.incident_id,
                 decision.selected_action,
                 decision.decision,
                 decision.policy_result,
+                decision.execution_status,
                 decision.reasons,
                 decision.policy_reasons,
             )
@@ -502,6 +673,20 @@ class AiopsPipeline:
             return decision.model_copy(
                 update={"policy_result": "not_mutating", "policy_allowed": False, "would_execute": False}
             )
+        if self.self_heal is not None:
+            capability_reasons = _local_executor_capability_reasons(
+                action,
+                self.self_heal.config.policy_id,
+            )
+            if capability_reasons:
+                return decision.model_copy(
+                    update={
+                        "policy_result": "executor_capability_blocked",
+                        "policy_reasons": tuple(capability_reasons),
+                        "policy_allowed": False,
+                        "would_execute": False,
+                    }
+                )
         policy_decision = self.policy.evaluate(
             ActionProposal(
                 action_type=action.action_type,
@@ -523,34 +708,60 @@ class AiopsPipeline:
             }
         )
 
-    def _suppress_related_notifications(self, incidents: list[Incident], rca_result: RcaResult) -> set[str]:
+    def _suppress_related_notifications(
+        self,
+        incidents: list[Incident],
+        rca_result: RcaResult,
+        root_incidents: list[Incident] | None = None,
+    ) -> set[str]:
         suppressed = set()
-        current_root_service = None
         service_scores = _algorithm_service_scores(rca_result.algorithm_findings)
-        affected_services: set[str] = set()
-        if self.runtime_config is not None and rca_result.root_causes:
-            root = rca_result.root_causes[0]
-            if root.score >= float(self.correlation_hyperparameters["suppress_min_root_score"]):
-                root_service = root.service
-                current_root_service = root_service
-                max_hops = int(self.correlation_hyperparameters["topology_max_hops"])
-                affected_services = self.topology_graph.neighborhood(root_service, max_hops) if self.topology_graph is not None else {root_service}
-                self.store.register_active_root_cause(
-                    root_service,
-                    affected_services,
-                    int(self.correlation_hyperparameters["suppress_window_seconds"]),
-                    service_scores.get(root_service, 0.0),
-                )
+        max_hops = int(self.correlation_hyperparameters.get("topology_max_hops", 1))
+        min_score = float(self.correlation_hyperparameters.get("suppress_min_root_score", 1.0))
+        active_roots = [incident for incident in (root_incidents or []) if incident.events[-1].confidence >= min_score]
+        root_services = {incident.service for incident in active_roots}
+        direct_anomaly_services = set(service_scores) if self.correlation_hyperparameters.get("allow_direct_anomaly_breakout", True) else set()
+        slo_services = {
+            incident.service
+            for incident in incidents
+            if self.correlation_hyperparameters.get("allow_slo_breakout", True) and is_slo_notification(incident.events[-1])
+        }
+        affected_by_root = {
+            incident.service: self.topology_graph.neighborhood(incident.service, max_hops) if self.topology_graph is not None else {incident.service}
+            for incident in active_roots
+        }
+        for incident in active_roots:
+            root_service = incident.service
+            affected_services = affected_by_root[root_service]
+            root_score = service_scores.get(root_service) or incident.events[-1].confidence
+            logger.info(
+                "AIOPS_RCA_SUPPRESS_FILTER filter=active_root_cause source=rca root_service=%s affected_services=%s max_hops=%s suppress_seconds=%s reason=notifiable_root_cause",
+                root_service,
+                sorted(affected_services),
+                max_hops,
+                int(self.correlation_hyperparameters.get("suppress_window_seconds", 900)),
+            )
+            self.store.register_active_root_cause(
+                root_service,
+                affected_services,
+                int(self.correlation_hyperparameters.get("suppress_window_seconds", 900)),
+                root_score,
+            )
         breakout_services = (
-            self.store.breakout_services(service_scores, float(self.correlation_hyperparameters["suppress_breakout_multiplier"]))
+            self.store.breakout_services(
+                service_scores,
+                float(self.correlation_hyperparameters.get("suppress_breakout_multiplier", 1.5)),
+                max_hops,
+            )
             if service_scores
             else set()
         )
-        if current_root_service:
-            suppressed.update(self.store.suppress_related_notifications(incidents, current_root_service, affected_services, breakout_services))
+        exempt_services = breakout_services | root_services | direct_anomaly_services | slo_services
+        for root_service, affected_services in affected_by_root.items():
+            suppressed.update(self.store.suppress_related_notifications(incidents, root_service, affected_services, exempt_services))
         if incidents:
             remaining = [incident for incident in incidents if incident.incident_id not in suppressed]
-            suppressed.update(self.store.suppress_active_root_notifications(remaining, breakout_services))
+            suppressed.update(self.store.suppress_active_root_notifications(remaining, exempt_services))
         return suppressed
 
     def _record_verified_history(
@@ -626,8 +837,64 @@ def _filter_normal_growth_root_metrics(root_causes: list[RootCauseCandidate], no
     return kept
 
 
-def _service_oom_counter_increased(service: str, series: list[MetricSeries], detection_window_seconds: int | None, start: int) -> bool:
-    return oom_counter_increased(series, detection_window_seconds, start, service)
+def _has_strong_corroboration(items) -> bool:
+    return any(item.log_failure or item.trace_failure for item in items)
+
+
+def _add_trace_log_enrichment_fallback(result: RcaResult, corroboration: dict[str, TelemetryCorroboration]) -> RcaResult:
+    if not result.root_causes or not corroboration or _has_strong_corroboration(corroboration.values()):
+        return result
+    line = "Trace/log enrichment: queried root/dependencies, no hard failure found"
+    return result.model_copy(
+        update={
+            "root_causes": [
+                root.model_copy(update={"evidence": [*root.evidence, line]})
+                for root in result.root_causes
+            ]
+        }
+    )
+
+
+def _should_boost_from_anomaly_enrichment(result: RcaResult, low_score_threshold: float) -> bool:
+    return bool(result.root_causes) and (result.root_causes[0].score < low_score_threshold or len(result.root_causes) > 1)
+
+
+def _direct_dependencies(topology_graph: TopologyGraph | None, service: str) -> set[str]:
+    if topology_graph is None or not topology_graph.contains(service):
+        return set()
+    return set(topology_graph.graph.successors(service))
+
+
+def _service_context_finding(
+    service: str,
+    findings: list[AnomalyFinding],
+    series: list[MetricSeries],
+    root: RootCauseCandidate,
+) -> AnomalyFinding:
+    timestamp = max(
+        [finding.timestamp for finding in findings if finding.service == service]
+        + [metric.points[-1].timestamp for metric in series if metric.service == service and metric.points],
+        default=0,
+    )
+    metric = root.root_cause_metrics[0] if root.root_cause_metrics else "rca_root"
+    return AnomalyFinding(
+        algorithm="rca_enrichment",
+        service=service,
+        metric=metric,
+        signal_id=f"{service}_{metric}",
+        score=root.score,
+        timestamp=timestamp,
+    )
+
+
+def _service_oom_counter_increased(
+    service: str,
+    series: list[MetricSeries],
+    detection_window_seconds: int | None,
+    start: int,
+    recent_buckets: int,
+) -> bool:
+    return oom_counter_increased(series, detection_window_seconds, start, service, recent_buckets)
 
 
 def _metric_tail_change(metric: MetricSeries, detection_window_seconds: int | None, start: int, config: dict):
@@ -646,12 +913,21 @@ def _tail_is_still_changed(metric: str, change, config: dict) -> bool:
     if not change.indexes:
         return False
     group = metric_group(metric)
-    return point_changed(
-        change.values[change.indexes[-1]],
+    last = change.values[change.indexes[-1]]
+    if point_changed(
+        last,
         change.baseline,
         float(config["min_relative_change_ratio"][group]),
         float(config["min_absolute_change"][group]),
-    )
+    ):
+        return True
+    direction = config.get("slow_drift", {}).get("metrics", {}).get(group, {}).get("direction")
+    recent = change.indexes[-max(2, int(config["min_tail_anomaly_buckets"][group])) :]
+    if direction == "up":
+        return len(recent) > 1 and last > change.values[recent[0]]
+    if direction == "down":
+        return len(recent) > 1 and last < change.values[recent[0]]
+    return False
 
 
 def _passes_rca_notification_gate(
@@ -659,23 +935,13 @@ def _passes_rca_notification_gate(
     min_metric_score: float,
     strong_shape_correlation_score: float,
     has_rca_context: bool = False,
-    oom_bypass: bool = False,
 ) -> bool:
-    if has_rca_context or oom_bypass:
+    if has_rca_context:
         return True
     if min_metric_score <= 0:
         return True
     metric_scores = list(root.metric_scores.values())
     return not metric_scores or max(metric_scores) >= min_metric_score or root.evidence_scores.get("shape_correlation", 0.0) >= strong_shape_correlation_score
-
-
-def _root_has_oom_bypass(root: RootCauseCandidate, series: list[MetricSeries], config: dict) -> bool:
-    if not any(is_memory_metric(metric) or is_oom_metric(metric) for metric in root.root_cause_metrics):
-        return False
-    combined = config.get("combined", {})
-    detection_window_seconds = int(combined.get("detection_window_seconds", 0)) or None
-    start = int(config.get("min_points", combined.get("drift_min_points", 1))) - 1
-    return _service_oom_counter_increased(root.service, series, detection_window_seconds, start)
 
 
 def _combined_rca_hyperparameters(config: dict, topology_max_hops: int) -> dict:
@@ -687,6 +953,7 @@ def _combined_rca_hyperparameters(config: dict, topology_max_hops: int) -> dict:
         "min_absolute_change": anomaly["min_absolute_change"],
         "slow_drift": anomaly.get("slow_drift", {}),
         "page_hinkley_min_bucket_factor": anomaly["page_hinkley_min_bucket_factor"],
+        "oom_recent_buckets": anomaly["oom_recent_buckets"],
         "traffic_shape_max_lag_buckets": anomaly["traffic_shape_max_lag_buckets"],
         "topology_max_hops": topology_max_hops,
     }
@@ -731,3 +998,46 @@ def _log_count(summary: str) -> int:
 
 def _unique_incidents(incidents: list[Incident]) -> list[Incident]:
     return list({incident.incident_id: incident for incident in incidents}.values())
+
+
+def _local_executor_capability_reasons(
+    action: ActionCatalogItem,
+    policy_id: str,
+) -> list[str]:
+    checks = (
+        (action.executor_supported, "executor_not_supported"),
+        (action.dry_run_supported, "dry_run_not_supported"),
+        (action.execute_supported, "execute_not_supported"),
+        (action.live_execute_supported, "live_execute_not_supported"),
+        (not action.recommendation_only, "recommendation_only"),
+        (not action.audit_only, "audit_only"),
+        (not action.protected, "protected_action"),
+        (not action.blocked, "blocked_action"),
+        (action.verification_defined, "verification_not_defined"),
+        (bool(action.verification_query_id), "verification_query_missing"),
+        (bool(action.verification_signal_id), "verification_signal_missing"),
+        (
+            action.verification_threshold is not None
+            or action.verification_max_ratio is not None,
+            "verification_recovery_rule_missing",
+        ),
+        (action.rollback_defined, "rollback_not_defined"),
+        (action.rollback_supported, "rollback_not_supported"),
+        (bool(action.rollback_action_id), "rollback_action_missing"),
+        (action.approved, "action_not_approved"),
+        (action.policy_approval_required, "policy_approval_not_required"),
+        (action.policy_id == policy_id, "policy_id_mismatch"),
+    )
+    return [reason for allowed, reason in checks if not allowed]
+
+
+def _canonical_signal_id(
+    runtime_config: RuntimeConfig | None,
+    service: str,
+    metric: str,
+) -> str:
+    if runtime_config is not None:
+        for spec in runtime_config.prometheus_query_specs.values():
+            if spec.service == service and spec.metric == metric:
+                return spec.signal_id
+    return f"{service.replace('-', '_')}_{metric}"

@@ -18,6 +18,15 @@ export const normalizeMetricTarget = (target: string): string => {
   return target;
 };
 
+export const isAiApi = (target: string): boolean => {
+  return (
+    target === '/api/copilot' ||
+    target === '/api/copilot/index' ||
+    /^\/api\/copilot(\/|$)/.test(target) ||
+    /^\/api\/product-ask-ai-assistant(\/|$)/.test(target)
+  );
+};
+
 const InstrumentationMiddleware = (handler: NextApiHandler): NextApiHandler => {
   return async (request, response) => {
     const {method, url = ''} = request;
@@ -25,6 +34,12 @@ const InstrumentationMiddleware = (handler: NextApiHandler): NextApiHandler => {
     const target = normalizeMetricTarget(rawTarget);
 
     const span = trace.getSpan(context.active()) as Span;
+    if (span && isAiApi(rawTarget)) {
+      const traceId = span.spanContext()?.traceId;
+      if (traceId && /^[0-9a-fA-F]{32}$/.test(traceId)) {
+        response.setHeader('x-trace-id', traceId.toLowerCase());
+      }
+    }
 
     let httpStatus = 200;
     try {
@@ -48,3 +63,5 @@ async function runWithSpan(parentSpan: Span, fn: () => Promise<unknown>) {
 }
 
 export default InstrumentationMiddleware;
+
+// Change trail: @hungxqt - 2026-07-29 - Merge validated trace headers while limiting exposure to AI API responses.

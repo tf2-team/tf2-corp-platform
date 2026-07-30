@@ -103,7 +103,7 @@ class SettingsTest(unittest.TestCase):
         )
         self.assertEqual(
             config["rca"]["anomaly"]["min_tail_anomaly_buckets"],
-            {"error": 1, "latency": 3, "cpu": 5, "memory": 8, "disk": 2, "socket_io": 5, "request_rate": 2, "default": 4},
+            {"error": 1, "latency": 3, "cpu": 3, "memory": 6, "disk": 3, "socket_io": 3, "request_rate": 3, "default": 4},
         )
         self.assertEqual(config["rca"]["anomaly"]["min_relative_change_ratio"]["cpu"], 0.1)
         self.assertEqual(config["rca"]["anomaly"]["min_absolute_change"]["cpu"], 10.0)
@@ -129,6 +129,14 @@ class SettingsTest(unittest.TestCase):
         self.assertEqual(config["incident"]["notification_retry_base_seconds"], 60)
         self.assertEqual(config["incident"]["notification_retry_max_seconds"], 3600)
         self.assertEqual(config["incident"]["notification_error_max_chars"], 512)
+        self.assertEqual(config["notification"]["important_evidence_limit"], 20)
+        self.assertEqual(config["notification"]["user_rca_medium_confidence_score"], 0.3)
+        self.assertEqual(config["notification"]["user_rca_high_confidence_score"], 0.42)
+        self.assertIn("Trace/log enrichment", config["notification"]["important_evidence_markers"])
+        self.assertIn("trace_", config["notification"]["important_evidence_markers"])
+        self.assertIn("shape_correlation_score", config["notification"]["important_evidence_markers"])
+        self.assertEqual(config["api"]["grafana_annotation_max_chars"], 5024)
+        self.assertEqual(config["replay"]["explanation_finding_limit"], 5)
         self.assertEqual(config["enrichment"]["corroboration_log_hits"], 1)
         self.assertEqual(config["enrichment"]["corroboration_trace_limit"], 20)
         self.assertEqual(config["enrichment"]["corroboration_trace_max_request_seconds"], 300)

@@ -80,12 +80,52 @@ public class MigrationTests
     [Theory]
     [InlineData("shipping_tracking_id", true)]
     [InlineData("shipping_tracking_id,transaction_type", true)]
+    [InlineData("transaction_type,shipping_tracking_id", true)]
+    [InlineData("order_id,transaction_type", true)]
+    [InlineData("transaction_type,order_id", true)]
     [InlineData("order_id", false)]
-    [InlineData("shipping_tracking_id,unexpected_column", false)]
-    public void LegacyPrimaryKeyGuardAcceptsOnlyKnownLayouts(string columns, bool expected)
+    [InlineData("shipping_tracking_id,extra", false)]
+    public void ShippingPrimaryKeyGuardAcceptsOnlyKnownLayouts(string columns, bool expected)
     {
-        var result = DatabaseMigrator.IsSupportedLegacyPrimaryKey(columns.Split(','));
+        var result = DatabaseMigrator.IsSupportedShippingLegacyPrimaryKey(columns.Split(','));
         Assert.Equal(expected, result);
+    }
+
+    [Theory]
+    [InlineData("order_id,product_id", true)]
+    [InlineData("product_id,order_id", true)]
+    [InlineData("order_id,product_id,transaction_type", true)]
+    [InlineData("transaction_type,product_id,order_id", true)]
+    [InlineData("order_id", false)]
+    [InlineData("product_id", false)]
+    [InlineData("order_id,product_id,extra_col", false)]
+    [InlineData("order_id,product_id,transaction_type,extra_col", false)]
+    public void OrderItemPrimaryKeyGuardAcceptsOnlyKnownLayouts(string columns, bool expected)
+    {
+        var result = DatabaseMigrator.IsSupportedOrderItemLegacyPrimaryKey(columns.Split(','));
+        Assert.Equal(expected, result);
+    }
+
+    [Fact]
+    public void DesiredShippingWithLegacyOrderItemSchedulesOrderItemMigration()
+    {
+        var shippingCols = new[] { "order_id", "transaction_type" };
+        var orderItemCols = new[] { "order_id", "product_id" };
+
+        Assert.True(DatabaseMigrator.IsDesiredShippingPrimaryKey(shippingCols));
+        Assert.False(DatabaseMigrator.IsDesiredOrderItemPrimaryKey(orderItemCols));
+        Assert.True(DatabaseMigrator.IsSupportedOrderItemLegacyPrimaryKey(orderItemCols));
+    }
+
+    [Fact]
+    public void DesiredLayoutsRequiresBothTablesChecked()
+    {
+        var shippingDesired = new[] { "transaction_type", "order_id" };
+        var orderItemDesired = new[] { "product_id", "transaction_type", "order_id" };
+        var orderItemLegacy = new[] { "product_id", "order_id" };
+
+        Assert.True(DatabaseMigrator.IsDesiredShippingPrimaryKey(shippingDesired) && DatabaseMigrator.IsDesiredOrderItemPrimaryKey(orderItemDesired));
+        Assert.False(DatabaseMigrator.IsDesiredShippingPrimaryKey(shippingDesired) && DatabaseMigrator.IsDesiredOrderItemPrimaryKey(orderItemLegacy));
     }
 }
 
@@ -105,5 +145,4 @@ internal class TestDbContext : DbContext
     }
 }
 
-// Change trail: @hungxqt - 2026-07-28 - Add migration and co-existence tests for Accounting.
-// Change trail: Person 3 - 2026-07-29 - Cover both known legacy primary-key layouts.
+// Change trail: @hungxqt - 2026-07-29 - Extend MigrationTests for orderitem primary key layout validation.

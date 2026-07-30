@@ -1,9 +1,9 @@
 # A1.3 DoD Evidence Pack — Summary Bot Hybrid Cache
 
 **Status:** Measured evidence
-**Date:** 2026-07-27  
-**Surface:** Review Summary (`product-reviews`) hybrid cache (exact + semantic KNN on Valkey)  
-**Model (miss path):** Amazon Bedrock `us.amazon.nova-2-lite-v1:0` · region `us-east-1` · `LLM_PROVIDER=bedrock`  
+**Date:** 2026-07-27
+**Surface:** Review Summary (`product-reviews`) hybrid cache (exact + semantic KNN on Valkey)
+**Model (miss path):** Amazon Bedrock `us.amazon.nova-2-lite-v1:0` · region `us-east-1` · `LLM_PROVIDER=bedrock`
 **Cache config at measure time:**
 
 ```text
@@ -14,8 +14,8 @@ AI_CACHE_MAX_DISTANCE=0.40
 AI_CACHE_USER_HMAC_SECRET=local-only-cache-scope-secret
 ```
 
-**Compose:** `docker-compose.yml` + `docker-compose.ai-dev.yml`  
-**Replay tool:** `src/product-reviews/scripts/replay_summary_cache.py`  
+**Compose:** `docker-compose.yml` + `docker-compose.ai-dev.yml`
+**Replay tool:** `src/product-reviews/scripts/replay_summary_cache.py`
 **Artifact root:** [`evidence/a1.3-cache/`](../../../evidence/a1.3-cache/)
 
 ---
@@ -65,7 +65,7 @@ docker compose -f docker-compose.yml -f docker-compose.ai-dev.yml up -d `
   valkey-ai-cache ai-cache-bootstrap postgresql product-catalog product-reviews
 ```
 
-**Kết quả:** containers `valkey-ai-cache` (healthy), `product-reviews`, `postgresql`, `product-catalog` Up.  
+**Kết quả:** containers `valkey-ai-cache` (healthy), `product-reviews`, `postgresql`, `product-catalog` Up.
 Index bootstrap tạo `ai_summary_cache_idx` (và `ai_copilot_cache_idx` nếu có).
 
 ### 3.2 Lấy port host của product-reviews (không hardcode)
@@ -95,7 +95,7 @@ docker compose -f docker-compose.yml -f docker-compose.ai-dev.yml up -d --force-
 
 ---
 
-## 4. Evidence chi tiết: 
+## 4. Evidence chi tiết:
 
 ### 4.1 Unit tests → `01-tests-output.txt`
 
@@ -170,7 +170,7 @@ Cache misses:          7
 Mean latency (all):    ~5160 ms
 ```
 
-**JSONL:** 7 dòng, mỗi dòng `cache_status=miss`.  
+**JSONL:** 7 dòng, mỗi dòng `cache_status=miss`.
 **File:** [03-replay-baseline.jsonl](../../../evidence/a1.3-cache/03-replay-baseline.jsonl)
 
 ---
@@ -225,7 +225,7 @@ Mean miss:   ~7641 ms
 
 **File:** [04-replay-cache-enabled.jsonl](../../../evidence/a1.3-cache/04-replay-cache-enabled.jsonl)
 
-**Giải thích “không gọi model khi hit”:**  
+**Giải thích “không gọi model khi hit”:**
 Hit path latency ~1.5s vs miss ~4–18s. Miss path gọi Bedrock thật (volume AWS credentials). Hit path trả từ Valkey; model-call proxy trên set 7 request: 7 → 5 (giảm 2 lời gọi tương ứng 2 hits). Chi tiết bảng: [07-summary-table.md](../../../evidence/a1.3-cache/07-summary-table.md).
 
 ---
@@ -278,7 +278,7 @@ preview=Perfect for camping trips...   # vẫn có answer, không crash
 RESTORED: valkey + bootstrap done
 ```
 
-**File:** [09-fail-open.txt](../../../evidence/a1.3-cache/09-fail-open.txt)  
+**File:** [09-fail-open.txt](../../../evidence/a1.3-cache/09-fail-open.txt)
 **Bổ sung unit:** `TestFailOpen` trong [01-tests-output.txt](../../../evidence/a1.3-cache/01-tests-output.txt).
 
 ---
@@ -369,12 +369,11 @@ Mỗi dòng JSONL có: `product_id`, `question`, `user_id`, `attempt`, `cache_st
 ---
 
 ## 7. Checklist
-- [x] [01-tests-output.txt](../../../evidence/a1.3-cache/01-tests-output.txt) — pytest xanh  
-- [x] [02-valkey-index.txt](../../../evidence/a1.3-cache/02-valkey-index.txt) — PONG + `ai_summary_cache_idx`  
-- [x] [03-replay-baseline.jsonl](../../../evidence/a1.3-cache/03-replay-baseline.jsonl) — 0% hit  
-- [x] [04-replay-cache-enabled.jsonl](../../../evidence/a1.3-cache/04-replay-cache-enabled.jsonl) — exact + semantic + isolation  
-- [x] [07-summary-table.md](../../../evidence/a1.3-cache/07-summary-table.md) — bảng so sánh  
-- [x] [08-ttl-check.txt](../../../evidence/a1.3-cache/08-ttl-check.txt) — TTL ≈ 3600  
-- [x] [09-fail-open.txt](../../../evidence/a1.3-cache/09-fail-open.txt) — fail-open runtime  
-- [x] [10-source-invalidation.txt](../../../evidence/a1.3-cache/10-source-invalidation.txt) — source_hash invalidation  
-
+- [x] [01-tests-output.txt](../../../evidence/a1.3-cache/01-tests-output.txt) — pytest xanh
+- [x] [02-valkey-index.txt](../../../evidence/a1.3-cache/02-valkey-index.txt) — PONG + `ai_summary_cache_idx`
+- [x] [03-replay-baseline.jsonl](../../../evidence/a1.3-cache/03-replay-baseline.jsonl) — 0% hit
+- [x] [04-replay-cache-enabled.jsonl](../../../evidence/a1.3-cache/04-replay-cache-enabled.jsonl) — exact + semantic + isolation
+- [x] [07-summary-table.md](../../../evidence/a1.3-cache/07-summary-table.md) — bảng so sánh
+- [x] [08-ttl-check.txt](../../../evidence/a1.3-cache/08-ttl-check.txt) — TTL ≈ 3600
+- [x] [09-fail-open.txt](../../../evidence/a1.3-cache/09-fail-open.txt) — fail-open runtime
+- [x] [10-source-invalidation.txt](../../../evidence/a1.3-cache/10-source-invalidation.txt) — source_hash invalidation

@@ -177,6 +177,12 @@ processors:
 connectors:
   spanmetrics:
     metrics_flush_interval: 1s
+    dimensions:
+      - name: app.ai.surface
+      - name: gen_ai.provider.name
+      - name: gen_ai.request.model
+      - name: gen_ai.operation.name
+      - name: app.ai.outcome
 
 service:
   pipelines:

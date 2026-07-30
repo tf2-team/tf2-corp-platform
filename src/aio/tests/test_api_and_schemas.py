@@ -4,6 +4,7 @@
 import unittest
 from pathlib import Path
 from tempfile import TemporaryDirectory
+from unittest.mock import patch
 
 from fastapi import HTTPException
 
@@ -60,6 +61,82 @@ class FastApiAppTest(unittest.TestCase):
                 "auto_run_enabled": True,
                 "prometheus_base_url": "http://prometheus:9090",
                 "notification_webhook_url": "",
+                "grafana_webhook_secret": "configured",
+            }
+        )
+
+        with self.assertRaises(HTTPException) as raised:
+            readiness(settings)
+
+        self.assertEqual(raised.exception.status_code, 503)
+
+    def test_readiness_requires_explicit_live_self_heal_approval(self):
+        settings = Settings().model_copy(
+            update={
+                "self_heal_enabled": True,
+                "policy_mode": "live-approved",
+                "live_executor_url": "http://aiops-live-executor:8080",
+                "self_heal_approval_id": "",
+                "notification_webhook_url": "https://notification.test",
+                "grafana_webhook_secret": "configured",
+            }
+        )
+
+        with self.assertRaises(HTTPException) as raised:
+            readiness(settings)
+
+        self.assertEqual(raised.exception.status_code, 503)
+
+    def test_readiness_checks_live_executor_dependency(self):
+        settings = Settings().model_copy(
+            update={
+                "self_heal_enabled": True,
+                "policy_mode": "live-approved",
+                "live_executor_url": "http://aiops-live-executor:8080",
+                "self_heal_approval_id": "adr-live-001",
+                "notification_webhook_url": "https://notification.test",
+                "grafana_webhook_secret": "configured",
+            }
+        )
+
+        with patch("aiops.api.app.LiveExecutorClient") as client_type:
+            client_type.return_value.ready.return_value = True
+            response = readiness(settings)
+
+        self.assertEqual(response.status, "ready")
+        client_type.return_value.ready.assert_called_once_with()
+        client_type.return_value.close.assert_called_once_with()
+
+    def test_readiness_fails_when_live_executor_is_unavailable(self):
+        settings = Settings().model_copy(
+            update={
+                "self_heal_enabled": True,
+                "policy_mode": "live-approved",
+                "live_executor_url": "http://aiops-live-executor:8080",
+                "self_heal_approval_id": "adr-live-001",
+                "notification_webhook_url": "https://notification.test",
+                "grafana_webhook_secret": "configured",
+            }
+        )
+
+        with patch("aiops.api.app.LiveExecutorClient") as client_type:
+            client_type.return_value.ready.return_value = False
+            with self.assertRaises(HTTPException) as raised:
+                readiness(settings)
+
+        self.assertEqual(raised.exception.status_code, 503)
+        client_type.return_value.close.assert_called_once_with()
+
+    def test_readiness_requires_escalation_webhook_for_self_heal(self):
+        settings = Settings().model_copy(
+            update={
+                "self_heal_enabled": True,
+                "policy_mode": "live-approved",
+                "live_executor_url": "http://aiops-live-executor:8080",
+                "self_heal_approval_id": "adr-live-001",
+                "notification_webhook_url": "",
+                "notification_dev_webhook_url": "",
+                "notification_user_webhook_url": "",
                 "grafana_webhook_secret": "configured",
             }
         )

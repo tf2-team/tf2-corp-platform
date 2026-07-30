@@ -320,5 +320,6 @@ def run_copilot(user_message: str, deps: CopilotDeps, user_id: str = "anonymous"
     except asyncio.TimeoutError:
         return {**initial_state, "status": CopilotStatus.FALLBACK, "reason": "Request timed out. Please try again.", "error": "timeout"}
     except Exception as exc:
-        logger.error("Copilot graph raised unexpected exception: %s", exc)
-        return {**initial_state, "status": CopilotStatus.FALLBACK, "reason": "An unexpected error occurred.", "error": str(exc)}
+        error_type = type(exc).__name__
+        logger.error("Copilot graph raised unexpected exception: %s", error_type)
+        return {**initial_state, "status": CopilotStatus.FALLBACK, "reason": "An unexpected error occurred.", "error": error_type}

@@ -4,12 +4,19 @@
 
 import json
 import os
+import time
 import urllib.error
 import urllib.request
 from typing import Any, Dict, List, Optional
 
 _WEBHOOK_URL_CACHE: Optional[str] = None
 func_get_secret = None
+
+
+def _require_https_webhook_url(url: str) -> str:
+    if not isinstance(url, str) or not url.startswith("https://"):
+        raise RuntimeError("Discord webhook URL must use HTTPS")
+    return url
 
 
 def get_webhook_url() -> str:
@@ -19,18 +26,24 @@ def get_webhook_url() -> str:
 
     url = os.environ.get("DISCORD_WEBHOOK_URL")
     if url:
-        _WEBHOOK_URL_CACHE = url
-        return url
+        _WEBHOOK_URL_CACHE = _require_https_webhook_url(url)
+        return _WEBHOOK_URL_CACHE
 
-    secret_name = os.environ.get("WEBHOOK_SECRET_NAME", "techx-audit-alert-router")
+    secret_id = (
+        os.environ.get("DISCORD_WEBHOOK_SECRET_ARN")
+        or os.environ.get("WEBHOOK_SECRET_NAME")
+    )
+    if not secret_id:
+        raise RuntimeError("Discord webhook secret identifier is not configured")
+
     if func_get_secret:
-        url = func_get_secret(secret_name)
+        url = func_get_secret(secret_id)
     else:
         try:
             import boto3
 
             client = boto3.client("secretsmanager")
-            res = client.get_secret_value(SecretId=secret_name)
+            res = client.get_secret_value(SecretId=secret_id)
             secret_str = res.get("SecretString", "")
             if secret_str.startswith("http"):
                 url = secret_str
@@ -43,8 +56,38 @@ def get_webhook_url() -> str:
     if not url:
         raise RuntimeError("Webhook URL not found in secret or environment")
 
-    _WEBHOOK_URL_CACHE = url
+    _WEBHOOK_URL_CACHE = _require_https_webhook_url(url)
     return url
+
+
+def _emit_delivery_metrics(successes: int, failures: int) -> None:
+    namespace = os.environ.get(
+        "AUDIT_DETECTION_EVIDENCE_NAMESPACE", "TechX/Mandate11"
+    )
+    print(
+        json.dumps(
+            {
+                "_aws": {
+                    "Timestamp": int(time.time() * 1000),
+                    "CloudWatchMetrics": [
+                        {
+                            "Namespace": namespace,
+                            "Dimensions": [["Pipeline", "Channel"]],
+                            "Metrics": [
+                                {"Name": "DiscordDeliverySuccess", "Unit": "Count"},
+                                {"Name": "DiscordDeliveryFailure", "Unit": "Count"},
+                            ],
+                        }
+                    ],
+                },
+                "Pipeline": "audit-detection",
+                "Channel": "discord",
+                "DiscordDeliverySuccess": successes,
+                "DiscordDeliveryFailure": failures,
+            },
+            sort_keys=True,
+        )
+    )
 
 
 def post_to_discord(webhook_url: str, message: str, timeout: float = 5.0) -> bool:
@@ -73,8 +116,10 @@ def handler(event: Dict[str, Any], context: Any = None) -> Dict[str, List[Dict[s
     try:
         webhook_url = get_webhook_url()
     except Exception:
+        _emit_delivery_metrics(0, len(records))
         return {"batchItemFailures": [{"itemIdentifier": r.get("messageId", "")} for r in records if "messageId" in r]}
 
+    successful_items = 0
     for record in records:
         msg_id = record.get("messageId", "")
         body = record.get("body", "")
@@ -100,7 +145,10 @@ def handler(event: Dict[str, Any], context: Any = None) -> Dict[str, List[Dict[s
         ok = post_to_discord(webhook_url, content)
         if not ok:
             failed_items.append({"itemIdentifier": msg_id})
+        else:
+            successful_items += 1
 
+    _emit_delivery_metrics(successful_items, len(failed_items))
     return {"batchItemFailures": failed_items}
 
-# Change trail: @hungxqt - 2026-07-28 - Fix missing license header.
+# Change trail: @hungxqt - 2026-07-29 - Align the router with the Terraform secret ARN and emit delivery evidence.

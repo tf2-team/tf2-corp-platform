@@ -22,10 +22,15 @@ Chỉ bật live khi toàn bộ điều kiện sau được xác nhận:
 - Namespace `techx-corp-prod` được xác nhận là dev/demo được phép mutate, hoặc có namespace demo riêng.
 - `Deployment/product-catalog` tồn tại trong namespace approved.
 - Baseline replica count của `Deployment/product-catalog` là 2.
-- Executor Secret `aiops-live-executor-token` đã được tạo bằng secret manager/ESO hoặc cơ chế approved.
+- Executor Secret `aiops-live-executor-token` đã được tạo bằng secret manager/ESO
+  với cả `token` và `approval-id` từ policy decision đã ký.
 - Executor PVC `aiops-live-executor-state` được provision thành công.
 - NetworkPolicy đã áp dụng và chỉ cho `aiops-runtime` gọi executor.
-- Executor ServiceAccount/RBAC chỉ mutate `Deployment/product-catalog`.
+- Executor ServiceAccount/RBAC chỉ mutate `Deployment/product-catalog` và
+  `HorizontalPodAutoscaler/product-catalog`.
+- Trong live-test window, Argo CD phải tạm bỏ reconcile riêng trường
+  `HPA/product-catalog.spec.minReplicas`; executor sẽ restore floor ban đầu sau
+  verification hoặc rollback. Không giữ ignore rule này khi quay lại guarded mode.
 - AIO runtime vẫn giữ Kubernetes read-only.
 - AI runtime post-action verification dùng telemetry mới hơn `executed_at`.
 - Escalation/page channel thật đã được chốt, hoặc `page_oncall.py` vẫn giữ audit-only.
