@@ -20,9 +20,6 @@ class LiveExecutorClient:
             transport=transport,
         )
 
-    def submit_action(self, action: dict) -> dict:
-        return self._post("/actions", action)
-
     def catalog(self, request_id: str | None = None) -> list[dict]:
         return self._http.get("/v1/actions/catalog", headers=self._request_headers({"request_id": request_id}))
 

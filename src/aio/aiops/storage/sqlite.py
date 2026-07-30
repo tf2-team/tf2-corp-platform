@@ -369,10 +369,6 @@ class SQLiteIncidentStore:
         current_seen = _candidate_seen_at(candidate)
         return current_seen - first_seen >= timedelta(seconds=self.incident_count_reset_seconds)
 
-    def _can_enqueue_notification(self, incident_id: str) -> bool:
-        status = self._notification_outbox_status(incident_id)
-        return status is None or status in {"sent", "suppressed"}
-
     def _notification_outbox_status(self, incident_id: str) -> str | None:
         row = self._connection.execute(
             "SELECT status FROM notification_outbox WHERE incident_id = ?",

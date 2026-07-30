@@ -379,9 +379,6 @@ class AiopsPipeline:
             )
         return rows
 
-    def _rca_root_metric_can_notify(self, service: str, metric: str, metric_series: list[MetricSeries]) -> bool:
-        return self._rca_root_metric_notify_reason(service, metric, metric_series)[0]
-
     def _rca_root_metric_notify_reason(self, service: str, metric: str, metric_series: list[MetricSeries]) -> tuple[bool, str]:
         if not is_root_cause_metric(metric):
             return False, "not_root_cause_metric"

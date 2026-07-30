@@ -74,12 +74,12 @@ class IntegrationClientTest(unittest.TestCase):
         JaegerClient(cfg, transport=transport).search_traces(service="checkout")
         OpenSearchClient(cfg, transport=transport).search(index="logs-*", body={"query": {"match_all": {}}})
         KubernetesClient(cfg, transport=transport).get_deployment(namespace="tf2", name="checkout")
-        LiveExecutorClient(cfg, transport=transport).submit_action({"action_id": "act-1"})
+        LiveExecutorClient(cfg, transport=transport).plan({"action_id": "act-1"})
 
         self.assertIn(("GET", "/jaeger/ui/api/traces"), calls)
         self.assertIn(("POST", "/logs-*/_search"), calls)
         self.assertIn(("GET", "/apis/apps/v1/namespaces/tf2/deployments/checkout"), calls)
-        self.assertIn(("POST", "/actions"), calls)
+        self.assertIn(("POST", "/v1/actions/plan"), calls)
 
     def test_live_executor_accepts_contract_blocking_response_with_http_409(self):
         def handler(request: httpx.Request) -> httpx.Response:

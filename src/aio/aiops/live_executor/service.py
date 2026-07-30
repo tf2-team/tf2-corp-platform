@@ -9,7 +9,7 @@ from pathlib import Path
 from threading import RLock
 from typing import Any
 
-from runbooks.actions import page_oncall, plan_scale_deployment, restore_deployment_replicas, scale_deployment
+from runbooks.actions import plan_scale_deployment, restore_deployment_replicas, scale_deployment
 from runbooks.actions.common import (
     ALLOWLIST,
     POLICY_EXPIRES_AT,
@@ -163,16 +163,9 @@ class LiveExecutorService:
         self._save_idempotency(request, "plan", response)
         return response
 
-    def execute_action(self, request: dict[str, Any]) -> dict[str, Any]:
+    def execute(self, request: dict[str, Any]) -> dict[str, Any]:
         with self._lock:
             return self._execute(request)
-
-    def execute(self, request: dict[str, Any]) -> dict[str, Any]:
-        """Backward-compatible alias for callers outside the HTTP boundary."""
-        return self.execute_action(request)
-
-    def submit_execution(self, request: dict[str, Any]) -> dict[str, Any]:
-        return self.execute_action(request)
 
     def _execute(self, request: dict[str, Any]) -> dict[str, Any]:
         cached = self._idempotent(request, "execute")
@@ -480,15 +473,6 @@ class LiveExecutorService:
         self._audit(request, response, "rollback_submitted" if response["executed"] else "rollback_blocked")
         self._save_idempotency(request, "rollback", response, execution_id)
         return response
-
-    def legacy_submit(self, request: dict[str, Any]) -> dict[str, Any]:
-        if request.get("action_type") == "page":
-            response = _script_response_to_api(page_oncall.run(request), STATUS_PLANNED)
-            self._audit(request, response, "page_recorded")
-            return response
-        if request.get("dry_run") is True or not request.get("plan_hash"):
-            return self.plan(request)
-        return self.execute_action(request)
 
     def _idempotent(
         self,

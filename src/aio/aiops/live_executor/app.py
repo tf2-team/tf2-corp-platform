@@ -233,7 +233,7 @@ def create_app(service: LiveExecutorService | None = None, token: str | None = N
     @app.post("/v1/actions/execute", dependencies=[Depends(require_auth)])
     def execute(request: ActionRequest, x_request_id: str = Header(default="")) -> dict[str, Any]:
         require_matching_request_id(x_request_id, request.request_id)
-        return service.execute_action(request.model_dump())
+        return service.execute(request.model_dump())
 
     @app.get("/v1/actions/{execution_id}", dependencies=[Depends(require_auth)])
     def status(execution_id: str) -> dict[str, Any]:
@@ -257,10 +257,4 @@ def create_app(service: LiveExecutorService | None = None, token: str | None = N
         require_matching_request_id(x_request_id, request.request_id)
         return service.rollback(execution_id, request.model_dump())
 
-    @app.post("/actions", dependencies=[Depends(require_auth)])
-    def legacy_actions(request: dict[str, Any], x_request_id: str = Header(default="")) -> dict[str, Any]:
-        require_matching_request_id(x_request_id, str(request.get("request_id") or ""))
-        return service.legacy_submit(request)
-
     return app
-
