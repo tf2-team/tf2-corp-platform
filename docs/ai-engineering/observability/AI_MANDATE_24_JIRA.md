@@ -2,13 +2,7 @@
 
 ## Jira Metadata
 
-| Field | Value |
-|---|---|
-| Summary | `AI MANDATE #24` |
-| Labels | `ai-mandate`, `m24` |
-| Priority | `High` |
-| Assignee | Trần Quang Minh |
-| Contributors | T-Sunm, hungxqt |
+**Assignee:** Trần Quang Minh
 
 ## 1. Outcome at a Glance
 
@@ -377,11 +371,7 @@ OTLP export do OpenTelemetry pipeline xử lý ngoài model invocation.
 - [`84e6d03`](https://github.com/tf2-team/tf2-corp-platform/commit/84e6d0362d3b7208c756cdd878ce50815c95fe4b) — GenAI telemetry and private trace proxy.
 - [`5a2e97a`](https://github.com/tf2-team/tf2-corp-platform/commit/5a2e97a1c4ef6798e160fc4de07bb7fb916e5179) — integration with the current observability path.
 
-**Implementation contributors:** T-Sunm, hungxqt
-
 **Design owner:** Trần Quang Minh
-
-**Reviewer/sign-off date:** `[REVIEWER — ký tên và ngày thực tế]`
 
 ### 8.1 ADR Record and Sign-off
 
