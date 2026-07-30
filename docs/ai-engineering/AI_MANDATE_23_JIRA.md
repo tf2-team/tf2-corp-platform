@@ -1,9 +1,7 @@
 # AI MANDATE #23 — GenAI Caching and Memory
 
 > **Status:** `DRAFT — evidence pending`
->
-> Đây là dàn ý body Jira. Thay mọi `[TODO]` bằng link, số đo thực tế hoặc `N/A`
-> trước khi chuyển trạng thái sang `PASS`.
+
 
 ## 1. Outcome at a Glance
 
@@ -457,17 +455,16 @@ Mục này ghi lại ai chịu trách nhiệm cho implementation và các quyế
 Jira; các link kỹ thuật chỉ giải thích cách implementation thực hiện các quyết định đó.
 
 **Implementation PR:** [tf2-team/tf2-corp-platform#140](https://github.com/tf2-team/tf2-corp-platform/pull/140)
-**Commit:** `[TODO]`
-**Design owner:** `[TODO]`
-**Reviewers/sign-off date:** `[TODO]`
+**Design owner:** Trần Quang Minh
+**Reviewers/sign-off date:** Lê Duy Khánh,28/07/2026
 
 ### 6.1 ADR Record and Sign-off
 
 | Decision | Status | Sign-off |
 |---|---|---|
-| Cache key luôn chứa user boundary, source version và TTL; hit không gọi model. | `Accepted` | `[TODO: name, date]` |
-| Session context dùng `user_id + session_id`; durable memory chỉ truy hồi trong cùng `user_id`. | `Accepted` | `[TODO: name, date]` |
-| Chỉ durable fact được policy cho phép mới được lưu; PII bị reject hoặc sanitize trước persistence. | `Accepted` | `[TODO: name, date]` |
+| Cache key luôn chứa user boundary, source version và TTL; hit không gọi model. | `Accepted` | Trần Quang Minh,28/07/2026 |
+| Session context dùng `user_id + session_id`; durable memory chỉ truy hồi trong cùng `user_id`. | `Accepted` | Trần Quang Minh,28/07/2026 |
+| Chỉ durable fact được policy cho phép mới được lưu; PII bị reject hoặc sanitize trước persistence. | `Accepted` | Trần Quang Minh,28/07/2026 |
 
 ### 6.2 Technical References
 
