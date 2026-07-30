@@ -807,6 +807,8 @@ flowchart TD
 
 ### 13.1 Robust Drift
 
+**Tác dụng:** phát hiện một bucket đang cách xa vùng giá trị gần đây của chính metric đó. Detector này phù hợp với level shift, spike, drop hoặc drift đã đủ xa baseline, kể cả khi baseline có vài outlier.
+
 ```text
 center = median(baseline)
 MAD spread = median(|x-center|) × 1.4826
@@ -815,33 +817,253 @@ spread = max(MAD spread, IQR spread, fallback 1)
 score = |value-center| / spread
 ```
 
-Fire khi score `>= 4.0`.
+| Thành phần | Vai trò |
+| --- | --- |
+| `median(baseline)` | Mức bình thường trung tâm, ít bị spike kéo lệch hơn mean |
+| `MAD` | Độ dao động điển hình quanh median |
+| `IQR` | Độ rộng của 50% dữ liệu nằm giữa baseline |
+| `spread` | Mẫu số robust; càng lớn thì detector càng ít nhạy |
+| `score` | Tail cách baseline bao nhiêu đơn vị robust spread |
+
+Engine không dùng mãi một baseline cố định. Với mỗi tail bucket `t`, nó lấy rolling baseline đứng trước `t`:
+
+```text
+baseline_t = values[max(0, t-window_size) : t]
+score_t = |value_t - median(baseline_t)| / robust_spread(baseline_t)
+finding_score = max(score_t trong tail)
+```
+
+Ví dụ:
+
+```text
+baseline median = 100
+MAD spread      = 3
+IQR spread      = 4
+fallback        = 1
+spread          = max(3, 4, 1) = 4
+tail value      = 120
+score           = |120-100|/4 = 5
+```
+
+`5 >= 4.0`, vì vậy detector fire. Score `5` có nghĩa tail cách mức bình thường khoảng năm robust spread, không phải xác suất lỗi 500%.
+
+**Bắt tốt:** spike, level shift và giá trị cực đoan trên từng metric.
+
+**Không tự chứng minh:** nguyên nhân nghiệp vụ, chiều tăng có xấu hay không, hoặc thay đổi có do traffic hợp lệ hay không. Growth gate và RCA giải quyết các phần đó.
+
+**Giới hạn:** rolling baseline có thể dần hấp thụ một incident kéo dài. Slow-drift và incident lifecycle tồn tại để giảm khoảng câm này.
 
 ### 13.2 EWMA + STL
 
-EWMA dùng alpha `0.1`. Vì `seasonal_period = 1`, hiện tại residual chủ yếu là:
+**Tác dụng:** phát hiện giá trị hiện tại không còn khớp với đường kỳ vọng đã làm mượt. Nó nhạy với biến động cục bộ nhanh hơn Robust Drift khi raw level vẫn chưa cách baseline quá xa.
+
+EWMA dùng công thức lặp:
 
 ```text
-residual = value - EWMA
-z = |residual - mean(baseline_residual)| / stdev(baseline_residual)
+EWMA_t = alpha × value_t + (1-alpha) × EWMA_(t-1)
 ```
 
-Fire khi z `>= 4.0`.
+Sau đó engine loại phần dự kiến và phần mùa vụ:
+
+```text
+residual_t = value_t - EWMA_t - seasonal_t
+center = mean(baseline_residuals)
+spread = stdev(baseline_residuals), hoặc 1 nếu stdev = 0
+z_t = |residual_t - center| / spread
+finding_score = max(z_t trong tail)
+```
+
+| Thành phần | Vai trò |
+| --- | --- |
+| `alpha` | Tốc độ EWMA thích nghi với dữ liệu mới |
+| `EWMA_t` | Giá trị kỳ vọng ngắn hạn tại bucket `t` |
+| `seasonal_t` | Chu kỳ lặp lại do STL tách ra |
+| `residual_t` | Phần biến động chưa được trend/seasonality giải thích |
+| `z_t` | Residual cách vùng residual bình thường bao nhiêu standard deviation |
+
+Config hiện dùng `alpha = 0.1`: dữ liệu mới đóng góp 10%, lịch sử EWMA đóng góp 90%. Giả sử:
+
+```text
+value_t                  = 130
+EWMA_t                   = 110
+seasonal_t               = 0
+residual_t               = 20
+baseline residual mean   = 2
+baseline residual stdev  = 3
+z_t                      = |20-2|/3 = 6
+```
+
+`6 >= 4.0`, vì vậy detector fire.
+
+Với `seasonal_period = 1` hiện tại, STL không chạy và `seasonal_t = 0`. Tên detector vẫn là `EWMA+STL`, nhưng hành vi production lúc này chủ yếu là EWMA residual z-score.
+
+**Bắt tốt:** spike, đổi nhịp đột ngột và sai lệch cục bộ khỏi trend ngắn hạn.
+
+**Không bắt tốt:** drift rất đều kéo dài; EWMA dần đi theo level mới và residual giảm. Slow-drift chịu trách nhiệm chính cho trường hợp này.
+
+**Rủi ro:** z-score dùng mean/stdev nên baseline residual có outlier có thể làm spread lớn và giảm độ nhạy. Tail gate phía trước ngăn một residual lớn nhưng thay đổi thực tế quá nhỏ tự đi tới notification.
 
 ### 13.3 Isolation Forest
 
-Model dùng nhiều metric cùng service tại timestamp chung. Mỗi cột được robust-scale:
+**Tác dụng:** phát hiện trạng thái đa biến lạ của cả service. Một metric riêng lẻ có thể chưa vượt ngưỡng, nhưng tổ hợp CPU, memory và socket I/O đồng thời lệch theo một hình dạng chưa từng có trong baseline vẫn có thể bị bắt.
+
+Với service có `m` metric tại timestamp `t`:
 
 ```text
-scaled = (value - median_baseline) / robust_spread_baseline
-service_score = -score_samples(row) × 10
+X_t = [x_(t,1), x_(t,2), ..., x_(t,m)]
 ```
 
-Fire khi service score `>= 5.0`. Finding đầu ra gắn với metric lệch baseline nhiều nhất.
+Engine chỉ giữ timestamp có mặt trong tất cả metric, rồi robust-scale từng cột bằng **baseline của chính cột đó**:
+
+```text
+x_scaled_(t,j) = (x_(t,j) - median(baseline_j)) / robust_spread(baseline_j)
+X_scaled_t = [x_scaled_(t,1), ..., x_scaled_(t,m)]
+```
+
+Isolation Forest tạo nhiều cây phân hoạch ngẫu nhiên. Điểm nằm tách khỏi đám baseline chỉ sau ít lần chia sẽ có đường đi trung bình ngắn và được xem là bất thường. Phần toán học chuẩn của model có thể biểu diễn:
+
+```text
+s(x, n) = 2^(-E[h(x)] / c(n))
+c(n) = 2H_(n-1) - 2(n-1)/n
+```
+
+| Thành phần | Vai trò |
+| --- | --- |
+| `h(x)` | Độ dài đường đi để cô lập row `x` trong một cây |
+| `E[h(x)]` | Độ dài đường đi trung bình qua các cây |
+| `n` | Số baseline row dùng để fit |
+| `H` | Harmonic number dùng chuẩn hóa độ sâu cây |
+| `s(x,n)` | Điểm anomaly lý thuyết; đường đi càng ngắn thì điểm càng cao |
+
+Code không tự tính công thức cây; nó dùng `sklearn.ensemble.IsolationForest`. Điểm engine thực sự lưu là:
+
+```text
+raw = IsolationForest.score_samples(X_scaled_t)
+service_score = -raw × isolation_score_scale
+```
+
+Hiện `isolation_score_scale = 10` và fire khi `service_score >= 5.0`.
+
+Ví dụ baseline thường nằm quanh:
+
+```text
+CPU scaled     ≈ -1..1
+Memory scaled  ≈ -1..1
+Socket scaled  ≈ -1..1
+```
+
+Tail row `[4, 3, 5]` bị model trả `score_samples = -0.62`:
+
+```text
+service_score = -(-0.62) × 10 = 6.2
+6.2 >= 5.0 -> fire
+```
+
+`6.2` là điểm ranking đã đổi chiều và scale, không phải xác suất 62%.
+
+Finding schema chỉ chứa một metric, nên engine gắn finding với cột có:
+
+```text
+max |tail_scaled_value_j - mean(baseline_scaled_j)|
+```
+
+Đó chỉ là metric đại diện nổi bật nhất; toàn bộ vector vẫn tham gia model.
+
+**Bắt tốt:** tổ hợp đa metric lạ, anomaly hình dạng mới và quan hệ giữa metric bị phá vỡ.
+
+**Không chạy khi:** service có dưới hai metric đủ điểm, số timestamp giao nhau dưới `min_points`, hoặc không có tail row.
+
+**Giới hạn:** IF cho biết trạng thái lạ chứ không chứng minh metric nào gây ra metric nào. Topology, temporal ordering và trace nằm ở RCA mới xử lý attribution.
 
 ### 13.4 Slow-drift finding
 
-Slow-drift đạt gate tạo finding score `1.0`, timestamp tại đầu cửa sổ drift.
+**Tác dụng:** phát hiện xu hướng nhỏ nhưng tích lũy lâu, ví dụ memory leak, CPU tăng chậm, queue hoặc socket I/O leo dần. Nó dùng toàn cửa sổ thay vì chỉ một bucket cực trị.
+
+Đường xu hướng tuyến tính:
+
+```text
+x_mean = Σx_i / n
+y_mean = Σy_i / n
+slope = Σ((x_i-x_mean)(y_i-y_mean)) / Σ((x_i-x_mean)^2)
+span = max(x_i) - min(x_i)
+projected_change = direction × slope × span
+```
+
+Độ nhất quán của hướng:
+
+```text
+delta_i = direction × (y_i - y_(i-1))
+positive_ratio = count(delta_i > 0) / (n-1)
+```
+
+Significant khi đồng thời:
+
+```text
+n >= min_points
+projected_change >= min_total_change
+positive_ratio >= positive_bucket_ratio
+```
+
+Ví dụ socket I/O tăng từ khoảng 4.0 MiB/s lên 4.7 MiB/s trong một giờ:
+
+```text
+projected_change ≈ 0.7 MiB/s ≈ 734003 byte/s
+min_total_change = 512000 byte/s
+positive_ratio   = 0.65
+required ratio   = 0.45
+```
+
+Cả độ lớn và độ đều đạt ngưỡng, nên slow-drift fire.
+
+Khi significant, detector tạo raw finding:
+
+```text
+algorithm = slow_drift
+score = 1.0
+timestamp = bucket đầu của cửa sổ drift
+```
+
+Score cố định `1.0` là quyết định pass/fail, không biểu diễn drift mạnh gấp bao nhiêu. Với weight `1.0`, slow-drift một mình đủ đạt weighted anomaly threshold hiện tại.
+
+**Bắt tốt:** leak hoặc saturation tăng từ từ và có hướng nhất quán.
+
+**Không bắt tốt:** spike ngắn, zig-zag mạnh, hoặc chuỗi tăng tổng cộng đủ lớn nhưng ít hơn tỷ lệ bucket đi đúng hướng.
+
+**Giới hạn:** linear slope chỉ mô tả xu hướng tuyến tính trung bình. Nó không phân biệt tự nhiên giữa leak và workload tăng; growth gate dùng request-rate shape để giải thích traffic hợp lệ.
+
+### 13.5 Gate detector không trực tiếp tạo AnomalyFinding
+
+Basic-tail, CUSUM, Page-Hinkley và OOM counter nằm trong `significant_tail_change()`. Chúng quyết định series có được đưa vào bốn detector phía trên hay không:
+
+```text
+pass_tail = basic_tail
+            OR slow_drift
+            OR (metric_group cho phép AND (CUSUM OR Page-Hinkley))
+            OR OOM_counter_increased
+```
+
+| Gate | Tác dụng chính | Công thức quyết định |
+| --- | --- | --- |
+| Basic-tail | Xác nhận nhiều bucket hiện tại lệch đủ lớn | `absolute AND relative AND changed_count >= N` |
+| CUSUM | Cộng các lệch dương nhỏ liên tiếp | `cumulative >= limit AND consecutive >= N` |
+| Page-Hinkley | Bắt mean shift kéo dài sau khi trừ tolerance | `cumulative-minimum >= threshold AND consecutive >= N` |
+| OOM | Không bỏ sót sự kiện counter hiếm nhưng chắc | `counter_t > counter_(t-1)` trong các bucket gần nhất |
+
+Điểm quan trọng: các gate này không có weight riêng trong weighted anomaly. Chúng mở đường cho detector chính; riêng Slow-drift vừa là một nhánh pass tail vừa tạo raw finding.
+
+### 13.6 Chọn detector theo hình dạng anomaly
+
+| Hình dạng dữ liệu | Detector chịu trách nhiệm chính | Detector bổ trợ |
+| --- | --- | --- |
+| Một spike lớn rồi về bình thường | EWMA/STL, Robust Drift | Basic-tail có thể chặn notify nếu tail đã hồi phục |
+| Level nhảy lên và còn giữ nguyên | Robust Drift, EWMA/STL | Basic-tail |
+| Tăng rất chậm trong 30-60 phút | Slow-drift | CUSUM/Page-Hinkley cho nhóm được bật |
+| Lệch nhỏ liên tục từng bucket | CUSUM/Page-Hinkley gate | Robust Drift hoặc EWMA phải tạo finding sau khi qua gate |
+| CPU, memory, socket cùng tạo tổ hợp lạ | Isolation Forest | Robust/EWMA cho từng metric |
+| OOM counter tăng | OOM gate | Detector chính và RCA evidence |
+| Traffic tăng kéo resource tăng cùng shape | Có thể vẫn bị detector nhìn thấy | Growth gate đánh dấu explained để RCA không chọn nhầm root |
+
+Không detector nào tự kết luận root cause. Kết quả của chúng chỉ là bằng chứng bất thường; RCA mới dùng topology, thời gian, shape và downstream coverage để chọn service gốc.
 
 ```mermaid
 flowchart LR
@@ -937,48 +1159,262 @@ flowchart TD
 
 ## 16. Tạo ứng viên RCA
 
-Đầu vào RCA gồm anomaly findings, SLO impact, drift metric trực tiếp và trace/log root mạnh.
+### 16.1 RCA dùng để làm gì?
+
+Anomaly detector trả lời:
+
+```text
+Metric hoặc service nào đang có hành vi bất thường?
+```
+
+RCA trả lời câu hỏi khó hơn:
+
+```text
+Trong các service đang bất thường, service nào có nhiều bằng chứng nhất để là nguồn khởi phát?
+```
+
+Ví dụ `checkout`, `payment` và `postgresql` cùng đỏ:
+
+```text
+checkout lỗi sau
+checkout phụ thuộc payment
+payment phụ thuộc postgresql
+postgresql drift trước và trace chỉ lỗi ở database
+```
+
+RCA cố xếp `postgresql` lên trước, thay vì chỉ thông báo cả ba service đỏ. Kết quả là một **ranking có lý lẽ**, không phải chứng minh nhân quả tuyệt đối.
+
+### 16.2 Đầu vào và điều kiện thành ứng viên
+
+Đầu vào RCA gồm:
+
+    - Weighted anomaly findings theo service + metric.
+    - SLO/threshold findings để mô tả impact.
+    - Metric series dùng tìm drift, shape và thời điểm.
+    - Service dependency topology.
+    - Trace/log corroboration nếu đã query được.
+    - Breakout metrics do growth gate cung cấp.
 
 Request rate, latency, burn rate, error và log template là context metric, không được chọn làm `root_cause_metric`. Resource/OOM/default metric có thể làm root metric.
 
-Protected/non-actionable service bị loại; PostgreSQL là ngoại lệ vẫn được quan sát.
+Protected hoặc non-actionable service bị loại; PostgreSQL là ngoại lệ vẫn được quan sát.
+
+Nếu có SLO finding nhưng chưa có resource anomaly, engine quét `drift_metrics`. Metric phải đồng thời:
+
+```text
+robust_score >= drift_score_threshold
+AND significant_tail_change = true
+```
+
+mới được thêm làm ứng viên drift. Vì vậy một SLO breach không tự tạo ra root cause khi không tìm thấy resource evidence.
+
+Trace/log chỉ tự tạo root finding khi cùng có:
+
+```text
+trace_failure
+AND log_failure
+AND log_classification = hard_failure
+AND trace root hợp lệ theo topology
+```
+
+### 16.3 RCA không làm gì?
+
+RCA hiện không đọc nội dung source code, không chạy causal intervention và không chứng minh rằng “tắt service A thì service B hồi phục”. Nó kết hợp topology, temporal order, shape và blast radius để đưa ra nghi phạm hợp lý nhất.
+
+```mermaid
+flowchart LR
+    A["Anomaly findings"] --> C["Root candidates"]
+    S["SLO impact"] --> C
+    M["Metric series"] --> C
+    T["Topology"] --> C
+    L["Log/trace evidence"] --> C
+    C --> R["RCA ranking có lý lẽ"]
+```
 
 ---
 
 ## 17. Bốn RCA ranker
 
+Bốn ranker nhìn cùng một service dưới bốn câu hỏi khác nhau:
+
+| Ranker | Câu hỏi |
+| --- | --- |
+| Graph | Service có nằm ở vị trí topology hợp lý và được anomaly seed ủng hộ không? |
+| Earliest drift | Service nào bắt đầu lệch sớm hơn? |
+| Shape correlation | Resource metric nào biến động cùng hình dạng với impact? |
+| Downstream coverage | Service nào giải thích được nhiều downstream anomaly xuất hiện sau nó? |
+
 ### 17.1 Graph
 
+#### Tác dụng
+
+Graph ranker đưa anomaly score vào dependency graph rồi lan ảnh hưởng bằng Personalized PageRank. Cạnh topology có chiều:
+
 ```text
-graph_raw = max_seed × (0.7 × personalized_pagerank + 0.3 × timestamp_score)
+service -> dependency
+```
+
+Ví dụ `checkout -> payment -> postgresql`: anomaly seed ở checkout có thể truyền trọng số về các dependency có khả năng nằm sâu hơn trong chuỗi gọi.
+
+#### Personalized PageRank
+
+Vector seed được chuẩn hóa:
+
+```text
+p_i = seed_i / Σseed
+```
+
+PageRank lặp theo dạng:
+
+```text
+PR_(t+1) = damping × P^T × PR_t + (1-damping) × p
+```
+
+| Biến | Ý nghĩa |
+| --- | --- |
+| `P` | Ma trận chuyển tiếp của dependency graph |
+| `PR_t` | Điểm graph tại vòng lặp `t` |
+| `p` | Personalization vector từ anomaly seeds |
+| `damping` | Tỷ lệ tiếp tục đi theo graph; hiện `0.85` |
+| `1-damping` | Tỷ lệ quay lại anomaly seed |
+
+Engine còn kết hợp timestamp:
+
+```text
 timestamp_score = 1 - (timestamp-oldest)/(newest-oldest)
+graph_raw = max_seed × (0.7 × personalized_pagerank + 0.3 × timestamp_score)
 graph_score = graph_raw / max(graph_raw)
 ```
 
+`timestamp_score = 1` cho service có timestamp cũ nhất và `0` cho service mới nhất. Nếu mọi service cùng timestamp, tất cả nhận `1`.
+
+Code hiện lấy timestamp lớn nhất của findings trong mỗi service trước khi so giữa service. Do đó đây là “latest evidence timestamp của service”, không hoàn toàn là first anomaly time.
+
+Sau cùng chia cho `max(graph_raw)` để service mạnh nhất có `graph_score = 1`. Vì vậy graph score là điểm tương đối trong batch RCA hiện tại, không phải xác suất root cause.
+
+**Bắt tốt:** root nằm trên đường dependency và được nhiều anomaly seed ủng hộ.
+
+**Giới hạn:** topology sai hoặc thiếu cạnh sẽ làm ranking sai. PageRank mô tả khả năng theo graph, chưa chứng minh causality.
+
 ### 17.2 Earliest drift
 
-Engine tìm bucket đầu có robust score `>= 4.0` và tail significant:
+#### Tác dụng
+
+Sự cố thường xuất hiện ở root trước rồi mới lan downstream. Ranker này ưu tiên service có resource drift sớm.
+
+Với mỗi metric, engine trước tiên yêu cầu tail significant, sau đó tìm bucket đầu:
 
 ```text
-earliest_score = 1 - drift_index / latest_drift_index
+robust_score_t = |value_t - median(baseline)| / robust_spread(baseline)
+robust_score_t >= drift_score_threshold
 ```
+
+Mỗi service lấy `drift_index` nhỏ nhất trong các metric. Sau đó:
+
+```text
+latest = max(drift_index của các service)
+earliest_score(service) = 1 - drift_index(service) / latest
+```
+
+Ví dụ:
+
+```text
+postgresql drift_index = 10
+payment    drift_index = 20
+checkout   drift_index = 25
+latest                 = 25
+
+postgresql = 1 - 10/25 = 0.60
+payment    = 1 - 20/25 = 0.20
+checkout   = 1 - 25/25 = 0.00
+```
+
+Service drift muộn nhất nhận `0`; drift càng sớm càng gần `1`.
+
+**Bắt tốt:** propagation có thứ tự rõ ràng.
+
+**Giới hạn:** index chỉ so được khi các series có bucket alignment và lookback tương đương. Nếu root metric không được collect hoặc baseline đã nhiễm incident, điểm có thể bằng 0 dù service thực sự là root.
 
 ### 17.3 Shape correlation
 
-Primary là SLO series nếu có, nếu không là anomaly mạnh nhất:
+#### Tác dụng
+
+Ranker kiểm tra hình dạng resource metric có đi cùng impact hay không. Primary là SLO series nếu có; nếu không, engine dùng series của finding mạnh nhất.
+
+Spearman chuyển raw values thành ranks rồi tính Pearson correlation trên ranks:
+
+```text
+rho = cov(rank(X), rank(Y)) / (std(rank(X)) × std(rank(Y)))
+```
+
+Nếu không có tied rank, có thể hình dung bằng:
+
+```text
+rho = 1 - 6Σd_i^2 / (n(n^2-1))
+```
+
+| Biến | Ý nghĩa |
+| --- | --- |
+| `rank(X)` | Thứ hạng các bucket của primary series |
+| `rank(Y)` | Thứ hạng các bucket của candidate metric |
+| `d_i` | Chênh lệch rank tại bucket `i` |
+| `rho` | Tương quan đơn điệu từ `-1` đến `1` |
+
+Engine thử nhiều lag:
 
 ```text
 shape_score = max(|Spearman(primary, metric, lag)|), lag = 0..5 bucket
 ```
 
+Dùng trị tuyệt đối nên cùng tăng (`rho > 0`) và một tăng một giảm (`rho < 0`) đều có thể là evidence nếu hình dạng đủ mạnh. Service lấy shape score lớn nhất trong các root-cause metric của nó.
+
+Ví dụ các lag cho payment CPU:
+
+```text
+lag 0: rho = 0.55
+lag 1: rho = 0.81
+lag 2: rho = 0.72
+shape_score = max(|rho|) = 0.81
+```
+
+**Bắt tốt:** impact xuất hiện trễ vài bucket nhưng giữ cùng hình dạng.
+
+**Giới hạn:** correlation cao có thể do workload chung hoặc trùng hợp. Ranker này không được dùng một mình; graph, earliest drift và support phải cùng kiềm chế nó.
+
 ### 17.4 Downstream coverage
 
-Root được điểm khi downstream phụ thuộc nó trong tối đa 2 hop và đỏ sau nó:
+#### Tác dụng
+
+Root tốt phải giải thích được blast radius. Với mỗi candidate `root`, engine tìm service khác thỏa mãn:
+
+```text
+service != root
+AND service có dependency path tới root
+AND distance <= topology_max_hops
+AND first_seen(root) < first_seen(service)
+```
+
+Sau đó cộng anomaly strength của downstream:
 
 ```text
 coverage_raw(root) = Σ anomaly_strength(downstream)
 coverage_score = coverage_raw / max(coverage_raw)
 ```
+
+Ví dụ:
+
+```text
+postgresql giải thích payment 0.8 + checkout 0.7 = 1.5
+payment giải thích checkout 0.7                   = 0.7
+maximum                                             = 1.5
+
+postgresql coverage = 1.5/1.5 = 1.00
+payment coverage    = 0.7/1.5 = 0.47
+```
+
+**Bắt tốt:** một root upstream gây ảnh hưởng cho nhiều caller downstream.
+
+**Giới hạn:** root không có downstream anomaly sẽ nhận 0; điều này không có nghĩa nó bình thường. Sự cố cô lập vẫn có thể được graph, drift và shape giữ lại.
 
 ```mermaid
 flowchart LR
@@ -996,6 +1432,13 @@ flowchart LR
 
 ## 18. Tổng hợp RCA score
 
+RCA không cộng thẳng bốn component score. Engine tạo hai kết quả khác nhau từ cùng các ranker:
+
+```text
+Weighted RRF = các ranker xếp service cao đến đâu?
+Support      = độ lớn score tuyệt đối của các ranker mạnh đến đâu?
+```
+
 | Ranker | Weight |
 | --- | ---: |
 | Graph | 0.15 |
@@ -1005,23 +1448,58 @@ flowchart LR
 
 ### Weighted RRF
 
-Mỗi ranker sắp service theo score:
+Mỗi ranker sắp service theo component score giảm dần. Với `k = 20`:
 
 ```text
 RRF_raw(service) = Σ weight_ranker / (20 + rank_position)
-weighted_rrf = RRF_raw / Σ(weight_active_ranker / 21)
+RRF_max = Σ weight_active_ranker / (20 + 1)
+weighted_rrf = RRF_raw / RRF_max
 ```
+
+| Biến | Ý nghĩa |
+| --- | --- |
+| `rank_position` | Vị trí service trong từng ranker, bắt đầu từ 1 |
+| `weight_ranker` | Mức tin cậy dành cho ranker |
+| `20` | `rrf_k`, làm chênh lệch giữa rank 1 và rank 2 bớt cực đoan |
+| `RRF_max` | Điểm tối đa giả định service đứng rank 1 ở mọi ranker active |
+| `weighted_rrf` | Mức đồng thuận về thứ hạng, đã normalize |
+
+RRF dùng **vị trí**, không dùng khoảng cách raw score. Vì vậy graph `1.0` không thể áp đảo shape `0.8` chỉ vì thang số khác nhau.
 
 ### Support
 
 ```text
-support = Σ(weight_ranker × clamp(component_score, 0, 1)) / Σ(weight_ranker)
+support = Σ(weight_ranker × clamp(component_score, 0, 1))
+          / Σ(weight của tất cả bốn ranker)
 ```
+
+Khác RRF, support dùng độ lớn component score. Ranker không có score cho service đóng góp `0`, nhưng weight của nó vẫn nằm trong mẫu số.
+
+Ví dụ component của service:
+
+```text
+graph      = 1.00 × 0.15 = 0.150
+earliest   = 0.60 × 0.55 = 0.330
+shape      = 0.80 × 0.15 = 0.120
+coverage   = 1.00 × 0.15 = 0.150
+support                    = 0.750 / 1.00 = 0.750
+```
+
+Support thấp khi service chỉ được một ranker ủng hộ. Đây là lớp chống một tín hiệu đơn lẻ chi phối RCA.
 
 ### Evidence strength
 
 ```text
 evidence_strength = min(1, anomaly_score mạnh nhất của service)
+```
+
+Engine lấy finding mạnh nhất, không cộng tất cả findings. Cap `1` ngăn số detector hoặc score lớn làm RCA vượt khỏi thang dự kiến.
+
+Ví dụ service có anomaly scores `0.6`, `0.9`, `1.4`:
+
+```text
+max = 1.4
+evidence_strength = min(1, 1.4) = 1.0
 ```
 
 ### RCA score cuối
@@ -1030,14 +1508,78 @@ evidence_strength = min(1, anomaly_score mạnh nhất của service)
 RCA score = weighted_rrf × evidence_strength × support
 ```
 
-Ví dụ:
+Phép nhân buộc ba câu hỏi cùng có câu trả lời tốt:
+
+    - Service có được các ranker xếp cao không?
+    - Service có anomaly evidence đủ mạnh không?
+    - Component score tuyệt đối có đủ support không?
+
+Một factor gần 0 sẽ kéo score cuối xuống, dù hai factor còn lại cao.
+
+### 18.1 Ví dụ tính đầy đủ
+
+Giả sử `postgresql` có:
 
 ```text
-weighted_rrf = 0.90
-evidence     = 0.80
-support      = 0.40
-RCA score    = 0.90 × 0.80 × 0.40 = 0.288
+graph_score              = 1.00
+earliest_drift_score     = 0.60
+shape_correlation_score  = 0.80
+downstream_coverage      = 1.00
+evidence_strength        = 0.90
 ```
+
+Trong bốn ranking, nó lần lượt đứng vị trí `1, 1, 2, 1`:
+
+```text
+RRF_raw = 0.15/21 + 0.55/21 + 0.15/22 + 0.15/21
+        = 0.04729
+
+RRF_max = (0.15+0.55+0.15+0.15)/21
+        = 0.04762
+
+weighted_rrf = 0.04726/0.04762 = 0.993
+```
+
+Support:
+
+```text
+support = 0.15×1.00 + 0.55×0.60 + 0.15×0.80 + 0.15×1.00
+        = 0.750
+```
+
+RCA score:
+
+```text
+RCA score = 0.993 × 0.90 × 0.750
+          = 0.670
+```
+
+`0.670 >= rca_notification_min_score 0.24`, nên candidate qua score gate. Nó vẫn phải qua root metric tail gate, context gate, dedup và downstream suppression trước khi notification được gửi.
+
+### 18.2 Vì sao cần cả RRF và support?
+
+Giả sử một service đứng đầu mọi bảng vì các service khác còn yếu hơn, nhưng component thực tế chỉ là:
+
+```text
+graph=0.10, earliest=0.05, shape=0.08, coverage=0.00
+```
+
+RRF có thể vẫn cao vì thứ hạng đẹp. Support sẽ thấp và kéo RCA score xuống. Ngược lại, một service có một component rất cao nhưng xếp kém ở các ranker khác sẽ bị RRF và support cùng hạn chế.
+
+### 18.3 Cách đọc Evidence trong notification
+
+```text
+graph_score               -> topology + PageRank + timestamp
+earliest_drift_score      -> service drift sớm đến đâu
+shape_correlation_score   -> resource và impact giống shape đến đâu
+downstream_coverage_score -> giải thích được bao nhiêu downstream anomaly
+weighted_rrf_score        -> đồng thuận thứ hạng của bốn ranker
+evidence_strength         -> anomaly mạnh nhất của service
+support_score             -> độ lớn bằng chứng có trọng số
+RCA score                 -> RRF × evidence × support
+```
+
+Không nên đọc riêng `graph_score=1.0` thành “chắc chắn 100%”. Nó chỉ có nghĩa candidate đang mạnh nhất theo graph trong batch hiện tại.
 
 ```mermaid
 flowchart TD
