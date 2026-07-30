@@ -16,7 +16,7 @@ các tuyên bố đã được kiểm chứng; những case chưa có live evide
 vì đánh dấu đạt.
 
 Chi tiết kỹ thuật nằm tại
-[shared semantic cache guide](caching/semantic-cache-implementation-guide.md),
+[Caching Implementation](caching/mandate-23-cache-implementation.md),
 [Shopping Copilot cache runbook](caching/shopping-copilot-dod-evidence-runbook.md),
 và [Memory implementation](memory/mandate-23-memory-implementation.md).
 
