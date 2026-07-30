@@ -86,46 +86,54 @@ reset failure count. Các replica không chia sẻ breaker state.
 flowchart LR
     A[AskProductAIAssistant] --> B[Lấy và sanitize review]
     B --> C[Chọn review nguồn liên quan]
-    C --> D[grounded_summary qua converse_json]
-    D --> E[Pydantic validate GroundedDraft]
-    E --> F[Đối chiếu source ID của claim]
-    F --> G[GROUNDED hoặc ABSTAINED]
-    D -. lỗi provider / JSON hỏng .-> H[FALLBACK]
-    E -. schema sai .-> H
-    F -. không grounded .-> H
+    C --> D{Có review phù hợp?}
+    D -- Không --> E[ABSTAINED]
+    D -- Có --> F[grounded_summary qua converse_json]
+    F --> G[Pydantic validate GroundedDraft trong converse_json]
+    G --> H[Đối chiếu claim với review nguồn]
+    H --> I{Còn claim grounded?}
+    I -- Có --> J[GROUNDED]
+    I -- Không --> E
+    B -. lỗi dependency .-> K[FALLBACK]
+    F -. lỗi provider hoặc schema retry cạn .-> K
 ```
 
-`_get_bedrock_response` bắt lỗi trên nhánh Bedrock và trả `FALLBACK` cố định.
-Payload công khai không có exception provider, stack trace, claim của model, hay
-nội dung thay thế được bịa. Fallback có `claims=[]` và thông báo: “AI summary is
-temporarily unavailable. Please try again shortly.”
+Không có review phù hợp, hoặc không còn claim sau grounding validation, trả
+`ABSTAINED`. Đây là thiếu bằng chứng, không phải lỗi hệ thống.
+`validate_grounded_summary` chỉ dựng answer từ claim còn hợp lệ, không dùng trực
+tiếp `draft.answer` của model.
 
-`converse_json(GroundedDraft, ...)` parse JSON bằng Pydantic. JSON hỏng bị từ
-chối, đếm metric, và chỉ được thử lại trong giới hạn
-`BEDROCK_SCHEMA_MAX_ATTEMPTS` cùng logical deadline. Draft hợp lệ còn phải qua
-grounding validation với source ID của review đã sanitize mới được trả
-`GROUNDED`.
+`converse_json(GroundedDraft, ...)` chứa Pydantic validation bên trong. JSON
+hỏng bị reject và schema-retry trong giới hạn `BEDROCK_SCHEMA_MAX_ATTEMPTS` cùng
+logical deadline. Lỗi provider, schema retry cạn, hoặc dependency lỗi được
+`_get_bedrock_response` đổi thành `FALLBACK`, với `claims=[]` và không lộ lỗi
+provider, stack trace, hay nội dung model chưa kiểm chứng.
 
 ### 4.3 Shopping Copilot Flow and Tool-Call Boundary
 
 ```mermaid
 flowchart LR
     A[Search request] --> B[Input guard, cache, conversation]
-    B --> C[retrieval_hint structured output]
-    C --> D[ReAct Bedrock round]
-    D --> E[Validate toàn bộ assistant batch]
-    E --> F[Tool allowlist + Pydantic input]
-    F --> G[Catalog / Review / prepare-cart]
-    G --> H[Grounded public response]
-    C -. lỗi provider hoặc schema .-> I[FALLBACK + scrub state]
-    D -. tool-call hỏng .-> I
-    E -. batch không hợp lệ .-> I
+    B --> C{Cache hit?}
+    C -- Có --> J[Public response]
+    C -- Không --> D[retrieval_hint qua converse_json]
+    D --> E[ReAct Bedrock round]
+    E --> F[Validate assistant batch, allowlist, và Pydantic tool input]
+    F --> G{Có tool-call?}
+    G -- Không --> J
+    G -- Có --> H[Chạy Catalog / Review / prepare-cart đã validate]
+    H --> E
+    D -. lỗi provider hoặc schema retry cạn .-> I[FALLBACK + scrub state]
+    F -. batch hoặc tool input không hợp lệ .-> I
+    H -. lỗi tool .-> I
 ```
 
 `_validate_bedrock_message` kiểm tra assistant envelope, từng content block,
 tool allowlist, tool-use ID, tool name, kiểu input, và Pydantic model của tool.
 Toàn bộ batch phải hợp lệ trước khi tool đầu tiên chạy. Vì vậy batch lẫn call
-hợp lệ và không hợp lệ sẽ không thực thi tool nào.
+hợp lệ và không hợp lệ sẽ không thực thi tool nào. Text hợp lệ không có tool-call
+đi thẳng tới public response; tool-call hợp lệ đưa kết quả tool vào ReAct round
+tiếp theo.
 
 Cart tool chỉ chuẩn bị pending action. RPC `ConfirmCartAction` riêng mới ghi
 cart thật. Khi Bedrock lỗi hoặc output sai, graph revoke pending token rồi trả
@@ -134,36 +142,36 @@ fallback với products, claims, sources, criteria, và pending-action token r�
 
 ## 5. Replay and Reproduction
 
-Điểm vào test là `src/product-reviews/tests/test_mandate25.py`. Test recreate
-service thật bằng `.env.override` cộng fault plan của scenario. Test không patch
-Python object, không thay service bằng mock. Outcome `pass` gọi Amazon Bedrock
+Điểm vào test là [mandate25_scenario_input.py](../../src/product-reviews/tests/mandate25_scenario_input.py). Test recreate service thật bằng `.env.override` cộng fault plan của scenario. Test không patch Python object, không thay service bằng mock. Outcome `pass` gọi Amazon Bedrock
 thật.
 
 ### 5.1 Replay Schema and Contract
 
-Team cung cấp 1 file scenario.py có thể sửa các scenario input đầu vào sau đó chạy lệnh py với từng kịch bản phù hợp. 
+Team chỉnh fault injection trong `mandate25_scenario_input.py`, sau đó chạy test
+tương ứng. Retry, timeout, schema retry, và breaker dùng baseline từ
+`.env.override`.
 
 **Ví dụ về kịch bản có thể sửa trong file mandate25_scenario_input.py**
 
-```json
-#kịch bản 1
+```python
+# Scenario: Shopping Copilot single provider failure
 "shopping-copilot/provider-failure": {
         "BEDROCK_FAULT_INJECTION_ENABLED": "true",
         "BEDROCK_FAULT_WORKFLOW_STEP": "retrieval_hint",
-        "BEDROCK_FAULT_SEQUENCE": "[],[]", #có thể điền timeout để test kịch bản timeout của bedrock hoặc điền server_error để test kịch bản lỗi 5XX của bedrock
+        "BEDROCK_FAULT_SEQUENCE": "timeout,timeout",
     },
 ```
 
 **Input**
 
-```json
+```powershell
 python src/product-reviews/tests/test_mandate25.py `
   ShoppingCopilotMandate25Tests.test_01_single_provider_failure_falls_back
 ```
 
 **Response Fields**
 
-```json
+```powershell
 >>   ShoppingCopilotMandate25Tests.test_01_single_provider_failure_falls_back
 test_01_single_provider_failure_falls_back (__main__.ShoppingCopilotMandate25Tests)
 One provider error returns a bounded, safe fallback. ... {"scenario": "shopping_copilot_single_provider_failure", "status": "FALLBACK", "latency_ms": 12879.9, "product_count": 0, "claim_count": 0, "pending_action": false, "surface": "shopping-copilot", "workflow_step": "retrieval_hint", "fault_sequence": "timeout,timeout", "configured_attempts": 2, "output_valid": true}
@@ -179,13 +187,13 @@ OK
 **Scenario**
 
 | Scenario | Fault plan | Quan sát bắt buộc |
-|---|---|---|---|
-| Shopping provider failure | `timeout,timeout` tại `retrieval_hint` | `FALLBACK`; không products, claims, sources, pending token |
-| Shopping sustained failure | Sáu timeout rồi `pass` tại `retrieval_hint` | Ba logical failure; OPEN reject không tiêu thụ `pass`; half-open hồi phục |
-| Shopping malformed tool call | `malformed_tool_call` tại `react_round` | Fallback; cart không đổi; không pending action token |
-| Product Reviews provider failure | `server_error,server_error` tại `grounded_summary` | `FALLBACK` có kiểm soát; claims rỗng |
-| Product Reviews sustained failure | Sáu timeout rồi `pass` tại `grounded_summary` | Ba logical failure; OPEN reject; half-open hồi phục |
-| Product Reviews malformed JSON | Một `malformed_json` tại `grounded_summary` | JSON hỏng bị reject; schema retry nội bộ trả public response hợp lệ |
+|---|---|---|
+| Shopping Copilot: provider failure | `timeout,timeout` tại `retrieval_hint` | `FALLBACK`; không products, claims, sources, hoặc pending token |
+| Shopping Copilot: sustained failure | Sáu `timeout`, rồi `pass` tại `retrieval_hint` | Ba logical failure; request khi breaker `OPEN` không tiêu thụ `pass`; half-open hồi phục |
+| Shopping Copilot: malformed tool call | `malformed_tool_call` tại `react_round` | `FALLBACK`; cart không đổi; không pending action token |
+| Product Reviews: provider failure | `server_error,server_error` tại `grounded_summary` | `FALLBACK` có kiểm soát; `claims=[]` |
+| Product Reviews: sustained failure | Sáu `timeout`, rồi `pass` tại `grounded_summary` | Ba logical failure; request khi breaker `OPEN` bị chặn; half-open hồi phục |
+| Product Reviews: malformed JSON | Một `malformed_json` tại `grounded_summary` | JSON hỏng bị reject; schema retry nội bộ trả public response hợp lệ |
 
 ### 5.2 Evidence Capture Scenarios
 
@@ -328,7 +336,7 @@ python src/product-reviews/tests/test_mandate25.py `
   ProductReviewMandate25Tests.test_03_malformed_json_is_rejected_then_recovers
 ```
 
-Sau khi đã chạy xong tất cả scenario, tất cả các kết quả của 6 kịch bản trên được lưu trong [evidence/mandate25-live.json](https://github.com/tf2-team/tf2-corp-platform/pull/140)
+Sau khi đã chạy xong tất cả scenario, tất cả các kết quả của 6 kịch bản trên được lưu trong [evidence/mandate25-live.json](https://github.com/tf2-team/tf2-corp-platform/blob/feat/aie-resilience-fallback-v2/evidence/mandate25-live.json)
 
 ## 6. ADR and Sign-off
 
@@ -342,7 +350,7 @@ Scope: Review Summary, Shopping Copilot, Bedrock
 | Dùng shared Bedrock resilience adapter cho hai bề mặt | `Accepted` | `Huy, 30/7/20206` |
 | Trả fallback có kiểm soát, không lộ provider detail hoặc bịa nội dung | `Accepted` | `Huy, 30/7/20206` |
 | Validate đầy đủ Copilot tool-call batch trước dispatch | `Accepted` | `Tuấn, 30/7/20206` |
-| Breaker process-local, key theo model và region | `Accepted; operational trade-off accepted` | `Tuấn, 30/7/20206` |
+| Breaker process-local, key theo model và region | `Accepted` | `Tuấn, 30/7/20206` |
 | Duyệt Mandate 25 sau khi đính kèm live artifact | `Accepted` | `Minh, 30/7/20206` |
 
 
@@ -352,6 +360,6 @@ Scope: Review Summary, Shopping Copilot, Bedrock
 - [Product Reviews server](../../src/product-reviews/product_reviews_server.py)
 - [Shopping Copilot graph](../../src/shopping-copilot/copilot_graph.py)
 - [Shopping Copilot ReAct tool validation](../../src/shopping-copilot/react_agent.py)
-- [Mandate 25 scenario configuration](../../src/product-reviews/tests/mandate25_scenario_input.py)
+- [Mandate 25 scenario inp](../../src/product-reviews/tests/mandate25_scenario_input.py)
 - [Mandate 25 live tests](../../src/product-reviews/tests/test_mandate25.py)
 - [Result scenario Bedrock flow](../../evidence/mandate25-live.json)
