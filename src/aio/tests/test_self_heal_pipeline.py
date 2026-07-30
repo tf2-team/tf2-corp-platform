@@ -1,6 +1,7 @@
 #!/usr/bin/python
 # Copyright The OpenTelemetry Authors
 # SPDX-License-Identifier: Apache-2.0
+
 from __future__ import annotations
 
 import json
@@ -41,6 +42,33 @@ class FakeExecutorClient:
     def __init__(self, clock: Clock) -> None:
         self.clock = clock
 
+    def catalog(self, request_id: str | None = None) -> list[dict]:
+        return [
+            {
+                "action_id": "scale_product_catalog",
+                "action_type": "scale_deployment",
+                "target": "product-catalog",
+                "target_kind": "Deployment",
+                "namespace": "techx-corp-prod",
+                "executor_supported": True,
+                "dry_run_supported": True,
+                "execute_supported": True,
+                "live_execute_supported": True,
+                "live_apply_enabled": True,
+                "recommendation_only": False,
+                "audit_only": False,
+                "blocked": False,
+                "protected": False,
+                "rollback_supported": True,
+                "rollback_action_id": "restore_deployment_replicas",
+                "verification_query_id": "product-catalog.cpu_millicores",
+                "verification_signal_id": "product_catalog_cpu_millicores",
+                "verification_max_ratio": 0.9,
+                "policy_id": "phase3-scale-policy-v1",
+                "policy_approval_required": True,
+            }
+        ]
+
     def plan(self, action: dict) -> dict:
         return {
             "allowed": True,
@@ -62,7 +90,7 @@ class FakeExecutorClient:
             "after": {"replicas": 3, "resource_version": "2"},
             "verification": {
                 "defined": True,
-                "query_id": "product_catalog_cpu_millicores",
+                "query_id": "product-catalog.cpu_millicores",
             },
             "rollback": {"defined": True, "rollback_token": "rbt:one"},
         }
@@ -129,8 +157,18 @@ def test_detector_drives_execute_then_fresh_telemetry_closes_incident(tmp_path: 
                     "blast_radius_services": ["frontend"],
                     "replicas": 3,
                     "verification_defined": True,
+                    "verification_query_id": "product-catalog.cpu_millicores",
+                    "verification_signal_id": "product_catalog_cpu_millicores",
+                    "verification_max_ratio": 0.9,
                     "rollback_defined": True,
+                    "rollback_action_id": "restore_deployment_replicas",
+                    "rollback_supported": True,
                     "approved": True,
+                    "policy_id": "phase3-scale-policy-v1",
+                    "policy_approval_required": True,
+                    "executor_supported": True,
+                    "execute_supported": True,
+                    "live_execute_supported": True,
                 }
             ]
         ),

@@ -17,4 +17,3 @@ test('identifies AI API targets for trace header emission', () => {
 });
 
 // Change trail: @hungxqt - 2026-07-29 - Add test coverage for isAiApi and trace ID header behavior.
-

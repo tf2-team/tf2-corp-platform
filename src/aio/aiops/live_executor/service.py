@@ -159,16 +159,20 @@ class LiveExecutorService:
         response["incident_id"] = request.get("incident_id")
         self._audit(request, response, "plan_recorded")
         if response["allowed"]:
-            self.store.save_plan(response)
+            self.store.save_plan(response, _plan_binding(request))
         self._save_idempotency(request, "plan", response)
         return response
 
-    def execute(self, request: dict[str, Any]) -> dict[str, Any]:
+    def execute_action(self, request: dict[str, Any]) -> dict[str, Any]:
         with self._lock:
             return self._execute(request)
 
+    def execute(self, request: dict[str, Any]) -> dict[str, Any]:
+        """Backward-compatible alias for callers outside the HTTP boundary."""
+        return self.execute_action(request)
+
     def submit_execution(self, request: dict[str, Any]) -> dict[str, Any]:
-        return self.execute(request)
+        return self.execute_action(request)
 
     def _execute(self, request: dict[str, Any]) -> dict[str, Any]:
         cached = self._idempotent(request, "execute")
@@ -179,6 +183,8 @@ class LiveExecutorService:
         plan_response = self.store.get_plan_response(plan_hash) if isinstance(plan_hash, str) else None
         if plan_response is None:
             response = self._blocked(request, "missing or unknown plan", ["missing_plan"])
+        elif binding_reasons := _binding_reasons(request, plan_response.get("_binding"), _PLAN_BINDING_FIELDS):
+            response = self._blocked(request, "request does not match stored plan context", binding_reasons)
         elif not self.allow_live_apply or self.deployment_gateway is None:
             response = self._blocked(request, "live apply is disabled", ["live_apply_disabled"])
         elif self.store.cooldown_active(plan_response["target"]):
@@ -197,7 +203,7 @@ class LiveExecutorService:
                         plan_response,
                     )
                     response = _script_response_to_api(scale_deployment.run(script_context), STATUS_RUNNING)
-                    response["incident_id"] = request.get("incident_id")
+                    response["incident_id"] = (plan_response.get("_binding") or {}).get("incident_id")
                     response["plan_hash"] = plan_hash
                     if response["executed"]:
                         requested_replicas = int(
@@ -241,7 +247,7 @@ class LiveExecutorService:
             return self._record_verification(execution_id, request)
 
     def _record_verification(self, execution_id: str, request: dict[str, Any]) -> dict[str, Any]:
-        cached = self._idempotent(request, "verification")
+        cached = self._idempotent(request, "verification", execution_id)
         if cached is not None:
             return cached
 
@@ -250,6 +256,10 @@ class LiveExecutorService:
         transient = False
         if execution is None:
             response = self._blocked(request, "execution not found", ["execution_not_found"])
+        elif binding_reasons := _binding_reasons(request, execution, ("incident_id",)):
+            response = self._blocked(request, "request does not match stored execution context", binding_reasons)
+        elif request.get("query_id") != (execution.get("verification") or {}).get("query_id"):
+            response = self._blocked(request, "verification query does not match execution plan", ["query_id_mismatch"])
         elif not isinstance(passed, bool):
             response = self._blocked(request, "verification result must be boolean", ["invalid_verification_result"])
         elif execution.get("status") in {STATUS_FAILED, STATUS_SUCCEEDED}:
@@ -348,7 +358,7 @@ class LiveExecutorService:
         self._audit(request, response, event_type)
         if transient:
             return response
-        self._save_idempotency(request, "verification", response)
+        self._save_idempotency(request, "verification", response, execution_id)
         return response
 
     def rollback(self, execution_id: str, request: dict[str, Any]) -> dict[str, Any]:
@@ -356,13 +366,15 @@ class LiveExecutorService:
             return self._rollback(execution_id, request)
 
     def _rollback(self, execution_id: str, request: dict[str, Any]) -> dict[str, Any]:
-        cached = self._idempotent(request, "rollback")
+        cached = self._idempotent(request, "rollback", execution_id)
         if cached is not None:
             return cached
 
         execution = self.store.get_execution_response(execution_id)
         if execution is None:
             response = self._blocked(request, "execution not found", ["execution_not_found"])
+        elif binding_reasons := _binding_reasons(request, execution, ("incident_id",)):
+            response = self._blocked(request, "request does not match stored execution context", binding_reasons)
         elif not self.allow_live_apply or self.deployment_gateway is None:
             response = self._blocked(request, "live rollback is disabled", ["live_apply_disabled"])
         elif execution.get("status") not in {STATUS_RUNNING, STATUS_FAILED}:
@@ -377,7 +389,7 @@ class LiveExecutorService:
                     [self._gateway_error_reason(exc)],
                 )
                 self._audit(request, response, "rollback_blocked")
-                self._save_idempotency(request, "rollback", response)
+                self._save_idempotency(request, "rollback", response, execution_id)
                 return response
             expected_controller = (execution.get("before") or {}).get(
                 "scaling_controller",
@@ -390,7 +402,7 @@ class LiveExecutorService:
                     ["scaling_controller_changed"],
                 )
                 self._audit(request, response, "rollback_blocked")
-                self._save_idempotency(request, "rollback", response)
+                self._save_idempotency(request, "rollback", response, execution_id)
                 return response
             script_execution = {
                 **execution,
@@ -466,7 +478,7 @@ class LiveExecutorService:
                     [self._gateway_error_reason(exc)],
                 )
         self._audit(request, response, "rollback_submitted" if response["executed"] else "rollback_blocked")
-        self._save_idempotency(request, "rollback", response)
+        self._save_idempotency(request, "rollback", response, execution_id)
         return response
 
     def legacy_submit(self, request: dict[str, Any]) -> dict[str, Any]:
@@ -476,18 +488,52 @@ class LiveExecutorService:
             return response
         if request.get("dry_run") is True or not request.get("plan_hash"):
             return self.plan(request)
-        return self.execute(request)
+        return self.execute_action(request)
 
-    def _idempotent(self, request: dict[str, Any], operation: str) -> dict[str, Any] | None:
+    def _idempotent(
+        self,
+        request: dict[str, Any],
+        operation: str,
+        resource_id: str | None = None,
+    ) -> dict[str, Any] | None:
         key = request.get("idempotency_key")
         if isinstance(key, str):
-            return self.store.get_idempotency(key, operation)
+            stored = self.store.get_idempotency(key, operation)
+            if stored is None:
+                return None
+            binding = stored.pop("_idempotency_binding", None)
+            if not isinstance(binding, dict):
+                return self._blocked(
+                    request,
+                    "stored idempotency result has no request binding",
+                    ["idempotency_context_unbound"],
+                )
+            if binding != _idempotency_binding(request, resource_id):
+                return self._blocked(
+                    request,
+                    "idempotency key was already used for another request context",
+                    ["idempotency_context_mismatch"],
+                )
+            return stored
         return None
 
-    def _save_idempotency(self, request: dict[str, Any], operation: str, response: dict[str, Any]) -> None:
+    def _save_idempotency(
+        self,
+        request: dict[str, Any],
+        operation: str,
+        response: dict[str, Any],
+        resource_id: str | None = None,
+    ) -> None:
         key = request.get("idempotency_key")
         if isinstance(key, str):
-            self.store.save_idempotency(key, operation, response)
+            self.store.save_idempotency(
+                key,
+                operation,
+                {
+                    **response,
+                    "_idempotency_binding": _idempotency_binding(request, resource_id),
+                },
+            )
 
     def _blocked(self, request: dict[str, Any], message: str, reasons: list[str]) -> dict[str, Any]:
         response = block_response(request, message, reasons)
@@ -580,6 +626,7 @@ def _request_to_script_context(request: dict[str, Any], plan_response: dict[str,
         "before": plan_response.get("before"),
         "after": plan_response.get("after"),
         "rollback_token": plan_response.get("rollback", {}).get("rollback_token"),
+        **(plan_response.get("_binding") or {}),
     }
     before = plan.get("before") or {}
     return {
@@ -683,22 +730,38 @@ def _load_service_support_catalog(path: Path) -> list[dict[str, Any]]:
 def _resolve_namespace(namespace: Any, environment: str) -> Any:
     return environment if namespace == "techx-corp-prod" else namespace
 
+
 def _action_with_runtime_state(action: dict[str, Any], allow_live_apply: bool, environment: str) -> dict[str, Any]:
     live_capable = bool(action.get("live_execute_supported"))
+    live_apply_enabled = bool(
+        allow_live_apply
+        and live_capable
+        and action.get("executor_supported")
+        and not action.get("blocked")
+    )
     return {
         **action,
         "namespace": _resolve_namespace(action.get("namespace"), environment),
-        "live_execute_supported": live_capable and allow_live_apply,
+        "live_execute_supported": live_capable and live_apply_enabled,
         "live_execute_capable": live_capable,
+        "live_apply_enabled": live_apply_enabled,
     }
+
 
 def _service_with_runtime_state(service: dict[str, Any], allow_live_apply: bool, environment: str) -> dict[str, Any]:
     live_capable = bool(service.get("live_execute_supported"))
+    live_apply_enabled = bool(
+        allow_live_apply
+        and live_capable
+        and service.get("executor_supported")
+        and not service.get("protected")
+    )
     return {
         **service,
         "namespace": _resolve_namespace(service.get("namespace"), environment),
-        "live_execute_supported": live_capable and allow_live_apply,
+        "live_execute_supported": live_capable and live_apply_enabled,
         "live_execute_capable": live_capable,
+        "live_apply_enabled": live_apply_enabled,
     }
 
 def _capability_from_allowlist(config: dict[str, Any]) -> dict[str, Any]:
@@ -716,10 +779,13 @@ def _capability_from_allowlist(config: dict[str, Any]) -> dict[str, Any]:
         "audit_only": False,
         "dry_run_supported": True,
         "execute_supported": not protected,
-        "live_execute_supported": False,
+        "live_execute_supported": not protected,
         "rollback_supported": not protected,
         "rollback_action_id": config.get("rollback_action_id"),
         "verification_query_id": config.get("verification_query_id"),
+        "verification_signal_id": config.get("verification_signal_id"),
+        "verification_threshold": config.get("verification_threshold"),
+        "verification_max_ratio": config.get("verification_max_ratio"),
         "policy_id": POLICY_ID,
         "policy_expires_at": POLICY_EXPIRES_AT,
         "policy_approval_required": True,
@@ -731,4 +797,72 @@ def _capability_from_allowlist(config: dict[str, Any]) -> dict[str, Any]:
         "max_replicas": config.get("max_replicas"),
         "target_replicas": config.get("target_replicas"),
         "blast_radius_services": config.get("blast_radius_services", []),
+    }
+
+
+_PLAN_BINDING_FIELDS = (
+    "incident_id",
+    "action_id",
+    "action_type",
+    "target",
+    "target_kind",
+    "namespace",
+    "policy_id",
+    "policy_approved",
+    "policy_expires_at",
+    "approval_id",
+    "requested_by",
+)
+
+
+def _plan_binding(request: dict[str, Any]) -> dict[str, Any]:
+    return {field: request.get(field) for field in _PLAN_BINDING_FIELDS}
+
+
+def _binding_reasons(
+    request: dict[str, Any],
+    binding: dict[str, Any] | None,
+    fields: tuple[str, ...],
+) -> list[str]:
+    if not isinstance(binding, dict):
+        return ["stored_context_unbound"]
+    return [
+        f"{field}_mismatch"
+        for field in fields
+        if request.get(field) != binding.get(field)
+    ]
+
+
+_IDEMPOTENCY_BINDING_FIELDS = (
+    "incident_id",
+    "action_id",
+    "action_type",
+    "target",
+    "target_kind",
+    "namespace",
+    "policy_id",
+    "policy_approved",
+    "policy_expires_at",
+    "approval_id",
+    "plan_hash",
+    "rollback_token",
+    "passed",
+    "query_id",
+    "reason",
+    "requested_by",
+    "dry_run",
+)
+
+
+def _idempotency_binding(
+    request: dict[str, Any],
+    resource_id: str | None,
+) -> dict[str, Any]:
+    return {
+        "resource_id": resource_id,
+        **{
+            field: request.get(field)
+            for field in _IDEMPOTENCY_BINDING_FIELDS
+            if field in request
+        },
     }

@@ -678,6 +678,35 @@ class SQLiteIncidentStore:
         ).fetchall()
         return [NotificationMessage.model_validate_json(row[0]) for row in rows]
 
+    def enqueue_notification(self, message: NotificationMessage) -> None:
+        now = _now()
+        with self._connection:
+            self._connection.execute(
+                """
+                INSERT INTO notification_outbox (
+                    incident_id, fingerprint, notification_json, status, next_attempt_at
+                )
+                VALUES (?, ?, ?, 'pending', ?)
+                ON CONFLICT(incident_id) DO UPDATE SET
+                    notification_json = excluded.notification_json,
+                    status = CASE
+                        WHEN notification_outbox.status = 'sent' THEN notification_outbox.status
+                        ELSE 'pending'
+                    END,
+                    next_attempt_at = CASE
+                        WHEN notification_outbox.status = 'sent' THEN notification_outbox.next_attempt_at
+                        ELSE excluded.next_attempt_at
+                    END,
+                    updated_at = excluded.next_attempt_at
+                """,
+                (
+                    message.incident_id,
+                    message.incident_id,
+                    message.model_dump_json(),
+                    now,
+                ),
+            )
+
     def suppressed_incident_ids(self, incidents: list[Incident]) -> set[str]:
         return {
             incident.incident_id

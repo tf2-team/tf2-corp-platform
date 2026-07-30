@@ -29,7 +29,9 @@ ALLOWLIST = {
         "target_replicas": 3,
         "owner": "platform-edge-owner",
         "blast_radius_services": ["frontend", "checkout", "product-catalog", "cart"],
-        "verification_query_id": "frontend_proxy_p95_latency_5m",
+        "verification_query_id": "frontend-proxy.p95_latency_5m",
+        "verification_signal_id": "frontend_proxy_p95_latency_5m",
+        "verification_threshold": 1.5,
     },
     "scale_frontend": {
         "action_id": "scale_frontend",
@@ -44,7 +46,9 @@ ALLOWLIST = {
         "target_replicas": 3,
         "owner": "frontend-owner",
         "blast_radius_services": ["frontend-proxy", "checkout", "product-catalog", "cart"],
-        "verification_query_id": "frontend_p95_latency_5m",
+        "verification_query_id": "frontend.p95_latency_5m",
+        "verification_signal_id": "frontend_p95_latency_5m",
+        "verification_threshold": 1.0,
     },
     "scale_checkout": {
         "action_id": "scale_checkout",
@@ -59,7 +63,9 @@ ALLOWLIST = {
         "target_replicas": 3,
         "owner": "checkout-owner",
         "blast_radius_services": ["frontend", "frontend-proxy", "cart", "payment", "shipping", "email"],
-        "verification_query_id": "checkout_p95_latency_5m",
+        "verification_query_id": "checkout.p95_latency_5m",
+        "verification_signal_id": "checkout_p95_latency_5m",
+        "verification_threshold": 2.0,
     },
     "scale_cart": {
         "action_id": "scale_cart",
@@ -74,7 +80,9 @@ ALLOWLIST = {
         "target_replicas": 3,
         "owner": "cart-owner",
         "blast_radius_services": ["checkout", "frontend"],
-        "verification_query_id": "cart_error_rate_5m",
+        "verification_query_id": "cart.error_rate_5m",
+        "verification_signal_id": "cart_error_rate_5m",
+        "verification_threshold": 0.005,
     },
     "scale_product_catalog": {
         "action_id": "scale_product_catalog",
@@ -89,7 +97,9 @@ ALLOWLIST = {
         "target_replicas": 3,
         "owner": "product-catalog-owner",
         "blast_radius_services": ["frontend", "recommendation", "product-reviews", "checkout"],
-        "verification_query_id": "product_catalog_cpu_millicores",
+        "verification_query_id": "product-catalog.cpu_millicores",
+        "verification_signal_id": "product_catalog_cpu_millicores",
+        "verification_max_ratio": 0.9,
     }
 }
 
@@ -330,6 +340,21 @@ def verify_plan_context(context: dict[str, Any], config: dict[str, Any]) -> tupl
         return plan, ["plan_hash_mismatch"]
     if context.get("rollback_token") != plan.get("rollback_token"):
         return plan, ["rollback_token_mismatch"]
+    for field in (
+        "incident_id",
+        "action_id",
+        "action_type",
+        "target",
+        "target_kind",
+        "namespace",
+        "policy_id",
+        "policy_approved",
+        "policy_expires_at",
+        "approval_id",
+        "requested_by",
+    ):
+        if context.get(field) != plan.get(field):
+            return plan, [f"{field}_mismatch"]
     try:
         expires_at = parse_time(plan.get("expires_at"))
     except (AttributeError, TypeError, ValueError):
@@ -360,6 +385,9 @@ def base_success(context: dict[str, Any], config: dict[str, Any], *, executed: b
             "passed": None,
             "owner": "aiops-runtime",
             "query_id": config.get("verification_query_id"),
+            "signal_id": config.get("verification_signal_id"),
+            "threshold": config.get("verification_threshold"),
+            "max_ratio": config.get("verification_max_ratio"),
         },
         "rollback": {"defined": True, "action_type": "restore_deployment_replicas"},
     }

@@ -45,7 +45,7 @@ Namespace: techx-corp-prod, hoặc namespace runtime được cấu hình qua AI
 
 Mỗi action scale dùng allowlist nội bộ để resolve namespace/target/min/max replicas; caller không được tự quyết target tùy ý. Executor vẫn yêu cầu policy `phase3-scale-policy-v1`, approval id hợp lệ, idempotency key, cooldown, single-flight theo target, action budget window, optimistic concurrency bằng Kubernetes `resourceVersion`, rollback token và post-action verification do AI runtime ghi nhận.
 
-`executor_supported_actions.json` và `executor_service_support.json` đánh dấu các action này là live-capable, nhưng endpoint runtime chỉ trả `live_execute_supported=true` khi executor được khởi động với `AIOPS_LIVE_EXECUTOR_ALLOW_LIVE_APPLY=true`. Với default deploy, live mutation vẫn tắt.
+`executor_supported_actions.json` và `executor_service_support.json` đánh dấu các action này là live-capable. Endpoint runtime trả `live_execute_capable=true` để biểu diễn capability đã implement, còn `live_execute_supported` và `live_apply_enabled` chỉ thành `true` khi live gate được bật. Với default deploy, live mutation vẫn tắt.
 
 Vì vậy:
 
@@ -64,6 +64,8 @@ X-AIOPS-Account: aiops-runtime
 X-Request-Id: <request-id>
 ```
 
+`X-AIOPS-Account` phải đúng bằng `aiops-runtime`. Với request có JSON body, `X-Request-Id` phải đúng bằng `request_id` trong body.
+
 ## Action Catalog
 
 Endpoint:
@@ -77,19 +79,19 @@ Payload trả về là danh sách action capability. Các trường chính:
 ```text
 action_id, action_type, target, target_kind, namespace,
 executor_supported, recommendation_only, audit_only,
-dry_run_supported, execute_supported, live_execute_supported,
+dry_run_supported, execute_supported, live_execute_supported, live_apply_enabled,
 rollback_supported, rollback_action_id,
-verification_query_id, policy_id, policy_approval_required,
+verification_query_id, verification_signal_id, policy_id, policy_approval_required,
 protected, blocked, blocked_reason, blast_radius_services
 ```
 
 | action_id | action_type | target | namespace | executor supported | live execute | rollback | verification | policy/approval | trạng thái |
 |---|---|---|---|---:|---:|---:|---|---|---|
-| `scale_product_catalog` | `scale_deployment` | `product-catalog` | `techx-corp-prod` | Có | Runtime-gated | Có, `restore_deployment_replicas` | `product_catalog_cpu_millicores` | `phase3-scale-policy-v1`, cần approval | Executable scale |
-| `scale_frontend_proxy` | `scale_deployment` | `frontend-proxy` | `techx-corp-prod` | Có | Runtime-gated | Có, `restore_deployment_replicas` | `frontend_proxy_p95_latency_5m` | `phase3-scale-policy-v1`, cần approval | Executable scale |
-| `scale_frontend` | `scale_deployment` | `frontend` | `techx-corp-prod` | Có | Runtime-gated | Có, `restore_deployment_replicas` | `frontend_p95_latency_5m` | `phase3-scale-policy-v1`, cần approval | Executable scale |
-| `scale_checkout` | `scale_deployment` | `checkout` | `techx-corp-prod` | Có | Runtime-gated | Có, `restore_deployment_replicas` | `checkout_p95_latency_5m` | `phase3-scale-policy-v1`, cần approval | Executable scale |
-| `scale_cart` | `scale_deployment` | `cart` | `techx-corp-prod` | Có | Runtime-gated | Có, `restore_deployment_replicas` | `cart_error_rate_5m` | `phase3-scale-policy-v1`, cần approval | Executable scale |
+| `scale_product_catalog` | `scale_deployment` | `product-catalog` | `techx-corp-prod` | Có | Runtime-gated | Có, `restore_deployment_replicas` | query `product-catalog.cpu_millicores`; signal `product_catalog_cpu_millicores`; ≤ 90% pre-action baseline | `phase3-scale-policy-v1`, cần approval | Executable scale |
+| `scale_frontend_proxy` | `scale_deployment` | `frontend-proxy` | `techx-corp-prod` | Có | Runtime-gated | Có, `restore_deployment_replicas` | `frontend_proxy_p95_latency_5m` ≤ 1.5s | `phase3-scale-policy-v1`, cần approval | Executable scale |
+| `scale_frontend` | `scale_deployment` | `frontend` | `techx-corp-prod` | Có | Runtime-gated | Có, `restore_deployment_replicas` | `frontend_p95_latency_5m` ≤ 1.0s | `phase3-scale-policy-v1`, cần approval | Executable scale |
+| `scale_checkout` | `scale_deployment` | `checkout` | `techx-corp-prod` | Có | Runtime-gated | Có, `restore_deployment_replicas` | `checkout_p95_latency_5m` ≤ 2.0s | `phase3-scale-policy-v1`, cần approval | Executable scale |
+| `scale_cart` | `scale_deployment` | `cart` | `techx-corp-prod` | Có | Runtime-gated | Có, `restore_deployment_replicas` | `cart_error_rate_5m` ≤ 0.005 | `phase3-scale-policy-v1`, cần approval | Executable scale |
 | `restart_product_catalog` | `restart` | `product-catalog` | `techx-corp-prod` | Không | Không | Không | Chưa có | Không áp dụng | Recommendation-only |
 | `restart_checkout` | `restart` | `checkout` | `techx-corp-prod` | Không | Không | Không | Chưa có | Không áp dụng | Recommendation-only |
 | `restart_cart` | `restart` | `cart` | `techx-corp-prod` | Không | Không | Không | Chưa có | Không áp dụng | Recommendation-only |
@@ -111,7 +113,7 @@ Payload trả về là danh sách service support. Các trường chính:
 
 ```text
 service, namespace, support_status, executor_supported,
-live_execute_supported, protected, supported_actions,
+live_execute_supported, live_apply_enabled, protected, supported_actions,
 recommendation_actions, fallback_action, runbooks
 ```
 
@@ -185,8 +187,10 @@ AND service.executor_supported=true
 ```text
 action.executor_supported=true
 AND action.live_execute_supported=true
+AND action.live_apply_enabled=true
 AND action.blocked=false
 AND service.live_execute_supported=true
+AND service.live_apply_enabled=true
 ```
 
 Với default deploy, tập live mutation là rỗng. Khi executor được bật `AIOPS_LIVE_EXECUTOR_ALLOW_LIVE_APPLY=true` trong namespace approved, endpoint runtime có thể trả live mutation cho 5 action scale allowlisted.

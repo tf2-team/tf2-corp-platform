@@ -11,7 +11,7 @@ from pathlib import Path
 import re
 import warnings
 
-from aiops.anomaly.stats import mean, rolling_robust_scores, stdev
+from aiops.anomaly.stats import mean, median, robust_spread, rolling_robust_scores, stdev
 from aiops.schemas import AnomalyFinding, MetricSeries
 from aiops.shared.tail import fixed_baseline_and_tail, significant_tail_change, slow_drift_tail_change, traffic_growth_decision
 
@@ -103,11 +103,12 @@ class RobustDriftDetector:
 
 
 class ServiceIsolationForestDetector:
-    def __init__(self, score_threshold: float, min_points: int, detection_window_seconds: int | None = None, score_scale: float = 10.0):
+    def __init__(self, score_threshold: float, min_points: int, detection_window_seconds: int | None = None, score_scale: float = 10.0, robust_scaling: dict | None = None):
         self.score_threshold = score_threshold
         self.min_points = min_points
         self.detection_window_seconds = detection_window_seconds
         self.score_scale = score_scale
+        self.robust_scaling = robust_scaling or {"mad_scale": 1.4826, "iqr_scale": 1.349, "min_spread": 1.0}
 
     def evaluate(self, series: list[MetricSeries]) -> list[AnomalyFinding]:
         by_service: dict[str, list[MetricSeries]] = defaultdict(list)
@@ -175,10 +176,9 @@ class ServiceIsolationForestDetector:
         normalized_columns = []
         for column in columns:
             baseline = column[:baseline_count]
-            low = min(baseline)
-            high = max(baseline)
-            spread = high - low or 1.0
-            normalized_columns.append([(value - low) / spread for value in column])
+            center = median(baseline)
+            spread = robust_spread(list(baseline), **self.robust_scaling)
+            normalized_columns.append([(value - center) / spread for value in column])
         return [list(row) for row in zip(*normalized_columns)]
 
 
@@ -276,6 +276,7 @@ class V001AnomalyEngine:
         robust_drift_threshold: float,
         robust_drift_min_baseline_points: int,
         isolation_score_scale: float,
+        robust_scaling: dict,
         page_hinkley_min_bucket_factor: float,
         min_tail_anomaly_buckets: dict[str, int],
         min_relative_change_ratio: dict[str, float],
@@ -310,7 +311,7 @@ class V001AnomalyEngine:
         }
         self.robust_drift = RobustDriftDetector(robust_drift_threshold, min_points, robust_drift_min_baseline_points, detection_window_seconds)
         self.ewma_stl = EwmaStlDetector(ewma_alpha, ewma_z_threshold, min_points, seasonal_period, detection_window_seconds)
-        self.isolation_forest = ServiceIsolationForestDetector(isolation_score_threshold, min_points, detection_window_seconds, isolation_score_scale)
+        self.isolation_forest = ServiceIsolationForestDetector(isolation_score_threshold, min_points, detection_window_seconds, isolation_score_scale, robust_scaling)
         self.log_templates = LogTemplateMetricBuilder(
             drain3_config_path,
             log_bucket_seconds,
@@ -486,6 +487,7 @@ def build_v001_anomaly_engine(config: dict, **overrides) -> V001AnomalyEngine:
         robust_drift_threshold=float(anomaly["robust_drift_threshold"]),
         robust_drift_min_baseline_points=int(anomaly["robust_drift_min_baseline_points"]),
         isolation_score_scale=float(anomaly["isolation_score_scale"]),
+        robust_scaling={key: float(value) for key, value in anomaly["robust_scaling"].items()},
         page_hinkley_min_bucket_factor=float(anomaly["page_hinkley_min_bucket_factor"]),
         min_tail_anomaly_buckets={key: int(value) for key, value in anomaly["min_tail_anomaly_buckets"].items()},
         min_relative_change_ratio={key: float(value) for key, value in anomaly["min_relative_change_ratio"].items()},

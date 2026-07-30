@@ -77,6 +77,7 @@ class FastApiAppTest(unittest.TestCase):
                 "policy_mode": "live-approved",
                 "live_executor_url": "http://aiops-live-executor:8080",
                 "self_heal_approval_id": "",
+                "notification_webhook_url": "https://notification.test",
                 "grafana_webhook_secret": "configured",
             }
         )
@@ -93,6 +94,7 @@ class FastApiAppTest(unittest.TestCase):
                 "policy_mode": "live-approved",
                 "live_executor_url": "http://aiops-live-executor:8080",
                 "self_heal_approval_id": "adr-live-001",
+                "notification_webhook_url": "https://notification.test",
                 "grafana_webhook_secret": "configured",
             }
         )
@@ -112,6 +114,7 @@ class FastApiAppTest(unittest.TestCase):
                 "policy_mode": "live-approved",
                 "live_executor_url": "http://aiops-live-executor:8080",
                 "self_heal_approval_id": "adr-live-001",
+                "notification_webhook_url": "https://notification.test",
                 "grafana_webhook_secret": "configured",
             }
         )
@@ -123,6 +126,25 @@ class FastApiAppTest(unittest.TestCase):
 
         self.assertEqual(raised.exception.status_code, 503)
         client_type.return_value.close.assert_called_once_with()
+
+    def test_readiness_requires_escalation_webhook_for_self_heal(self):
+        settings = Settings().model_copy(
+            update={
+                "self_heal_enabled": True,
+                "policy_mode": "live-approved",
+                "live_executor_url": "http://aiops-live-executor:8080",
+                "self_heal_approval_id": "adr-live-001",
+                "notification_webhook_url": "",
+                "notification_dev_webhook_url": "",
+                "notification_user_webhook_url": "",
+                "grafana_webhook_secret": "configured",
+            }
+        )
+
+        with self.assertRaises(HTTPException) as raised:
+            readiness(settings)
+
+        self.assertEqual(raised.exception.status_code, 503)
 
     def test_template_settings_do_not_enable_external_enrichment_clients(self):
         settings = Settings().model_copy(

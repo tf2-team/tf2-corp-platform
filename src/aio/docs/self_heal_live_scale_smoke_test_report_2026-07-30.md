@@ -1,9 +1,10 @@
 # Self-heal Live Executor Scale Smoke Test Report
 
-Ngày kiểm thử: 2026-07-30  
-Môi trường: `techx-corp-prod` trên EKS `techx-tf2-prod`  
-Namespace: `techx-corp-prod`  
-Executor: `Deployment/aiops-live-executor`  
+- Ngày kiểm thử: 2026-07-30
+- Môi trường: `techx-corp-prod` trên EKS `techx-tf2-prod`
+- Namespace: `techx-corp-prod`
+- Executor: `Deployment/aiops-live-executor`
+
 Action kiểm thử chính: `scale_cart`
 
 ## 1. Tóm tắt kết quả

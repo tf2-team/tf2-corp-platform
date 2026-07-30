@@ -133,6 +133,9 @@ class ActionCatalogItem(AiopsModel):
     replicas: int = 3
     verification_defined: bool = True
     verification_query_id: str | None = None
+    verification_signal_id: str | None = None
+    verification_threshold: float | None = None
+    verification_max_ratio: float | None = Field(default=None, gt=0, lt=1)
     rollback_defined: bool = True
     rollback_action_id: str | None = None
     approved: bool = False
@@ -142,6 +145,7 @@ class ActionCatalogItem(AiopsModel):
     dry_run_supported: bool = True
     execute_supported: bool = False
     live_execute_supported: bool = False
+    live_apply_enabled: bool = False
     rollback_supported: bool = False
     policy_id: str | None = None
     policy_approval_required: bool = False

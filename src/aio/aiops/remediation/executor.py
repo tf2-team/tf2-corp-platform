@@ -1,6 +1,7 @@
 #!/usr/bin/python
 # Copyright The OpenTelemetry Authors
 # SPDX-License-Identifier: Apache-2.0
+
 from __future__ import annotations
 
 import hashlib
@@ -11,14 +12,18 @@ from uuid import uuid4
 
 from aiops.schemas import (
     ActionCatalogItem,
+    CandidateEvent,
     Feature,
     Incident,
+    NotificationMessage,
     RootCauseCandidate,
     VerificationResult,
 )
 
 
 class ExecutorClient(Protocol):
+    def catalog(self, request_id: str | None = None) -> list[dict]: ...
+
     def plan(self, action: dict) -> dict: ...
 
     def execute(self, action: dict) -> dict: ...
@@ -44,6 +49,8 @@ class WorkflowStore(Protocol):
     ) -> None: ...
 
     def mark_incident_recovered(self, incident_id: str, recovered_at: str | None = None) -> Incident | None: ...
+
+    def enqueue_notification(self, message: NotificationMessage) -> None: ...
 
 
 @dataclass(frozen=True)
@@ -80,9 +87,16 @@ class SelfHealOrchestrator:
         incident: Incident,
         action: ActionCatalogItem,
         root_cause: RootCauseCandidate | None,
+        *,
+        verification_features: list[Feature] | None = None,
     ) -> dict[str, Any]:
         existing = self.store.self_heal_workflow(incident.incident_id)
-        if existing is not None and existing["status"] != "succeeded":
+        if existing is not None and existing["status"] in {
+            "verifying",
+            "rollback_pending",
+            "rolled_back",
+            "rollback_failed",
+        }:
             return {
                 "status": existing["status"],
                 "execution_id": existing.get("execution_id"),
@@ -90,6 +104,84 @@ class SelfHealOrchestrator:
                 "reasons": ["workflow_already_exists"],
             }
         attempt = int((existing or {}).get("attempt", 0)) + 1
+
+        verification_event = next(
+            (
+                event
+                for event in reversed(incident.events)
+                if event.signal_id == action.verification_signal_id
+            ),
+            None,
+        )
+        verification_feature = next(
+            (
+                feature
+                for feature in verification_features or []
+                if feature.signal_id == action.verification_signal_id
+                and feature.status == "ready"
+                and feature.value is not None
+            ),
+            None,
+        )
+        if verification_features is not None and verification_feature is None:
+            return self._save_blocked(
+                incident.incident_id,
+                action,
+                "capability_blocked",
+                {"reasons": ["verification_signal_unavailable"]},
+                attempt,
+            )
+        if verification_features is None and verification_event is None:
+            return self._save_blocked(
+                incident.incident_id,
+                action,
+                "capability_blocked",
+                {"reasons": ["verification_signal_unavailable"]},
+                attempt,
+            )
+        verification_threshold = _verification_threshold(action, verification_feature, verification_event)
+        if verification_threshold is None:
+            return self._save_blocked(
+                incident.incident_id,
+                action,
+                "capability_blocked",
+                {"reasons": ["verification_threshold_unavailable"]},
+                attempt,
+            )
+
+        capability_request_id = str(uuid4())
+        try:
+            capabilities = self.client.catalog(capability_request_id)
+        except Exception as exc:
+            return self._start_error(incident.incident_id, "capability_catalog_request_failed", exc)
+        capability = next(
+            (
+                item
+                for item in capabilities
+                if item.get("action_id") == action.action_id
+            ),
+            None,
+        )
+        capability_reasons = _remote_capability_reasons(
+            action,
+            capability,
+            self.config.namespace,
+            self.config.policy_id,
+        )
+        if capability_reasons:
+            self.store.append_self_heal_audit(
+                "capability_blocked",
+                incident.incident_id,
+                None,
+                {"request_id": capability_request_id, "reasons": capability_reasons},
+            )
+            return self._save_blocked(
+                incident.incident_id,
+                action,
+                "capability_blocked",
+                {"reasons": capability_reasons},
+                attempt,
+            )
 
         event = incident.events[-1]
         request = {
@@ -130,7 +222,7 @@ class SelfHealOrchestrator:
             return self._start_error(incident.incident_id, "plan_request_failed", exc)
         self.store.append_self_heal_audit("plan", incident.incident_id, None, plan)
         if not plan.get("allowed") or plan.get("status") != "planned":
-            return self._save_blocked(incident.incident_id, action, "plan_blocked", plan)
+            return self._save_blocked(incident.incident_id, action, "plan_blocked", plan, attempt)
 
         execute_request = {
             **request,
@@ -151,7 +243,7 @@ class SelfHealOrchestrator:
             execution,
         )
         if not execution.get("allowed") or not execution.get("executed"):
-            return self._save_blocked(incident.incident_id, action, "execute_blocked", execution)
+            return self._save_blocked(incident.incident_id, action, "execute_blocked", execution, attempt)
 
         executed_at = _parse_time(execution.get("executed_at"), self.clock())
         workflow = {
@@ -163,10 +255,21 @@ class SelfHealOrchestrator:
             "action_type": action.action_type,
             "target": action.target,
             "namespace": self.config.namespace,
-            "signal_id": event.signal_id,
-            "threshold": event.threshold,
-            "verification_direction": _verification_direction(event.signal_id),
-            "verification_query_id": event.signal_id,
+            "signal_id": action.verification_signal_id,
+            "triggering_signal_id": event.signal_id,
+            "threshold": verification_threshold,
+            "verification_baseline": (
+                verification_feature.value
+                if verification_feature is not None
+                else verification_event.value if verification_event is not None else None
+            ),
+            "verification_direction": _verification_direction(action.verification_signal_id or ""),
+            "verification_query_id": action.verification_query_id,
+            "verification_signal_id": action.verification_signal_id,
+            "severity": incident.severity,
+            "flow": incident.flow,
+            "service": incident.service,
+            "runbook_id": event.runbook_id,
             "executed_at": _iso(executed_at),
             "deadline_at": _iso(executed_at + timedelta(seconds=self.config.verification_deadline_seconds)),
             "last_sample_timestamp": None,
@@ -189,7 +292,10 @@ class SelfHealOrchestrator:
     def reconcile(self, features: list[Feature]) -> list[VerificationResult]:
         by_signal = {feature.signal_id: feature for feature in features}
         return [
-            self._reconcile_one(workflow, by_signal.get(workflow["signal_id"]))
+            self._reconcile_one(
+                workflow,
+                by_signal.get(workflow.get("verification_signal_id") or workflow["signal_id"]),
+            )
             for workflow in self.store.active_self_heal_workflows()
         ]
 
@@ -373,13 +479,31 @@ class SelfHealOrchestrator:
         else:
             workflow["status"] = "rollback_failed"
             workflow["rollback"] = response
-            self.store.append_self_heal_audit(
-                "escalation_required",
-                workflow["incident_id"],
-                workflow["execution_id"],
-                {"reason": "automatic_rollback_failed"},
-            )
-            result_reason = "post_action_verification_failed_rollback_failed"
+            escalation = _rollback_failure_notification(workflow, response)
+            try:
+                self.store.enqueue_notification(escalation)
+            except Exception as exc:
+                self.store.append_self_heal_audit(
+                    "escalation_enqueue_failed",
+                    workflow["incident_id"],
+                    workflow["execution_id"],
+                    {
+                        "reason": "automatic_rollback_failed",
+                        "error_type": type(exc).__name__,
+                    },
+                )
+                result_reason = "post_action_verification_failed_escalation_enqueue_failed"
+            else:
+                self.store.append_self_heal_audit(
+                    "escalation_enqueued",
+                    workflow["incident_id"],
+                    workflow["execution_id"],
+                    {
+                        "reason": "automatic_rollback_failed",
+                        "notification_id": escalation.incident_id,
+                    },
+                )
+                result_reason = "post_action_verification_failed_escalated"
         self.store.save_self_heal_workflow(workflow)
         return VerificationResult(
             incident_id=workflow["incident_id"],
@@ -393,11 +517,13 @@ class SelfHealOrchestrator:
         action: ActionCatalogItem,
         status: str,
         response: dict[str, Any],
+        attempt: int,
     ) -> dict[str, Any]:
         workflow = {
             "incident_id": incident_id,
             "execution_id": response.get("execution_id"),
             "status": status,
+            "attempt": attempt,
             "action_id": action.action_id,
             "action_type": action.action_type,
             "target": action.target,
@@ -427,8 +553,96 @@ def _idempotency_key(incident_id: str, action_id: str, operation: str) -> str:
     return f"sha256:{digest}"
 
 
+def _remote_capability_reasons(
+    action: ActionCatalogItem,
+    capability: dict[str, Any] | None,
+    namespace: str,
+    policy_id: str,
+) -> list[str]:
+    if capability is None:
+        return ["action_not_in_executor_catalog"]
+
+    reasons: list[str] = []
+    checks = (
+        (capability.get("executor_supported") is True, "executor_not_supported"),
+        (capability.get("dry_run_supported") is True, "dry_run_not_supported"),
+        (capability.get("execute_supported") is True, "execute_not_supported"),
+        (
+            capability.get("live_execute_supported") is True
+            or capability.get("live_execute_capable") is True,
+            "live_execute_not_supported",
+        ),
+        (capability.get("live_apply_enabled") is True, "live_apply_disabled"),
+        (capability.get("recommendation_only") is not True, "recommendation_only"),
+        (capability.get("audit_only") is not True, "audit_only"),
+        (capability.get("blocked") is not True, "blocked_action"),
+        (capability.get("protected") is not True, "protected_action"),
+        (capability.get("rollback_supported") is True, "rollback_not_supported"),
+        (capability.get("policy_approval_required") is True, "policy_approval_not_required"),
+    )
+    reasons.extend(reason for allowed, reason in checks if not allowed)
+    expected_values = {
+        "action_type": action.action_type,
+        "target": action.target,
+        "target_kind": action.target_kind,
+        "namespace": namespace,
+        "verification_query_id": action.verification_query_id,
+        "verification_signal_id": action.verification_signal_id,
+        "verification_threshold": action.verification_threshold,
+        "verification_max_ratio": action.verification_max_ratio,
+        "rollback_action_id": action.rollback_action_id,
+        "policy_id": policy_id,
+    }
+    reasons.extend(
+        f"{field}_mismatch"
+        for field, expected in expected_values.items()
+        if capability.get(field) != expected
+    )
+    return reasons
+
+
 def _verification_direction(signal_id: str) -> str:
     return "at_or_above" if "ready_pods" in signal_id or "available_replicas" in signal_id else "at_or_below"
+
+
+def _verification_threshold(
+    action: ActionCatalogItem,
+    feature: Feature | None,
+    event: CandidateEvent | None,
+) -> float | None:
+    if action.verification_threshold is not None:
+        return float(action.verification_threshold)
+    if action.verification_max_ratio is not None and feature is not None and feature.value is not None:
+        return float(feature.value) * float(action.verification_max_ratio)
+    if event is not None and event.threshold is not None:
+        return float(event.threshold)
+    return None
+
+
+def _rollback_failure_notification(
+    workflow: dict[str, Any],
+    response: dict[str, Any],
+) -> NotificationMessage:
+    attempt = int(workflow.get("attempt", 1))
+    notification_id = f"{workflow['incident_id']}:self-heal-escalation:{attempt}"
+    return NotificationMessage(
+        incident_id=notification_id,
+        severity="SEV1",
+        state="open",
+        title=f"URGENT: AIOps rollback failed for {workflow.get('target', 'unknown target')}",
+        summary=(
+            "Automated remediation verification failed and the automatic rollback did not complete.\n"
+            f"Action: {workflow.get('action_id', 'unknown')}\n"
+            f"Execution: {workflow.get('execution_id', 'unknown')}\n"
+            f"Target: {workflow.get('target', 'unknown')}\n"
+            f"Rollback status: {response.get('status', 'unknown')}\n"
+            "Action required: stop further mutation, inspect executor audit, and restore the previous replica state manually."
+        ),
+        flow=str(workflow.get("flow") or "operations"),
+        service=str(workflow.get("service") or workflow.get("target") or "aiops-runtime"),
+        likely_dependency="unknown",
+        runbook_id="RB-AIOPS-RUNTIME",
+    )
 
 
 def _sample_passed(value: float, threshold: float | None, direction: str) -> bool:

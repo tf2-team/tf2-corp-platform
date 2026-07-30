@@ -154,6 +154,9 @@ class ProdSimulationTest(unittest.TestCase):
         self.assertEqual([incident.service for incident in result.incidents], ["payment"])
         self.assertEqual(result.rca_result.root_causes[0].service, "payment")
         self.assertEqual([message.service for message in sender.sent], ["payment"])
+        configured_signal_ids = {signal.id for signal in pipeline.runtime_config.signals}
+        self.assertIn(result.incidents[0].events[-1].signal_id, configured_signal_ids)
+        self.assertNotEqual(result.incidents[0].events[-1].signal_id, "error_rate_5m")
 
     def test_repeated_slo_breach_is_deduped_by_incident(self):
         with TemporaryDirectory() as tmp:

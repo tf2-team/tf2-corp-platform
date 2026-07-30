@@ -83,8 +83,9 @@ class LiveExecutorStore:
         )
         self._connection.commit()
 
-    def save_plan(self, response: dict[str, Any]) -> None:
+    def save_plan(self, response: dict[str, Any], binding: dict[str, Any]) -> None:
         now = utc_now_text()
+        stored = {**response, "_binding": binding}
         with self._connection:
             self._connection.execute(
                 """
@@ -98,7 +99,7 @@ class LiveExecutorStore:
                     response["action_id"],
                     response["target"],
                     response.get("expires_at") or "",
-                    json.dumps(response, sort_keys=True),
+                    json.dumps(stored, sort_keys=True),
                     now,
                 ),
             )

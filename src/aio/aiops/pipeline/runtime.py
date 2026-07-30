@@ -202,7 +202,7 @@ class AiopsPipeline:
             if proposal is not None:
                 decisions.append(self.policy.evaluate(proposal))
         logger.debug("AIOPS_BLOCK policy decisions=%s results=%s suppressed=%s", len(decisions), [decision.result for decision in decisions], len(suppressed_incident_ids))
-        remediation_decisions = self._run_remediation_strategy(actionable_incidents, rca_result)
+        remediation_decisions = self._run_remediation_strategy(actionable_incidents, rca_result, features)
         if self.self_heal is not None and remediation_decisions:
             decisions = [
                 PolicyDecision(
@@ -349,6 +349,7 @@ class AiopsPipeline:
         rows = []
         for root in self._dedup_rca_root_causes(valid_roots):
             metric = root.root_cause_metrics[0]
+            signal_id = _canonical_signal_id(self.runtime_config, root.service, metric)
             flow = next((service.flow for service in self.runtime_config.topology.services if service.name == root.service), "unknown") if self.runtime_config else "unknown"
             rows.append(
                 self.store.upsert(
@@ -357,7 +358,7 @@ class AiopsPipeline:
                         flow=flow,
                         service=root.service,
                         severity=severity,
-                        signal_id=metric,
+                        signal_id=signal_id,
                         value=root.score,
                         unit="score",
                         window="rca",
@@ -615,7 +616,12 @@ class AiopsPipeline:
                         messages.append((service, event.timestamp, text))
         return messages
 
-    def _run_remediation_strategy(self, incidents: list[Incident], rca_result: RcaResult) -> list[RemediationDecision]:
+    def _run_remediation_strategy(
+        self,
+        incidents: list[Incident],
+        rca_result: RcaResult,
+        verification_features: list[Feature],
+    ) -> list[RemediationDecision]:
         if self.remediation is None:
             return []
         extractor, retriever, decider, catalog, history, audit = self.remediation
@@ -632,7 +638,12 @@ class AiopsPipeline:
                     (root for root in rca_result.root_causes if root.service == action.target),
                     rca_result.root_causes[0] if rca_result.root_causes else None,
                 )
-                execution = self.self_heal.start(incident, action, root_cause)
+                execution = self.self_heal.start(
+                    incident,
+                    action,
+                    root_cause,
+                    verification_features=verification_features,
+                )
                 decision = decision.model_copy(
                     update={
                         "would_execute": bool(execution["executed"]),
@@ -662,6 +673,20 @@ class AiopsPipeline:
             return decision.model_copy(
                 update={"policy_result": "not_mutating", "policy_allowed": False, "would_execute": False}
             )
+        if self.self_heal is not None:
+            capability_reasons = _local_executor_capability_reasons(
+                action,
+                self.self_heal.config.policy_id,
+            )
+            if capability_reasons:
+                return decision.model_copy(
+                    update={
+                        "policy_result": "executor_capability_blocked",
+                        "policy_reasons": tuple(capability_reasons),
+                        "policy_allowed": False,
+                        "would_execute": False,
+                    }
+                )
         policy_decision = self.policy.evaluate(
             ActionProposal(
                 action_type=action.action_type,
@@ -973,3 +998,46 @@ def _log_count(summary: str) -> int:
 
 def _unique_incidents(incidents: list[Incident]) -> list[Incident]:
     return list({incident.incident_id: incident for incident in incidents}.values())
+
+
+def _local_executor_capability_reasons(
+    action: ActionCatalogItem,
+    policy_id: str,
+) -> list[str]:
+    checks = (
+        (action.executor_supported, "executor_not_supported"),
+        (action.dry_run_supported, "dry_run_not_supported"),
+        (action.execute_supported, "execute_not_supported"),
+        (action.live_execute_supported, "live_execute_not_supported"),
+        (not action.recommendation_only, "recommendation_only"),
+        (not action.audit_only, "audit_only"),
+        (not action.protected, "protected_action"),
+        (not action.blocked, "blocked_action"),
+        (action.verification_defined, "verification_not_defined"),
+        (bool(action.verification_query_id), "verification_query_missing"),
+        (bool(action.verification_signal_id), "verification_signal_missing"),
+        (
+            action.verification_threshold is not None
+            or action.verification_max_ratio is not None,
+            "verification_recovery_rule_missing",
+        ),
+        (action.rollback_defined, "rollback_not_defined"),
+        (action.rollback_supported, "rollback_not_supported"),
+        (bool(action.rollback_action_id), "rollback_action_missing"),
+        (action.approved, "action_not_approved"),
+        (action.policy_approval_required, "policy_approval_not_required"),
+        (action.policy_id == policy_id, "policy_id_mismatch"),
+    )
+    return [reason for allowed, reason in checks if not allowed]
+
+
+def _canonical_signal_id(
+    runtime_config: RuntimeConfig | None,
+    service: str,
+    metric: str,
+) -> str:
+    if runtime_config is not None:
+        for spec in runtime_config.prometheus_query_specs.values():
+            if spec.service == service and spec.metric == metric:
+                return spec.signal_id
+    return f"{service.replace('-', '_')}_{metric}"
