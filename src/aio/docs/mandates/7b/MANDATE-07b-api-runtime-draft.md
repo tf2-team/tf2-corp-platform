@@ -14,6 +14,16 @@ Evidence pack live cho `AI MANDATE #7b`. State store tách theo scenario. AIOps 
 
 **Impact / no-spam (supplemental, ngoài mẫu số K):** burn-rate `ops01_checkout_slo_burn_rate` / `inc-ca09d8e8a247` (Scenario 3).
 
+### Submission traceability
+
+| Hạng mục | Link cố định | Trạng thái |
+| --- | --- | --- |
+| Labeled live dataset | [`f06f209`](https://github.com/tf2-team/tf2-corp-platform/commit/f06f209) | **Committed** — label, metric series và incident dump cho cart, checkout p95, checkout memory và burn-rate. |
+| Live detector/evidence implementation | [`8a656ac`](https://github.com/tf2-team/tf2-corp-platform/commit/8a656ac) | **Committed** — capture/replay, state tách theo scenario, runtime evidence và regression tests. |
+| Evidence report hiện tại | [`feat/aio/v0.1.0`](https://github.com/tf2-team/tf2-corp-platform/tree/feat/aio/v0.1.0/src/aio/docs/mandates/7b) | **On remote branch** — ảnh, metadata và report. |
+| ADR live measurement | [`ADR-DETECT-002-LIVE-MEASUREMENT.md`](./ADR-DETECT-002-LIVE-MEASUREMENT.md) | **Proposed** — chờ owner/reviewer ký tên. |
+| PR / merge trunk | [`main`](https://github.com/tf2-team/tf2-corp-platform/tree/main) | **Target branch** — source là `feat/aio/v0.1.0`; chỉ đánh dấu merged sau khi PR vào `main` hoàn tất. |
+
 ```text
 S2 cart error:     state/7b/s2-cart/              + cart_* dataset
 S3 burn-rate:      state/7b/s3-burn-rate/         + burn_rate_* + 18a–18k
@@ -147,7 +157,7 @@ Chỉ có **2 incident**, cả 2 đều nằm trong tập nhãn mong đợi (pay
 | Field | Value |
 | --- | --- |
 | Fault | `local-cartFailure` |
-| Fault start timestamp | TODO |
+| Fault start timestamp | `1785076022` Unix = **2026-07-26 21:27:02 +07:00** |
 
 ![Fault start timestamp](./evidence/s2-rerun-02-fault-start-timestamp.png)
 
@@ -494,8 +504,11 @@ Công thức mandate: **recall** = bắt được / K; **precision** = lần kê
 | --- | --- |
 | Live evidence pack (`7b/`) | **Ready** |
 | Labeled datasets `mandate7b_live/` | **Ready** (cart, checkout_p95, checkout_memory, burn_rate) |
-| #7a ADR / PR | Giả định đã nộp ở ticket #7a — điền link khi paste Jira |
-| Commit evidence docs | Tạo PR khi team sẵn sàng |
+| #7a ADR / PR | ADR đã có; reviewer sign-off và URL PR vẫn pending |
+| #7b ADR | `7b/ADR-DETECT-002-LIVE-MEASUREMENT.md` — proposed, chờ chữ ký owner/reviewer |
+| Commit labeled dataset | [`f06f209`](https://github.com/tf2-team/tf2-corp-platform/commit/f06f209) |
+| Commit live evidence | [`8a656ac`](https://github.com/tf2-team/tf2-corp-platform/commit/8a656ac) |
+| PR / merge trunk | Target: [`main`](https://github.com/tf2-team/tf2-corp-platform/tree/main); source: [`feat/aio/v0.1.0`](https://github.com/tf2-team/tf2-corp-platform/tree/feat/aio/v0.1.0); điền URL PR và chỉ đổi trạng thái sau khi merge |
 
 ## 13. Jira Paste Block
 

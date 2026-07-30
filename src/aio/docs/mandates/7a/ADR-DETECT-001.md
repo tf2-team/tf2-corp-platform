@@ -1,8 +1,8 @@
 # ADR-DETECT-001 - Mandate 7a Anomaly Detector Architecture
 
-> Status: Proposed, pending reviewer sign-off
+> Status: Accepted
 > Owner: Nguyen Quy Hung
-> Reviewers: Pending team review
+> Reviewers: Phan Đức Huy
 > Last updated: 2026-07-15
 > Related docs: `docs/aiops/mandate/MANDATE-07a-detection-analysis.md`
 
@@ -267,7 +267,7 @@ Phase 3: Future production readiness
 
 | Reviewer      | Area                        | Decision       | Evidence link/comment  | Date    |
 | ------------- | --------------------------- | -------------- | ---------------------- | ------- |
-| team reviewer | AIOps detector architecture | Pending review | Pending review comment | Pending |
+| Phan Đức Huy | AIOps detector architecture | Approved | Reviewed detector architecture, baseline method, safety constraints, and linked implementation evidence. | 2026-07-30 |
 
 
 ## Consequences

@@ -1,8 +1,8 @@
 # ADR-DETECT-002 - Mandate #15 Trustworthy Incident Detection
 
-Status: Ready for reviewer sign-off
+Status: Accepted
 Owner: Phan Duc Huy
-Reviewers: TODO
+Reviewers: Ngô Nguyên Phúc, Nguyễn Qúy Hưng
 Last updated: 2026-07-27
 Supersedes/extends: `docs/decisions/adr/ADR-DETECT-001.md` (Mandate #7a)
 Related: `docs/mandates/15/MANDATE-15-checkout-submission.md`
@@ -67,7 +67,7 @@ Measured results:
 | Recall | 1.0 |
 | False positives | 0 |
 | False negatives | 0 |
-| Average lead time | 29.5 seconds |
+| Replay average lead time | 29.5 seconds (includes masking replay floor `0s`) |
 
 Case results:
 
@@ -78,14 +78,17 @@ Case results:
 | checkout_real_incident | incident | fired |
 | checkout_masking | incident | fired |
 
-MTTD:
+MTTD / lead-time contract:
 
-| Approach | MTTD | Source |
+| Measurement | Value | Source / interpretation |
 |---|---:|---|
-| Before | 300 seconds | Previous static/manual 5-minute SLO/dashboard detection window. |
-| After | 29.5 seconds | Replay average lead time. |
+| Before baseline | 300 seconds | Previous static/manual 5-minute SLO/dashboard detection window. |
+| Detection floor | 0–5 seconds | Runtime cadence is 5s; this is the theoretical scheduling bound, not observed MTTD. |
+| Masking replay floor | 0 seconds | Replay clamp artifact; not accepted as live lead-time. |
+| Masking observed live lead-time | 1.985 seconds (~2.0s) | Fault start epoch `1785095183` to first runtime incident record `2026-07-26T19:46:24.985035Z`. |
+| Observed live MTTD | ~30.5 seconds | `(real incident 59.0s + masking 1.985s) / 2`. |
 
-MTTD reduction: `300s -> 29.5s`, about `90.2%` faster.
+Observed MTTD reduction: `300s -> ~30.5s`, about `89.8%` faster. The raw replay report remains reproducible and may show `29.5s`; submission claims use the reconciled live timestamps above.
 
 ## 4. Consequences
 
@@ -111,5 +114,5 @@ Tradeoffs:
 
 | Role | Name | Date | Status |
 |---|---|---|---|
-| Owner | Phan Duc Huy | 2026-07-27 | Ready |
-| Reviewer | TODO | TODO | Pending sign-off |
+| Owner | Phan Đức Huy | 2026-07-30 | Done |
+| Reviewer | Ngô Nguyên Phúc, Nguyễn Qúy Hưng | 2026-07-30 | Approved |
