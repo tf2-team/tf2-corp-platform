@@ -106,3 +106,31 @@ def test_tool_loop_failure_does_not_promote_partial_results():
     react_agent._tool_loop_failure(state)
 
     assert state["status"] == CopilotStatus.FALLBACK
+
+
+def test_runtime_tool_failure_is_fallback_and_not_cache_eligible(monkeypatch):
+    import react_agent
+    from copilot_contracts import CopilotStatus
+
+    monkeypatch.setattr(
+        react_agent,
+        "search_catalog",
+        lambda *_: (_ for _ in ()).throw(RuntimeError("catalog unavailable")),
+    )
+    state = {
+        "status": CopilotStatus.GROUNDED,
+        "cache_eligible": True,
+    }
+
+    result = react_agent._run_tool(
+        "search_catalog",
+        {"query": "telescope", "max_price": 150},
+        state,
+        SimpleNamespace(catalog_stub=MagicMock()),
+    )
+
+    assert result == {
+        "error": "The requested store operation is temporarily unavailable."
+    }
+    assert state["status"] == CopilotStatus.FALLBACK
+    assert state["cache_eligible"] is False

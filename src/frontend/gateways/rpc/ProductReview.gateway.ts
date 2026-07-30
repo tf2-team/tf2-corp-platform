@@ -23,6 +23,7 @@ const ProductReviewGateway = () => ({
     askProductAIAssistant(productId: string, question: string, userId: string) {
         const metadata = new Metadata();
         metadata.set('x-session-id', userId || 'anonymous');
+        metadata.set('x-user-id', userId || 'anonymous');
         return new Promise<string>((resolve, reject) =>
             client.askProductAiAssistant({ productId, question }, metadata, (error, response) => {
                 if (error) return reject(error);

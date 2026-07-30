@@ -49,6 +49,13 @@ from techx_ai_common.grounding import generate_grounded_summary, validate_ground
 from techx_ai_common.observability import call_model, call_tool, record_fallback, telemetry_context
 from techx_ai_common.rate_limiter import check_rate_limit
 from techx_ai_common.retrieval import retrieve_relevant_reviews
+from techx_ai_common.semantic_cache import (
+    DEFAULT_EMBEDDING_SCOPE,
+    DEFAULT_PROMPT_SCOPE,
+    SemanticCache,
+    compute_source_hash,
+    is_cache_enabled,
+)
 
 llm_host = None
 llm_port = None
@@ -57,6 +64,19 @@ llm_base_url = None
 llm_api_key = None
 llm_model = None
 valkey_client = None
+
+# Lazy env-based cache client; policy (enabled flag, user boundary) is applied at call sites.
+semantic_cache = SemanticCache.from_env()
+
+# Cache scopes for Summary Bot (invalidate when prompt/model/embedding change).
+CACHE_PROMPT_SCOPE = DEFAULT_PROMPT_SCOPE
+CACHE_EMBEDDING_SCOPE = DEFAULT_EMBEDDING_SCOPE
+
+
+def _cache_model_scope() -> str:
+    provider = os.environ.get("LLM_PROVIDER", "groq")
+    model = os.environ.get("LLM_MODEL") or os.environ.get("BEDROCK_MODEL_ID") or "unknown"
+    return f"{provider}:{model}"
 
 # --- Define the tool for the OpenAI API ---
 tools = [
@@ -112,9 +132,17 @@ class ProductReviewService(demo_pb2_grpc.ProductReviewServiceServicer):
     def AskProductAIAssistant(self, request, context):
         logger.info(f"Receive AskProductAIAssistant for product id:{request.product_id}, question_length: {len(request.question)}")
         metadata = dict(context.invocation_metadata())
-        user_id = metadata.get("x-session-id", "anonymous")
-        with telemetry_context(surface="summary", user_id=user_id):
-            ai_assistant_response = get_ai_assistant_response(request.product_id, request.question, user_id)
+        # x-session-id: rate-limit / short-lived session boundary
+        # x-user-id: stable cache boundary (handoff §7); missing → cache bypass
+        session_id = metadata.get("x-session-id", "anonymous")
+        cache_user_id = metadata.get("x-user-id") or None
+        with telemetry_context(surface="summary", user_id=session_id):
+            ai_assistant_response = get_ai_assistant_response(
+                request.product_id,
+                request.question,
+                session_id=session_id,
+                cache_user_id=cache_user_id,
+            )
 
         return ai_assistant_response
 
@@ -170,56 +198,114 @@ FALLBACK_MESSAGE = "AI summary is temporarily unavailable."
 ABSTAIN_MESSAGE = "The current reviews do not provide enough information."
 
 
-def _build_structured_response(status: str, answer: str = "", reason: str = "", claims: list = None) -> str:
+def _build_structured_response(status: str, answer: str = "", reason: str = "", claims: list = None, cache_status: str = "miss", cache_match: str = "none", cache_distance: float = 0.0) -> str:
     payload = {
         "status": status,
         "answer": answer,
         "reason": reason,
         "claims": claims or [],
+        "cache_status": cache_status,
+        "cache_match": cache_match,
+        "cache_distance": cache_distance,
     }
     return json.dumps(payload)
 
 
+def _make_ai_response(
+    status: str,
+    answer: str = "",
+    reason: str = "",
+    claims: list = None,
+    cache_status: str = "miss",
+    cache_match: str = "none",
+    cache_distance: float = 0.0,
+):
+    """Build AskProductAIAssistantResponse with JSON body + top-level cache fields."""
+    response = demo_pb2.AskProductAIAssistantResponse()
+    response.response = _build_structured_response(
+        status=status,
+        answer=answer,
+        reason=reason,
+        claims=claims,
+        cache_status=cache_status,
+        cache_match=cache_match,
+        cache_distance=cache_distance,
+    )
+    response.status = status
+    response.reason = reason or ""
+    if claims:
+        for claim in claims:
+            c = response.claims.add()
+            c.text = claim.get("text", "")
+            for sid in claim.get("source_ids") or claim.get("sources") or []:
+                c.source_ids.append(sid)
+    # Proto top-level cache metadata (handoff §11)
+    if hasattr(response, "cache_status"):
+        response.cache_status = cache_status
+        response.cache_match = cache_match
+        response.cache_distance = float(cache_distance or 0.0)
+    return response
+
+
 def _blocked_response(reason: str):
-    ai_assistant_response = demo_pb2.AskProductAIAssistantResponse()
-    ai_assistant_response.response = _build_structured_response(
+    logger.info(f"Request blocked by guardrails. reason={reason}")
+    return _make_ai_response(
         status="BLOCKED",
         answer="Sorry, I cannot process this request.",
         reason=reason,
     )
-    logger.info(f"Request blocked by guardrails. reason={reason}")
-    return ai_assistant_response
 
 
 def _rate_limited_response(reason: str | None):
     message = reason or "Rate limit exceeded. Please try again later."
-    ai_assistant_response = demo_pb2.AskProductAIAssistantResponse()
-    ai_assistant_response.response = _build_structured_response(
+    logger.info("Product review AI request rate limited")
+    return _make_ai_response(
         status="RATE_LIMITED",
         answer=message,
         reason=message,
     )
-    logger.info("Product review AI request rate limited")
-    return ai_assistant_response
 
 
 def _fallback_response(error_class: str = ""):
     """gRPC response when the LLM or a dependency fails.
     Logs the error class but never raw prompts, PII, or secrets."""
     record_fallback(error_class or "UnknownError")
-    ai_assistant_response = demo_pb2.AskProductAIAssistantResponse()
-    ai_assistant_response.response = _build_structured_response(
+    logger.warning("Returning fallback response. error_class=%s", error_class)
+    return _make_ai_response(
         status="FALLBACK",
         answer=FALLBACK_MESSAGE,
         reason=f"LLM or dependency error: {error_class}" if error_class else "LLM error",
     )
-    logger.warning(f"Returning fallback response. error_class={error_class}")
-    return ai_assistant_response
 
 
-def _get_bedrock_response(request_product_id, question, system_prompt, span):
-    """Bedrock has no OpenAI-compatible client here; fetch trusted data directly via RAG pipeline."""
+def _record_cache_metric(outcome: str, match: str = "none", duration_ms: float | None = None):
     try:
+        product_review_svc_metrics["ai_cache_requests_total"].add(
+            1, {"outcome": outcome, "match": match}
+        )
+        if duration_ms is not None:
+            product_review_svc_metrics["ai_cache_lookup_duration_ms"].record(
+                duration_ms, {"outcome": outcome}
+            )
+    except Exception:
+        pass
+
+
+def _get_bedrock_response(
+    request_product_id,
+    question,
+    system_prompt,
+    span,
+    cache_user_id=None,
+    cache_source_hash=None,
+):
+    """Bedrock has no OpenAI-compatible client here; fetch trusted data directly via RAG pipeline."""
+    candidate_text = ""
+    claims = []
+    status = "ABSTAINED"
+    reason = ABSTAIN_MESSAGE
+    try:
+        product_review_svc_metrics["ai_cache_model_calls_total"].add(1)
         safe_reviews = guardrails.sanitize_reviews(
             request_product_id,
             call_tool(
@@ -227,24 +313,36 @@ def _get_bedrock_response(request_product_id, question, system_prompt, span):
                 name="fetch_product_reviews",
             ),
         )
+        # source_hash is over full sanitized set before question retrieval
+        if cache_source_hash is None:
+            cache_source_hash = (
+                compute_source_hash(safe_reviews.reviews) if safe_reviews.reviews else "empty"
+            )
         safe_reviews = retrieve_relevant_reviews(safe_reviews, question)
         span.set_attribute("app.safe_reviews.count", len(safe_reviews.reviews))
         if not safe_reviews.reviews:
             candidate_text = ABSTAIN_MESSAGE
-            structured_response = _build_structured_response(
-                status="ABSTAINED", answer=ABSTAIN_MESSAGE, reason=ABSTAIN_MESSAGE
-            )
+            status = "ABSTAINED"
+            reason = ABSTAIN_MESSAGE
         else:
             grounded = validate_grounded_summary(
                 generate_grounded_summary(safe_reviews, question=question), safe_reviews
             )
             span.set_attribute("app.grounding.status", grounded.status.value)
-            candidate_text = grounded.answer if grounded.status == ResponseStatus.GROUNDED else grounded.reason
-            structured_response = _build_structured_response(
-                status=grounded.status.value,
-                answer=candidate_text or ABSTAIN_MESSAGE,
-                reason="" if grounded.status == ResponseStatus.GROUNDED else candidate_text or ABSTAIN_MESSAGE,
-                claims=[{"text": claim.text, "source_ids": claim.sources} for claim in grounded.claims],
+            candidate_text = (
+                grounded.answer
+                if grounded.status == ResponseStatus.GROUNDED
+                else grounded.reason
+            )
+            claims = [
+                {"text": claim.text, "source_ids": claim.sources}
+                for claim in grounded.claims
+            ]
+            status = grounded.status.value
+            reason = (
+                ""
+                if grounded.status == ResponseStatus.GROUNDED
+                else candidate_text or ABSTAIN_MESSAGE
             )
     except Exception as exc:
         logger.error("Bedrock AI assistant request failed: %s", type(exc).__name__)
@@ -257,32 +355,52 @@ def _get_bedrock_response(request_product_id, question, system_prompt, span):
         return _blocked_response(output_guard.reason)
     if output_guard.action == GuardrailAction.SANITIZED and output_guard.sanitized_text:
         candidate_text = output_guard.sanitized_text
-        structured_response = _build_structured_response(status="GROUNDED", answer=candidate_text)
 
-    response = demo_pb2.AskProductAIAssistantResponse()
-    response.response = structured_response
-    product_review_svc_metrics["app_ai_assistant_counter"].add(1, {"product.id": request_product_id})
-    return response
+    if status == "GROUNDED" and cache_user_id and cache_source_hash and is_cache_enabled():
+        semantic_cache.store(
+            user_id=cache_user_id,
+            product_id=request_product_id,
+            question=question,
+            source_hash=cache_source_hash,
+            answer_payload={
+                "status": "GROUNDED",
+                "answer": candidate_text or "",
+                "claims": claims,
+            },
+            prompt_scope=CACHE_PROMPT_SCOPE,
+            model_scope=_cache_model_scope(),
+            embedding_scope=CACHE_EMBEDDING_SCOPE,
+        )
+
+    product_review_svc_metrics["app_ai_assistant_counter"].add(
+        1, {"product.id": request_product_id}
+    )
+    return _make_ai_response(
+        status=status,
+        answer=candidate_text or ABSTAIN_MESSAGE,
+        reason=reason if status != "GROUNDED" else "",
+        claims=claims if status == "GROUNDED" else [],
+    )
 
 
-def get_ai_assistant_response(request_product_id, question, user_id="anonymous"):
+def get_ai_assistant_response(
+    request_product_id,
+    question,
+    session_id="anonymous",
+    cache_user_id=None,
+    user_id=None,
+):
+    # Backward-compatible: older callers passed user_id as 3rd positional for rate limit.
+    if user_id is not None and session_id == "anonymous":
+        session_id = user_id
 
     with tracer.start_as_current_span("get_ai_assistant_response") as span:
 
         ai_assistant_response = demo_pb2.AskProductAIAssistantResponse()
+        cache_source_hash = None
 
         span.set_attribute("app.product.id", request_product_id)
         span.set_attribute("app.product.question_length", len(question))
-
-        allowed, limit_reason = check_rate_limit(
-            valkey_client=valkey_client,
-            client_id=f"product-reviews:{user_id or 'anonymous'}",
-            cooldown_seconds=2,
-            max_requests_per_minute=10,
-        )
-        if not allowed:
-            span.set_attribute("app.rate_limit.exceeded", True)
-            return _rate_limited_response(limit_reason)
 
         # --- A1.2, step 1: is the incoming request itself safe? ---------
         # It runs before any model invocation, mock or real.
@@ -296,6 +414,81 @@ def get_ai_assistant_response(request_product_id, question, user_id="anonymous")
 
         logger.info("AI Assistant question sanitized; length=%d", len(question))
 
+        # Hybrid cache lookup (A1.3) — before expensive model path.
+        # Requires AI_CACHE_ENABLED + stable x-user-id (not anonymous).
+        if is_cache_enabled() and cache_user_id:
+            import time as _time
+            lookup_start = _time.perf_counter()
+            try:
+                # Fetch + sanitize full review set BEFORE question retrieval (handoff §8).
+                safe_for_hash = guardrails.sanitize_reviews(
+                    request_product_id,
+                    fetch_product_reviews(product_id=request_product_id),
+                )
+                cache_source_hash = (
+                    compute_source_hash(safe_for_hash.reviews)
+                    if safe_for_hash.reviews
+                    else "empty"
+                )
+                span.set_attribute("app.cache.source_hash", cache_source_hash[:16])
+
+                cache_hit = semantic_cache.lookup(
+                    user_id=cache_user_id,
+                    product_id=request_product_id,
+                    question=question,
+                    source_hash=cache_source_hash,
+                    prompt_scope=CACHE_PROMPT_SCOPE,
+                    model_scope=_cache_model_scope(),
+                    embedding_scope=CACHE_EMBEDDING_SCOPE,
+                )
+                duration_ms = (_time.perf_counter() - lookup_start) * 1000.0
+                if cache_hit:
+                    match_type = cache_hit.get("cache_match", "exact")
+                    distance = float(cache_hit.get("cache_distance") or 0.0)
+                    answer_data = cache_hit.get("answer_data") or {}
+                    span.set_attribute("app.cache.hit", True)
+                    span.set_attribute("app.cache.match", match_type)
+                    span.set_attribute("app.cache.distance", distance)
+                    _record_cache_metric("hit", match_type, duration_ms)
+                    claims = answer_data.get("claims") or []
+                    # Normalize claim shape for response builder
+                    normalized_claims = []
+                    for c in claims:
+                        if isinstance(c, dict):
+                            normalized_claims.append({
+                                "text": c.get("text", ""),
+                                "source_ids": c.get("source_ids") or c.get("sources") or [],
+                            })
+                    return _make_ai_response(
+                        status=answer_data.get("status") or "GROUNDED",
+                        answer=answer_data.get("answer", ""),
+                        reason=answer_data.get("reason") or "",
+                        claims=normalized_claims,
+                        cache_status="hit",
+                        cache_match=match_type,
+                        cache_distance=distance,
+                    )
+                span.set_attribute("app.cache.hit", False)
+                _record_cache_metric("miss", "none", duration_ms)
+            except Exception as exc:
+                duration_ms = (_time.perf_counter() - lookup_start) * 1000.0
+                logger.debug("Cache path error (fail-open): %s", type(exc).__name__)
+                _record_cache_metric("error", "none", duration_ms)
+        else:
+            span.set_attribute("app.cache.bypass", True)
+            _record_cache_metric("bypass", "none")
+
+        # Rate-limit only the expensive model path (after cache miss / bypass).
+        allowed, limit_reason = check_rate_limit(
+            valkey_client=valkey_client,
+            client_id=f"product-reviews:{session_id or 'anonymous'}",
+            cooldown_seconds=2,
+            max_requests_per_minute=10,
+        )
+        if not allowed:
+            span.set_attribute("app.rate_limit.exceeded", True)
+            return _rate_limited_response(limit_reason)
+
         # Instruct the model to call fetch_product_reviews in English for review questions
         system_prompt = (
             "You are a helpful assistant that answers related to a specific product. "
@@ -307,7 +500,14 @@ def get_ai_assistant_response(request_product_id, question, user_id="anonymous")
         )
 
         if is_bedrock_provider():
-            return _get_bedrock_response(request_product_id, question, system_prompt, span)
+            return _get_bedrock_response(
+                request_product_id,
+                question,
+                system_prompt,
+                span,
+                cache_user_id=cache_user_id,
+                cache_source_hash=cache_source_hash,
+            )
 
         llm_rate_limit_error = check_feature_flag("llmRateLimitError")
         logger.info(f"llmRateLimitError feature flag: {llm_rate_limit_error}")
@@ -381,6 +581,17 @@ def get_ai_assistant_response(request_product_id, question, user_id="anonymous")
             response_message = initial_response.choices[0].message
             tool_calls = response_message.tool_calls
             logger.info("Received initial AI assistant response")
+            usage = getattr(initial_response, "usage", None)
+            if usage is not None:
+                try:
+                    product_review_svc_metrics["ai_cache_model_input_tokens_total"].add(
+                        int(getattr(usage, "prompt_tokens", 0) or 0)
+                    )
+                    product_review_svc_metrics["ai_cache_model_output_tokens_total"].add(
+                        int(getattr(usage, "completion_tokens", 0) or 0)
+                    )
+                except Exception:
+                    pass
         except Exception as e:
             # Includes APITimeoutError / connection failures — never let them
             # surface as an unhandled 500 or hang until the gateway 504s.
@@ -490,14 +701,34 @@ def get_ai_assistant_response(request_product_id, question, user_id="anonymous")
 
             span.set_attribute("app.grounding.status", grounded.status.value)
 
+            product_review_svc_metrics["ai_cache_model_calls_total"].add(1)
             if grounded.status == ResponseStatus.GROUNDED:
                 span.set_attribute("app.grounding.claim_count", len(grounded.claims))
                 candidate_text = grounded.answer
+                grounded_claims = [
+                    {"text": c.text, "source_ids": c.sources} for c in grounded.claims
+                ]
                 structured_response = _build_structured_response(
                     status="GROUNDED",
                     answer=grounded.answer,
-                    claims=[{"text": c.text, "source_ids": c.sources} for c in grounded.claims],
+                    claims=grounded_claims,
                 )
+                # Store only GROUNDED (fail-open safe); needs stable user + source_hash
+                if is_cache_enabled() and cache_user_id and cache_source_hash:
+                    semantic_cache.store(
+                        user_id=cache_user_id,
+                        product_id=request_product_id,
+                        question=question,
+                        source_hash=cache_source_hash,
+                        answer_payload={
+                            "status": "GROUNDED",
+                            "answer": grounded.answer,
+                            "claims": grounded_claims,
+                        },
+                        prompt_scope=CACHE_PROMPT_SCOPE,
+                        model_scope=_cache_model_scope(),
+                        embedding_scope=CACHE_EMBEDDING_SCOPE,
+                    )
             else:
                 candidate_text = grounded.reason
                 structured_response = _build_structured_response(
@@ -542,6 +773,17 @@ def get_ai_assistant_response(request_product_id, question, user_id="anonymous")
                     workflow_step="final_answer",
                 )
                 candidate_text = final_response.choices[0].message.content
+                usage = getattr(final_response, "usage", None)
+                if usage is not None:
+                    try:
+                        product_review_svc_metrics["ai_cache_model_input_tokens_total"].add(
+                            int(getattr(usage, "prompt_tokens", 0) or 0)
+                        )
+                        product_review_svc_metrics["ai_cache_model_output_tokens_total"].add(
+                            int(getattr(usage, "completion_tokens", 0) or 0)
+                        )
+                    except Exception:
+                        pass
             except Exception as e:
                 logger.error(f"LLM final-answer call failed: {type(e).__name__}")
                 span.set_status(Status(StatusCode.ERROR, description=type(e).__name__))
@@ -564,21 +806,39 @@ def get_ai_assistant_response(request_product_id, question, user_id="anonymous")
         if output_guard.action == GuardrailAction.SANITIZED and output_guard.sanitized_text:
             candidate_text = output_guard.sanitized_text
 
-        # Use structured JSON if grounding produced one; otherwise wrap
-        # the plain candidate_text as a GROUNDED response without claims.
+        # Prefer structured grounding payload; always include cache miss metadata.
         if structured_response:
-            ai_assistant_response.response = structured_response
+            try:
+                body = json.loads(structured_response)
+            except (json.JSONDecodeError, TypeError):
+                body = {
+                    "status": "GROUNDED",
+                    "answer": candidate_text or "",
+                    "claims": [],
+                }
         else:
-            ai_assistant_response.response = _build_structured_response(
-                status="GROUNDED",
-                answer=candidate_text or "",
-            )
-        logger.info(f"Returning an AI assistant response with length: {len(candidate_text or '')}")
+            body = {
+                "status": "GROUNDED",
+                "answer": candidate_text or "",
+                "claims": [],
+            }
 
-        # Collect metrics for this service
-        product_review_svc_metrics["app_ai_assistant_counter"].add(1, {'product.id': request_product_id})
-
-        return ai_assistant_response
+        claims = body.get("claims") or []
+        logger.info(
+            f"Returning an AI assistant response with length: {len(candidate_text or '')}"
+        )
+        product_review_svc_metrics["app_ai_assistant_counter"].add(
+            1, {"product.id": request_product_id}
+        )
+        return _make_ai_response(
+            status=body.get("status") or "GROUNDED",
+            answer=body.get("answer") or candidate_text or "",
+            reason=body.get("reason") or "",
+            claims=claims,
+            cache_status="miss",
+            cache_match="none",
+            cache_distance=0.0,
+        )
 
 def fetch_product_info(product_id):
     try:

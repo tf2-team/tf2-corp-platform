@@ -1,0 +1,12 @@
+﻿=== TTL check after clean cache-enabled replay ===
+Date: 2026-07-27 13:27:31
+AI_CACHE_TTL_SECONDS=3600
+
+Keys matching ai:cache:summary:*:
+ai:cache:summary:8117b9155faa484ed15fdb0ff9dd09e4d8d18967fad826ae5ca511850c72b4cb
+ai:cache:summary:15799d89be78dcb3c617fedf2375412afd7b53d99abd7650d2ab2a51c983c7de
+ai:cache:summary:839cc8e1dcd111aef382e9ffbe51f82c1488e9b4c277936e6be028213edabf20
+
+KEY=ai:cache:summary:8117b9155faa484ed15fdb0ff9dd09e4d8d18967fad826ae5ca511850c72b4cb TTL=3556
+KEY=ai:cache:summary:15799d89be78dcb3c617fedf2375412afd7b53d99abd7650d2ab2a51c983c7de TTL=3563
+KEY=ai:cache:summary:839cc8e1dcd111aef382e9ffbe51f82c1488e9b4c277936e6be028213edabf20 TTL=3567

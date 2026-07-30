@@ -1,0 +1,5 @@
+﻿PONG
+ai_copilot_cache_idx
+ai_summary_cache_idx
+# Keyspace
+db0:keys=3,expires=3,avg_ttl=3567622,keys_with_volatile_items=0

@@ -141,6 +141,9 @@ message CopilotSearchResponse {
     // Non-empty when the copilot proposes an add-to-cart action.
     // Frontend must call ConfirmCartAction with this token to execute the write.
     string pending_action_token = 7;
+    string cache_status = 8;   // hit | miss
+    string cache_match = 9;    // exact | semantic | none
+    float cache_distance = 10; // 0 for exact/miss
 }
 
 message CopilotProduct {
@@ -223,6 +226,9 @@ message AskProductAIAssistantResponse {
     string status = 2;
     string reason = 3;
     repeated GroundedClaim claims = 4;
+    string cache_status = 5;  // hit | miss
+    string cache_match = 6;   // exact | semantic | none
+    float cache_distance = 7; // 0 for exact/miss
 }
 
 // ---------------Shipping Service----------

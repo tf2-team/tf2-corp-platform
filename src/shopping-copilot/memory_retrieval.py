@@ -12,6 +12,7 @@ from openai import OpenAI
 
 from bedrock_runtime import converse_json, is_bedrock_provider
 from copilot_contracts import RetrievalHint
+import metrics as copilot_metrics
 from techx_ai_common.observability import call_model
 
 _PROMPT = """Build turn context for a shopping conversation.
@@ -62,8 +63,8 @@ def parse_retrieval_hint(user_message: str, conversation_context: str = "") -> R
         mode=instructor.Mode.JSON,
     )
     model = os.environ["LLM_MODEL"]
-    return call_model(
-        lambda: client.chat.completions.create(
+    parsed, completion = call_model(
+        lambda: client.chat.completions.create_with_completion(
             model=model,
             response_model=RetrievalHint,
             messages=[{"role": "system", "content": _PROMPT}, {"role": "user", "content": prompt}],
@@ -73,5 +74,11 @@ def parse_retrieval_hint(user_message: str, conversation_context: str = "") -> R
         provider=os.environ.get("LLM_PROVIDER", "openai_compatible"),
         workflow_step="retrieval_hint",
     )
-
 # Change trail: @hungxqt - 2026-07-29 - Merge retrieval hints onto the content-free model telemetry wrapper.
+    usage = getattr(completion, "usage", None)
+    copilot_metrics.record_model_call(
+        os.environ.get("LLM_PROVIDER", "openai").lower(),
+        int(getattr(usage, "prompt_tokens", 0) or 0),
+        int(getattr(usage, "completion_tokens", 0) or 0),
+    )
+    return parsed
