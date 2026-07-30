@@ -11,6 +11,7 @@ from pathlib import Path
 from aiops.collectors import StaticCollector
 from aiops.detectors import Detector
 from aiops.detectors.base import candidate_from_feature
+from aiops.live_executor.app import ActionRequest, RollbackRequest, VerificationRequest
 from aiops.pipeline import AiopsPipeline
 from aiops.remediation import (
     ActionCatalog,
@@ -70,6 +71,7 @@ class FakeExecutorClient:
         ]
 
     def plan(self, action: dict) -> dict:
+        ActionRequest.model_validate(action)
         return {
             "allowed": True,
             "executed": False,
@@ -79,6 +81,7 @@ class FakeExecutorClient:
         }
 
     def execute(self, action: dict) -> dict:
+        ActionRequest.model_validate(action)
         return {
             "allowed": True,
             "executed": True,
@@ -96,12 +99,14 @@ class FakeExecutorClient:
         }
 
     def record_verification(self, execution_id: str, verification: dict) -> dict:
+        VerificationRequest.model_validate(verification)
         return {
             "execution_id": execution_id,
             "status": "succeeded" if verification["passed"] else "failed",
         }
 
     def rollback(self, execution_id: str, request: dict) -> dict:
+        RollbackRequest.model_validate(request)
         return {
             "execution_id": execution_id,
             "status": "rolled_back",
