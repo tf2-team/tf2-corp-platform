@@ -269,15 +269,16 @@ def test_detector_drives_execute_then_fresh_telemetry_closes_incident(tmp_path: 
         assert first.policy_decisions[0].executed is True
 
         clock.advance(60)
-        collector._observations = [_observation(70, clock())]
+        collector._observations = [_observation(100, clock())]
         second = pipeline.run_once()
         assert second.verification_results[0].status == "not_recovered"
 
         clock.advance(60)
-        collector._observations = [_observation(60, clock())]
+        collector._observations = [_observation(90, clock())]
         third = pipeline.run_once()
         assert third.verification_results[0].status == "recovered"
         assert store.self_heal_workflow(first.incidents[0].incident_id)["status"] == "succeeded"
         assert store.list_incidents()[0].state == "recovered"
+        assert any(notification.title == "Recovered: product-catalog" for notification in third.notifications)
     finally:
         store.close()

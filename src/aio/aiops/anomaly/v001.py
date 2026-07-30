@@ -200,7 +200,7 @@ class LogTemplateMetricBuilder:
     def build(self, logs: list[tuple[str, int, str]]) -> list[MetricSeries]:
         grouped: dict[tuple[str, str], dict[int, float]] = defaultdict(lambda: defaultdict(float))
         for service, timestamp, message in logs:
-            template = self._template(message)
+            template = self.template(message)
             grouped[(service, template)][self._bucket(timestamp)] += 1.0
 
         series = []
@@ -221,7 +221,7 @@ class LogTemplateMetricBuilder:
             )
         return series
 
-    def _template(self, message: str) -> str:
+    def template(self, message: str) -> str:
         if self.template_miner is not None:
             result = self.template_miner.add_log_message(message)
             template = result.get("template_mined")

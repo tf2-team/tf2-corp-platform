@@ -139,6 +139,8 @@ class SQLiteIncidentStore:
 
     def upsert(self, candidate: CandidateEvent) -> Incident:
         self._validate_runbook(candidate.runbook_id)
+        if not candidate.timestamp:
+            candidate = candidate.model_copy(update={"timestamp": int(datetime.now(UTC).timestamp())})
         fingerprint = incident_fingerprint(self.environment, candidate, self.topology_graph)
         seen_at = _seen_at(candidate)
         row = self._connection.execute(
@@ -167,14 +169,13 @@ class SQLiteIncidentStore:
             incident.state = "open" if incident.state == "recovered" else "ongoing"
             incident.recovered_at = None
             incident.recovery_count = 0
-            if self._count_window_expired(incident, candidate):
-                incident.occurrence_count = 1
-                incident.events = [candidate]
-                incident.severity = candidate.severity
-            else:
-                incident.occurrence_count += 1
-                incident.events.append(candidate)
-                incident.severity = min(incident.severity, candidate.severity)
+            incident.events = _events_in_window(
+                incident.events,
+                candidate,
+                self.incident_count_reset_seconds,
+            ) + [candidate]
+            incident.occurrence_count = len(incident.events)
+            incident.severity = min(event.severity for event in incident.events)
             incident.last_seen = seen_at
 
         now = datetime.now(UTC)
@@ -361,13 +362,6 @@ class SQLiteIncidentStore:
         if is_new or not incident.cooldown_until:
             return True
         return datetime.fromisoformat(incident.cooldown_until) <= now
-
-    def _count_window_expired(self, incident: Incident, candidate: CandidateEvent) -> bool:
-        if self.incident_count_reset_seconds <= 0 or not incident.events:
-            return True
-        first_seen = _candidate_seen_at(incident.events[0])
-        current_seen = _candidate_seen_at(candidate)
-        return current_seen - first_seen >= timedelta(seconds=self.incident_count_reset_seconds)
 
     def _notification_outbox_status(self, incident_id: str) -> str | None:
         row = self._connection.execute(
@@ -669,6 +663,7 @@ class SQLiteIncidentStore:
                     """,
                     (recovered_at, fingerprint),
                 )
+                self._enqueue_recovery_notification(incident)
             return incident
         return None
 
@@ -875,6 +870,14 @@ def _candidate_seen_at(candidate: CandidateEvent) -> datetime:
     if candidate.timestamp:
         return datetime.fromtimestamp(candidate.timestamp, UTC)
     return datetime.now(UTC)
+
+
+def _events_in_window(events: list[CandidateEvent], candidate: CandidateEvent, window_seconds: int) -> list[CandidateEvent]:
+    if window_seconds <= 0:
+        return []
+    current = _candidate_seen_at(candidate)
+    window = timedelta(seconds=window_seconds)
+    return [event for event in events if timedelta(0) <= current - _candidate_seen_at(event) < window]
 
 
 def _ordered_notifications(rows: list[tuple[str]]) -> list[NotificationMessage]:

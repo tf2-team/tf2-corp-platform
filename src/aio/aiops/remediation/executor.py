@@ -75,10 +75,26 @@ class SelfHealConfig:
     min_incident_occurrences: int = 3
     min_incident_score: float = 0.24
     rollback_after_executions: int = 3
+    min_occurrence_interval_seconds: int = 60
+    queue_ttl_seconds: int = 900
+    verification_callback_max_attempts: int = 3
+    rollback_max_attempts: int = 3
 
     def __post_init__(self) -> None:
-        if self.min_incident_occurrences < 1 or self.rollback_after_executions < 1:
-            raise ValueError("self-heal occurrence and rollback thresholds must be positive")
+        positive = (
+            self.verification_deadline_seconds,
+            self.min_fresh_samples,
+            self.consecutive_passes,
+            self.failure_samples,
+            self.min_incident_occurrences,
+            self.rollback_after_executions,
+            self.min_occurrence_interval_seconds,
+            self.queue_ttl_seconds,
+            self.verification_callback_max_attempts,
+            self.rollback_max_attempts,
+        )
+        if any(value < 1 for value in positive):
+            raise ValueError("self-heal thresholds and timeouts must be positive")
         if not 0 <= self.min_incident_score <= 1:
             raise ValueError("self-heal incident score threshold must be between 0 and 1")
 
@@ -106,6 +122,21 @@ class SelfHealOrchestrator:
         }
         return sorted(incidents, key=lambda incident: queued.get(incident.incident_id, len(queued)))
 
+    def sync_queue(self, active_incident_ids: set[str]) -> None:
+        now = self.clock()
+        for workflow in self.store.queued_self_heal_workflows():
+            reason = None
+            if workflow["incident_id"] not in active_incident_ids:
+                reason = "queued_incident_no_longer_active"
+            elif _queue_expired(workflow, now, self.config.queue_ttl_seconds):
+                reason = "queued_incident_expired"
+            if reason is None:
+                continue
+            workflow["status"] = "cancelled"
+            workflow["cancel_reason"] = reason
+            self.store.save_self_heal_workflow(workflow)
+            self.store.append_self_heal_audit("queue_cancelled", workflow["incident_id"], workflow.get("execution_id"), {"reason": reason})
+
     def start(
         self,
         incident: Incident,
@@ -115,6 +146,13 @@ class SelfHealOrchestrator:
         verification_features: list[Feature] | None = None,
     ) -> dict[str, Any]:
         existing = self.store.self_heal_workflow(incident.incident_id)
+        if existing is not None and existing.get("status") == "queued" and _queue_expired(
+            existing,
+            self.clock(),
+            self.config.queue_ttl_seconds,
+        ):
+            existing["status"] = "cancelled"
+            self.store.save_self_heal_workflow(existing)
         if existing is not None and existing["status"] in {
             "verifying",
             "rollback_pending",
@@ -128,15 +166,18 @@ class SelfHealOrchestrator:
                 "reasons": ["workflow_already_exists"],
             }
         score = incident.events[-1].confidence
-        qualifying_occurrences = sum(
-            event.confidence >= self.config.min_incident_score for event in incident.events
+        trigger_timestamp = (
+            float(existing["trigger_event_timestamp"])
+            if existing is not None and existing.get("status") != "queued" and existing.get("trigger_event_timestamp") is not None
+            else None
         )
-        previous_trigger = int((existing or {}).get("trigger_occurrence_count", 0))
-        occurrences_since_trigger = (
-            qualifying_occurrences - previous_trigger
-            if qualifying_occurrences > previous_trigger
-            else qualifying_occurrences
+        qualifying_events = _qualifying_occurrences(
+            incident.events,
+            self.config.min_incident_score,
+            self.config.min_occurrence_interval_seconds,
+            trigger_timestamp,
         )
+        occurrences_since_trigger = len(qualifying_events)
         if score < self.config.min_incident_score:
             return self._waiting(
                 incident,
@@ -326,7 +367,7 @@ class SelfHealOrchestrator:
             "status": "verifying",
             "attempt": attempt,
             "execution_count": execution_count + 1,
-            "trigger_occurrence_count": qualifying_occurrences,
+            "trigger_event_timestamp": max((event.timestamp for event in qualifying_events), default=event.timestamp),
             "action_id": action.action_id,
             "action_type": action.action_type,
             "target": action.target,
@@ -392,6 +433,7 @@ class SelfHealOrchestrator:
             "action_type": action.action_type,
             "target": action.target,
             "service": incident.service,
+            "queued_at": (existing or {}).get("queued_at") or _iso(self.clock()),
         }
         if existing is not None and existing.get("action_id") != action.action_id:
             workflow.update({"execution_id": None, "execution_count": 0, "rollback_token": None})
@@ -429,7 +471,7 @@ class SelfHealOrchestrator:
     def _reconcile_one(self, workflow: dict[str, Any], feature: Feature | None) -> VerificationResult:
         incident_id = workflow["incident_id"]
         if workflow["status"] == "rollback_pending":
-            return self._rollback(workflow, "verification_failed")
+            return self._rollback(workflow, workflow.get("rollback_reason", "verification_failed"))
 
         now = self.clock()
         deadline = _parse_time(workflow.get("deadline_at"), now)
@@ -485,6 +527,7 @@ class SelfHealOrchestrator:
             reason = "verification_failed" if failed else "verification_inconclusive_timeout"
             self._record_failed_verification(workflow, reason)
             workflow["status"] = "rollback_pending"
+            workflow["rollback_reason"] = reason
             self.store.save_self_heal_workflow(workflow)
             return self._rollback(workflow, reason)
 
@@ -518,26 +561,22 @@ class SelfHealOrchestrator:
                 workflow["execution_id"],
                 {"error_type": type(exc).__name__},
             )
-            self.store.save_self_heal_workflow(workflow)
-            return VerificationResult(
-                incident_id=workflow["incident_id"],
-                status="inconclusive",
-                reason="verification_callback_failed",
-            )
+            return self._verification_callback_failure(workflow, "verification_callback_failed")
 
+        if response.get("status") != "succeeded":
+            self.store.append_self_heal_audit(
+                "verification_rejected",
+                workflow["incident_id"],
+                workflow["execution_id"],
+                response,
+            )
+            return self._verification_callback_failure(workflow, "executor_rejected_verification")
         self.store.append_self_heal_audit(
             "verification_passed",
             workflow["incident_id"],
             workflow["execution_id"],
             response,
         )
-        if response.get("status") != "succeeded":
-            self.store.save_self_heal_workflow(workflow)
-            return VerificationResult(
-                incident_id=workflow["incident_id"],
-                status="inconclusive",
-                reason="executor_rejected_verification",
-            )
         workflow["status"] = "succeeded"
         self.store.save_self_heal_workflow(workflow)
         self.store.mark_incident_recovered(workflow["incident_id"], _iso(self.clock()))
@@ -546,6 +585,17 @@ class SelfHealOrchestrator:
             status="recovered",
             reason="post_action_verification_passed",
         )
+
+    def _verification_callback_failure(self, workflow: dict[str, Any], reason: str) -> VerificationResult:
+        attempts = int(workflow.get("verification_callback_attempts", 0)) + 1
+        workflow["verification_callback_attempts"] = attempts
+        if attempts >= self.config.verification_callback_max_attempts:
+            workflow["status"] = "rollback_pending"
+            workflow["rollback_reason"] = reason
+            self.store.save_self_heal_workflow(workflow)
+            return self._rollback(workflow, reason)
+        self.store.save_self_heal_workflow(workflow)
+        return VerificationResult(incident_id=workflow["incident_id"], status="inconclusive", reason=reason)
 
     def _record_failed_verification(self, workflow: dict[str, Any], reason: str) -> None:
         request = {
@@ -573,6 +623,9 @@ class SelfHealOrchestrator:
         )
 
     def _rollback(self, workflow: dict[str, Any], reason: str) -> VerificationResult:
+        rollback_attempt = int(workflow.get("rollback_attempts", 0)) + 1
+        workflow["rollback_attempts"] = rollback_attempt
+        workflow["rollback_reason"] = reason
         request = {
             "request_id": str(uuid4()),
             "incident_id": workflow["incident_id"],
@@ -585,7 +638,7 @@ class SelfHealOrchestrator:
             "idempotency_key": _idempotency_key(
                 workflow["incident_id"],
                 workflow["action_id"],
-                f"rollback-{workflow.get('attempt', 1)}",
+                f"rollback-{workflow.get('attempt', 1)}-{rollback_attempt}",
             ),
         }
         try:
@@ -603,6 +656,10 @@ class SelfHealOrchestrator:
             workflow["status"] = "rolled_back"
             workflow["rollback"] = response
             result_reason = "post_action_verification_failed_rolled_back"
+        elif rollback_attempt < self.config.rollback_max_attempts:
+            workflow["status"] = "rollback_pending"
+            workflow["rollback"] = response
+            result_reason = "automatic_rollback_retry_pending"
         else:
             workflow["status"] = "rollback_failed"
             workflow["rollback"] = response
@@ -682,6 +739,32 @@ class SelfHealOrchestrator:
 def _idempotency_key(incident_id: str, action_id: str, operation: str) -> str:
     digest = hashlib.sha256(f"{incident_id}:{action_id}:{operation}".encode("utf-8")).hexdigest()
     return f"sha256:{digest}"
+
+
+def _qualifying_occurrences(
+    events: list[CandidateEvent],
+    min_score: float,
+    min_interval_seconds: int,
+    after_timestamp: float | None,
+) -> list[CandidateEvent]:
+    qualifying = sorted(
+        (
+            event
+            for event in events
+            if event.confidence >= min_score and (after_timestamp is None or event.timestamp > after_timestamp)
+        ),
+        key=lambda event: event.timestamp,
+    )
+    kept: list[CandidateEvent] = []
+    for event in qualifying:
+        if not kept or event.timestamp - kept[-1].timestamp >= min_interval_seconds:
+            kept.append(event)
+    return kept
+
+
+def _queue_expired(workflow: dict[str, Any], now: datetime, ttl_seconds: int) -> bool:
+    queued_at = _parse_time(workflow.get("queued_at"), datetime.min.replace(tzinfo=UTC))
+    return now - queued_at >= timedelta(seconds=ttl_seconds)
 
 
 def _remote_capability_reasons(

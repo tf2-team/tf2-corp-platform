@@ -147,6 +147,12 @@ def _incident() -> Incident:
     )
 
 
+def _incident_at(*timestamps: int) -> Incident:
+    incident = _incident()
+    events = [incident.events[0].model_copy(update={"timestamp": timestamp}) for timestamp in timestamps]
+    return incident.model_copy(update={"events": events, "occurrence_count": len(events)})
+
+
 def _action() -> ActionCatalogItem:
     return ActionCatalogItem(
         action_id="scale_product_catalog",
@@ -220,19 +226,11 @@ def _orchestrator(tmp_path: Path, clock: Clock, **config_overrides):
 def test_self_heal_waits_for_repeated_qualified_incidents(tmp_path: Path) -> None:
     clock = Clock()
     orchestrator, client, store = _orchestrator(tmp_path, clock, min_incident_occurrences=3)
-    incident = _incident()
+    incident = _incident_at(1)
     try:
         first = orchestrator.start(incident, _action(), _root())
-        second = orchestrator.start(
-            incident.model_copy(update={"events": incident.events * 2, "occurrence_count": 2}),
-            _action(),
-            _root(),
-        )
-        third = orchestrator.start(
-            incident.model_copy(update={"events": incident.events * 3, "occurrence_count": 3}),
-            _action(),
-            _root(),
-        )
+        second = orchestrator.start(_incident_at(1, 61), _action(), _root())
+        third = orchestrator.start(_incident_at(1, 61, 121), _action(), _root())
 
         assert first["status"] == second["status"] == "waiting_recurrence"
         assert third["status"] == "verifying"
@@ -269,24 +267,20 @@ def test_self_heal_queues_another_incident_while_one_is_active(tmp_path: Path) -
 def test_repeated_self_heal_rolls_back_previous_execution(tmp_path: Path) -> None:
     clock = Clock()
     orchestrator, client, store = _orchestrator(tmp_path, clock, rollback_after_executions=2)
-    incident = _incident()
+    incident = _incident_at(1)
     try:
         orchestrator.start(incident, _action(), _root())
         workflow = store.self_heal_workflow(incident.incident_id)
         workflow["status"] = "succeeded"
         store.save_self_heal_workflow(workflow)
 
-        repeated = incident.model_copy(update={"events": incident.events * 2, "occurrence_count": 2})
+        repeated = _incident_at(1, 61)
         orchestrator.start(repeated, _action(), _root())
         workflow = store.self_heal_workflow(incident.incident_id)
         workflow["status"] = "succeeded"
         store.save_self_heal_workflow(workflow)
 
-        rollback = orchestrator.start(
-            incident.model_copy(update={"events": incident.events * 3, "occurrence_count": 3}),
-            _action(),
-            _root(),
-        )
+        rollback = orchestrator.start(_incident_at(1, 61, 121), _action(), _root())
 
         assert rollback["status"] == "rolled_back"
         assert rollback["reasons"] == ["repeated_self_heal_limit"]
@@ -418,7 +412,7 @@ def test_self_heal_uses_live_feature_and_relative_recovery_threshold(tmp_path: P
 
 def test_self_heal_enqueues_retryable_notification_when_rollback_fails(tmp_path: Path) -> None:
     clock = Clock()
-    orchestrator, client, store = _orchestrator(tmp_path, clock)
+    orchestrator, client, store = _orchestrator(tmp_path, clock, rollback_max_attempts=1)
     client.rollback_succeeds = False
     try:
         orchestrator.start(_incident(), _action(), _root())
@@ -444,5 +438,63 @@ def test_self_heal_enqueues_retryable_notification_when_rollback_fails(tmp_path:
             (escalation.incident_id,),
         ).fetchone()
         assert tuple(row) == ("retry", 1)
+    finally:
+        store.close()
+
+
+def test_self_heal_cancels_stale_queued_incident(tmp_path: Path) -> None:
+    clock = Clock()
+    orchestrator, _, store = _orchestrator(tmp_path, clock, queue_ttl_seconds=60)
+    first = _incident()
+    second = _incident().model_copy(update={"incident_id": "inc-queued", "fingerprint": "sha256:queued"})
+    try:
+        orchestrator.start(first, _action(), _root())
+        orchestrator.start(second, _action(), _root())
+        clock.advance(61)
+        orchestrator.sync_queue({second.incident_id})
+
+        workflow = store.self_heal_workflow(second.incident_id)
+        assert workflow["status"] == "cancelled"
+        assert workflow["cancel_reason"] == "queued_incident_expired"
+    finally:
+        store.close()
+
+
+def test_verification_callback_rejection_eventually_rolls_back(tmp_path: Path) -> None:
+    clock = Clock()
+    orchestrator, client, store = _orchestrator(tmp_path, clock, verification_callback_max_attempts=2)
+    client.record_verification = lambda execution_id, verification: {"status": "failed"}
+    try:
+        orchestrator.start(_incident(), _action(), _root())
+        clock.advance(30)
+        orchestrator.reconcile([_feature(70, clock())])
+        clock.advance(30)
+        first = orchestrator.reconcile([_feature(60, clock())])[0]
+        second = orchestrator.reconcile([_feature(60, clock())])[0]
+
+        assert first.reason == "executor_rejected_verification"
+        assert second.reason == "post_action_verification_failed_rolled_back"
+        assert store.self_heal_workflow("inc-product-catalog")["status"] == "rolled_back"
+    finally:
+        store.close()
+
+
+def test_rollback_retries_before_escalating(tmp_path: Path) -> None:
+    clock = Clock()
+    orchestrator, client, store = _orchestrator(tmp_path, clock, rollback_max_attempts=3)
+    client.rollback_succeeds = False
+    try:
+        orchestrator.start(_incident(), _action(), _root())
+        clock.advance(30)
+        orchestrator.reconcile([_feature(110, clock())])
+        clock.advance(30)
+        first = orchestrator.reconcile([_feature(100, clock())])[0]
+        second = orchestrator.reconcile([])[0]
+        third = orchestrator.reconcile([])[0]
+
+        assert first.reason == second.reason == "automatic_rollback_retry_pending"
+        assert third.reason == "post_action_verification_failed_escalated"
+        assert len(client.rollbacks) == 3
+        assert len(store.due_notifications()) == 1
     finally:
         store.close()

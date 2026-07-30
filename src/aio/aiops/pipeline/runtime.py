@@ -128,7 +128,7 @@ class AiopsPipeline:
             len(features),
             _counts(feature.status for feature in features),
         )
-        self_heal_verification = self.self_heal.reconcile(features) if self.self_heal is not None else []
+        self_heal_verification: list[VerificationResult] = []
         candidates = self.detector_engine.evaluate(features)
         (logger.info if candidates else logger.debug)("AIOPS_BLOCK detect candidates=%s ids=%s", len(candidates), [candidate.detector_id for candidate in candidates])
         correlated = self.correlator.correlate(candidates)
@@ -166,6 +166,28 @@ class AiopsPipeline:
                 *analysis_incidents,
                 *(incident for incident in lifecycle_incidents if incident.state != "recovered"),
             ])
+        if self.self_heal is not None:
+            self_heal_verification = self.self_heal.reconcile(features)
+            recovered_ids = {
+                result.incident_id
+                for result in self_heal_verification
+                if result.status == "recovered"
+            }
+            self.self_heal.sync_queue({incident.incident_id for incident in incidents} - recovered_ids)
+            if recovered_ids:
+                persisted = {incident.incident_id: incident for incident in self.store.list_incidents()}
+                incidents = [persisted.get(incident.incident_id, incident) for incident in incidents]
+                analysis_incidents = [persisted.get(incident.incident_id, incident) for incident in analysis_incidents]
+                present_ids = {incident.incident_id for incident in incidents}
+                incidents.extend(persisted[incident_id] for incident_id in recovered_ids - present_ids if incident_id in persisted)
+                analysis_ids = {incident.incident_id for incident in analysis_incidents}
+                analysis_incidents.extend(persisted[incident_id] for incident_id in recovered_ids - analysis_ids if incident_id in persisted)
+                regular_incidents = [
+                    incident
+                    for incident in incidents
+                    if incident.state != "recovered" and not is_slo_notification(incident.events[-1])
+                ]
+                deduped_incidents = _unique_incidents(incidents)
         logger.info(
             "AIOPS_DEDUP_RESULT input_candidates=%s rca_incidents=%s incidents=%s ids=%s services=%s occurrences=%s",
             len(enriched),
@@ -220,7 +242,7 @@ class AiopsPipeline:
                 for decision in remediation_decisions
             ]
         for decision in remediation_decisions:
-            if decision.execution_status != "verifying":
+            if decision.execution_status != "verifying" or not decision.would_execute:
                 continue
             verification_results = [
                 result for result in verification_results if result.incident_id != decision.incident_id

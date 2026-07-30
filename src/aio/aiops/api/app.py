@@ -10,6 +10,7 @@ import os
 import time
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime
+from threading import Lock
 from urllib.parse import urlparse
 
 from fastapi import FastAPI, Header, HTTPException
@@ -41,6 +42,8 @@ from aiops.topology import TopologyGraph
 
 
 logger = logging.getLogger(__name__)
+# ponytail: process-local lock; use a distributed lease if the API runs with multiple workers.
+_LIVE_PIPELINE_LOCK = Lock()
 
 
 def configure_logging() -> None:
@@ -66,19 +69,20 @@ def run_static_pipeline(request: PipelineRunRequest, settings: Settings | None =
 
 
 def run_live_pipeline(settings: Settings | None = None) -> PipelineResult:
-    settings = settings or Settings()
-    runtime_config = load_runtime_config(settings.runtime_config_path, settings.prometheus_registry_path)
-    collector = PrometheusCollector(
-        PrometheusClient(settings),
-        runtime_config,
-        cache_namespace=settings.prometheus_base_url,
-    )
-    try:
-        metric_series = collector.collect_metric_series()
-    except Exception:
-        collector.close()
-        raise
-    return run_pipeline_with_collector(collector, settings, runtime_config, metric_series=metric_series)
+    with _LIVE_PIPELINE_LOCK:
+        settings = settings or Settings()
+        runtime_config = load_runtime_config(settings.runtime_config_path, settings.prometheus_registry_path)
+        collector = PrometheusCollector(
+            PrometheusClient(settings),
+            runtime_config,
+            cache_namespace=settings.prometheus_base_url,
+        )
+        try:
+            metric_series = collector.collect_metric_series()
+        except Exception:
+            collector.close()
+            raise
+        return run_pipeline_with_collector(collector, settings, runtime_config, metric_series=metric_series)
 
 
 def run_pipeline_with_collector(collector, settings: Settings, runtime_config, metric_series=None) -> PipelineResult:
@@ -132,6 +136,10 @@ def run_pipeline_with_collector(collector, settings: Settings, runtime_config, m
                 failure_samples=settings.self_heal_failure_samples,
                 min_incident_occurrences=int(hyperparameters["self_heal"]["min_incident_occurrences"]),
                 min_incident_score=float(hyperparameters["self_heal"]["min_incident_score"]),
+                min_occurrence_interval_seconds=int(hyperparameters["self_heal"]["min_occurrence_interval_seconds"]),
+                queue_ttl_seconds=int(hyperparameters["self_heal"]["queue_ttl_seconds"]),
+                verification_callback_max_attempts=int(hyperparameters["self_heal"]["verification_callback_max_attempts"]),
+                rollback_max_attempts=int(hyperparameters["self_heal"]["rollback_max_attempts"]),
                 rollback_after_executions=int(hyperparameters["self_heal"]["rollback_after_executions"]),
                 rollback_failure_runbook_id=str(hyperparameters["self_heal"]["rollback_failure_runbook_id"]),
             ),

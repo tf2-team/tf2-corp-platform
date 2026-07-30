@@ -12,6 +12,10 @@
   "self_heal": {
     "min_incident_occurrences": 3,
     "min_incident_score": 0.24,
+    "min_occurrence_interval_seconds": 60,
+    "queue_ttl_seconds": 900,
+    "verification_callback_max_attempts": 3,
+    "rollback_max_attempts": 3,
     "rollback_after_executions": 3,
     "rollback_failure_runbook_id": "RB-AIOPS-RUNTIME"
   },
@@ -44,7 +48,10 @@
     "corroboration_trace_max_request_seconds": 300,
     "trace_evidence_limit": 1,
     "log_evidence_hits": 3,
-    "log_excerpt_max_chars": 240
+    "log_excerpt_max_chars": 240,
+    "log_window_seconds": 300,
+    "log_search_hits": 100,
+    "log_drain3_config_path": "config/drain3.ini"
   },
   "correlation": {
     "window_seconds": 300,

@@ -207,6 +207,17 @@ class SQLiteIncidentStoreTest(unittest.TestCase):
         self.assertEqual(reset.occurrence_count, 1)
         self.assertEqual(len(reset.events), 1)
 
+    def test_incident_count_uses_sliding_window(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            store = SQLiteIncidentStore(Path(tmp) / "aiops.sqlite3", environment="tf2", incident_count_reset_seconds=900)
+            store.upsert(candidate(0.02, timestamp=100))
+            store.upsert(candidate(0.03, timestamp=940))
+            incident = store.upsert(candidate(0.04, timestamp=1060))
+            store.close()
+
+        self.assertEqual([event.timestamp for event in incident.events], [940, 1060])
+        self.assertEqual(incident.occurrence_count, 2)
+
     def test_slo_notification_bypasses_service_cooldown(self):
         with tempfile.TemporaryDirectory() as tmp:
             store = SQLiteIncidentStore(Path(tmp) / "aiops.sqlite3", environment="tf2", notification_cooldown_seconds=900)

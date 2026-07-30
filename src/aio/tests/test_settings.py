@@ -143,6 +143,9 @@ class SettingsTest(unittest.TestCase):
         self.assertEqual(config["enrichment"]["trace_evidence_limit"], 1)
         self.assertEqual(config["enrichment"]["log_evidence_hits"], 3)
         self.assertEqual(config["enrichment"]["log_excerpt_max_chars"], 240)
+        self.assertEqual(config["enrichment"]["log_window_seconds"], 300)
+        self.assertEqual(config["enrichment"]["log_search_hits"], 100)
+        self.assertEqual(config["enrichment"]["log_drain3_config_path"], "config/drain3.ini")
         self.assertNotIn("direct_slo_suppress_seconds", config["incident"])
         self.assertEqual(config["detectors"]["default_burn_rate_slo"], 1.0)
         self.assertEqual(
