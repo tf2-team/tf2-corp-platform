@@ -165,9 +165,16 @@ class LiveExecutorService:
         self._save_idempotency(request, "plan", response)
         return response
 
-    def execute(self, request: dict[str, Any]) -> dict[str, Any]:
+    def execute_action(self, request: dict[str, Any]) -> dict[str, Any]:
         with self._lock:
             return self._execute(request)
+
+    def execute(self, request: dict[str, Any]) -> dict[str, Any]:
+        """Backward-compatible alias for callers outside the HTTP boundary."""
+        return self.execute_action(request)
+
+    def submit_execution(self, request: dict[str, Any]) -> dict[str, Any]:
+        return self.execute_action(request)
 
     def _execute(self, request: dict[str, Any]) -> dict[str, Any]:
         cached = self._idempotent(request, "execute")
