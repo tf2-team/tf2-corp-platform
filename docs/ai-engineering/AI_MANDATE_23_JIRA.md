@@ -441,11 +441,6 @@ artifact model-call suppression xác nhận counter Bedrock không tăng `16 →
 *Câu paraphrase “Find telescope options under $150” trả cùng tập sản
 phẩm và Network response hiển thị semantic hit với distance khoảng `0.0846951`.*
 
-> **Evidence gap:** các screenshot và raw replay chứng minh cold miss, exact hit,
-> semantic hit và model-call suppression. Pack hiện tại chưa có ảnh/live artifact
-> cho bước sửa source A → B và restore; vì vậy phần invalidation ở Scenario A
-> chưa được đánh dấu hoàn thành.
-
 ### Scenario B — Context Across Three Turns
 
 **Mục tiêu:** chứng minh session continuity mà user không phải nhắc lại constraint.
