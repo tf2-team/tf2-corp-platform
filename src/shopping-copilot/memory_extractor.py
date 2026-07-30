@@ -29,13 +29,18 @@ Return JSON exactly as {"memories":[...]} with at most 5 memories.
 """
 
 
-def extract_memories(user_message: str) -> MemoryExtraction:
+def extract_memories(
+    user_message: str,
+    *,
+    deadline: float | None = None,
+) -> MemoryExtraction:
     if is_bedrock_provider():
         return converse_json(
             MemoryExtraction,
             _PROMPT,
             user_message,
             workflow_step="memory_extraction",
+            deadline=deadline,
         )
     client = instructor.from_openai(
         OpenAI(

@@ -73,6 +73,16 @@ class ShoppingCopilotServicer(demo_pb2_grpc.ShoppingCopilotServiceServicer):
                     request.turn_id,
                 )
             status = state.get("status", CS.FALLBACK)
+            if status == CS.FALLBACK:
+                # A degraded response must never expose partial model/tool state.
+                state = {
+                    **state,
+                    "catalog_results": [],
+                    "qa_result": None,
+                    "safe_reviews": None,
+                    "pending_action": None,
+                    "interpreted_criteria": "",
+                }
 
             span.set_attribute("app.copilot.status", status.value)
             if status == CS.FALLBACK:

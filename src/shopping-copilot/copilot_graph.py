@@ -10,8 +10,10 @@ validated Catalog, Review, or cart-preparation tool is needed; it cannot write
 a cart directly.
 """
 
-import asyncio
+from __future__ import annotations
+
 import logging
+import time
 import uuid
 from typing import Any, Literal, Optional, TypedDict
 
@@ -28,6 +30,8 @@ import mem0_client
 import memory_extractor
 import memory_retrieval
 import shopping_cache
+from bedrock_runtime import BedrockUnavailableError, InvalidModelOutputError
+from cart_tool import discard_pending_token
 from react_agent import run_react_agent
 
 logger = logging.getLogger("copilot_graph")
@@ -58,6 +62,7 @@ class CopilotState(TypedDict):
     cache_match: Literal["exact", "semantic", "none"]
     cache_distance: float
     cache_eligible: bool
+    deadline_monotonic: float
 
 
 class CopilotDeps:
@@ -85,6 +90,35 @@ def _should_use_cached(state: CopilotState) -> str:
 
 
 def make_nodes(deps: CopilotDeps):
+    def degraded_state(
+        state: CopilotState,
+        *,
+        reason: str,
+        error: str,
+    ) -> CopilotState:
+        pending = state.get("pending_action")
+        if pending is not None:
+            try:
+                discard_pending_token(pending.token, deps.valkey_client)
+            except Exception as exc:
+                logger.warning(
+                    "Could not revoke pending cart action: %s",
+                    type(exc).__name__,
+                )
+        return {
+            **state,
+            "status": CopilotStatus.FALLBACK,
+            "reason": reason,
+            "error": error,
+            "catalog_results": [],
+            "allowed_product_ids": [],
+            "qa_result": None,
+            "safe_reviews": None,
+            "pending_action": None,
+            "interpreted_criteria": "",
+            "cache_eligible": False,
+        }
+
     def input_guardrail_node(state: CopilotState) -> CopilotState:
         allowed, limit_reason = check_rate_limit(
             valkey_client=deps.valkey_client, client_id=state["user_id"],
@@ -147,21 +181,57 @@ def make_nodes(deps: CopilotDeps):
 
     def turn_context_node(state: CopilotState) -> CopilotState:
         try:
-            hint = memory_retrieval.parse_retrieval_hint(state["safe_message"], state.get("conversation_context", ""))
-            next_state = {**state, "retrieval_hint": hint, "tool_access": hint.tool_access}
-            if hint.policy_action == "block":
-                return {
-                    **next_state,
-                    "status": CopilotStatus.BLOCKED,
-                    "tool_access": "none",
-                    "reason": (
-                        "I can only help with safe shopping requests, product "
-                        "discovery, reviews, and cart preparation."
-                    ),
-                    "error": "POLICY_BLOCKED",
-                }
-            if not mem0_client.read_enabled() or not state.get("conversation_id"):
-                return next_state
+            hint = memory_retrieval.parse_retrieval_hint(
+                state["safe_message"],
+                state.get("conversation_context", ""),
+                deadline=state["deadline_monotonic"],
+            )
+        except (BedrockUnavailableError, InvalidModelOutputError) as exc:
+            logger.warning(
+                "Bedrock retrieval hint unavailable: %s",
+                type(exc).__name__,
+            )
+            return degraded_state(
+                state,
+                reason=(
+                    "Shopping Copilot is temporarily unavailable. "
+                    "Please try again shortly."
+                ),
+                error=type(exc).__name__,
+            )
+        except Exception as exc:
+            logger.warning(
+                "Turn policy could not be established: %s",
+                type(exc).__name__,
+            )
+            return degraded_state(
+                state,
+                reason=(
+                    "Shopping Copilot is temporarily unavailable. "
+                    "Please try again shortly."
+                ),
+                error=type(exc).__name__,
+            )
+
+        next_state = {
+            **state,
+            "retrieval_hint": hint,
+            "tool_access": hint.tool_access,
+        }
+        if hint.policy_action == "block":
+            return {
+                **next_state,
+                "status": CopilotStatus.BLOCKED,
+                "tool_access": "none",
+                "reason": (
+                    "I can only help with safe shopping requests, product "
+                    "discovery, reviews, and cart preparation."
+                ),
+                "error": "POLICY_BLOCKED",
+            }
+        if not mem0_client.read_enabled() or not state.get("conversation_id"):
+            return next_state
+        try:
             memories = mem0_client.search(hint.semantic_query or state["safe_message"], state["conversation_id"])
             values = [
                 item["memory"].replace("\x00", "")[:500]
@@ -170,8 +240,11 @@ def make_nodes(deps: CopilotDeps):
             ]
             return {**next_state, "memory_context": "\n".join(values[:5])}
         except Exception as exc:
-            logger.warning("Turn context unavailable; disabling tools: %s", type(exc).__name__)
-            return {**state, "tool_access": "none"}
+            logger.warning(
+                "Memory retrieval unavailable; continuing without memory: %s",
+                type(exc).__name__,
+            )
+            return next_state
 
     def agent_node(state: CopilotState) -> CopilotState:
         try:
@@ -188,8 +261,16 @@ def make_nodes(deps: CopilotDeps):
                 "safe_reviews": state.get("safe_reviews"),
             }
         except Exception as exc:
-            logger.error("ReAct agent failed: %s", exc)
-            return {**state, "status": CopilotStatus.FALLBACK, "reason": "I could not complete that request. Please try again.", "error": str(exc)}
+            error_type = type(exc).__name__
+            logger.error("ReAct agent failed: %s", error_type)
+            return degraded_state(
+                state,
+                reason=(
+                    "Shopping Copilot is temporarily unavailable. "
+                    "Please try again shortly."
+                ),
+                error=error_type,
+            )
 
     def build_response_node(state: CopilotState) -> CopilotState:
         if state.get("status") in (CopilotStatus.BLOCKED, CopilotStatus.FALLBACK):
@@ -216,7 +297,16 @@ def make_nodes(deps: CopilotDeps):
         ):
             return state
         try:
-            extraction = memory_extractor.extract_memories(state["safe_message"])
+            remaining = state["deadline_monotonic"] - time.monotonic()
+            if remaining <= 0:
+                return state
+            extraction = memory_extractor.extract_memories(
+                state["safe_message"],
+                deadline=min(
+                    state["deadline_monotonic"],
+                    time.monotonic() + 2,
+                ),
+            )
             wrote_all = True
             for candidate in extraction.memories:
                 wrote_all = mem0_client.add(
@@ -306,20 +396,28 @@ def run_copilot(user_message: str, deps: CopilotDeps, user_id: str = "anonymous"
         "pending_action": None, "status": CopilotStatus.GROUNDED, "interpreted_criteria": "", "reason": "", "error": None,
         "cache_status": "miss", "cache_match": "none", "cache_distance": 0.0,
         "cache_eligible": True,
+        "deadline_monotonic": time.monotonic() + GRAPH_TIMEOUT_SECONDS,
     }
     graph = build_graph(deps)
 
-    async def invoke():
-        return graph.invoke(initial_state, config={"recursion_limit": GRAPH_RECURSION_LIMIT})
-
     try:
-        loop = asyncio.new_event_loop()
-        result = loop.run_until_complete(asyncio.wait_for(invoke(), timeout=GRAPH_TIMEOUT_SECONDS))
-        loop.close()
-        return result
-    except asyncio.TimeoutError:
-        return {**initial_state, "status": CopilotStatus.FALLBACK, "reason": "Request timed out. Please try again.", "error": "timeout"}
+        return graph.invoke(
+            initial_state,
+            config={"recursion_limit": GRAPH_RECURSION_LIMIT},
+        )
     except Exception as exc:
         error_type = type(exc).__name__
         logger.error("Copilot graph raised unexpected exception: %s", error_type)
-        return {**initial_state, "status": CopilotStatus.FALLBACK, "reason": "An unexpected error occurred.", "error": error_type}
+        return {
+            **initial_state,
+            "status": CopilotStatus.FALLBACK,
+            "reason": (
+                "Shopping Copilot is temporarily unavailable. "
+                "Please try again shortly."
+            ),
+            "error": error_type,
+            "catalog_results": [],
+            "allowed_product_ids": [],
+            "pending_action": None,
+            "cache_eligible": False,
+        }

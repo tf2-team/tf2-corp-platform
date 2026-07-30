@@ -15,6 +15,8 @@ Public API:
         -> GroundedResponse
 """
 
+from __future__ import annotations
+
 import logging
 import os
 
@@ -42,6 +44,8 @@ def answer_with_reviews(
     question: str,
     allowed_product_ids: list[str],
     product_reviews_stub: demo_pb2_grpc.ProductReviewServiceStub,
+    *,
+    deadline: float | None = None,
 ) -> GroundedResponse:
     """Return a grounded answer about a product based on its reviews.
 
@@ -92,7 +96,11 @@ def answer_with_reviews(
         ), safe_reviews
 
     draft = (
-        generate_bedrock_grounded_summary(safe_reviews, question)
+        generate_bedrock_grounded_summary(
+            safe_reviews,
+            question,
+            deadline=deadline,
+        )
         if is_bedrock_provider()
         else generate_grounded_summary(
             safe_reviews,

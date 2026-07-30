@@ -5,6 +5,8 @@
 
 """Validated Product Catalog calls used by the ReAct agent."""
 
+from __future__ import annotations
+
 import logging
 import os
 

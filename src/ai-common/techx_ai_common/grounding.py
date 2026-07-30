@@ -19,6 +19,8 @@ grounding.py never sets ResponseStatus.BLOCKED. BLOCKED is a decision
 that belongs to the safety layer (A1.2 / guardrails.py).
 """
 
+from __future__ import annotations
+
 import logging
 import os
 import re
@@ -116,6 +118,7 @@ def generate_grounded_summary(
     safe_reviews: SafeReviewSet,
     question: str = "",
     usage_callback: Callable[[int, int], None] | None = None,
+    deadline: float | None = None,
 ) -> GroundedDraft:
     """Calls the LLM through Instructor, which enforces the GroundedDraft
     schema on the model's response and retries automatically on a schema
@@ -132,6 +135,7 @@ def generate_grounded_summary(
             _build_review_prompt(safe_reviews, question),
             usage_callback=usage_callback,
             workflow_step="grounded_summary",
+            deadline=deadline,
         )
 
     client, model = _get_client_and_model()

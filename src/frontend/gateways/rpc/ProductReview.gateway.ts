@@ -25,7 +25,11 @@ const ProductReviewGateway = () => ({
         metadata.set('x-session-id', userId || 'anonymous');
         metadata.set('x-user-id', userId || 'anonymous');
         return new Promise<string>((resolve, reject) =>
-            client.askProductAiAssistant({ productId, question }, metadata, (error, response) => {
+            client.askProductAiAssistant(
+              { productId, question },
+              metadata,
+              { deadline: Date.now() + 15_000 },
+              (error, response) => {
                 if (error) return reject(error);
                 // response.response contains a JSON string with status, answer, reason, claims
                 try {
@@ -35,7 +39,8 @@ const ProductReviewGateway = () => ({
                     // Backward compatibility: plain text response from older backends
                     resolve({ status: 'GROUNDED', answer: response.response, reason: '', claims: [] } as any);
                 }
-            })
+              }
+            )
         );
     },
 });

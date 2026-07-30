@@ -9,6 +9,7 @@ import os
 import json
 from concurrent import futures
 import random
+import time
 
 # Pip
 import grpc
@@ -42,10 +43,9 @@ from openai import OpenAI
 from google.protobuf.json_format import MessageToJson, MessageToDict
 
 # AI trustworthiness pipeline (A1.2 guardrails -> A1.1 grounding -> A1.2 output scan)
-from techx_ai_common.contracts import GroundedDraft, GuardrailAction, ResponseStatus
+from techx_ai_common.contracts import GuardrailAction, ResponseStatus
 from techx_ai_common import guardrails
-from techx_ai_common import grounding as grounding_module
-from techx_ai_common.bedrock import converse_json, is_bedrock_provider, peek_breaker_state
+from techx_ai_common.bedrock import is_bedrock_provider, peek_breaker_state
 from techx_ai_common.grounding import generate_grounded_summary, validate_grounded_summary
 from techx_ai_common.observability import call_model, call_tool, record_fallback, telemetry_context
 from techx_ai_common.rate_limiter import check_rate_limit
@@ -195,7 +195,9 @@ def get_average_product_review_score(request_product_id):
         return product_review_score
 
 
-FALLBACK_MESSAGE = "AI summary is temporarily unavailable."
+FALLBACK_MESSAGE = (
+    "AI summary is temporarily unavailable. Please try again shortly."
+)
 ABSTAIN_MESSAGE = "The current reviews do not provide enough information."
 
 # Created against the global MeterProvider directly (rather than relying on
@@ -325,6 +327,22 @@ def _record_cache_metric(outcome: str, match: str = "none", duration_ms: float |
         pass
 
 
+def _record_bedrock_usage(input_tokens: int, output_tokens: int) -> None:
+    """Record provider-reported usage without inspecting model content."""
+
+    try:
+        if input_tokens > 0:
+            product_review_svc_metrics[
+                "ai_cache_model_input_tokens_total"
+            ].add(input_tokens)
+        if output_tokens > 0:
+            product_review_svc_metrics[
+                "ai_cache_model_output_tokens_total"
+            ].add(output_tokens)
+    except Exception:
+        pass
+
+
 def _get_bedrock_response(
     request_product_id,
     question,
@@ -359,10 +377,11 @@ def _get_bedrock_response(
             status = "ABSTAINED"
             reason = ABSTAIN_MESSAGE
         else:
-            draft = converse_json(
-                GroundedDraft,
-                grounding_module._SYSTEM_PROMPT,
-                grounding_module._build_review_prompt(safe_reviews, question),
+            draft = generate_grounded_summary(
+                safe_reviews,
+                question=question,
+                usage_callback=_record_bedrock_usage,
+                deadline=time.monotonic() + 12,
             )
             grounded = validate_grounded_summary(draft, safe_reviews)
             span.set_attribute("app.grounding.status", grounded.status.value)

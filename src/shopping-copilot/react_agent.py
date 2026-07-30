@@ -5,6 +5,8 @@
 
 """Small provider-neutral ReAct loop with strictly validated shopping tools."""
 
+from __future__ import annotations
+
 import json
 import logging
 import os
@@ -13,8 +15,13 @@ from typing import Any
 from openai import OpenAI
 from opentelemetry import trace
 from pydantic import BaseModel, ValidationError
-from bedrock_runtime import is_bedrock_provider
-from cart_tool import create_pending_token
+from bedrock_runtime import (
+    BedrockUnavailableError,
+    InvalidModelOutputError,
+    converse_raw,
+    is_bedrock_provider,
+)
+from cart_tool import create_pending_token, discard_pending_token
 from catalog_tool import get_product, search_catalog
 from copilot_contracts import CatalogSearchInput, CartActionInput, CopilotStatus, ProductInput, ReviewQuestionInput
 import conversation_store
@@ -140,7 +147,11 @@ def _run_tool_impl(name: str, raw_arguments: Any, state: dict[str, Any], deps: A
 
         if name == "answer_with_reviews":
             grounded, safe_reviews = answer_with_reviews(
-                product_id, args.question, list(_known_ids(state)), deps.reviews_stub
+                product_id,
+                args.question,
+                list(_known_ids(state)),
+                deps.reviews_stub,
+                deadline=state.get("deadline_monotonic"),
             )
             state["qa_result"] = grounded
             state["safe_reviews"] = safe_reviews
@@ -204,6 +215,99 @@ def _tool_loop_failure(state: dict[str, Any]) -> str:
     return "I could not complete that request within the tool-call limit. Please refine it."
 
 
+def _bedrock_fallback(
+    state: dict[str, Any],
+    deps: Any,
+    reason: str = "Shopping Copilot is temporarily unavailable. Please try again shortly.",
+) -> str:
+    """Remove every partial result before returning a Bedrock fallback."""
+
+    pending = state.get("pending_action")
+    if pending is not None:
+        try:
+            discard_pending_token(pending.token, deps.valkey_client)
+        except Exception as exc:
+            logger.warning(
+                "Could not revoke pending cart action during fallback: %s",
+                type(exc).__name__,
+            )
+    state.update(
+        {
+            "status": CopilotStatus.FALLBACK,
+            "reason": reason,
+            "catalog_results": [],
+            "allowed_product_ids": [],
+            "qa_result": None,
+            "safe_reviews": None,
+            "claims": [],
+            "sources": [],
+            "interpreted_criteria": "",
+            "pending_action": None,
+            "cache_eligible": False,
+        }
+    )
+    return reason
+
+
+def _validate_bedrock_message(
+    assistant: Any,
+    *,
+    tools_allowed: bool,
+) -> tuple[list[tuple[dict[str, Any], dict[str, Any]]], str]:
+    """Validate a whole assistant batch before any tool may execute."""
+
+    if not isinstance(assistant, dict):
+        raise InvalidModelOutputError("Bedrock assistant message was not an object")
+    content = assistant.get("content")
+    if not isinstance(content, list) or not content:
+        raise InvalidModelOutputError("Bedrock assistant content was empty")
+
+    calls: list[tuple[dict[str, Any], dict[str, Any]]] = []
+    text_parts: list[str] = []
+    for item in content:
+        if not isinstance(item, dict):
+            raise InvalidModelOutputError("Bedrock content block was not an object")
+        has_tool = "toolUse" in item
+        has_text = "text" in item
+        if has_tool == has_text:
+            raise InvalidModelOutputError("Bedrock content block had an invalid shape")
+        if has_text:
+            if not isinstance(item["text"], str):
+                raise InvalidModelOutputError("Bedrock text content was not a string")
+            text_parts.append(item["text"])
+            continue
+        if not tools_allowed:
+            raise InvalidModelOutputError("Bedrock requested a disabled tool")
+        call = item["toolUse"]
+        if not isinstance(call, dict):
+            raise InvalidModelOutputError("Bedrock toolUse was not an object")
+        tool_use_id = call.get("toolUseId")
+        name = call.get("name")
+        raw_input = call.get("input")
+        if not isinstance(tool_use_id, str) or not tool_use_id.strip():
+            raise InvalidModelOutputError("Bedrock toolUseId was invalid")
+        if not isinstance(name, str) or name not in _TOOL_MODELS:
+            raise InvalidModelOutputError("Bedrock requested an unknown tool")
+        if not isinstance(raw_input, dict):
+            raise InvalidModelOutputError("Bedrock tool input was not an object")
+        try:
+            validated = _TOOL_MODELS[name].model_validate(raw_input)
+        except ValidationError as exc:
+            raise InvalidModelOutputError(
+                "Bedrock tool input failed schema validation"
+            ) from exc
+        calls.append(
+            (
+                call,
+                validated.model_dump(exclude_none=True),
+            )
+        )
+    text = "\n".join(text_parts).strip()
+    if not calls and not text:
+        raise InvalidModelOutputError("Bedrock returned no usable content")
+    return calls, text
+
+
 def _run_openai(state: dict[str, Any], deps: Any) -> str:
     client = OpenAI(base_url=os.environ["LLM_BASE_URL"], api_key=os.environ["OPENAI_API_KEY"])
     tools = [
@@ -257,9 +361,6 @@ def _run_openai(state: dict[str, Any], deps: Any) -> str:
 
 
 def _run_bedrock(state: dict[str, Any], deps: Any) -> str:
-    import boto3
-
-    client = boto3.client("bedrock-runtime", region_name=os.environ.get("AWS_REGION", "us-east-1"))
     tool_config = {"tools": [{"toolSpec": {
         "name": name, "description": description, "inputSchema": {"json": _schema(model)},
     }} for name, description, model in _TOOLS]}
@@ -273,39 +374,78 @@ def _run_bedrock(state: dict[str, Any], deps: Any) -> str:
     if tools_allowed:
         request["toolConfig"] = tool_config
     seen_calls: set[str] = set()
-    for _ in range(_MAX_TOOL_ROUNDS if tools_allowed else 1):
-        response = call_model(
-            lambda: client.converse(**request),
-            model=os.environ["BEDROCK_MODEL_ID"],
-            provider="aws.bedrock",
-            workflow_step="react_round",
-        )
-        usage = response.get("usage") or {}
-        copilot_metrics.record_model_call(
-            "bedrock",
-            int(usage.get("inputTokens") or usage.get("input_tokens") or 0),
-            int(usage.get("outputTokens") or usage.get("output_tokens") or 0),
-        )
-        assistant = response["output"]["message"]
-        messages.append(assistant)
-        calls = [item["toolUse"] for item in assistant["content"] if "toolUse" in item]
-        if not calls:
-            text = "\n".join(item["text"] for item in assistant["content"] if "text" in item).strip()
-            return _final_text(text) if text else "I could not complete that request."
-        results = []
-        for call in calls:
-            call_key = json.dumps(
-                [call["name"], call.get("input", {})], sort_keys=True, default=str
+    try:
+        for _ in range(_MAX_TOOL_ROUNDS if tools_allowed else 1):
+            response = converse_raw(
+                request,
+                workflow_step="react_round",
+                deadline=state.get("deadline_monotonic"),
             )
-            if call_key in seen_calls:
-                return _tool_loop_failure(state)
-            seen_calls.add(call_key)
-            result = _run_tool(call["name"], call.get("input", {}), state, deps)
-            results.append({"toolResult": {
-                "toolUseId": call["toolUseId"], "content": [{"json": result}], "status": "success",
-            }})
-        messages.append({"role": "user", "content": results})
-    return _tool_loop_failure(state)
+            try:
+                assistant = response["output"]["message"]
+            except (KeyError, TypeError):
+                raise InvalidModelOutputError(
+                    "Bedrock response did not include an assistant message"
+                ) from None
+
+            # Validation is deliberately complete before messages or state are
+            # mutated. A mixed valid/invalid batch therefore executes nothing.
+            calls, final_text = _validate_bedrock_message(
+                assistant,
+                tools_allowed=tools_allowed,
+            )
+            messages.append(assistant)
+            if not calls:
+                return _final_text(final_text)
+
+            call_keys = [
+                json.dumps(
+                    [call["name"], arguments],
+                    sort_keys=True,
+                    default=str,
+                )
+                for call, arguments in calls
+            ]
+            if (
+                len(set(call_keys)) != len(call_keys)
+                or any(key in seen_calls for key in call_keys)
+            ):
+                return _bedrock_fallback(
+                    state,
+                    deps,
+                    "I could not safely complete that request. Please try again.",
+                )
+            seen_calls.update(call_keys)
+
+            results = []
+            for call, arguments in calls:
+                result = _run_tool(call["name"], arguments, state, deps)
+                if state.get("status") == CopilotStatus.FALLBACK:
+                    return _bedrock_fallback(state, deps)
+                results.append(
+                    {
+                        "toolResult": {
+                            "toolUseId": call["toolUseId"],
+                            "content": [{"json": result}],
+                            "status": (
+                                "error" if "error" in result else "success"
+                            ),
+                        }
+                    }
+                )
+            messages.append({"role": "user", "content": results})
+    except (BedrockUnavailableError, InvalidModelOutputError) as exc:
+        logger.warning(
+            "Bedrock ReAct degraded safely: %s",
+            type(exc).__name__,
+        )
+        state["error"] = type(exc).__name__
+        return _bedrock_fallback(state, deps)
+    return _bedrock_fallback(
+        state,
+        deps,
+        "I could not complete that request within the tool-call limit. Please refine it.",
+    )
 
 
 def run_react_agent(state: dict[str, Any], deps: Any) -> str:

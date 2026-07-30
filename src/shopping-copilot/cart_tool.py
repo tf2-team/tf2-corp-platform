@@ -79,6 +79,13 @@ def create_pending_token(
     return action
 
 
+def discard_pending_token(token: str, valkey_client: valkeylib.Valkey) -> None:
+    """Revoke a prepared action that must not survive a degraded response."""
+
+    if token:
+        valkey_client.delete(_pending_key(token))
+
+
 def confirm_cart_action(
     token: str,
     user_id: str,
