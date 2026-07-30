@@ -3,12 +3,15 @@
 # SPDX-License-Identifier: Apache-2.0
 from __future__ import annotations
 
+import logging
 from uuid import uuid4
 
 import httpx
 
 from aiops.config import Settings
 from aiops.integrations.http import HttpApiClient
+
+logger = logging.getLogger(__name__)
 
 
 class LiveExecutorClient:
@@ -46,6 +49,14 @@ class LiveExecutorClient:
         return self._post(f"/v1/actions/{execution_id}/rollback", request)
 
     def _post(self, path: str, payload: dict) -> dict:
+        logger.info(
+            "AIOPS_EXECUTOR_API_CALL operation=%s incident=%s runbook=%s action_type=%s target=%s",
+            path.rsplit("/", 1)[-1],
+            payload.get("incident_id", "unknown"),
+            payload.get("runbook_id", "unknown"),
+            payload.get("action_type", "unknown"),
+            payload.get("target", "unknown"),
+        )
         try:
             return self._http.post(path, json=payload, headers=self._request_headers(payload))
         except httpx.HTTPStatusError as exc:

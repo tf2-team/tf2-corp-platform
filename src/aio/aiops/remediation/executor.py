@@ -316,6 +316,7 @@ class SelfHealOrchestrator:
             "rollback_token": None,
             "idempotency_key": _idempotency_key(incident.incident_id, action.action_id, f"plan-{attempt}"),
             "reason": event.reason,
+            "runbook_id": event.runbook_id,
             "requested_by": AUTHORIZED_REQUESTER,
             "dry_run": True,
             "root_cause": {
@@ -550,6 +551,9 @@ class SelfHealOrchestrator:
             "passed": True,
             "query_id": workflow["verification_query_id"],
             "message": "fresh telemetry met the post-action recovery rule",
+            "runbook_id": workflow["runbook_id"],
+            "action_type": workflow["action_type"],
+            "target": workflow["target"],
             "requested_by": AUTHORIZED_REQUESTER,
         }
         try:
@@ -609,6 +613,9 @@ class SelfHealOrchestrator:
             "passed": False,
             "query_id": workflow["verification_query_id"],
             "message": reason,
+            "runbook_id": workflow["runbook_id"],
+            "action_type": workflow["action_type"],
+            "target": workflow["target"],
             "requested_by": AUTHORIZED_REQUESTER,
         }
         try:
@@ -631,6 +638,9 @@ class SelfHealOrchestrator:
             "incident_id": workflow["incident_id"],
             "rollback_token": workflow.get("rollback_token"),
             "reason": reason,
+            "runbook_id": workflow["runbook_id"],
+            "action_type": "rollback",
+            "target": workflow["target"],
             "requested_by": AUTHORIZED_REQUESTER,
             "policy_id": self.config.policy_id,
             "policy_approved": True,

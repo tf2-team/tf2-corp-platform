@@ -106,6 +106,27 @@ class IntegrationClientTest(unittest.TestCase):
         self.assertEqual(response["status"], "blocked")
         self.assertEqual(response["reasons"], ["target_cooldown"])
 
+    def test_live_executor_logs_runbook_and_action_type(self):
+        client = LiveExecutorClient(
+            fixed_settings(live_executor_url="https://executor.example"),
+            transport=httpx.MockTransport(lambda request: httpx.Response(200, json={"status": "planned"})),
+        )
+
+        with self.assertLogs("aiops.integrations.live_executor", level="INFO") as logs:
+            client.plan(
+                {
+                    "incident_id": "inc-1",
+                    "runbook_id": "RB-SERVICE-RESOURCE",
+                    "action_type": "scale",
+                    "target": "checkout",
+                }
+            )
+
+        self.assertIn(
+            "operation=plan incident=inc-1 runbook=RB-SERVICE-RESOURCE action_type=scale target=checkout",
+            logs.output[0],
+        )
+
     def test_live_executor_readiness_calls_ready_endpoint(self):
         seen: list[httpx.Request] = []
 
