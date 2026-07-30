@@ -3,6 +3,7 @@
 # Copyright The OpenTelemetry Authors
 # SPDX-License-Identifier: Apache-2.0
 
+import base64
 import re
 import hashlib
 import json
@@ -43,7 +44,7 @@ def _prompt_injection_scanner():
     except Exception as e:
         if _model_is_required():
             raise e
-        logger.warning(f"Failed to load LLM Guard PromptInjection scanner: {e}")
+        logger.warning("Failed to load LLM Guard PromptInjection scanner: %s", type(e).__name__)
         _scanner_cache = None
 
     _scanner_initialized = True
@@ -63,7 +64,7 @@ def initialize_guardrails() -> None:
     try:
         _get_presidio_engines()
     except Exception as e:
-        logger.warning(f"Presidio model unavailable at startup: {e}")
+        logger.warning("Presidio model unavailable at startup: %s", type(e).__name__)
 
 # Common PII Regex Fallback patterns
 EMAIL_REGEX = re.compile(r"[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+")
@@ -97,6 +98,21 @@ COMBINATION_PATTERNS = [
     re.compile(r"\bact\s+as\b.*\b(unrestricted|dan|jailbreak)\b", re.IGNORECASE),
 ]
 
+BASE64_TOKEN = re.compile(
+    r"(?<![A-Za-z0-9+/=])[A-Za-z0-9+/]{20,}={0,2}(?![A-Za-z0-9+/=])"
+)
+
+
+def _contains_base64_injection(text: str) -> bool:
+    for match in BASE64_TOKEN.finditer(text):
+        try:
+            decoded = base64.b64decode(match.group(), validate=True).decode("utf-8").lower()
+        except (ValueError, UnicodeDecodeError):
+            continue
+        if any(keyword in decoded for keyword in HARD_INJECTION_KEYWORDS):
+            return True
+    return False
+
 @lru_cache(maxsize=1)
 def _get_presidio_engines():
     from presidio_analyzer import AnalyzerEngine
@@ -104,7 +120,7 @@ def _get_presidio_engines():
     return AnalyzerEngine(), AnonymizerEngine()
 
 def redact_pii(text: str) -> str:
-    """Redacts email, phone number, location/address and credit cards."""
+    """Redact direct contact and payment identifiers."""
     if not text:
         return text
 
@@ -118,13 +134,12 @@ def redact_pii(text: str) -> str:
         results = analyzer.analyze(
             text=sanitized,
             language="en",
-            entities=["EMAIL_ADDRESS", "PHONE_NUMBER", "LOCATION", "CREDIT_CARD"]
+            entities=["EMAIL_ADDRESS", "PHONE_NUMBER", "CREDIT_CARD"]
         )
 
         operators = {
             "EMAIL_ADDRESS": OperatorConfig("replace", {"new_value": "[REDACTED]"}),
             "PHONE_NUMBER": OperatorConfig("replace", {"new_value": "[REDACTED]"}),
-            "LOCATION": OperatorConfig("replace", {"new_value": "[REDACTED]"}),
             "CREDIT_CARD": OperatorConfig("replace", {"new_value": "[REDACTED]"}),
         }
 
@@ -135,7 +150,7 @@ def redact_pii(text: str) -> str:
         )
         sanitized = anonymized.text
     except Exception as e:
-        logger.warning(f"Presidio PII anonymization failed or not installed. Error: {e}")
+        logger.warning("Presidio PII anonymization failed or not installed: %s", type(e).__name__)
 
     # 2. Defense-in-depth: always run Regex fallback on top to catch missed or unclassified PII
     sanitized = EMAIL_REGEX.sub("[REDACTED]", sanitized)
@@ -163,6 +178,10 @@ def check_prompt_injection(text: str) -> bool:
             logger.info(f"Prompt injection detected by Layer 1 Hard Keyword: '{kw}'")
             return False
 
+    if _contains_base64_injection(text):
+        logger.info("Prompt injection detected by Base64-decoded hard keyword")
+        return False
+
     for pattern in COMBINATION_PATTERNS:
         if pattern.search(text):
             logger.info(f"Prompt injection detected by Layer 1 Combination Pattern: '{pattern.pattern}'")
@@ -179,7 +198,7 @@ def check_prompt_injection(text: str) -> bool:
     except Exception as e:
         if _model_is_required():
             raise RuntimeError("Required prompt-injection model is unavailable") from e
-        logger.warning(f"LLM Guard prompt injection model scan failed. Error: {e}")
+        logger.warning("LLM Guard prompt injection model scan failed: %s", type(e).__name__)
 
     return True
 
@@ -215,7 +234,7 @@ def sanitize_reviews(product_id: str, reviews) -> SafeReviewSet:
         try:
             reviews_list = json.loads(reviews)
         except Exception as e:
-            logger.error(f"Failed to parse reviews string as JSON: {e}")
+            logger.error("Failed to parse reviews string as JSON: %s", type(e).__name__)
             return SafeReviewSet(product_id=product_id, reviews=[], reason="NO_ELIGIBLE_REVIEWS")
     elif isinstance(reviews, list):
         reviews_list = reviews
@@ -323,7 +342,7 @@ def scan_output(text: str) -> GuardrailResult:
         results = analyzer.analyze(
             text=text,
             language="en",
-            entities=["EMAIL_ADDRESS", "PHONE_NUMBER", "LOCATION", "CREDIT_CARD"]
+            entities=["EMAIL_ADDRESS", "PHONE_NUMBER", "CREDIT_CARD"]
         )
         if results:
             return GuardrailResult(
@@ -331,7 +350,7 @@ def scan_output(text: str) -> GuardrailResult:
                 reason="Response blocked: Personally identifiable information (PII) detected in output."
             )
     except Exception as e:
-        logger.warning(f"Presidio PII check on output failed. Using Regex fallback. Error: {e}")
+        logger.warning("Presidio PII check on output failed; using regex fallback: %s", type(e).__name__)
         if EMAIL_REGEX.search(text) or PHONE_REGEX.search(text) or CARD_REGEX.search(text):
             return GuardrailResult(
                 action=GuardrailAction.BLOCK,

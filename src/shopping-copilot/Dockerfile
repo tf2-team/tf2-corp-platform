@@ -48,10 +48,16 @@ ENV HF_HOME=/home/appuser/.cache/huggingface
 COPY --chown=appuser:appgroup ./src/shopping-copilot/copilot_contracts.py copilot_contracts.py
 COPY --chown=appuser:appgroup ./src/shopping-copilot/bedrock_runtime.py bedrock_runtime.py
 COPY --chown=appuser:appgroup ./src/shopping-copilot/bedrock_grounding.py bedrock_grounding.py
-COPY --chown=appuser:appgroup ./src/shopping-copilot/intent_parser.py intent_parser.py
+COPY --chown=appuser:appgroup ./src/shopping-copilot/memory_retrieval.py memory_retrieval.py
+COPY --chown=appuser:appgroup ./src/shopping-copilot/mem0_client.py mem0_client.py
+COPY --chown=appuser:appgroup ./src/shopping-copilot/memory_extractor.py memory_extractor.py
+COPY --chown=appuser:appgroup ./src/shopping-copilot/react_agent.py react_agent.py
+COPY --chown=appuser:appgroup ./src/shopping-copilot/metrics.py metrics.py
+COPY --chown=appuser:appgroup ./src/shopping-copilot/shopping_cache.py shopping_cache.py
 COPY --chown=appuser:appgroup ./src/shopping-copilot/catalog_tool.py catalog_tool.py
 COPY --chown=appuser:appgroup ./src/shopping-copilot/review_tool.py review_tool.py
 COPY --chown=appuser:appgroup ./src/shopping-copilot/cart_tool.py cart_tool.py
+COPY --chown=appuser:appgroup ./src/shopping-copilot/conversation_store.py conversation_store.py
 COPY --chown=appuser:appgroup ./src/shopping-copilot/copilot_graph.py copilot_graph.py
 COPY --chown=appuser:appgroup ./src/shopping-copilot/copilot_server.py copilot_server.py
 

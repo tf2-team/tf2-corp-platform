@@ -1,0 +1,9 @@
+{
+  "scenario_type": "high_load_healthy",
+  "expected_incident": false,
+  "incident_start_ts": null,
+  "captured_at": "2026-07-26T18:56:23.730319+00:00",
+  "notes": "Locust ramp 200 to 400 users, ramp-up 20, no fault flag, checkout SLO healthy, current failures per second 0",
+  "source": "live_prometheus_capture",
+  "prometheus_base_url_host": "localhost:9090"
+}

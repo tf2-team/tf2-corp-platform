@@ -1,0 +1,156 @@
+[
+  {
+    "incident_id": "hist-payment-latency",
+    "affected_services": [
+      "checkout",
+      "payment"
+    ],
+    "log_signatures": [
+      "dependency_signal_breached"
+    ],
+    "trace_signatures": [
+      "checkout->payment"
+    ],
+    "metric_ratios": {
+      "checkout_payment_error_rate_5m": 2.6
+    },
+    "actions_taken": [
+      {
+        "action_id": "restart_payment",
+        "target": "payment",
+        "outcome": "success"
+      }
+    ]
+  },
+  {
+    "incident_id": "seed-cart-busy-oom-001",
+    "affected_services": [
+      "cart"
+    ],
+    "log_signatures": [
+      "container_oom_detected",
+      "busy_gate_breakout_oom"
+    ],
+    "trace_signatures": [],
+    "metric_ratios": {
+      "cart_memory_usage_bytes": 2.3,
+      "cart_oom_events_total": 1.0,
+      "cart_request_rate_5m": 1.2
+    },
+    "actions_taken": [
+      {
+        "action_id": "restart_cart",
+        "target": "cart",
+        "outcome": "success"
+      }
+    ]
+  },
+  {
+    "incident_id": "seed-checkout-db-pool-001",
+    "affected_services": [
+      "checkout",
+      "postgresql"
+    ],
+    "log_signatures": [
+      "database_pool_saturation"
+    ],
+    "trace_signatures": [
+      "checkout->postgresql"
+    ],
+    "metric_ratios": {
+      "checkout_postgresql_error_rate_5m": 2.8,
+      "postgresql_connections": 1.9
+    },
+    "actions_taken": [
+      {
+        "action_id": "page_data_oncall",
+        "target": "data-platform-oncall",
+        "outcome": "success"
+      }
+    ]
+  },
+  {
+    "incident_id": "seed-frontend-latency-001",
+    "affected_services": [
+      "frontend"
+    ],
+    "log_signatures": [
+      "latency_slo_breached"
+    ],
+    "trace_signatures": [],
+    "metric_ratios": {
+      "frontend_p95_latency_5m": 2.2,
+      "frontend_request_rate_5m": 1.0
+    },
+    "actions_taken": [
+      {
+        "action_id": "restart_frontend",
+        "target": "frontend",
+        "outcome": "partial"
+      }
+    ]
+  },
+  {
+    "incident_id": "seed-product-catalog-cpu-001",
+    "affected_services": [
+      "product-catalog"
+    ],
+    "log_signatures": [
+      "cpu_saturation"
+    ],
+    "trace_signatures": [],
+    "metric_ratios": {
+      "product_catalog_cpu_millicores": 2.0,
+      "product_catalog_request_rate_5m": 1.0
+    },
+    "actions_taken": [
+      {
+        "action_id": "scale_product_catalog",
+        "target": "product-catalog",
+        "outcome": "success"
+      }
+    ]
+  },
+  {
+    "incident_id": "seed-product-catalog-ready-pods-001",
+    "affected_services": [
+      "product-catalog"
+    ],
+    "log_signatures": [
+      "ready_pods_degraded",
+      "busy_gate_breakout_pod_failure"
+    ],
+    "trace_signatures": [],
+    "metric_ratios": {
+      "product_catalog_workload_ready_pods": 0.5,
+      "product_catalog_request_rate_5m": 1.5
+    },
+    "actions_taken": [
+      {
+        "action_id": "scale_product_catalog",
+        "target": "product-catalog",
+        "outcome": "partial"
+      }
+    ]
+  },
+  {
+    "incident_id": "seed-unknown-protected-001",
+    "affected_services": [
+      "unknown-service"
+    ],
+    "log_signatures": [
+      "unknown_service_signal"
+    ],
+    "trace_signatures": [],
+    "metric_ratios": {
+      "unknown_service_error_rate_5m": 2.5
+    },
+    "actions_taken": [
+      {
+        "action_id": "page_oncall",
+        "target": "platform-team",
+        "outcome": "success"
+      }
+    ]
+  }
+]

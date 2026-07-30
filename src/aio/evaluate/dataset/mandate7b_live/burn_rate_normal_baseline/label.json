@@ -1,0 +1,9 @@
+{
+  "scenario_type": "normal",
+  "expected_incident": false,
+  "incident_start_ts": null,
+  "captured_at": null,
+  "notes": "baseline before local-paymentFailure escalate for burn-rate",
+  "source": "live_run_state",
+  "state_store": "state/7b/s3-burn-rate/aiops.sqlite3"
+}

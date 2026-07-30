@@ -7,7 +7,11 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from update_chart_service_digests import render, resolve_output_dir, main as update_main
+from update_chart_service_digests import (
+    render,
+    resolve_output_dir,
+    update_aiops_live_executor,
+)
 import update_chart_service_digests as digest_mod
 
 
@@ -20,6 +24,189 @@ class DigestOverlayTests(unittest.TestCase):
 
     def test_mem0_top_level_image(self) -> None:
         self.assertIn("mem0:\n  image:\n    digest:", render("mem0", self.digest))
+
+    def test_aiops_top_level_image_keeps_runtime_contract(self) -> None:
+        overlay = render("aiops", self.digest)
+        self.assertIn("aiops:\n  enabled: true", overlay)
+        self.assertIn("existingSecret: techx-corp-aiops-grafana-webhook", overlay)
+        self.assertIn("  image:\n    digest:", overlay)
+
+    def test_updates_aiops_live_executor_digest_only(self) -> None:
+        old_digest = "sha256:" + "b" * 64
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            path = root / "values-aiops-live-executor.yaml"
+            path.write_text(
+                "aiopsLiveExecutor:\n"
+                "  enabled: true\n"
+                "  image:\n"
+                f"    digest: {old_digest}\n"
+                "  auth:\n"
+                "    existingSecret: aiops-live-executor-token\n",
+                encoding="utf-8",
+            )
+
+            self.assertTrue(update_aiops_live_executor(root, self.digest))
+            updated = path.read_text(encoding="utf-8")
+            self.assertIn(f"    digest: {self.digest}\n", updated)
+            self.assertIn("existingSecret: aiops-live-executor-token", updated)
+            self.assertNotIn(old_digest, updated)
+            self.assertFalse(update_aiops_live_executor(root, self.digest))
+
+    def test_aiops_live_executor_promotion_requires_aiops_service(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            services = json.dumps(["ad"])
+            digests = json.dumps({"ad": self.digest})
+            import sys
+
+            argv = sys.argv
+            try:
+                sys.argv = [
+                    "update_chart_service_digests.py",
+                    "--directory",
+                    str(root),
+                    "--services-json",
+                    services,
+                    "--digests-json",
+                    digests,
+                    "--promote-aiops-live-executor",
+                ]
+                with self.assertRaisesRegex(SystemExit, "requires aiops"):
+                    digest_mod.main()
+            finally:
+                sys.argv = argv
+            self.assertFalse((root / "service-digest").exists())
+
+    def test_cli_promotes_aiops_overlay_and_live_executor_together(self) -> None:
+        old_digest = "sha256:" + "b" * 64
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            live_values = root / "values-aiops-live-executor.yaml"
+            live_values.write_text(
+                "aiopsLiveExecutor:\n"
+                "  enabled: true\n"
+                "  image:\n"
+                f"    digest: {old_digest}\n",
+                encoding="utf-8",
+            )
+            import sys
+
+            argv = sys.argv
+            try:
+                sys.argv = [
+                    "update_chart_service_digests.py",
+                    "--directory",
+                    str(root),
+                    "--services-json",
+                    json.dumps(["aiops"]),
+                    "--digests-json",
+                    json.dumps({"aiops": self.digest}),
+                    "--promote-aiops-live-executor",
+                ]
+                digest_mod.main()
+            finally:
+                sys.argv = argv
+
+            overlay = root / "service-digest" / "values-aiops.yaml"
+            self.assertIn(self.digest, overlay.read_text(encoding="utf-8"))
+            self.assertIn(self.digest, live_values.read_text(encoding="utf-8"))
+
+    def test_multi_service_promotion_keeps_per_service_digests(self) -> None:
+        ad_digest = "sha256:" + "c" * 64
+        old_digest = "sha256:" + "b" * 64
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            live_values = root / "values-aiops-live-executor.yaml"
+            live_values.write_text(
+                "aiopsLiveExecutor:\n"
+                "  image:\n"
+                f"    digest: {old_digest}\n",
+                encoding="utf-8",
+            )
+            import sys
+
+            argv = sys.argv
+            try:
+                sys.argv = [
+                    "update_chart_service_digests.py",
+                    "--directory",
+                    str(root),
+                    "--services-json",
+                    json.dumps(["ad", "aiops"]),
+                    "--digests-json",
+                    json.dumps({"ad": ad_digest, "aiops": self.digest}),
+                    "--promote-aiops-live-executor",
+                ]
+                digest_mod.main()
+            finally:
+                sys.argv = argv
+
+            ad_overlay = root / "service-digest" / "values-ad.yaml"
+            aiops_overlay = root / "service-digest" / "values-aiops.yaml"
+            self.assertIn(ad_digest, ad_overlay.read_text(encoding="utf-8"))
+            self.assertNotIn(self.digest, ad_overlay.read_text(encoding="utf-8"))
+            self.assertIn(self.digest, aiops_overlay.read_text(encoding="utf-8"))
+            self.assertIn(self.digest, live_values.read_text(encoding="utf-8"))
+
+    def test_non_aiops_promotion_leaves_live_executor_unchanged(self) -> None:
+        old_digest = "sha256:" + "b" * 64
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            live_values = root / "values-aiops-live-executor.yaml"
+            original = (
+                "aiopsLiveExecutor:\n"
+                "  image:\n"
+                f"    digest: {old_digest}\n"
+            )
+            live_values.write_text(original, encoding="utf-8")
+            import sys
+
+            argv = sys.argv
+            try:
+                sys.argv = [
+                    "update_chart_service_digests.py",
+                    "--directory",
+                    str(root),
+                    "--services-json",
+                    json.dumps(["ad"]),
+                    "--digests-json",
+                    json.dumps({"ad": self.digest}),
+                ]
+                digest_mod.main()
+            finally:
+                sys.argv = argv
+
+            self.assertEqual(original, live_values.read_text(encoding="utf-8"))
+            self.assertIn(
+                self.digest,
+                (root / "service-digest" / "values-ad.yaml").read_text(
+                    encoding="utf-8"
+                ),
+            )
+
+    def test_aio_source_changes_select_aiops_image(self) -> None:
+        workflow_dir = Path(__file__).resolve().parents[1] / ".github" / "workflows"
+        for workflow_name in ("ci.yml", "build-and-push.yml"):
+            with self.subTest(workflow=workflow_name):
+                workflow = (workflow_dir / workflow_name).read_text(encoding="utf-8")
+                self.assertIn("src/aio|src/aio/*)", workflow)
+                self.assertIn('BUILD_SET["aiops"]=1', workflow)
+
+    def test_prod_aiops_promotion_synchronizes_live_executor_digest(self) -> None:
+        workflow = (
+            Path(__file__).resolve().parents[1]
+            / ".github"
+            / "workflows"
+            / "build-and-push.yml"
+        ).read_text(encoding="utf-8")
+        prod_job = workflow.split("  create-chart-prod-pr:", maxsplit=1)[1]
+        dev_job = workflow.split("  update-chart-dev:", maxsplit=1)[1].split(
+            "  create-chart-prod-pr:", maxsplit=1
+        )[0]
+        self.assertIn('index("aiops") != null', prod_job)
+        self.assertIn("--promote-aiops-live-executor", workflow)
+        self.assertNotIn("--promote-aiops-live-executor", dev_job)
 
     def test_load_generator_updates_worker_alias(self) -> None:
         overlay = render("load-generator", self.digest)

@@ -10,16 +10,26 @@ const handler: NextApiHandler = async (req, res) => {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
-  const { user_message = '', user_id = 'anonymous' } = req.body || {};
+  const {
+    user_message = '',
+    user_id = 'anonymous',
+    conversation_id = '',
+    turn_id = '',
+  } = req.body || {};
 
   if (!user_message.trim()) {
     return res.status(400).json({ error: 'user_message is required' });
   }
 
   try {
-    const response = await ShoppingCopilotService.search(user_message, user_id);
+    const response = await ShoppingCopilotService.search(
+      user_message,
+      user_id,
+      conversation_id,
+      turn_id
+    );
     return res.status(200).json(response);
-  } catch (error: any) {
+  } catch {
     return res.status(200).json({
       status: 'FALLBACK',
       interpretedCriteria: '',
@@ -28,7 +38,7 @@ const handler: NextApiHandler = async (req, res) => {
       sources: [],
       reason: 'Shopping Copilot service is temporarily unavailable. Please try again.',
       pendingActionToken: '',
-      error: error?.message || String(error),
+      error: 'ShoppingCopilotUnavailable',
     });
   }
 };

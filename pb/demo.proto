@@ -122,7 +122,10 @@ message CopilotSearchRequest {
     // Browser-scoped session ID used for PoC rate limiting and pending cart ownership.
     // This is not an authenticated user identity.
     string user_id = 2;
-    // session_id is reserved for A2.4 (multi-turn) — omit in current MVP.
+    // Opaque UUID v4 identifying the browser conversation.
+    string conversation_id = 3;
+    // Opaque UUID v4 identifying one user turn; stable across retries.
+    string turn_id = 4;
 }
 
 message CopilotSearchResponse {
@@ -138,6 +141,9 @@ message CopilotSearchResponse {
     // Non-empty when the copilot proposes an add-to-cart action.
     // Frontend must call ConfirmCartAction with this token to execute the write.
     string pending_action_token = 7;
+    string cache_status = 8;   // hit | miss
+    string cache_match = 9;    // exact | semantic | none
+    float cache_distance = 10; // 0 for exact/miss
 }
 
 message CopilotProduct {
@@ -220,6 +226,9 @@ message AskProductAIAssistantResponse {
     string status = 2;
     string reason = 3;
     repeated GroundedClaim claims = 4;
+    string cache_status = 5;  // hit | miss
+    string cache_match = 6;   // exact | semantic | none
+    float cache_distance = 7; // 0 for exact/miss
 }
 
 // ---------------Shipping Service----------

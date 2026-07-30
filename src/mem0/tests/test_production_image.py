@@ -55,7 +55,7 @@ class ProductionImageContractTest(unittest.TestCase):
 
     def test_jose_asn1_stack_uses_remediated_versions(self):
         self.assertRegex(REQUIREMENTS, r"(?m)^python-jose==3\.5\.0$")
-        self.assertRegex(REQUIREMENTS, r"(?m)^pyasn1==0\.6\.3$")
+        self.assertRegex(REQUIREMENTS, r"(?m)^pyasn1==0\.6\.4$")
 
 
 if __name__ == "__main__":

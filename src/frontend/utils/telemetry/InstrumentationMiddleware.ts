@@ -9,12 +9,37 @@ import { metrics } from '@opentelemetry/api';
 const meter = metrics.getMeter('frontend');
 const requestCounter = meter.createCounter('app.frontend.requests');
 
+/** Keep Prometheus labels bounded while preserving the endpoint's operation. */
+export const normalizeMetricTarget = (target: string): string => {
+  if (/^\/api\/products\/[^/]+\/index$/.test(target)) return '/api/products/{productId}/index';
+  if (/^\/api\/product-reviews\/[^/]+\/index$/.test(target)) return '/api/product-reviews/{productId}/index';
+  if (/^\/api\/product-reviews-avg-score\/[^/]+\/index$/.test(target)) return '/api/product-reviews-avg-score/{productId}/index';
+  if (/^\/api\/product-ask-ai-assistant\/[^/]+\/index$/.test(target)) return '/api/product-ask-ai-assistant/{productId}/index';
+  return target;
+};
+
+export const isAiApi = (target: string): boolean => {
+  return (
+    target === '/api/copilot' ||
+    target === '/api/copilot/index' ||
+    /^\/api\/copilot(\/|$)/.test(target) ||
+    /^\/api\/product-ask-ai-assistant(\/|$)/.test(target)
+  );
+};
+
 const InstrumentationMiddleware = (handler: NextApiHandler): NextApiHandler => {
   return async (request, response) => {
     const {method, url = ''} = request;
-    const [target] = url.split('?');
+    const [rawTarget] = url.split('?');
+    const target = normalizeMetricTarget(rawTarget);
 
     const span = trace.getSpan(context.active()) as Span;
+    if (span && isAiApi(rawTarget)) {
+      const traceId = span.spanContext()?.traceId;
+      if (traceId && /^[0-9a-fA-F]{32}$/.test(traceId)) {
+        response.setHeader('x-trace-id', traceId.toLowerCase());
+      }
+    }
 
     let httpStatus = 200;
     try {
@@ -38,3 +63,5 @@ async function runWithSpan(parentSpan: Span, fn: () => Promise<unknown>) {
 }
 
 export default InstrumentationMiddleware;
+
+// Change trail: @hungxqt - 2026-07-29 - Merge validated trace headers while limiting exposure to AI API responses.

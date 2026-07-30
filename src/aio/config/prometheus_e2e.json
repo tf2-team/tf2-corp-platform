@@ -1,0 +1,18 @@
+{
+  "schema_version": "2.0",
+  "observation_query_ids": [
+    "checkout.bad_ratio.24h",
+    "checkout.payment_error_rate.5m"
+  ],
+  "metric_series_query_ids": [
+    "checkout.p95_latency_5m",
+    "checkout.p99_latency_5m",
+    "checkout.error_rate_5m",
+    "checkout.request_rate_5m",
+    "cart.error_rate_5m",
+    "product-catalog.cpu_millicores",
+    "postgresql.active_connections",
+    "kafka.consumer_lag",
+    "otel_collector.exporter_queue_saturation"
+  ]
+}

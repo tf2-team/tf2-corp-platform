@@ -3,11 +3,14 @@
 
 using Microsoft.EntityFrameworkCore;
 using System.ComponentModel.DataAnnotations.Schema;
+using System.Runtime.CompilerServices;
+
+[assembly: InternalsVisibleTo("Accounting.Tests")]
 
 namespace Accounting;
 
 [Table("shipping", Schema = "accounting")]
-[PrimaryKey(nameof(ShippingTrackingId), nameof(TransactionType))]
+[PrimaryKey(nameof(OrderId), nameof(TransactionType))]
 internal class ShippingEntity
 {
 
@@ -35,7 +38,7 @@ internal class ShippingEntity
 }
 
 [Table("orderitem", Schema = "accounting")]
-[PrimaryKey(nameof(ProductId), nameof(OrderId), nameof(TransactionType))]
+[PrimaryKey(nameof(OrderId), nameof(ProductId), nameof(TransactionType))]
 internal class OrderItemEntity
 {
     public required string ItemCostCurrencyCode { get; set; }
@@ -63,3 +66,5 @@ internal class OrderEntity
     [Column("status")]
     public string Status { get; set; } = "PENDING";
 }
+
+// Change trail: @hungxqt - 2026-07-29 - Align EF key order for OrderItemEntity to (OrderId, ProductId, TransactionType).

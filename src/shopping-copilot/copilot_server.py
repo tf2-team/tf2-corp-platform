@@ -20,7 +20,7 @@ from concurrent import futures
 
 import grpc
 from grpc_health.v1 import health_pb2, health_pb2_grpc
-from opentelemetry import trace, metrics
+from opentelemetry import trace, metrics as otel_metrics
 from opentelemetry._logs import set_logger_provider
 from opentelemetry.exporter.otlp.proto.grpc._log_exporter import OTLPLogExporter
 from opentelemetry.sdk._logs import LoggerProvider, LoggingHandler
@@ -28,12 +28,15 @@ from opentelemetry.sdk._logs.export import BatchLogRecordProcessor
 from opentelemetry.sdk.resources import Resource
 
 from techx_ai_common.guardrails import initialize_guardrails, sanitize_reviews
+from techx_ai_common.observability import record_fallback, telemetry_context
 from techx_ai_common.proto import demo_pb2, demo_pb2_grpc
 
 from copilot_graph import CopilotDeps, run_copilot, CopilotStatus
 from copilot_contracts import CopilotStatus as CS
 from cart_tool import confirm_cart_action, make_cart_stub, make_valkey_client
 from catalog_tool import make_catalog_stub
+from metrics import init_metrics
+from shopping_cache import create_cache
 
 logger = logging.getLogger("copilot_server")
 
@@ -57,17 +60,37 @@ class ShoppingCopilotServicer(demo_pb2_grpc.ShoppingCopilotServiceServicer):
         with tracer.start_as_current_span("copilot_search") as span:
             span.set_attribute("app.copilot.message_length", len(request.user_message))
 
-            state = run_copilot(request.user_message, self._deps, request.user_id or "anonymous")
+            with telemetry_context(
+                surface="copilot",
+                user_id=request.user_id or "anonymous",
+                session_id=request.conversation_id or None,
+            ):
+                state = run_copilot(
+                    request.user_message,
+                    self._deps,
+                    request.user_id or "anonymous",
+                    request.conversation_id,
+                    request.turn_id,
+                )
             status = state.get("status", CS.FALLBACK)
 
             span.set_attribute("app.copilot.status", status.value)
+            if status == CS.FALLBACK:
+                record_fallback(state.get("error") or "CopilotFallback", surface="copilot")
+            else:
+                span.set_attribute("app.ai.outcome", "ok")
             span.set_attribute("app.copilot.product_count", len(state.get("catalog_results", [])))
+            span.set_attribute("app.copilot.cache_status", state.get("cache_status", "miss"))
+            span.set_attribute("app.copilot.cache_match", state.get("cache_match", "none"))
 
             # Build proto response
             resp = demo_pb2.CopilotSearchResponse(
                 status=status.value,
                 interpreted_criteria=state.get("interpreted_criteria", ""),
                 reason=state.get("reason", ""),
+                cache_status=state.get("cache_status", "miss"),
+                cache_match=state.get("cache_match", "none"),
+                cache_distance=float(state.get("cache_distance", 0.0)),
             )
 
             for p in state.get("catalog_results", []):
@@ -105,7 +128,10 @@ class ShoppingCopilotServicer(demo_pb2_grpc.ShoppingCopilotServiceServicer):
                         for sr in safe_rev_set.reviews:
                             reviews_by_id[sr.source_id] = sr
                     except Exception as e:
-                        logger.error("Failed to fetch product reviews for metadata in server: %s", e)
+                        logger.error(
+                            "Failed to fetch product reviews for metadata: %s",
+                            type(e).__name__,
+                        )
 
                 for claim in qa.claims:
                     c = resp.claims.add(text=claim.text)
@@ -173,6 +199,9 @@ if __name__ == "__main__":
     logging.getLogger().addHandler(handler)
     logging.getLogger().setLevel(logging.INFO)
 
+    meter = otel_metrics.get_meter_provider().get_meter(service_name)
+    init_metrics(meter)
+
     # Build gRPC stubs and Valkey client.
     catalog_stub = make_catalog_stub()
     valkey_client = make_valkey_client()
@@ -187,6 +216,7 @@ if __name__ == "__main__":
         reviews_stub=reviews_stub,
         cart_stub=cart_stub,
         valkey_client=valkey_client,
+        semantic_cache=create_cache(),
     )
 
     max_workers = int(os.environ.get("GRPC_MAX_WORKERS", "16"))

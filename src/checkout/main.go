@@ -16,8 +16,15 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"syscall"
 	"time"
+
+	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/config"
+	"github.com/aws/aws-sdk-go-v2/service/cloudwatch"
+	cwtypes "github.com/aws/aws-sdk-go-v2/service/cloudwatch/types"
+	"golang.org/x/sync/errgroup"
 
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/log/global"
@@ -66,6 +73,7 @@ import (
 var logger *slog.Logger
 var tracer trace.Tracer
 var resource *sdkresource.Resource
+var acceptedOrderWithoutDurableRecordCounter uint64
 var initResourcesOnce sync.Once
 
 func initResource() *sdkresource.Resource {
@@ -302,6 +310,8 @@ func main() {
 		}
 	}
 
+	go startCloudWatchMetricReporter(workerCtx, logger)
+
 	logger.Info(fmt.Sprintf("service config: %+v", svc))
 
 	lis, err := net.Listen("tcp", fmt.Sprintf(":%s", port))
@@ -389,28 +399,8 @@ func (cs *checkout) PlaceOrder(ctx context.Context, req *pb.PlaceOrderRequest) (
 		total = money.Must(money.Sum(total, multPrice))
 	}
 
-	txID, err := cs.chargeCard(ctx, total, req.CreditCard)
-	if err != nil {
-		return nil, status.Errorf(codes.Internal, "failed to charge card: %+v", err)
-	}
-
-	span.AddEvent("charged",
-		trace.WithAttributes(attribute.String("app.payment.transaction.id", txID)))
-	logger.LogAttrs(
-		ctx,
-		slog.LevelInfo, "payment went through",
-		slog.String("transaction_id", txID),
-	)
-
-	// In pre-auth/hold, shipping is deferred until after fraud check.
 	shippingTrackingID := "PENDING_SHIPPING"
 	shippingTrackingAttribute := attribute.String("app.shipping.tracking.id", shippingTrackingID)
-	span.AddEvent("hold", trace.WithAttributes(shippingTrackingAttribute))
-
-	// Do not swallow EmptyCart errors (e.g. cartFailure / local-cartFailure inject).
-	if err := cs.emptyUserCart(ctx, req.UserId); err != nil {
-		return nil, status.Errorf(codes.Internal, "failed to empty user cart: %+v", err)
-	}
 
 	orderResult := &pb.OrderResult{
 		OrderId:            orderID.String(),
@@ -430,6 +420,59 @@ func (cs *checkout) PlaceOrder(ctx context.Context, req *pb.PlaceOrderRequest) (
 		attribute.Int("app.order.items.count", len(prep.orderItems)),
 		shippingTrackingAttribute,
 	)
+
+	var txID string
+	if cs.Outbox != nil {
+		message, marshalErr := proto.Marshal(orderResult)
+		if marshalErr != nil {
+			logger.Error("failed to encode checkout outbox event", "order_id", orderID.String(), "error", marshalErr)
+			return nil, status.Errorf(codes.Internal, "failed to encode outbox event: %+v", marshalErr)
+		}
+
+		outboxCtx, cancel := context.WithTimeout(context.Background(), 750*time.Millisecond)
+		prepOutboxErr := cs.Outbox.Prepare(outboxCtx, outbox.Event{ID: orderID.String(), Payload: message})
+		cancel()
+		if prepOutboxErr != nil {
+			logger.Error("failed to prepare outbox event", "order_id", orderID.String(), "error", prepOutboxErr)
+			return nil, status.Errorf(codes.Internal, "failed to prepare outbox event: %+v", prepOutboxErr)
+		}
+
+		txID, err = cs.chargeCard(ctx, total, req.CreditCard)
+		if err != nil {
+			rmCtx, rmCancel := context.WithTimeout(context.Background(), 750*time.Millisecond)
+			_ = cs.Outbox.RemovePrepared(rmCtx, orderID.String())
+			rmCancel()
+			return nil, status.Errorf(codes.Internal, "failed to charge card: %+v", err)
+		}
+
+		span.AddEvent("charged", trace.WithAttributes(attribute.String("app.payment.transaction.id", txID)))
+		span.AddEvent("hold", trace.WithAttributes(shippingTrackingAttribute))
+
+		traceID := span.SpanContext().TraceID().String()
+		actCtx, actCancel := context.WithTimeout(context.Background(), 750*time.Millisecond)
+		actErr := cs.Outbox.Activate(actCtx, orderID.String(), time.Now(), traceID, txID)
+		actCancel()
+		if actErr != nil {
+			logger.Error("failed to activate outbox event", "order_id", orderID.String(), "error", actErr)
+			return nil, status.Errorf(codes.Internal, "failed to activate outbox event: %+v", actErr)
+		}
+	} else {
+		txID, err = cs.chargeCard(ctx, total, req.CreditCard)
+		if err != nil {
+			return nil, status.Errorf(codes.Internal, "failed to charge card: %+v", err)
+		}
+
+		span.AddEvent("charged", trace.WithAttributes(attribute.String("app.payment.transaction.id", txID)))
+		span.AddEvent("hold", trace.WithAttributes(shippingTrackingAttribute))
+
+		if cs.kafkaBrokerSvcAddr != "" && cs.KafkaProducerClient != nil {
+			logger.Info("sending to postProcessor")
+			_ = cs.sendToPostProcessor(ctx, orderResult)
+		} else if cs.kafkaBrokerSvcAddr != "" {
+			logger.Warn("skipping order post-processing: Kafka producer is not available")
+		}
+	}
+
 	logger.LogAttrs(
 		ctx,
 		slog.LevelInfo, "order placed",
@@ -440,35 +483,15 @@ func (cs *checkout) PlaceOrder(ctx context.Context, req *pb.PlaceOrderRequest) (
 		slog.String("app.shipping.tracking.id", shippingTrackingID),
 	)
 
+	// EmptyCart is best-effort cleanup: cart failure must not block order completion after payment succeeds.
+	if err := cs.emptyUserCart(ctx, req.UserId); err != nil {
+		logger.Warn(fmt.Sprintf("cart cleanup failed for user %s: %+v (deferred)", req.UserId, err))
+	}
+
 	if err := cs.sendOrderConfirmation(ctx, req.Email, orderResult); err != nil {
 		logger.Warn(fmt.Sprintf("failed to send order confirmation for order %s: %+v", orderID.String(), err))
 	} else {
 		logger.Info(fmt.Sprintf("order confirmation email sent for order %s", orderID.String()))
-	}
-
-	// Production persists the event before returning and publishes it from a
-	// background worker. Kafka availability therefore cannot delay checkout.
-	if cs.Outbox != nil {
-		message, marshalErr := proto.Marshal(orderResult)
-		if marshalErr != nil {
-			logger.Error("failed to encode checkout outbox event", "order_id", orderID.String(), "error", marshalErr)
-		} else {
-			outboxCtx, cancel := context.WithTimeout(context.Background(), 750*time.Millisecond)
-			enqueueErr := cs.Outbox.Enqueue(outboxCtx, outbox.Event{ID: orderID.String(), Payload: message})
-			cancel()
-			if enqueueErr != nil {
-				// Payment has already succeeded, so returning an error would invite a
-				// duplicate charge. DynamoDB is Multi-AZ; surface the exceptional write
-				// failure through telemetry and the outbox alert instead.
-				logger.Error("failed to persist checkout outbox event", "order_id", orderID.String(), "error", enqueueErr)
-			}
-		}
-	} else if cs.kafkaBrokerSvcAddr != "" && cs.KafkaProducerClient != nil {
-		// Development compatibility path when no durable outbox is configured.
-		logger.Info("sending to postProcessor")
-		_ = cs.sendToPostProcessor(ctx, orderResult)
-	} else if cs.kafkaBrokerSvcAddr != "" {
-		logger.Warn("skipping order post-processing: Kafka producer is not available")
 	}
 
 	resp := &pb.PlaceOrderResponse{Order: orderResult}
@@ -494,14 +517,35 @@ func (cs *checkout) prepareOrderItemsAndShippingQuoteFromCart(ctx context.Contex
 	if len(cartItems) == 0 {
 		return out, fmt.Errorf("cart is empty")
 	}
-	orderItems, err := cs.prepOrderItems(ctx, cartItems, userCurrency)
-	if err != nil {
-		return out, fmt.Errorf("failed to prepare order: %+v", err)
+	var (
+		orderItems  []*pb.OrderItem
+		shippingUSD *pb.Money
+	)
+
+	g, gctx := errgroup.WithContext(ctx)
+
+	g.Go(func() error {
+		var err error
+		orderItems, err = cs.prepOrderItems(gctx, cartItems, userCurrency)
+		if err != nil {
+			return fmt.Errorf("failed to prepare order: %+v", err)
+		}
+		return nil
+	})
+
+	g.Go(func() error {
+		var err error
+		shippingUSD, err = cs.quoteShipping(gctx, address, cartItems)
+		if err != nil {
+			return fmt.Errorf("shipping quote failure: %+v", err)
+		}
+		return nil
+	})
+
+	if err := g.Wait(); err != nil {
+		return out, err
 	}
-	shippingUSD, err := cs.quoteShipping(ctx, address, cartItems)
-	if err != nil {
-		return out, fmt.Errorf("shipping quote failure: %+v", err)
-	}
+
 	shippingPrice, err := cs.convertCurrency(ctx, shippingUSD, userCurrency)
 	if err != nil {
 		return out, fmt.Errorf("failed to convert shipping cost to currency: %+v", err)
@@ -526,6 +570,10 @@ func (cs *checkout) prepareOrderItemsAndShippingQuoteFromCart(ctx context.Contex
 }
 
 func mustCreateClient(svcAddr string) *grpc.ClientConn {
+	// Linkerd sidecar proxy (linkerd-proxy) intercepts this connection and performs
+	// L7 (per-request) load balancing across all destination pod replicas automatically.
+	// No dns:/// scheme or client-side round_robin config needed — the proxy handles it.
+	// Change trail: @chinhgithub04 - 2026-07-24 - Revert gRPC resolver hack; use Linkerd for L7 LB (M16).
 	c, err := grpc.NewClient(svcAddr,
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
 		grpc.WithStatsHandler(otelgrpc.NewClientHandler()),
@@ -717,19 +765,29 @@ func recordCartCleanupDeferred(ctx context.Context, userID string, err error) {
 
 func (cs *checkout) prepOrderItems(ctx context.Context, items []*pb.CartItem, userCurrency string) ([]*pb.OrderItem, error) {
 	out := make([]*pb.OrderItem, len(items))
+	g, ctx := errgroup.WithContext(ctx)
 
 	for i, item := range items {
-		product, err := cs.productCatalogSvcClient.GetProduct(ctx, &pb.GetProductRequest{Id: item.GetProductId()})
-		if err != nil {
-			return nil, fmt.Errorf("failed to get product #%q", item.GetProductId())
-		}
-		price, err := cs.convertCurrency(ctx, product.GetPriceUsd(), userCurrency)
-		if err != nil {
-			return nil, fmt.Errorf("failed to convert price of %q to %s", item.GetProductId(), userCurrency)
-		}
-		out[i] = &pb.OrderItem{
-			Item: item,
-			Cost: price}
+		i, item := i, item
+		g.Go(func() error {
+			product, err := cs.productCatalogSvcClient.GetProduct(ctx, &pb.GetProductRequest{Id: item.GetProductId()})
+			if err != nil {
+				return fmt.Errorf("failed to get product #%q: %w", item.GetProductId(), err)
+			}
+			price, err := cs.convertCurrency(ctx, product.GetPriceUsd(), userCurrency)
+			if err != nil {
+				return fmt.Errorf("failed to convert price of %q to %s: %w", item.GetProductId(), userCurrency, err)
+			}
+			out[i] = &pb.OrderItem{
+				Item: item,
+				Cost: price,
+			}
+			return nil
+		})
+	}
+
+	if err := g.Wait(); err != nil {
+		return nil, err
 	}
 	return out, nil
 }
@@ -1203,4 +1261,55 @@ func parseOrderCancelledBytes(data []byte) (string, string, error) {
 	return orderID, reason, nil
 }
 
-// Change trail: @hungxqt - 2026-07-17 - Remove deferred-payment containment; fail PlaceOrder on cart cleanup errors.
+func startCloudWatchMetricReporter(ctx context.Context, logger *slog.Logger) {
+	ticker := time.NewTicker(1 * time.Minute)
+	defer ticker.Stop()
+
+	cfg, err := config.LoadDefaultConfig(ctx)
+	if err != nil {
+		logger.Error("failed to load AWS config for CloudWatch metric reporter", "error", err)
+	}
+	var cwClient *cloudwatch.Client
+	if err == nil {
+		cwClient = cloudwatch.NewFromConfig(cfg)
+	}
+
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			count := atomic.LoadUint64(&acceptedOrderWithoutDurableRecordCounter)
+			if cwClient != nil {
+				_, err := cwClient.PutMetricData(ctx, &cloudwatch.PutMetricDataInput{
+					Namespace: aws.String("TechX/Mandate21"),
+					MetricData: []cwtypes.MetricDatum{
+						{
+							MetricName: aws.String("AcceptedOrderWithoutDurableRecord"),
+							Value:      aws.Float64(float64(count)),
+							Unit:       cwtypes.StandardUnitCount,
+							Dimensions: []cwtypes.Dimension{
+								{
+									Name:  aws.String("Environment"),
+									Value: aws.String("production"),
+								},
+							},
+						},
+					},
+				})
+				if err != nil {
+					logger.Error("failed to publish AcceptedOrderWithoutDurableRecord metric to CloudWatch", "count", count, "error", err)
+				} else {
+					if count > 0 {
+						atomic.StoreUint64(&acceptedOrderWithoutDurableRecordCounter, 0)
+					}
+					logger.Info("published AcceptedOrderWithoutDurableRecord metric to CloudWatch", "count", count)
+				}
+			} else {
+				logger.Error("CloudWatch client unavailable, metric not published", "count", count)
+			}
+		}
+	}
+}
+
+// Change trail: @hungxqt - 2026-07-29 - Enforce mandatory production outbox guard and 1-minute CloudWatch metric reporter for AcceptedOrderWithoutDurableRecord.

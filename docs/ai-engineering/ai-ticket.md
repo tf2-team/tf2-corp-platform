@@ -1,6 +1,6 @@
 # Nộp evidence cho mandate AI qua Jira
 
-Áp dụng cho **track AIO** (các directive AI: #6, #7, …). Mentor chấm mandate **dựa trên Jira ticket** — không có ticket, hoặc ticket không có bằng chứng chạy được, thì coi như chưa làm.
+Áp dụng cho **track AIO** (các directive AI: #6, #7, …). Mentor chấm mandate **dựa trên Jira ticket**: không có ticket, hoặc ticket không có bằng chứng chạy được, thì coi như chưa làm.
 
 > Team ngoài track AI nộp theo `JIRA_EXPORT.md` như bình thường.
 
@@ -21,7 +21,7 @@
 1. **Link PR/commit** phần code làm mandate (nối ticket ↔ repo).
 2. **Cách chạy lại (repro):** lệnh/script để mentor tự bật lại — ví dụ `make detect-demo`, hoặc "bơm flagd X → xem alert ở …".
 3. **Bằng chứng chạy thật:** ảnh/log cho thấy tính năng **chạy end-to-end** (detector kêu / guardrail chặn / loop rollback… tùy mandate).
-4. **Link ADR ký tên** — chọn phương pháp gì, đánh đổi gì.
+4. **Link ADR ký tên**: chọn phương pháp gì, đánh đổi gì.
 
 **Đóng ticket** khi đủ 4 thứ trên, **trước deadline**. Thiếu mục 3 (bằng chứng chạy thật) → mentor để ticket mở, hỏi lại, **chưa tính** dù code đã có.
 
@@ -35,7 +35,7 @@ Một mandate có thể có nhiều chặng, mỗi chặng 1 ticket + 1 deadline
 
 | Ticket | Nội dung | Chấm kiểu | Hạn |
 |---|---|---|---|
-| `AI MANDATE #7a` | implement (link PR) + phân tích **≥3 metrics** (mỗi metric: baseline/ngưỡng bất thường) + phương pháp | như **doc** — chưa cần chạy thật | T7 18/07 |
+| `AI MANDATE #7a` | implement (link PR) + phân tích **≥3 metrics** (mỗi metric: baseline/ngưỡng bất thường) + phương pháp | như **doc**; chưa cần chạy thật | T7 18/07 |
 | `AI MANDATE #7b` | chạy thật e2e (**ảnh alert**) + số precision/recall + alert theo mức ảnh hưởng | **bằng chứng chạy được** | T7 25/07 |
 
 Đội đã có sẵn phần đầu thì làm gọn `#7a`, tập trung `#7b`.
@@ -50,7 +50,7 @@ Một mandate có thể có nhiều chặng, mỗi chặng 1 ticket + 1 deadline
 
 # Submitting AI mandate evidence via Jira
 
-Applies to the **AIO track** (AI directives: #6, #7, …). Mentors grade a mandate **from the Jira ticket** — no ticket, or a ticket with no working evidence, counts as not done.
+Applies to the **AIO track** (AI directives: #6, #7, …). Mentors grade a mandate **from the Jira ticket**: no ticket, or a ticket with no working evidence, counts as not done.
 
 > Teams outside the AI track submit via `JIRA_EXPORT.md` as usual.
 
@@ -69,7 +69,7 @@ Applies to the **AIO track** (AI directives: #6, #7, …). Mentors grade a manda
 1. **PR/commit link** for the mandate code (ties ticket ↔ repo).
 2. **How to reproduce (repro):** command/script for the mentor to re-run — e.g. `make detect-demo`, or "inject flagd X → see the alert at …".
 3. **Proof it runs:** screenshot/log showing the feature **running end-to-end** (detector fires / guardrail blocks / loop rollback… depending on the mandate).
-4. **Signed ADR link** — method chosen, trade-offs.
+4. **Signed ADR link**: method chosen, trade-offs.
 
 **Close the ticket** when all 4 are present, **before the deadline**. Missing item 3 (working proof) → the mentor leaves the ticket open, asks back, and it **does not count** even if the code exists.
 
@@ -81,7 +81,7 @@ A mandate can have several stages, each its own ticket + deadline. Example **#7 
 
 | Ticket | Content | Grading style | Due |
 |---|---|---|---|
-| `AI MANDATE #7a` | implement (PR link) + analysis of **≥3 metrics** (each: baseline/anomaly threshold) + method | as a **doc** — no live run yet | Sat 18/07 |
+| `AI MANDATE #7a` | implement (PR link) + analysis of **≥3 metrics** (each: baseline/anomaly threshold) + method | as a **doc**; no live run yet | Sat 18/07 |
 | `AI MANDATE #7b` | live e2e run (**alert screenshot**) + precision/recall + impact-based alerting | **working proof** | Sat 25/07 |
 
 Teams that already have the first part can keep `#7a` light and focus on `#7b`.

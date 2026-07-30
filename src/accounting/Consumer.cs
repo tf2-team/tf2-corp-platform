@@ -117,11 +117,25 @@ internal class Consumer : IDisposable
 
     private bool ProcessMessage(Message<string, byte[]> message)
     {
+        OrderResult order;
         try
         {
-            var order = OrderResult.Parser.ParseFrom(message.Value);
+            order = OrderResult.Parser.ParseFrom(message.Value);
             Log.OrderReceivedMessage(_logger, order);
+        }
+        catch (Google.Protobuf.InvalidProtocolBufferException ex)
+        {
+            _logger.LogError(ex, "Order parsing failed:");
+            return false;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Order parsing failed:");
+            return false;
+        }
 
+        try
+        {
             if (Environment.GetEnvironmentVariable("DB_CONNECTION_STRING") == null)
             {
                 return true;
@@ -179,7 +193,7 @@ internal class Consumer : IDisposable
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Order parsing failed:");
+            _logger.LogError(ex, "Database persistence failed:");
             return false;
         }
     }
@@ -393,4 +407,6 @@ internal class Consumer : IDisposable
         _outboxReconciler?.Dispose();
     }
 }
+
+// Change trail: @hungxqt - 2026-07-28 - Separate Protobuf decode failures from DB persistence failures.
 

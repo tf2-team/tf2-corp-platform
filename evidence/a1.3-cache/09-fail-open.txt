@@ -1,0 +1,17 @@
+=== Fail-open evidence (Valkey down) ===
+Date: 2026-07-27
+Expect: product-reviews still returns GROUNDED (not crash); cache_status=miss while Valkey stopped.
+BEFORE_STOP ok cache_status=miss response_status=GROUNDED latency_ms=5493.2
+valkey-ai-cache
+VALKEY_DOWN ok cache_status=miss response_status=GROUNDED latency_ms=11381.5
+preview=Perfect for camping trips. It's lightweight and portable, making it easy to take anywhere. The views are surprisingly go
+valkey-ai-cache
+
+Attaching to ai-cache-bootstrap-1
+ Container valkey-ai-cache Waiting
+ Container valkey-ai-cache Healthy
+ Container tf2-corp-platform-ai-cache-bootstrap-1 Starting
+ Container tf2-corp-platform-ai-cache-bootstrap-1 Started
+
+ai-cache-bootstrap-1 exited with code 0
+RESTORED: valkey + bootstrap done

@@ -1,0 +1,39 @@
+[project]
+name = "techx-ai-eval"
+version = "0.1.0"
+description = "Reproducible host-side evaluator for TechX AI surfaces"
+requires-python = ">=3.12,<3.13"
+dependencies = [
+  "grpcio-health-checking==1.71.0",
+  "jsonschema>=4.23,<5",
+  "langgraph==0.3.34",
+  "llm-guard==0.3.16",
+  "openfeature-hooks-opentelemetry==0.3.0",
+  "openfeature-provider-flagd==0.2.3",
+  "opentelemetry-distro==0.60b1",
+  "opentelemetry-exporter-otlp-proto-grpc==1.39.1",
+  "presidio-anonymizer==2.2.363",
+  "psutil==7.0.0",
+  "psycopg2-binary==2.9.11",
+  "python-dotenv==1.2.1",
+  "python-json-logger==4.0.0",
+  "simplejson==3.20.2",
+  "techx-ai-common",
+  "tqdm>=4.69,<5",
+  "valkey==6.1.0",
+]
+
+[tool.uv.sources]
+techx-ai-common = { path = "../src/ai-common", editable = true }
+
+# Mirrors the service Dockerfiles: llm-guard's old pin is overridden by the
+# security-remediated presidio-anonymizer version used by the platform.
+[tool.uv]
+override-dependencies = [
+  "cryptography==48.0.1",
+  "json-repair==0.60.1",
+  "presidio-analyzer==2.2.363",
+  "presidio-anonymizer==2.2.363",
+  "regex==2026.7.19",
+  "transformers==5.5.0",
+]

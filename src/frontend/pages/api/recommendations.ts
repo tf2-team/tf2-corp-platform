@@ -8,6 +8,8 @@ import { Empty, Product } from '../../protos/demo';
 import ProductCatalogService from '../../services/ProductCatalog.service';
 import {
   isOptionalDependencyError,
+  isOptionalDependencyCircuitOpen,
+  recordOptionalDependencyCircuitOpen,
   recordOptionalDependencyFallback,
   setDegradedDependencyHeader,
 } from '../../utils/resilience/OptionalDependency';
@@ -26,6 +28,11 @@ export const createRecommendationsHandler = (
     case 'GET': {
       const { productIds = [], sessionId = '', currencyCode = '' } = query;
       let productList: string[];
+      if (isOptionalDependencyCircuitOpen('recommendation')) {
+        recordOptionalDependencyCircuitOpen('recommendation');
+        setDegradedDependencyHeader(res, 'recommendation');
+        return res.status(200).json([]);
+      }
       try {
         const response = await recommendationDependency.listRecommendations(
           sessionId as string,

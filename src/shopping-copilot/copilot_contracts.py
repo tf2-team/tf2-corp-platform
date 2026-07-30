@@ -3,38 +3,22 @@
 # Copyright The OpenTelemetry Authors
 # SPDX-License-Identifier: Apache-2.0
 
-"""Pydantic contracts for Shopping Copilot I/O.
-
-These models define the internal data shapes that flow through the
-LangGraph graph. They are separate from the gRPC-generated proto classes
-and are used to enforce schema at each node boundary before the final
-response is serialised back to proto.
-"""
+"""Pydantic contracts for Shopping Copilot I/O and tool inputs."""
 
 from enum import Enum
 from typing import Literal, Optional
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 AllowedCategory = Literal[
-    "telescopes",
-    "accessories",
-    "travel",
-    "binoculars",
-    "flashlights",
-    "assembly",
-    "books",
+    "telescopes", "accessories", "travel", "binoculars", "flashlights",
+    "assembly", "books",
 ]
 
 
 class CopilotContractModel(BaseModel):
-    """Base config shared by all copilot contracts."""
     model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
 
-
-# ---------------------------------------------------------------------------
-# Response status (mirrors the proto string values for clarity)
-# ---------------------------------------------------------------------------
 
 class CopilotStatus(str, Enum):
     GROUNDED = "GROUNDED"
@@ -44,67 +28,59 @@ class CopilotStatus(str, Enum):
     FALLBACK = "FALLBACK"
 
 
-# ---------------------------------------------------------------------------
-# Intent parsing (A2.1)
-# ---------------------------------------------------------------------------
+class CatalogSearchInput(CopilotContractModel):
+    """Validated input for the Catalog search tool."""
 
-class ShoppingIntent(CopilotContractModel):
-    """Structured intent extracted from a raw user message.
-
-    The LLM fills this via Instructor structured output. Backend code then
-    validates it and uses each field as a hard filter — not a hint — when
-    calling ProductCatalogService.SearchProducts.
-    """
-    is_greeting: bool = Field(
-        default=False,
-        description="True if the user message is a simple greeting or chit-chat start (e.g. 'hi', 'hello', 'hey', 'good morning').",
-    )
-    is_shopping_related: bool = Field(
-        default=True,
-        description="True if the user request is related to shopping, products, reviews, cart actions, or a greeting. False if completely unrelated (e.g. math problems, coding tasks, weather).",
-    )
-    query: str = Field(description="Keyword(s) to search in product name/description.")
-    category: Optional[str] = Field(
-        default=None,
-        description="Exact product category to filter by. Must be one of: 'telescopes', 'accessories', 'travel', 'binoculars', 'flashlights', 'assembly', 'books'. Set to null if not mentioned or matching another category.",
-    )
-    max_price: Optional[float] = Field(
-        default=None,
-        ge=0,
-        description="Maximum price in USD. Applied as a hard upper bound.",
-    )
-    features: list[str] = Field(
-        default_factory=list,
-        description="Desired features mentioned by the user (informational, for Q&A).",
-    )
-    wants_description: bool = Field(
-        default=False,
-        description="True if the user explicitly asked for a description, summary, or details of a product.",
-    )
-    needs_review_qa: bool = Field(
-        default=False,
-        description="True if the user wants review-grounded Q&A, quality feedback, pros/cons, or ratings after search.",
-    )
-    follow_up_question: Optional[str] = Field(
-        default=None,
-        description="The specific question to answer from reviews, if needs_review_qa is True.",
-    )
-    wants_add_to_cart: bool = Field(
-        default=False,
-        description="True if the user explicitly asked to add a product to their cart.",
-    )
-    cart_product_hint: Optional[str] = Field(
-        default=None,
-        description="Product name or descriptor the user wants to add (resolved to ID by backend).",
-    )
+    query: str = Field(default="", max_length=200)
+    category: Optional[AllowedCategory] = None
+    max_price: Optional[float] = Field(default=None, ge=0)
 
 
-# ---------------------------------------------------------------------------
-# Catalog results (A2.1)
-# ---------------------------------------------------------------------------
+class ProductInput(CopilotContractModel):
+    """Validated product reference for detail, review, and cart tools."""
+
+    product_id: str = Field(default="", max_length=100)
+    product_name: str = Field(default="", max_length=200)
+
+    @model_validator(mode="after")
+    def require_reference(self):
+        if not self.product_id and not self.product_name:
+            raise ValueError("product_id or product_name is required")
+        return self
+
+
+class ReviewQuestionInput(ProductInput):
+    question: str = Field(min_length=1, max_length=500)
+
+
+class CartActionInput(ProductInput):
+    quantity: int = Field(default=1, ge=1, le=10)
+
+
+class RetrievalHint(CopilotContractModel):
+    """Turn context used for Mem0 retrieval and tool access."""
+
+    is_follow_up: bool = False
+    semantic_query: str = Field(default="", max_length=500)
+    tool_access: Literal["none", "shopping"] = "none"
+    policy_action: Literal["allow", "block"] = "allow"
+
+
+class MemoryCandidate(CopilotContractModel):
+    """A durable semantic fact extracted from the current user turn."""
+
+    memory_kind: Literal["preference", "constraint", "shopping_goal"]
+    content: str = Field(min_length=1, max_length=500)
+    constraint_type: Optional[
+        Literal["budget", "brand", "feature", "compatibility", "exclusion"]
+    ] = None
+
+
+class MemoryExtraction(CopilotContractModel):
+    memories: list[MemoryCandidate] = Field(default_factory=list, max_length=5)
+
 
 class CopilotProductResult(CopilotContractModel):
-    """A single product returned from catalog search."""
     product_id: str = Field(min_length=1)
     name: str = Field(min_length=1)
     description: str = ""
@@ -113,17 +89,9 @@ class CopilotProductResult(CopilotContractModel):
     currency_code: str = "USD"
 
 
-# ---------------------------------------------------------------------------
-# Pending cart action (A2.3)
-# ---------------------------------------------------------------------------
-
 class PendingCartAction(CopilotContractModel):
-    """Describes an add-to-cart action awaiting user confirmation.
+    """Add-to-cart action awaiting the separate confirmation RPC."""
 
-    Stored in Valkey under key ``copilot:pending:{token}``. The token is
-    a URL-safe random string generated by ``secrets.token_urlsafe()``.
-    TTL is set at write time (default: 300 seconds / 5 minutes).
-    """
     token: str = Field(min_length=1)
     user_id: str = Field(min_length=1)
     product_id: str = Field(min_length=1)
@@ -131,9 +99,8 @@ class PendingCartAction(CopilotContractModel):
 
 
 __all__ = [
-    "CopilotContractModel",
-    "CopilotStatus",
-    "ShoppingIntent",
-    "CopilotProductResult",
-    "PendingCartAction",
+    "CatalogSearchInput", "CartActionInput", "CopilotContractModel",
+    "CopilotProductResult", "CopilotStatus", "MemoryCandidate",
+    "MemoryExtraction", "PendingCartAction", "ProductInput",
+    "RetrievalHint", "ReviewQuestionInput",
 ]
