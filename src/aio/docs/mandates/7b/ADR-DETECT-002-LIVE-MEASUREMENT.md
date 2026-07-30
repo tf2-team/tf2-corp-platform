@@ -35,7 +35,9 @@ Burn-rate detection is supplemental impact/no-spam proof and is excluded from th
 ## Measurement Contract
 
 - **Recall:** caught labeled primary incidents / total labeled primary incidents (`3/3 = 100%`).
-- **Precision:** fault-attributable fires / all fires in the three isolated stores (`9/11 = 81.8%`).
+- **Primary strict precision:** correct deduplicated incident groups / all incident groups (`3/5 = 60.0%`).
+- **Raw primary-only alert precision:** primary labeled fires / all raw fires (`3/11 = 27.3%`, conservative lower bound).
+- **Fault-attributable alert precision:** primary + same-fault related fires / all raw fires (`9/11 = 81.8%`, secondary operational view).
 - **Lead-time:** first detector-fire timestamp minus recorded fault-start timestamp (mean approximately `287s`).
 - **Duplicate control:** repeated breaches with the same fingerprint increment `occurrence_count`; they do not create a new incident.
 - **False positives:** retain and disclose unrelated detector/RCA fires in the denominator rather than silently removing them.

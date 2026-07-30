@@ -214,7 +214,7 @@ Mandate #7b is the live-evidence stage. After #7a proves detector implementation
 | L2 Checkout p95 latency | `local-cartFailure` (isolated run) | `auto_checkout_latency_p95` / `inc-97d2a7043a2b` | 322s |
 | L3 Checkout memory (saturation substitute) | attempted `local-adHighCpu` | `rca_root_cause` / `inc-788d322c0b2f` | 328s |
 
-Measured result over K=3 labeled scenarios and N=11 fires: **recall 3/3 = 100%**, **precision 9/11 = 81.8%**, **mean lead-time ~287s**. Two unrelated fires remain disclosed as false positives. Burn-rate evidence is supplemental and proves impact-based severity plus fingerprint dedup (`occurrence_count` 1→2→3) without entering the K denominator.
+Measured result over K=3 labeled scenarios and N=11 raw fires: **recall 3/3 = 100%**, **strict incident-level precision 3/5 = 60.0%** (primary), **raw primary-only alert precision 3/11 = 27.3%** (lower bound), **fault-attributable alert precision 9/11 = 81.8%** (secondary), **mean lead-time ~287s**. Two unrelated fires remain disclosed as false positives. Burn-rate evidence is supplemental and proves impact-based severity plus fingerprint dedup (`occurrence_count` 1→2→3) without entering the K denominator.
 
 Traceability:
 
@@ -230,7 +230,7 @@ Traceability:
 - [x] Three labeled injected scenarios produced visible detector output.
 - [x] Evidence includes detector logs, incident IDs, dashboard screenshots, and alert/dedup proof.
 - [x] Evidence includes fault-start/fire timestamps and per-scenario reproduction metadata.
-- [x] Precision reported: **9/11 = 81.8%** (TP + same-fault related).
+- [x] Precision reported with explicit units: strict incident-level **3/5 = 60.0%** (primary), raw primary-only **3/11 = 27.3%**, fault-attributable **9/11 = 81.8%**.
 - [x] Recall reported: **3/3 = 100%**.
 - [x] Mean lead-time reported: **~287s** (212s, 322s, 328s).
 - [x] Two false positives, caveats, and fingerprint dedup behavior are documented.
@@ -321,7 +321,9 @@ Also report:
 - Reproduction metadata: `docs/mandates/7b/s2-rerun-meta.txt`, `s3-burn-rate-meta.txt`, `s4-rerun-meta.txt`, `s5-checkout-p95-meta.txt`
 - Labeled incident set: `evaluate/dataset/mandate7b_live/` — commit [`f06f209`](https://github.com/tf2-team/tf2-corp-platform/commit/f06f209)
 - Normal-period no-alert evidence: S2/S4/S5 baseline images and baseline label folders
-- Precision: **9/11 = 81.8%** (TP + same-fault related)
+- Strict incident-level precision: **3/5 = 60.0%** (primary)
+- Raw primary-only alert precision: **3/11 = 27.3%** (lower bound)
+- Fault-attributable alert precision: **9/11 = 81.8%** (secondary)
 - Recall: **3/3 = 100%**
 - Mean lead-time: **~287s**
 - False-positive / spam-control notes: 2 unrelated FP retained; burn-rate fingerprint dedup occurrence 1→2→3

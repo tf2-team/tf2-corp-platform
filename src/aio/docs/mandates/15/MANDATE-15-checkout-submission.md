@@ -338,7 +338,7 @@ Evidence links/files:
 - [x] High-load-but-healthy traffic does not trigger a false incident.
 - [x] Detection is based on deviation from the service normal baseline.
 - [x] Detector runs continuously during the evidence run.
-- [ ] Implementation is merged into main/trunk branch.
+- [x] Implementation merged into `main` via [PR #139](https://github.com/tf2-team/tf2-corp-platform/pull/139), merge commit [`f51a4a7`](https://github.com/tf2-team/tf2-corp-platform/commit/f51a4a74e6346e6c61ed75ca3386e093b0a1b724).
 - [x] Incident summary is generated and delivered to a real channel.
 - [x] Live MTTD before/after, 0–5s detection floor, and 300s comparison baseline are documented.
 - [x] External replay entry point is available.

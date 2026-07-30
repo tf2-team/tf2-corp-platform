@@ -39,7 +39,7 @@ Caveat S4: ad CPU không materialize; claim là **checkout memory RCA**, không 
 | --- | --- | --- |
 | Ảnh/log detector kêu e2e khi bơm fault | **PASS** | S2 `s2-rerun-*`, S5 `s5-08`/`s5-09`, S4 `s4-rerun-04`, S3 `18g` |
 | Cách chạy lại (reproduce) | **PASS** | Mục 11 + meta `s2`/`s3`/`s4`/`s5` |
-| Precision / recall / lead-time trên bộ nhãn | **PASS** | Mục 9 — Recall **3/3**; Precision B **9/11=81.8%**; mean lead **~287s** |
+| Precision / recall / lead-time trên bộ nhãn | **PASS** | Mục 9 — Recall **3/3**; strict incident-level precision **3/5=60.0%**; fault-attributable alert precision **9/11=81.8%**; mean lead **~287s** |
 | Cảnh báo theo mức ảnh hưởng (burn-rate, không spam) | **PASS** | S3: vượt 1.0x → 1 incident fingerprint, occurrence 1→2→3+ |
 | Mở rộng thêm service | **PASS** | cart, checkout (latency + memory + burn-rate), payment dependency path trong burn-rate fault |
 
@@ -426,7 +426,9 @@ Công thức mandate: **recall** = bắt được / K; **precision** = lần kê
 | Metric | Value | Notes |
 | --- | --- | --- |
 | **Recall** | **3/3 = 100%** | cả 3 labeled primary đều fire |
-| **Precision B (mandate-style, TP+Related)** | **9/11 = 81.8%** | **primary submission** — fault-attributable |
+| **Strict incident-level precision (dedup + causal grouping)** | **3/5 = 60.0%** | **Primary strict metric** — 3 correct labeled incident groups / (3 correct + 2 unrelated FP groups). |
+| Raw primary-only alert precision | **3/11 = 27.3%** | Conservative lower bound: every related same-fault alert remains in the denominator but is not counted correct. |
+| Fault-attributable alert precision | **9/11 = 81.8%** | Secondary operational view: primary TP + same-fault related alerts; all 2 unrelated FP remain in denominator. |
 | Mean lead-time | **~287s** | (212+322+328)/3 |
 | Burn-rate (supplemental) | caught ✓ `inc-ca09d8e8a247`; store N=8 | **không** vào mẫu số K |
 
@@ -527,7 +529,9 @@ State: state/7b/s2-cart, s3-burn-rate, s4-checkout-memory, s5-checkout-p95
 
 ## Metrics on labeled set K=3 (N=11 incidents across 3 stores)
 - Recall: 3/3 = 100%
-- Precision B (TP+same-fault related): 9/11 = 81.8%  ← primary
+- Strict incident-level precision (dedup + causal grouping): 3/5 = 60.0%  ← primary strict
+- Raw primary-only alert precision: 3/11 = 27.3%  ← conservative lower bound
+- Fault-attributable alert precision: 9/11 = 81.8%  ← secondary operational view
 - Mean lead-time: ~287s
 - FP disclosed: RCA/frontend noise (see draft §8); burn-rate store excluded from K
 

@@ -110,6 +110,9 @@ Tradeoffs:
 - No mutation of `flagd` or Kubernetes state by the detector is required for the evidence run.
 - Synthetic/demo datasets are out of scope for Jira evidence.
 
+## 5.1 Merge Traceability
+
+Mandate #15 implementation is present on `main` through [PR #139](https://github.com/tf2-team/tf2-corp-platform/pull/139), merge commit [`f51a4a7`](https://github.com/tf2-team/tf2-corp-platform/commit/f51a4a74e6346e6c61ed75ca3386e093b0a1b724). Later documentation refinements may travel in a separate PR and do not change the implementation merge claim.
 ## 6. Sign-off
 
 | Role | Name | Date | Status |
