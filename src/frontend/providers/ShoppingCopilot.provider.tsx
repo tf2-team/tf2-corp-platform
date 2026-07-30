@@ -35,6 +35,9 @@ export interface CopilotResponse {
   sources: CopilotSource[];
   reason: string;
   pendingActionToken: string;
+  cacheStatus?: string;
+  cacheMatch?: string;
+  cacheDistance?: number;
 }
 
 export interface ChatTurn {

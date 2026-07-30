@@ -23,6 +23,7 @@ import logging
 import os
 import re
 from enum import Enum
+from typing import Callable
 
 class GroundingMode(str, Enum):
     SEMANTICS = "semantics"
@@ -111,7 +112,11 @@ def _get_client_and_model() -> tuple[OpenAI, str]:
     return client, model
 
 
-def generate_grounded_summary(safe_reviews: SafeReviewSet, question: str = "") -> GroundedDraft:
+def generate_grounded_summary(
+    safe_reviews: SafeReviewSet,
+    question: str = "",
+    usage_callback: Callable[[int, int], None] | None = None,
+) -> GroundedDraft:
     """Calls the LLM through Instructor, which enforces the GroundedDraft
     schema on the model's response and retries automatically on a schema
     mismatch. Client/model come from _get_client_and_model, not from
@@ -125,24 +130,41 @@ def generate_grounded_summary(safe_reviews: SafeReviewSet, question: str = "") -
             GroundedDraft,
             _SYSTEM_PROMPT,
             _build_review_prompt(safe_reviews, question),
+            usage_callback=usage_callback,
             workflow_step="grounded_summary",
         )
 
     client, model = _get_client_and_model()
     instructor_client = instructor.from_openai(client, mode=instructor.Mode.JSON)
-    return call_model(
-        lambda: instructor_client.chat.completions.create(
+    request = {
+        "model": model,
+        "response_model": GroundedDraft,
+        "messages": [
+            {"role": "system", "content": _SYSTEM_PROMPT},
+            {"role": "user", "content": _build_review_prompt(safe_reviews, question)},
+        ],
+    }
+    if usage_callback is None:
+        return call_model(
+            lambda: instructor_client.chat.completions.create(**request),
             model=model,
-            response_model=GroundedDraft,
-            messages=[
-                {"role": "system", "content": _SYSTEM_PROMPT},
-                {"role": "user", "content": _build_review_prompt(safe_reviews, question)},
-            ],
-        ),
+            provider=os.environ.get("LLM_PROVIDER", "openai_compatible"),
+            workflow_step="grounded_summary",
+        )
+
+    parsed, completion = call_model(
+        lambda: instructor_client.chat.completions.create_with_completion(**request),
         model=model,
         provider=os.environ.get("LLM_PROVIDER", "openai_compatible"),
         workflow_step="grounded_summary",
     )
+    if usage_callback is not None:
+        usage = getattr(completion, "usage", None)
+        usage_callback(
+            int(getattr(usage, "prompt_tokens", 0) or 0),
+            int(getattr(usage, "completion_tokens", 0) or 0),
+        )
+    return parsed
 
 
 def _extract_numbers(text: str) -> set[str]:

@@ -12,6 +12,7 @@ it's patched in the one test that exercises it, so the whole suite still
 runs offline.
 """
 
+from types import SimpleNamespace
 from unittest.mock import patch
 
 import pytest
@@ -215,6 +216,38 @@ def test_generate_grounded_summary_calls_instructor_client():
     kwargs = mock_from_openai.return_value.chat.completions.create.call_args.kwargs
     user_content = kwargs["messages"][1]["content"]
     assert "What do reviews say?" in user_content
+
+
+def test_generate_grounded_summary_reports_provider_usage():
+    safe_reviews = SafeReviewSet(
+        product_id="P001",
+        reviews=_reviews(("r1", "Pin dung tot")),
+    )
+    expected_draft = GroundedDraft(
+        answer="Pin dung tot",
+        claims=[GroundedClaim(text="Pin dung tot", sources=["r1"])],
+    )
+    reported_usage = []
+    completion = SimpleNamespace(
+        usage=SimpleNamespace(prompt_tokens=14, completion_tokens=5)
+    )
+
+    with patch("grounding._get_client_and_model", return_value=(object(), "fake-model")), \
+         patch("grounding.instructor.from_openai") as mock_from_openai:
+        mock_from_openai.return_value.chat.completions.create_with_completion.return_value = (
+            expected_draft,
+            completion,
+        )
+        result = generate_grounded_summary(
+            safe_reviews,
+            question="Is the battery good?",
+            usage_callback=lambda input_tokens, output_tokens: reported_usage.append(
+                (input_tokens, output_tokens)
+            ),
+        )
+
+    assert result == expected_draft
+    assert reported_usage == [(14, 5)]
 
 
 # --- Contract sanity: SafeReviewSet with duplicate source_id is invalid

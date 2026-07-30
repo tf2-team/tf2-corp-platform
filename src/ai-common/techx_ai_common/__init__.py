@@ -6,3 +6,11 @@
 """Shared AI runtime primitives used by TechX AI services."""
 
 # Change trail: @hungxqt - 2026-07-29 - Restore the package initializer for the merged telemetry module.
+
+from .semantic_cache import SemanticCache, compute_source_hash, is_cache_enabled
+
+__all__ = [
+    "SemanticCache",
+    "compute_source_hash",
+    "is_cache_enabled",
+]

@@ -127,6 +127,9 @@ export interface CopilotSearchResponse {
   sources: CopilotSource[];
   reason: string;
   pendingActionToken: string;
+  cacheStatus: string;
+  cacheMatch: string;
+  cacheDistance: number;
 }
 
 export interface ConfirmCartActionRequest {
@@ -1610,7 +1613,18 @@ export const CopilotSource: MessageFns<CopilotSource> = {
 };
 
 function createBaseCopilotSearchResponse(): CopilotSearchResponse {
-  return { status: "", interpretedCriteria: "", products: [], claims: [], sources: [], reason: "", pendingActionToken: "" };
+  return {
+    status: "",
+    interpretedCriteria: "",
+    products: [],
+    claims: [],
+    sources: [],
+    reason: "",
+    pendingActionToken: "",
+    cacheStatus: "",
+    cacheMatch: "",
+    cacheDistance: 0,
+  };
 }
 
 export const CopilotSearchResponse: MessageFns<CopilotSearchResponse> = {
@@ -1635,6 +1649,15 @@ export const CopilotSearchResponse: MessageFns<CopilotSearchResponse> = {
     }
     if (message.pendingActionToken !== "") {
       writer.uint32(58).string(message.pendingActionToken);
+    }
+    if (message.cacheStatus !== "") {
+      writer.uint32(66).string(message.cacheStatus);
+    }
+    if (message.cacheMatch !== "") {
+      writer.uint32(74).string(message.cacheMatch);
+    }
+    if (message.cacheDistance !== 0) {
+      writer.uint32(85).float(message.cacheDistance);
     }
     return writer;
   },
@@ -1681,6 +1704,21 @@ export const CopilotSearchResponse: MessageFns<CopilotSearchResponse> = {
           message.pendingActionToken = reader.string();
           continue;
         }
+        case 8: {
+          if (tag !== 66) break;
+          message.cacheStatus = reader.string();
+          continue;
+        }
+        case 9: {
+          if (tag !== 74) break;
+          message.cacheMatch = reader.string();
+          continue;
+        }
+        case 10: {
+          if (tag !== 85) break;
+          message.cacheDistance = reader.float();
+          continue;
+        }
       }
       if ((tag & 7) === 4 || tag === 0) break;
       reader.skip(tag & 7);
@@ -1697,6 +1735,9 @@ export const CopilotSearchResponse: MessageFns<CopilotSearchResponse> = {
       sources: globalThis.Array.isArray(object?.sources) ? object.sources.map((e: any) => CopilotSource.fromJSON(e)) : [],
       reason: isSet(object.reason) ? globalThis.String(object.reason) : "",
       pendingActionToken: isSet(object.pendingActionToken) ? globalThis.String(object.pendingActionToken) : "",
+      cacheStatus: isSet(object.cacheStatus) ? globalThis.String(object.cacheStatus) : "",
+      cacheMatch: isSet(object.cacheMatch) ? globalThis.String(object.cacheMatch) : "",
+      cacheDistance: isSet(object.cacheDistance) ? globalThis.Number(object.cacheDistance) : 0,
     };
   },
 
@@ -1709,6 +1750,9 @@ export const CopilotSearchResponse: MessageFns<CopilotSearchResponse> = {
     if (message.sources?.length) obj.sources = message.sources.map((e) => CopilotSource.toJSON(e));
     if (message.reason !== "") obj.reason = message.reason;
     if (message.pendingActionToken !== "") obj.pendingActionToken = message.pendingActionToken;
+    if (message.cacheStatus !== "") obj.cacheStatus = message.cacheStatus;
+    if (message.cacheMatch !== "") obj.cacheMatch = message.cacheMatch;
+    if (message.cacheDistance !== 0) obj.cacheDistance = message.cacheDistance;
     return obj;
   },
 
@@ -1724,6 +1768,9 @@ export const CopilotSearchResponse: MessageFns<CopilotSearchResponse> = {
     message.sources = object.sources?.map((e) => CopilotSource.fromPartial(e)) || [];
     message.reason = object.reason ?? "";
     message.pendingActionToken = object.pendingActionToken ?? "";
+    message.cacheStatus = object.cacheStatus ?? "";
+    message.cacheMatch = object.cacheMatch ?? "";
+    message.cacheDistance = object.cacheDistance ?? 0;
     return message;
   },
 };

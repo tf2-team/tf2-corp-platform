@@ -94,7 +94,14 @@ def mock_span(mocker):
     
     # Inject logger and metrics to avoid NameError
     product_reviews_server.logger = logging.getLogger("test")
-    product_reviews_server.product_review_svc_metrics = {"app_ai_assistant_counter": mocker.MagicMock()}
+    product_reviews_server.product_review_svc_metrics = {
+        "app_ai_assistant_counter": mocker.MagicMock(),
+        "ai_cache_requests_total": mocker.MagicMock(),
+        "ai_cache_lookup_duration_ms": mocker.MagicMock(),
+        "ai_cache_model_calls_total": mocker.MagicMock(),
+        "ai_cache_model_input_tokens_total": mocker.MagicMock(),
+        "ai_cache_model_output_tokens_total": mocker.MagicMock(),
+    }
     
     yield mock_span_obj
     del product_reviews_server.tracer
