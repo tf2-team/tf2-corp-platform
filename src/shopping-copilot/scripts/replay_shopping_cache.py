@@ -3,7 +3,11 @@
 # Copyright The OpenTelemetry Authors
 # SPDX-License-Identifier: Apache-2.0
 
-"""Replay Shopping Copilot requests and emit cache evidence as JSONL."""
+"""Replay Shopping Copilot requests and emit cache evidence as JSONL.
+
+Each result includes ``cache`` for the Mandate #23 replay contract and retains
+``cache_status`` for compatibility with existing evidence.
+"""
 
 from __future__ import annotations
 
@@ -58,6 +62,7 @@ def main() -> int:
             "user_id": args.user_id,
             "session_id": args.session_id,
             "status": response.status,
+            "cache": response.cache_status,
             "cache_status": response.cache_status,
             "cache_match": response.cache_match,
             "cache_distance": response.cache_distance,

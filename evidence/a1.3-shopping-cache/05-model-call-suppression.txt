@@ -1,0 +1,19 @@
+Measured: 2026-07-29
+
+Prometheus query before request:
+  shopping_copilot_model_calls_total{provider="bedrock"} = 16
+
+Request:
+{"sequence": 1, "request": "Recommend telescope options priced below $150.", "user_id": "evidence-happy-20260729", "session_id": "88888888-8888-4888-8888-888888888888", "status": "GROUNDED", "cache_status": "hit", "cache_match": "exact", "cache_distance": 0.0, "latency_ms": 64812.51, "product_ids": ["1YMWWN1N4O", "6E92ZMYYFZ", "OLJCESPC7Z"]}
+
+Prometheus query after request:
+  shopping_copilot_model_calls_total{provider="bedrock"} = 16
+
+Result:
+  PASS - exact cache hit returned the structured response while the Bedrock
+  model-call counter remained unchanged (16 -> 16).
+
+Note:
+  End-to-end latency remains high in this local CPU run because input
+  guardrails and source snapshot construction execute before cache hydration.
+  This artifact proves model-call suppression, not an end-to-end latency SLO.

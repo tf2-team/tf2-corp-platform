@@ -1,0 +1,37 @@
+Measured: 2026-07-29
+
+$ docker exec valkey-ai-cache valkey-cli PING
+PONG
+
+$ docker exec valkey-ai-cache valkey-cli FT._LIST
+ai_copilot_cache_idx
+ai_summary_cache_idx
+
+$ docker exec valkey-ai-cache valkey-cli --scan --pattern "ai:cache:copilot:*"
+COPILOT_KEY_COUNT=2
+ai:cache:copilot:f680953ce70ff5c9e78b35b04b04d6e9b212d42ac4c74ea698b18473a07e344c TTL=3348
+ai:cache:copilot:7c87513b6e069145ba5f6cb8151c2ed5fb26d4a9024b6975bc7f480b4ca52d40 TTL=3456
+
+$ docker exec valkey-ai-cache valkey-cli INFO keyspace
+# Keyspace
+db0:keys=2,expires=2,avg_ttl=3406938,keys_with_volatile_items=0
+
+Interpretation:
+- The semantic index exists and Valkey is reachable.
+- Physical keys use the expected ai:cache:copilot:<sha256> namespace.
+- Both measured entries have a positive TTL close to the configured 3600 s.
+- Key names contain no raw user ID, conversation ID, or prompt text.
+
+Selected HASH metadata (opaque hashes intentionally retained):
+
+KEY=ai:cache:copilot:f680953ce70ff5c9e78b35b04b04d6e9b212d42ac4c74ea698b18473a07e344c
+kind=shopping-copilot
+prompt_scope=shopping-react-agent:v1
+model_scope=bedrock:us.amazon.nova-2-lite-v1:0
+embedding_scope=all-MiniLM-L6-v2:v1
+
+KEY=ai:cache:copilot:7c87513b6e069145ba5f6cb8151c2ed5fb26d4a9024b6975bc7f480b4ca52d40
+kind=shopping-copilot
+prompt_scope=shopping-react-agent:v1
+model_scope=bedrock:us.amazon.nova-2-lite-v1:0
+embedding_scope=all-MiniLM-L6-v2:v1

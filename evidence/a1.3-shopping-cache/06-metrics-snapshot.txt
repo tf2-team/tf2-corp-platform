@@ -1,0 +1,19 @@
+Measured: 2026-07-29
+Source: local Prometheus HTTP API after runtime replay
+
+shopping_copilot_cache_requests_total:
+  outcome=miss match=none value=4
+  outcome=hit match=exact value=1
+  outcome=hit match=semantic value=1
+
+shopping_copilot_model_calls_total:
+  provider=bedrock value=16
+
+shopping_copilot_model_input_tokens_total:
+  provider=bedrock value=18814
+
+shopping_copilot_model_output_tokens_total:
+  provider=bedrock value=680
+
+The exact-hit suppression check is captured separately in
+05-model-call-suppression.txt.
