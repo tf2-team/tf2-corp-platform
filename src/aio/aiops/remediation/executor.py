@@ -5,6 +5,7 @@
 from __future__ import annotations
 
 import hashlib
+import logging
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from typing import Any, Callable, Protocol
@@ -19,6 +20,8 @@ from aiops.schemas import (
     RootCauseCandidate,
     VerificationResult,
 )
+
+logger = logging.getLogger(__name__)
 
 
 class ExecutorClient(Protocol):
@@ -37,6 +40,8 @@ class WorkflowStore(Protocol):
     def save_self_heal_workflow(self, workflow: dict) -> None: ...
 
     def active_self_heal_workflows(self) -> list[dict]: ...
+
+    def queued_self_heal_workflows(self) -> list[dict]: ...
 
     def self_heal_workflow(self, incident_id: str) -> dict | None: ...
 
@@ -64,6 +69,15 @@ class SelfHealConfig:
     min_fresh_samples: int = 2
     consecutive_passes: int = 2
     failure_samples: int = 2
+    min_incident_occurrences: int = 3
+    min_incident_score: float = 0.24
+    rollback_after_executions: int = 3
+
+    def __post_init__(self) -> None:
+        if self.min_incident_occurrences < 1 or self.rollback_after_executions < 1:
+            raise ValueError("self-heal occurrence and rollback thresholds must be positive")
+        if not 0 <= self.min_incident_score <= 1:
+            raise ValueError("self-heal incident score threshold must be between 0 and 1")
 
 
 class SelfHealOrchestrator:
@@ -81,6 +95,13 @@ class SelfHealOrchestrator:
         self.store = store
         self.config = config
         self.clock = clock or (lambda: datetime.now(UTC))
+
+    def prioritize(self, incidents: list[Incident]) -> list[Incident]:
+        queued = {
+            workflow["incident_id"]: index
+            for index, workflow in enumerate(self.store.queued_self_heal_workflows())
+        }
+        return sorted(incidents, key=lambda incident: queued.get(incident.incident_id, len(queued)))
 
     def start(
         self,
@@ -102,6 +123,56 @@ class SelfHealOrchestrator:
                 "execution_id": existing.get("execution_id"),
                 "executed": False,
                 "reasons": ["workflow_already_exists"],
+            }
+        score = incident.events[-1].confidence
+        qualifying_occurrences = sum(
+            event.confidence >= self.config.min_incident_score for event in incident.events
+        )
+        previous_trigger = int((existing or {}).get("trigger_occurrence_count", 0))
+        occurrences_since_trigger = (
+            qualifying_occurrences - previous_trigger
+            if qualifying_occurrences > previous_trigger
+            else qualifying_occurrences
+        )
+        if score < self.config.min_incident_score:
+            return self._waiting(
+                incident,
+                "incident_score_below_threshold",
+                score=score,
+                occurrences=occurrences_since_trigger,
+            )
+        if existing is None or existing.get("status") != "queued":
+            recurrence_ready = occurrences_since_trigger >= self.config.min_incident_occurrences
+        else:
+            recurrence_ready = True
+        if not recurrence_ready:
+            return self._waiting(
+                incident,
+                "incident_occurrence_threshold_not_met",
+                score=score,
+                occurrences=occurrences_since_trigger,
+            )
+        active = self.store.active_self_heal_workflows()
+        if any(workflow["incident_id"] != incident.incident_id for workflow in active):
+            return self._queue(incident, action, existing)
+
+        same_action = existing is not None and existing.get("action_id") == action.action_id
+        execution_count = int(existing.get("execution_count", 0)) if same_action else 0
+        if existing is not None and execution_count >= self.config.rollback_after_executions:
+            self._rollback(existing, "repeated_self_heal_limit")
+            logger.warning(
+                "AIOPS_SELF_HEAL_ROLLBACK incident=%s action=%s executions=%s threshold=%s reason=repeated_self_heal_limit",
+                incident.incident_id,
+                action.action_id,
+                execution_count,
+                self.config.rollback_after_executions,
+            )
+            status = self.store.self_heal_workflow(incident.incident_id)["status"]
+            return {
+                "status": status,
+                "execution_id": existing.get("execution_id"),
+                "executed": status == "rolled_back",
+                "reasons": ["repeated_self_heal_limit"],
             }
         attempt = int((existing or {}).get("attempt", 0)) + 1
 
@@ -251,6 +322,8 @@ class SelfHealOrchestrator:
             "execution_id": execution["execution_id"],
             "status": "verifying",
             "attempt": attempt,
+            "execution_count": execution_count + 1,
+            "trigger_occurrence_count": qualifying_occurrences,
             "action_id": action.action_id,
             "action_type": action.action_type,
             "target": action.target,
@@ -287,6 +360,57 @@ class SelfHealOrchestrator:
             "execution_id": execution["execution_id"],
             "executed": True,
             "reasons": [],
+        }
+
+    def _waiting(self, incident: Incident, reason: str, *, score: float, occurrences: int) -> dict[str, Any]:
+        logger.info(
+            "AIOPS_SELF_HEAL_WAIT incident=%s service=%s score=%.3f min_score=%.3f occurrences=%s required=%s reason=%s",
+            incident.incident_id,
+            incident.service,
+            score,
+            self.config.min_incident_score,
+            occurrences,
+            self.config.min_incident_occurrences,
+            reason,
+        )
+        return {"status": "waiting_recurrence", "execution_id": None, "executed": False, "reasons": [reason]}
+
+    def _queue(
+        self,
+        incident: Incident,
+        action: ActionCatalogItem,
+        existing: dict[str, Any] | None,
+    ) -> dict[str, Any]:
+        workflow = {
+            **(existing or {}),
+            "incident_id": incident.incident_id,
+            "status": "queued",
+            "action_id": action.action_id,
+            "action_type": action.action_type,
+            "target": action.target,
+            "service": incident.service,
+        }
+        if existing is not None and existing.get("action_id") != action.action_id:
+            workflow.update({"execution_id": None, "execution_count": 0, "rollback_token": None})
+        if existing is None or existing.get("status") != "queued":
+            self.store.append_self_heal_audit(
+                "queued",
+                incident.incident_id,
+                workflow.get("execution_id"),
+                {"reason": "another_self_heal_is_active", "action_id": action.action_id},
+            )
+        self.store.save_self_heal_workflow(workflow)
+        logger.info(
+            "AIOPS_SELF_HEAL_QUEUED incident=%s service=%s action=%s reason=another_self_heal_is_active",
+            incident.incident_id,
+            incident.service,
+            action.action_id,
+        )
+        return {
+            "status": "queued",
+            "execution_id": workflow.get("execution_id"),
+            "executed": False,
+            "reasons": ["another_self_heal_is_active"],
         }
 
     def reconcile(self, features: list[Feature]) -> list[VerificationResult]:

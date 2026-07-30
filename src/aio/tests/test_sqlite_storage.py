@@ -531,11 +531,11 @@ class SQLiteIncidentStoreTest(unittest.TestCase):
 
     def test_breakout_uses_same_two_hop_scope_as_suppression(self):
         graph = TopologyGraph(load_runtime_config(Path("config/runtime.json")))
-        two_hop = graph.neighborhood("checkout", max_hops=2) - graph.neighborhood("checkout", max_hops=1)
+        two_hop = graph.blast_radius("checkout", max_hops=2) - graph.blast_radius("checkout", max_hops=1)
         service = sorted(two_hop)[0]
         with tempfile.TemporaryDirectory() as tmp:
             store = SQLiteIncidentStore(Path(tmp) / "aiops.sqlite3", environment="tf2", topology_graph=graph)
-            store.register_active_root_cause("checkout", graph.neighborhood("checkout", max_hops=2), root_score=1.0)
+            store.register_active_root_cause("checkout", graph.blast_radius("checkout", max_hops=2), root_score=1.0)
             breakout = store.breakout_services({service: 1.5}, 1.5, max_hops=2)
             store.close()
 

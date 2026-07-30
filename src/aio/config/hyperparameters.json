@@ -9,6 +9,11 @@
     "notification_retry_max_seconds": 3600,
     "notification_error_max_chars": 512
   },
+  "self_heal": {
+    "min_incident_occurrences": 3,
+    "min_incident_score": 0.24,
+    "rollback_after_executions": 3
+  },
   "notification": {
     "user_rca_medium_confidence_score": 0.3,
     "user_rca_high_confidence_score": 0.42,
@@ -51,8 +56,8 @@
     "rca_notification_require_current_tail_change": true,
     "rca_notification_allow_default_metric_without_series": true,
     "suppress_breakout_multiplier": 1.5,
-    "allow_direct_anomaly_breakout": true,
-    "allow_slo_breakout": true,
+    "allow_direct_anomaly_breakout": false,
+    "allow_slo_breakout": false,
     "rca_dedup_require_same_service": true,
     "suppress_window_seconds": 900,
     "weights": {
@@ -65,7 +70,7 @@
     }
   },
   "detectors": {
-    "default_error_rate": 0.05,
+    "default_error_rate": 0.01,
     "default_burn_rate_slo": 1.0,
     "default_latency_slo": 1.0,
     "latency_slo_overrides": {
@@ -102,8 +107,7 @@
       "auto_email_error_rate": 0.05,
       "auto_quote_error_rate": 0.05,
       "auto_fraud_detection_error_rate": 0.05,
-      "auto_accounting_error_rate": 0.05
-    },
+      "auto_accounting_error_rate": 0.05    },
     "confidences": {
       "ops03_checkout_payment_dependency": 0.8
     }

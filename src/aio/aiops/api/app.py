@@ -130,6 +130,9 @@ def run_pipeline_with_collector(collector, settings: Settings, runtime_config, m
                 min_fresh_samples=settings.self_heal_min_fresh_samples,
                 consecutive_passes=settings.self_heal_consecutive_passes,
                 failure_samples=settings.self_heal_failure_samples,
+                min_incident_occurrences=int(hyperparameters["self_heal"]["min_incident_occurrences"]),
+                min_incident_score=float(hyperparameters["self_heal"]["min_incident_score"]),
+                rollback_after_executions=int(hyperparameters["self_heal"]["rollback_after_executions"]),
             ),
         )
     pipeline = AiopsPipeline(

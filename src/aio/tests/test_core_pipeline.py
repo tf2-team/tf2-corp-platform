@@ -268,6 +268,29 @@ class DetectorEngineTest(unittest.TestCase):
         self.assertEqual(candidates[0].detector_id, "auto_payment_error_rate")
         self.assertEqual(candidates[0].service, "payment")
 
+    def test_zero_error_rate_threshold_fires_only_for_positive_values(self):
+        detector = ThresholdDetector(
+            detector_id="auto_checkout_error_rate",
+            signal_id="checkout_error_rate_5m",
+            threshold=0.0,
+            flow="checkout",
+            service="checkout",
+            severity="SEV2",
+            runbook_id="RB-SERVICE-ERROR-RATE",
+        )
+        feature = Feature(
+            signal_id="checkout_error_rate_5m",
+            value=0.0,
+            unit="ratio",
+            window="5m",
+            quality=SignalQuality.VERIFIED,
+            status="ready",
+            feature_role="anomaly_input",
+        )
+
+        self.assertEqual(detector.evaluate([feature]), [])
+        self.assertEqual(len(detector.evaluate([feature.model_copy(update={"value": 0.000001})])), 1)
+
     def test_dependency_detector_ignores_official_slo_feature(self):
         detector = DependencyDetector(
             detector_id="ops03_checkout_payment_dependency",

@@ -139,10 +139,9 @@ class AiopsPipeline:
         deduped_incidents = _unique_incidents(incidents)
         logger.debug("AIOPS_BLOCK incident persisted=%s ids=%s", len(incidents), [incident.incident_id for incident in analysis_incidents])
 
-        direct_notifications = self._flush_notifications(
-            _unique_incidents([incident for incident in incidents if is_slo_notification(incident.events[-1])]),
-            only_incidents=True,
-        )
+        # Persist SLO breaches immediately, but wait for RCA before dispatching so
+        # graph-related symptoms can be suppressed behind the actual root cause.
+        direct_notifications: list[NotificationMessage] = []
 
         input_metric_series = metric_series or []
         rca_result = self._run_v001_rca(input_metric_series, analysis_incidents)
@@ -188,13 +187,13 @@ class AiopsPipeline:
         )
         self._log_failure_conclusion(rca_result, analysis_incidents)
         suppressed_incident_ids = self._suppress_related_notifications(
-            _unique_incidents(regular_incidents),
+            _unique_incidents(incidents),
             rca_result,
             _unique_incidents(root_incidents),
         )
         actionable_incidents = _unique_incidents(regular_incidents)
         self._record_rca_history(rca_result, incidents, enriched, metric_series or [])
-        notifications = direct_notifications + self._flush_notifications(_unique_incidents(regular_incidents))
+        notifications = direct_notifications + self._flush_notifications(_unique_incidents(incidents))
         logger.debug("AIOPS_BLOCK notify notifications=%s", len(notifications))
         decisions: list[PolicyDecision] = []
         for incident in actionable_incidents:
@@ -202,7 +201,12 @@ class AiopsPipeline:
             if proposal is not None:
                 decisions.append(self.policy.evaluate(proposal))
         logger.debug("AIOPS_BLOCK policy decisions=%s results=%s suppressed=%s", len(decisions), [decision.result for decision in decisions], len(suppressed_incident_ids))
-        remediation_decisions = self._run_remediation_strategy(actionable_incidents, rca_result, features)
+        remediation_decisions = self._run_remediation_strategy(
+            actionable_incidents,
+            rca_result,
+            features,
+            suppressed_incident_ids,
+        )
         if self.self_heal is not None and remediation_decisions:
             decisions = [
                 PolicyDecision(
@@ -621,6 +625,7 @@ class AiopsPipeline:
         incidents: list[Incident],
         rca_result: RcaResult,
         verification_features: list[Feature],
+        suppressed_incident_ids: set[str] | None = None,
     ) -> list[RemediationDecision]:
         if self.remediation is None:
             return []
@@ -628,12 +633,20 @@ class AiopsPipeline:
         records = history.load()
         actions = catalog.load()
         decisions = []
+        suppressed_incident_ids = suppressed_incident_ids or set()
+        if self.self_heal is not None:
+            incidents = self.self_heal.prioritize(incidents)
         for incident in incidents:
             features = extractor.extract(incident, rca_result)
             decision = decider.decide(incident.incident_id, features, retriever.top_matches(features, records), actions)
             decision = self._apply_remediation_policy(decision, actions)
             action = actions.get(decision.selected_action)
-            if self.self_heal is not None and decision.policy_allowed and action is not None:
+            if (
+                self.self_heal is not None
+                and decision.policy_allowed
+                and action is not None
+                and incident.incident_id not in suppressed_incident_ids
+            ):
                 root_cause = next(
                     (root for root in rca_result.root_causes if root.service == action.target),
                     rca_result.root_causes[0] if rca_result.root_causes else None,
@@ -652,6 +665,18 @@ class AiopsPipeline:
                         "execution_reasons": execution.get("reasons", []),
                         "decision": "executed" if execution["executed"] else decision.decision,
                     }
+                )
+            elif (
+                self.self_heal is not None
+                and decision.policy_allowed
+                and action is not None
+                and incident.incident_id in suppressed_incident_ids
+            ):
+                logger.info(
+                    "AIOPS_SELF_HEAL_SUPPRESSED incident=%s service=%s action=%s filter=rca_dedup reason=dedup_breakout_not_met",
+                    incident.incident_id,
+                    incident.service,
+                    action.action_id,
                 )
             logger.info(
                 "AIOPS_BLOCK remediation_decide incident=%s action=%s decision=%s policy=%s execution=%s reasons=%s policy_reasons=%s",
@@ -720,14 +745,14 @@ class AiopsPipeline:
         min_score = float(self.correlation_hyperparameters.get("suppress_min_root_score", 1.0))
         active_roots = [incident for incident in (root_incidents or []) if incident.events[-1].confidence >= min_score]
         root_services = {incident.service for incident in active_roots}
-        direct_anomaly_services = set(service_scores) if self.correlation_hyperparameters.get("allow_direct_anomaly_breakout", True) else set()
+        direct_anomaly_services = set(service_scores) if self.correlation_hyperparameters.get("allow_direct_anomaly_breakout", False) else set()
         slo_services = {
             incident.service
             for incident in incidents
-            if self.correlation_hyperparameters.get("allow_slo_breakout", True) and is_slo_notification(incident.events[-1])
+            if self.correlation_hyperparameters.get("allow_slo_breakout", False) and is_slo_notification(incident.events[-1])
         }
         affected_by_root = {
-            incident.service: self.topology_graph.neighborhood(incident.service, max_hops) if self.topology_graph is not None else {incident.service}
+            incident.service: self.topology_graph.blast_radius(incident.service, max_hops) if self.topology_graph is not None else {incident.service}
             for incident in active_roots
         }
         for incident in active_roots:

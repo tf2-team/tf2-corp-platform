@@ -446,7 +446,7 @@ class SQLiteIncidentStore:
         required: dict[str, float] = {}
         for root_service, root_score in rows:
             threshold = float(root_score) * multiplier
-            for service in self.topology_graph.neighborhood(root_service, max_hops=max_hops):
+            for service in self.topology_graph.blast_radius(root_service, max_hops=max_hops):
                 if service != root_service:
                     required[service] = max(required.get(service, 0.0), threshold)
         return {service for service, score in service_scores.items() if score >= required.get(service, float("inf"))}
@@ -586,6 +586,12 @@ class SQLiteIncidentStore:
             WHERE status IN ('verifying', 'rollback_pending')
             ORDER BY created_at
             """
+        ).fetchall()
+        return [json.loads(row[0]) for row in rows]
+
+    def queued_self_heal_workflows(self) -> list[dict]:
+        rows = self._connection.execute(
+            "SELECT workflow_json FROM self_heal_workflows WHERE status = 'queued' ORDER BY created_at"
         ).fetchall()
         return [json.loads(row[0]) for row in rows]
 

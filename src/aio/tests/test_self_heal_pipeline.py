@@ -212,6 +212,7 @@ def test_detector_drives_execute_then_fresh_telemetry_closes_incident(tmp_path: 
             min_fresh_samples=2,
             consecutive_passes=2,
             failure_samples=2,
+            min_incident_occurrences=1,
         ),
         clock=clock,
     )

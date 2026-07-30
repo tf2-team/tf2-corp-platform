@@ -133,6 +133,7 @@ def _incident() -> Incident:
         quality=SignalQuality.VERIFIED,
         reason="cpu_saturation",
         runbook_id="RB-PRODUCT-CATALOG-CPU",
+        confidence=0.9,
     )
     return Incident(
         incident_id="inc-product-catalog",
@@ -190,26 +191,108 @@ def _feature(value: float, timestamp: datetime) -> Feature:
     )
 
 
-def _orchestrator(tmp_path: Path, clock: Clock):
+def _orchestrator(tmp_path: Path, clock: Clock, **config_overrides):
     store = SQLiteIncidentStore(tmp_path / "runtime.sqlite3", "techx-corp-prod")
     client = FakeExecutorClient(clock)
+    config = {
+        "namespace": "techx-corp-prod",
+        "policy_id": "phase3-scale-policy-v1",
+        "policy_expires_at": "2026-08-31T23:59:59Z",
+        "approval_id": "ADR-LIVE-001",
+        "protected_targets": frozenset({"payment", "postgresql"}),
+        "verification_deadline_seconds": 120,
+        "min_fresh_samples": 2,
+        "consecutive_passes": 2,
+        "failure_samples": 2,
+        "min_incident_occurrences": 1,
+    }
+    config.update(config_overrides)
     orchestrator = SelfHealOrchestrator(
         client,
         store,
-        SelfHealConfig(
-            namespace="techx-corp-prod",
-            policy_id="phase3-scale-policy-v1",
-            policy_expires_at="2026-08-31T23:59:59Z",
-            approval_id="ADR-LIVE-001",
-            protected_targets=frozenset({"payment", "postgresql"}),
-            verification_deadline_seconds=120,
-            min_fresh_samples=2,
-            consecutive_passes=2,
-            failure_samples=2,
-        ),
+        SelfHealConfig(**config),
         clock=clock,
     )
     return orchestrator, client, store
+
+
+def test_self_heal_waits_for_repeated_qualified_incidents(tmp_path: Path) -> None:
+    clock = Clock()
+    orchestrator, client, store = _orchestrator(tmp_path, clock, min_incident_occurrences=3)
+    incident = _incident()
+    try:
+        first = orchestrator.start(incident, _action(), _root())
+        second = orchestrator.start(
+            incident.model_copy(update={"events": incident.events * 2, "occurrence_count": 2}),
+            _action(),
+            _root(),
+        )
+        third = orchestrator.start(
+            incident.model_copy(update={"events": incident.events * 3, "occurrence_count": 3}),
+            _action(),
+            _root(),
+        )
+
+        assert first["status"] == second["status"] == "waiting_recurrence"
+        assert third["status"] == "verifying"
+        assert client.plan_calls == 1
+    finally:
+        store.close()
+
+
+def test_self_heal_queues_another_incident_while_one_is_active(tmp_path: Path) -> None:
+    clock = Clock()
+    orchestrator, client, store = _orchestrator(tmp_path, clock)
+    first = _incident()
+    second = _incident().model_copy(update={"incident_id": "inc-product-catalog-2", "fingerprint": "sha256:test-2"})
+    try:
+        orchestrator.start(first, _action(), _root())
+        queued = orchestrator.start(second, _action(), _root())
+
+        assert queued["status"] == "queued"
+        assert store.self_heal_workflow(second.incident_id)["status"] == "queued"
+        assert orchestrator.prioritize([first, second])[0].incident_id == second.incident_id
+        assert client.plan_calls == 1
+
+        workflow = store.self_heal_workflow(first.incident_id)
+        workflow["status"] = "succeeded"
+        store.save_self_heal_workflow(workflow)
+        started = orchestrator.start(second, _action(), _root())
+
+        assert started["status"] == "verifying"
+        assert client.plan_calls == 2
+    finally:
+        store.close()
+
+
+def test_repeated_self_heal_rolls_back_previous_execution(tmp_path: Path) -> None:
+    clock = Clock()
+    orchestrator, client, store = _orchestrator(tmp_path, clock, rollback_after_executions=2)
+    incident = _incident()
+    try:
+        orchestrator.start(incident, _action(), _root())
+        workflow = store.self_heal_workflow(incident.incident_id)
+        workflow["status"] = "succeeded"
+        store.save_self_heal_workflow(workflow)
+
+        repeated = incident.model_copy(update={"events": incident.events * 2, "occurrence_count": 2})
+        orchestrator.start(repeated, _action(), _root())
+        workflow = store.self_heal_workflow(incident.incident_id)
+        workflow["status"] = "succeeded"
+        store.save_self_heal_workflow(workflow)
+
+        rollback = orchestrator.start(
+            incident.model_copy(update={"events": incident.events * 3, "occurrence_count": 3}),
+            _action(),
+            _root(),
+        )
+
+        assert rollback["status"] == "rolled_back"
+        assert rollback["reasons"] == ["repeated_self_heal_limit"]
+        assert len(client.rollbacks) == 1
+        assert client.plan_calls == 2
+    finally:
+        store.close()
 
 
 def test_self_heal_success_requires_two_fresh_post_action_samples(tmp_path: Path) -> None:
