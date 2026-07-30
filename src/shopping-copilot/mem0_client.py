@@ -48,29 +48,53 @@ def _request(path: str, payload: dict) -> dict:
         return value if isinstance(value, dict) else {}
 
 
-def search(query: str, conversation_id: str) -> list[dict]:
-    """Return scoped active memories; every transport/schema failure is a miss."""
-    if not read_enabled() or not query or not conversation_id:
+def _profile_user_id(user_id: str) -> str:
+    value = (user_id or "").strip()
+    return value if value.lower() not in {"anonymous", "none", "null"} else ""
+
+
+def search(query: str, conversation_id: str = "", user_id: str = "") -> list[dict]:
+    """Return active session and browser-profile memories; failures are misses."""
+    if not read_enabled() or not query:
         return []
+    filters = [
+        {"run_id": conversation_id},
+        {"user_id": _profile_user_id(user_id)},
+    ]
     with trace.get_tracer("shopping-copilot").start_as_current_span(
         "retrieval mem0",
         attributes={"app.ai.retrieval.source": "mem0"},
     ) as span:
         try:
-            response = _request(
-                "/search",
-                {
-                    "query": query[:500],
-                    "filters": {
-                        "run_id": conversation_id,
-                        "agent_id": os.environ.get("MEM0_AGENT_ID", AGENT_ID),
-                        "schema_version": SCHEMA_VERSION,
-                    },
-                    "top_k": int(os.environ.get("MEM0_TOP_K", "5")),
-                    "show_expired": False,
-                },
-            )
-            results = [item for item in response.get("results", []) if isinstance(item, dict)]
+            results: list[dict] = []
+            seen: set[str] = set()
+            for scope in filters:
+                if not next(iter(scope.values())):
+                    continue
+                try:
+                    response = _request(
+                        "/search",
+                        {
+                            "query": query[:500],
+                            "filters": {
+                                **scope,
+                                "agent_id": os.environ.get("MEM0_AGENT_ID", AGENT_ID),
+                                "schema_version": SCHEMA_VERSION,
+                            },
+                            "top_k": int(os.environ.get("MEM0_TOP_K", "5")),
+                            "show_expired": False,
+                        },
+                    )
+                except (HTTPError, URLError, TimeoutError, ValueError, json.JSONDecodeError) as exc:
+                    logger.warning("Mem0 search unavailable: %s", type(exc).__name__)
+                    continue
+                for item in response.get("results", []):
+                    if not isinstance(item, dict):
+                        continue
+                    memory_id = str(item.get("id") or item.get("memory") or "")
+                    if memory_id and memory_id not in seen:
+                        seen.add(memory_id)
+                        results.append(item)
             span.set_attribute("app.ai.retrieval.result_count", len(results))
             span.set_attribute("app.ai.outcome", "ok")
             return results
@@ -84,6 +108,7 @@ def search(query: str, conversation_id: str) -> list[dict]:
 def add(
     content: str,
     conversation_id: str,
+    user_id: str,
     turn_id: str,
     turn_sequence: int,
     memory_kind: str,
@@ -102,16 +127,22 @@ def add(
     if constraint_type:
         metadata["constraint_type"] = constraint_type
     try:
+        payload = {
+            "messages": [{"role": "user", "content": content[:500]}],
+            "run_id": conversation_id,
+            "agent_id": os.environ.get("MEM0_AGENT_ID", AGENT_ID),
+            "metadata": metadata,
+            "infer": False,
+        }
+        if ttl_days > 0:
+            payload["expiration_date"] = (date.today() + timedelta(days=ttl_days)).isoformat()
+        profile_user_id = _profile_user_id(user_id)
+        if profile_user_id:
+            # ponytail: browser UUID is anonymous and single-device; use an auth subject for cross-device memory.
+            payload["user_id"] = profile_user_id
         _request(
             "/memories",
-            {
-                "messages": [{"role": "user", "content": content[:500]}],
-                "run_id": conversation_id,
-                "agent_id": os.environ.get("MEM0_AGENT_ID", AGENT_ID),
-                "metadata": metadata,
-                "expiration_date": (date.today() + timedelta(days=ttl_days)).isoformat(),
-                "infer": False,
-            },
+            payload,
         )
         return True
     except (HTTPError, URLError, TimeoutError, ValueError, json.JSONDecodeError) as exc:

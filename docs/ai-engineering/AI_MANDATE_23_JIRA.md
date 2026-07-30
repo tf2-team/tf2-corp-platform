@@ -227,19 +227,69 @@ khác tạo deterministic key khác và exact record có stale hash bị reject.
 thiếu là live replay sửa một source record thật rồi chụp `miss` cùng response mới;
 đó là thiếu artifact runtime, không phải thiếu logic invalidation trong code.
 
-### 4.4 Verification Source Record
+### 4.4 Memory Approach
 
-Đây là bản ghi được chọn để đội chạy invalidation replay và để người review có thể
-sửa an toàn khi cần xác minh lại.
+#### What Memory Does
 
-| Field | Value |
+Memory không trả lại một response cũ. Nó chọn một lượng context nhỏ, thuộc đúng user,
+để Copilot tạo response mới phù hợp với cuộc hội thoại hiện tại. Nhờ vậy user có thể nói
+“so sánh sản phẩm đầu tiên với lựa chọn khác” mà không phải nhắc lại sản phẩm nào, hoặc mở
+session mới và vẫn không cần lặp lại preference đã được cho phép lưu.
+
+Ví dụ, trong Session A user nói “Tôi ưu tiên kính thiên văn gọn nhẹ, ngân sách $150”.
+Turn tiếp theo dùng cùng session có thể tham chiếu “lựa chọn đó”; Session B của cùng user
+có thể dùng lại preference gọn nhẹ và ngân sách, nhưng không được mang theo tham chiếu
+tạm thời như “sản phẩm đầu tiên” của Session A.
+
+#### Scopes and Isolation
+
+| Scope | Key | Lưu gì | Không được mang sang scope khác |
+|---|---|---|---|
+| Session context | `user_id + session_id` | Recent turns, product đang được tham chiếu, selected item và context tạm thời | Không sang session mới, không sang user khác. |
+| Durable user memory | `user_id` | Preference hoặc shopping constraint được policy cho phép | Không sang user khác; không chứa temporary turn reference. |
+
+Hai scope giúp giải quyết hai vấn đề khác nhau: session context giữ mạch hội thoại trong
+ba lượt liên quan, còn durable memory tránh bắt user lặp lại preference ở session sau.
+Mọi lookup durable đều filter theo `user_id`; `session_id` mới chỉ thay conversation
+context, không thay quyền sở hữu durable fact.
+
+#### Retrieval and Write Path
+
+```mermaid
+flowchart TD
+    A[request + user_id + session_id] --> B[Load session context]
+    B --> C[Retrieve durable facts for the same user]
+    C --> D[Mark retrieved memory as untrusted context]
+    D --> E[Build grounded response]
+    E --> F[Extract candidate durable facts]
+    F --> G{Allowed and PII-safe?}
+    G -- Yes --> H[Persist with user scope, provenance and retention]
+    G -- No --> I[Discard candidate]
+    H --> J[Return response]
+    I --> J
+```
+
+Retrieval diễn ra trước khi agent lập kế hoạch để preference có thể ảnh hưởng đến câu trả
+lời mới, nhưng memory không được xem như system instruction. Sau khi response được tạo,
+hệ thống chỉ trích xuất fact từ input do user nêu rõ; không lưu suy diễn từ model hoặc
+position tạm thời của product. Mỗi durable entry giữ provenance của turn đã tạo nó để phục
+vụ review, expiry và deletion.
+
+#### Memory Safety Rules
+
+| Rule | Approach |
 |---|---|
-| Service/store | `[TODO]` |
-| Record ID | `[TODO: stable ID]` |
-| Field có thể sửa khi xác minh | `[TODO]` |
-| Giá trị gốc | `[TODO]` |
-| Test value / giá trị mới phải xuất hiện trong answer | `[TODO]` |
-| Lệnh sửa và restore | `[TODO]` |
+| User isolation | Read và write luôn mang `user_id`; không có global memory lookup. |
+| Session isolation | Context tạm thời luôn key theo `user_id + session_id` và có TTL. |
+| Minimal retention | Chỉ lưu preference/constraint cần cho shopping; durable fact có retention TTL và deletion path. |
+| PII handling | PII bị reject hoặc sanitize trước persistence; raw PII không được đưa vào cache key, metric label hoặc recall response. |
+| Untrusted retrieval | Memory được đưa vào prompt như data, không được phép thay đổi tool policy hay system instruction. |
+| Safe writes | Chỉ persist candidate đủ policy sau turn hợp lệ; cache hit không tự tạo durable memory mới. |
+
+Chi tiết schema, retrieval filter, retention và PII guard được mô tả trong
+[Shopping Copilot Mem0 integration](memory/shopping-copilot-mem0-integration-plan.md).
+Scenario B, C và D ở mục 5 lần lượt chứng minh session continuity, recall ở session mới
+và không rò dữ liệu sang user khác.
 
 ## 5. Replay and Reproduction
 

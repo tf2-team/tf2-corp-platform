@@ -37,7 +37,9 @@ unrelated requests. After search_catalog, give a brief
 recommendation only: do not repeat product names, prices, descriptions, or
 lists, because the UI renders results. When the user names a product but does
 not provide its ID, pass the exact name as product_name; the tool resolves it
-against Catalog."""
+against Catalog. Apply relevant remembered shopping preferences and constraints
+to tool arguments when the current message omits them. The current user message
+always overrides remembered information."""
 
 
 def _schema(model: type[BaseModel]) -> dict[str, Any]:

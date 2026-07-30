@@ -118,10 +118,10 @@ def _stable_conversation_state(conversation_id: str, client: Any) -> dict[str, A
     }
 
 
-def _memory_fingerprint(question: str, conversation_id: str) -> list[str]:
+def _memory_fingerprint(question: str, conversation_id: str, user_id: str = "") -> list[str]:
     if not mem0_client.read_enabled() or not conversation_id:
         return []
-    memories = mem0_client.search(question, conversation_id)
+    memories = mem0_client.search(question, conversation_id, user_id)
     return sorted(
         item["memory"].strip()
         for item in memories
@@ -178,11 +178,12 @@ def compute_source_snapshot(
     question: str,
     conversation_id: str,
     deps: Any,
+    user_id: str = "",
 ) -> str:
     conversation = _stable_conversation_state(conversation_id, deps.valkey_client)
     payload = {
         "conversation": conversation,
-        "memory": _memory_fingerprint(question, conversation_id),
+        "memory": _memory_fingerprint(question, conversation_id, user_id),
         "sources": _catalog_and_review_fingerprint(
             conversation["last_result_product_ids"], deps
         ),
@@ -211,7 +212,7 @@ def lookup(
 
     started = time.perf_counter()
     try:
-        source_hash = compute_source_snapshot(question, conversation_id, deps)
+        source_hash = compute_source_snapshot(question, conversation_id, deps, user_id)
         result = cache.lookup(
             user_id=user_id,
             product_id=_conversation_scope(cache, conversation_id, question),
@@ -323,7 +324,7 @@ def store(
             ),
             question=state["safe_message"],
             source_hash=compute_source_snapshot(
-                state["safe_message"], state["conversation_id"], deps
+                state["safe_message"], state["conversation_id"], deps, state["user_id"]
             ),
             answer_payload=serialize_state(state),
             prompt_scope=PROMPT_SCOPE,

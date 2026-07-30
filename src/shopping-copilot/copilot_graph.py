@@ -162,7 +162,11 @@ def make_nodes(deps: CopilotDeps):
                 }
             if not mem0_client.read_enabled() or not state.get("conversation_id"):
                 return next_state
-            memories = mem0_client.search(hint.semantic_query or state["safe_message"], state["conversation_id"])
+            memories = mem0_client.search(
+                hint.semantic_query or state["safe_message"],
+                state["conversation_id"],
+                state["user_id"],
+            )
             values = [
                 item["memory"].replace("\x00", "")[:500]
                 for item in memories
@@ -220,8 +224,12 @@ def make_nodes(deps: CopilotDeps):
             wrote_all = True
             for candidate in extraction.memories:
                 wrote_all = mem0_client.add(
-                    content=candidate.content, conversation_id=state["conversation_id"], turn_id=state["turn_id"],
-                    turn_sequence=state.get("turn_sequence", 0), memory_kind=candidate.memory_kind,
+                    content=candidate.content,
+                    conversation_id=state["conversation_id"],
+                    user_id=state["user_id"],
+                    turn_id=state["turn_id"],
+                    turn_sequence=state.get("turn_sequence", 0),
+                    memory_kind=candidate.memory_kind,
                     constraint_type=candidate.constraint_type,
                 ) and wrote_all
             if extraction.memories and wrote_all:
