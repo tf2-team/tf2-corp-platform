@@ -130,7 +130,7 @@ src/product-reviews/tests/test_integration.py::test_no_unvalidated_model_output_
 
 > Tóm tắt nhanh các quyết định chính (chi tiết xem trong ADR):
 >
-> **Model:** Sử dụng Groq API (model `openai/gpt-oss-20b`) thay vì model mock. Đây là model thật, có rate limit và latency thực tế.
+> **Model:** Sử dụng Amazon Bedrock (model `global.amazon.nova-2-lite-v1:0`) thay vì model mock. Đây là model thật, có quota và latency thực tế.
 >
 > **Guardrail:** Sử dụng thư viện `presidio-analyzer` để phát hiện và ẩn PII (email, số điện thoại, thẻ tín dụng). Fallback bằng regex nếu Presidio không khởi động được. Chặn Prompt Injection bằng danh sách từ khóa kết hợp với LLM Guard.
 >
