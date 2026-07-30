@@ -1,4 +1,8 @@
 #!/usr/bin/env python3
+
+# Copyright The OpenTelemetry Authors
+# SPDX-License-Identifier: Apache-2.0
+
 """Replay script for Summary Bot cache validation (A1.3).
 
 Sends AI assistant requests via gRPC with x-user-id / x-session-id metadata,

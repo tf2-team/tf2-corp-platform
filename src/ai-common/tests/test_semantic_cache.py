@@ -1,3 +1,8 @@
+#!/usr/bin/python
+
+# Copyright The OpenTelemetry Authors
+# SPDX-License-Identifier: Apache-2.0
+
 """Unit tests for techx_ai_common.semantic_cache (A1.3).
 
 Covers:

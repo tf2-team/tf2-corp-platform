@@ -1,3 +1,8 @@
+#!/usr/bin/python
+
+# Copyright The OpenTelemetry Authors
+# SPDX-License-Identifier: Apache-2.0
+
 """Integration tests for Summary Bot cache (A1.3).
 
 Verifies policy at the product-reviews boundary:
