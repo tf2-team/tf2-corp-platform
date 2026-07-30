@@ -197,17 +197,40 @@ liên tiếp đều miss.
 
 ### 4.3 Cache Safety Rules
 
-Các giá trị cấu hình và flow xử lý chi tiết của các quy tắc dưới đây được ghi trong
-[shared semantic cache guide](caching/semantic-cache-implementation-guide.md).
+Bảng này tách hai loại bằng chứng:
 
-| Rule | Giá trị implementation | Evidence |
-|---|---|---|
-| Cache scope | Key vật lý dùng namespace `ai:cache:copilot:{sha256}`; metadata ghi `kind`, prompt, model và embedding scope; key name không chứa raw user ID, conversation ID hoặc prompt | [Valkey index and TTL](../../evidence/a1.3-shopping-cache/02-valkey-index-and-ttl.txt) |
-| Match modes | Exact và semantic | [Cache-enabled replay](../../evidence/a1.3-shopping-cache/04-replay-cache-enabled.jsonl), [summary](../../evidence/a1.3-shopping-cache/07-summary-table.md) |
-| TTL | Cấu hình `3600 s`; hai entry đo được còn `3348 s` và `3456 s` | [Valkey index and TTL](../../evidence/a1.3-shopping-cache/02-valkey-index-and-ttl.txt) |
-| Invalidation | Source version/hash được kiểm tra trước lookup | `[TODO: evidence pack hiện tại chưa có live source-mutation replay]` |
-| Cacheable output | Grounded, read-only product discovery response | [Cache-enabled replay](../../evidence/a1.3-shopping-cache/04-replay-cache-enabled.jsonl) |
-| Never cached | `NO_RESULTS` đã được kiểm chứng: hai request giống nhau đều miss; các trạng thái blocked, fallback, rate-limited và mutation vẫn cần artifact riêng | [Non-cacheable replay](../../evidence/a1.3-shopping-cache/03-replay-non-cacheable.jsonl) |
+- **Code reference** chỉ ra chính xác logic nằm ở file và dòng nào.
+- **Runtime/test evidence** chứng minh logic đó đã chạy hoặc được test như thế nào.
+
+| Rule | Giá trị implementation | Code reference | Runtime/test evidence |
+|---|---|---|---|
+| Cache scope | Key vật lý dùng namespace `ai:cache:copilot:{sha256}`. Exact key gồm HMAC user scope, conversation/request scope, source hash, prompt/model/embedding version và question hash. Raw user ID, conversation ID và prompt không xuất hiện trong key name. | [`_compute_user_scope()` và deterministic key](../../src/ai-common/techx_ai_common/semantic_cache.py#L163-L195); [conversation/request scope](../../src/shopping-copilot/shopping_cache.py#L81-L108) | [Valkey index and TTL](../../evidence/a1.3-shopping-cache/02-valkey-index-and-ttl.txt); [user/key unit tests](../../src/ai-common/tests/test_semantic_cache.py#L71-L113); [conversation isolation tests](../../src/shopping-copilot/tests/test_shopping_cache.py#L245-L277) |
+| Match modes | Exact lookup chạy trước. Exact miss mới tạo embedding và chạy filtered KNN; semantic candidate chỉ được nhận khi distance không vượt threshold. | [exact → semantic lookup](../../src/ai-common/techx_ai_common/semantic_cache.py#L209-L278); [hybrid KNN và distance gate](../../src/ai-common/techx_ai_common/semantic_cache.py#L280-L342) | [Cache-enabled replay](../../evidence/a1.3-shopping-cache/04-replay-cache-enabled.jsonl); [summary](../../evidence/a1.3-shopping-cache/07-summary-table.md) |
+| TTL | TTL mặc định đọc từ `AI_CACHE_TTL_SECONDS=3600`; mỗi HASH được gắn `EXPIRE` trong cùng pipeline khi store. | [Shopping Copilot cache config](../../src/shopping-copilot/shopping_cache.py#L53-L66); [`HSET` + `EXPIRE`](../../src/ai-common/techx_ai_common/semantic_cache.py#L411-L415) | Hai entry đo được còn `3348 s` và `3456 s`: [Valkey index and TTL](../../evidence/a1.3-shopping-cache/02-valkey-index-and-ttl.txt); [store/expire unit test](../../src/ai-common/tests/test_semantic_cache.py#L335-L353) |
+| Invalidation | Trước lookup, Copilot hash stable conversation state, memory fingerprint và catalog/review snapshot hiện tại. `source_hash` tham gia exact key, được kiểm tra lại trên exact hit và là filter bắt buộc của KNN. Source đổi làm request miss logic; entry cũ chờ TTL hết hạn. | [`compute_source_snapshot()`](../../src/shopping-copilot/shopping_cache.py#L111-L192); [snapshot được tạo trước lookup](../../src/shopping-copilot/shopping_cache.py#L195-L223); [exact source check và KNN source filter](../../src/ai-common/techx_ai_common/semantic_cache.py#L246-L299) | Catalog/review đổi làm snapshot đổi: [Shopping cache test](../../src/shopping-copilot/tests/test_shopping_cache.py#L280-L326). Source hash khác tạo exact key khác và stale hash bị reject: [shared cache tests](../../src/ai-common/tests/test_semantic_cache.py#L105-L113), [mismatch test](../../src/ai-common/tests/test_semantic_cache.py#L202-L220). Live source-mutation replay vẫn cần bổ sung. |
+| Cacheable output | Chỉ state `GROUNDED`, `cache_eligible`, không có pending action, có conversation và là read-only question mới được store. Shared adapter kiểm tra lại status trước persistence. | [Copilot store gate](../../src/shopping-copilot/shopping_cache.py#L304-L332); [shared GROUNDED gate](../../src/ai-common/techx_ai_common/semantic_cache.py#L344-L365) | Grounded discovery được lưu và hit: [cache-enabled replay](../../evidence/a1.3-shopping-cache/04-replay-cache-enabled.jsonl); [grounded store test](../../src/ai-common/tests/test_semantic_cache.py#L335-L353) |
+| Never cached | Anonymous/missing identity, cart mutation, pending action, tool error hoặc status khác `GROUNDED` đều bypass hoặc không store. Replay hiện tại chứng minh riêng `NO_RESULTS` không được lưu. | [lookup bypass và action policy](../../src/shopping-copilot/shopping_cache.py#L45-L108); [Copilot store rejection](../../src/shopping-copilot/shopping_cache.py#L304-L317); [shared status rejection](../../src/ai-common/techx_ai_common/semantic_cache.py#L355-L368) | [Non-cacheable replay](../../evidence/a1.3-shopping-cache/03-replay-non-cacheable.jsonl); [cart/tool-error tests](../../src/shopping-copilot/tests/test_shopping_cache.py#L203-L242); [abstained test](../../src/ai-common/tests/test_semantic_cache.py#L355-L370) |
+
+#### Invalidation hoạt động như thế nào?
+
+Implementation dùng **logical invalidation theo version**, không xóa tất cả key
+ngay khi source thay đổi:
+
+1. Trước mỗi lookup, Shopping Copilot đọc state ổn định của conversation, memory
+   liên quan, catalog và review của các product liên quan rồi tạo `source_hash`.
+2. Exact key chứa `source_hash`. Khi source đổi, hash mới tạo ra key mới nên
+   entry cũ không thể exact hit. Code còn so sánh `stored_source == source_hash`
+   như một lớp kiểm tra phòng thủ.
+3. Semantic lookup bắt buộc filter `@source_hash:{current_hash}` cùng user,
+   conversation/resource, prompt, model và embedding scope. Vì vậy một vector
+   gần về ngữ nghĩa nhưng thuộc source cũ vẫn bị loại trước khi xét distance.
+4. Entry cũ không còn được đọc nhưng vẫn có thể tồn tại vật lý cho tới khi TTL
+   hết hạn. Cách này tránh phải scan/delete hàng loạt key trong request path.
+
+Unit test đã chứng minh thay đổi catalog hoặc review làm snapshot đổi, source hash
+khác tạo deterministic key khác và exact record có stale hash bị reject. Phần còn
+thiếu là live replay sửa một source record thật rồi chụp `miss` cùng response mới;
+đó là thiếu artifact runtime, không phải thiếu logic invalidation trong code.
 
 ### 4.4 Verification Source Record
 
