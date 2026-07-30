@@ -1,3 +1,4 @@
+#!/usr/bin/python
 # Copyright The OpenTelemetry Authors
 # SPDX-License-Identifier: Apache-2.0
 
@@ -232,7 +233,7 @@ def create_app(service: LiveExecutorService | None = None, token: str | None = N
     @app.post("/v1/actions/execute", dependencies=[Depends(require_auth)])
     def execute(request: ActionRequest, x_request_id: str = Header(default="")) -> dict[str, Any]:
         require_matching_request_id(x_request_id, request.request_id)
-        return service.execute(request.model_dump())
+        return service.execute_action(request.model_dump())
 
     @app.get("/v1/actions/{execution_id}", dependencies=[Depends(require_auth)])
     def status(execution_id: str) -> dict[str, Any]:

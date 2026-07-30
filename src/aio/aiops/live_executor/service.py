@@ -1,3 +1,4 @@
+#!/usr/bin/python
 # Copyright The OpenTelemetry Authors
 # SPDX-License-Identifier: Apache-2.0
 
@@ -162,12 +163,16 @@ class LiveExecutorService:
         self._save_idempotency(request, "plan", response)
         return response
 
-    def execute(self, request: dict[str, Any]) -> dict[str, Any]:
+    def execute_action(self, request: dict[str, Any]) -> dict[str, Any]:
         with self._lock:
             return self._execute(request)
 
+    def execute(self, request: dict[str, Any]) -> dict[str, Any]:
+        """Backward-compatible alias for callers outside the HTTP boundary."""
+        return self.execute_action(request)
+
     def submit_execution(self, request: dict[str, Any]) -> dict[str, Any]:
-        return self.execute(request)
+        return self.execute_action(request)
 
     def _execute(self, request: dict[str, Any]) -> dict[str, Any]:
         cached = self._idempotent(request, "execute")
@@ -483,7 +488,7 @@ class LiveExecutorService:
             return response
         if request.get("dry_run") is True or not request.get("plan_hash"):
             return self.plan(request)
-        return self.execute(request)
+        return self.execute_action(request)
 
     def _idempotent(
         self,
