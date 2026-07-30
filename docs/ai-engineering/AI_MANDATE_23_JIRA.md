@@ -1,7 +1,5 @@
 # AI MANDATE #23 — GenAI Caching and Memory
 
-> **Status:** `DRAFT — evidence pending`
-
 
 ## 1. Outcome at a Glance
 
