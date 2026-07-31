@@ -2,10 +2,10 @@
 param(
     [string]$Namespace = $env:AIOPS_SMOKE_NAMESPACE,
     [int]$StartupTimeoutSeconds = 20,
-    # Which services to tunnel. Default = all 4 (back-compat). Pass a subset
+    # Which services to tunnel. Default = all AIOps evidence endpoints. Pass a subset
     # (e.g. -Services prometheus) to skip services whose pods aren't Ready
     # right now (e.g. opensearch stuck Pending) without failing the whole run.
-    [string[]]$Services = @("prometheus", "jaeger", "opensearch", "grafana")
+    [string[]]$Services = @("prometheus", "jaeger", "opensearch", "grafana", "aiops-live-executor")
 )
 
 $ErrorActionPreference = "Stop"
@@ -18,7 +18,8 @@ $allForwards = @(
     [pscustomobject]@{ Name = "prometheus"; LocalPort = 9090; RemotePort = 9090; Scheme = "http" },
     [pscustomobject]@{ Name = "jaeger"; LocalPort = 16686; RemotePort = 16686; Scheme = "http" },
     [pscustomobject]@{ Name = "opensearch"; LocalPort = 9200; RemotePort = 9200; Scheme = "https" },
-    [pscustomobject]@{ Name = "grafana"; LocalPort = 3000; RemotePort = 80; Scheme = "http" }
+    [pscustomobject]@{ Name = "grafana"; LocalPort = 3000; RemotePort = 80; Scheme = "http" },
+    [pscustomobject]@{ Name = "aiops-live-executor"; LocalPort = 18081; RemotePort = 8080; Scheme = "http" }
 )
 $forwards = @($allForwards | Where-Object { $_.Name -in $Services })
 $unknown = @($Services | Where-Object { $_ -notin $allForwards.Name })
@@ -120,7 +121,7 @@ try {
         $failedJobs = @($jobs | Where-Object { $_.State -ne "Running" })
         if ($failedJobs) {
             $details = ($failedJobs | ForEach-Object { Get-JobDetails $_ }) -join "`n"
-            throw "A port-forward stopped during startup.`n$details`n`nTip: if this is opensearch/jaeger/grafana and its pod isn't Ready, rerun with -Services to skip it, e.g.:`n  powershell -File scripts/port_forward.ps1 -Services prometheus"
+            throw "A port-forward stopped during startup.`n$details`n`nTip: if one optional service is not Ready, rerun with -Services to skip it, e.g.:`n  powershell -File scripts/port_forward.ps1 -Services prometheus,jaeger,grafana,aiops-live-executor"
         }
         Start-Sleep -Milliseconds 300
     } while ((Get-Date) -lt $deadline)
@@ -142,6 +143,7 @@ try {
     Write-Host "  Prometheus, Jaeger, Kubernetes proxy, Grafana health: no service credential"
     if ("opensearch" -in $Services) { Write-Host "  OpenSearch: Basic Auth username/password is required" }
     if ("grafana" -in $Services) { Write-Host "  Grafana inbound webhook: shared secret must match the AIOps process" }
+    if ("aiops-live-executor" -in $Services) { Write-Host "  AIOps live executor: bearer token from aiops-live-executor-token is required" }
     Write-Host "  Notification: external webhook URL; it cannot be port-forwarded"
     Write-Host "`nPress Ctrl+C to stop only the jobs created by this script." -ForegroundColor Gray
 

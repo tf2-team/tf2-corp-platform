@@ -5,8 +5,12 @@
     "owner": "catalog-oncall",
     "source": "reviewed-seed",
     "incident_id": "seed-product-catalog-cpu-001",
-    "affected_services": ["product-catalog"],
-    "log_signatures": ["cpu_saturation"],
+    "affected_services": [
+      "product-catalog"
+    ],
+    "log_signatures": [
+      "cpu_saturation"
+    ],
     "trace_signatures": [],
     "metric_ratios": {
       "product_catalog_cpu_millicores": 2.0,
@@ -26,8 +30,13 @@
     "owner": "catalog-oncall",
     "source": "reviewed-seed",
     "incident_id": "seed-product-catalog-ready-pods-001",
-    "affected_services": ["product-catalog"],
-    "log_signatures": ["ready_pods_degraded", "busy_gate_breakout_pod_failure"],
+    "affected_services": [
+      "product-catalog"
+    ],
+    "log_signatures": [
+      "ready_pods_degraded",
+      "busy_gate_breakout_pod_failure"
+    ],
     "trace_signatures": [],
     "metric_ratios": {
       "product_catalog_workload_ready_pods": 0.5,
@@ -47,8 +56,13 @@
     "owner": "cart-oncall",
     "source": "reviewed-seed",
     "incident_id": "seed-cart-busy-oom-001",
-    "affected_services": ["cart"],
-    "log_signatures": ["container_oom_detected", "busy_gate_breakout_oom"],
+    "affected_services": [
+      "cart"
+    ],
+    "log_signatures": [
+      "container_oom_detected",
+      "busy_gate_breakout_oom"
+    ],
     "trace_signatures": [],
     "metric_ratios": {
       "cart_memory_usage_bytes": 2.3,
@@ -69,8 +83,12 @@
     "owner": "frontend-oncall",
     "source": "reviewed-seed",
     "incident_id": "seed-frontend-latency-001",
-    "affected_services": ["frontend"],
-    "log_signatures": ["latency_slo_breached"],
+    "affected_services": [
+      "frontend"
+    ],
+    "log_signatures": [
+      "latency_slo_breached"
+    ],
     "trace_signatures": [],
     "metric_ratios": {
       "frontend_p95_latency_5m": 2.2,
@@ -90,9 +108,16 @@
     "owner": "checkout-oncall",
     "source": "reviewed-seed",
     "incident_id": "hist-payment-latency",
-    "affected_services": ["checkout", "payment"],
-    "log_signatures": ["dependency_signal_breached"],
-    "trace_signatures": ["checkout->payment"],
+    "affected_services": [
+      "checkout",
+      "payment"
+    ],
+    "log_signatures": [
+      "dependency_signal_breached"
+    ],
+    "trace_signatures": [
+      "checkout->payment"
+    ],
     "metric_ratios": {
       "checkout_payment_error_rate_5m": 2.6
     },
@@ -110,9 +135,16 @@
     "owner": "data-platform-oncall",
     "source": "reviewed-seed",
     "incident_id": "seed-checkout-db-pool-001",
-    "affected_services": ["checkout", "postgresql"],
-    "log_signatures": ["database_pool_saturation"],
-    "trace_signatures": ["checkout->postgresql"],
+    "affected_services": [
+      "checkout",
+      "postgresql"
+    ],
+    "log_signatures": [
+      "database_pool_saturation"
+    ],
+    "trace_signatures": [
+      "checkout->postgresql"
+    ],
     "metric_ratios": {
       "checkout_postgresql_error_rate_5m": 2.8,
       "postgresql_connections": 1.9
@@ -131,8 +163,12 @@
     "owner": "platform-team",
     "source": "reviewed-seed",
     "incident_id": "seed-unknown-protected-001",
-    "affected_services": ["unknown-service"],
-    "log_signatures": ["unknown_service_signal"],
+    "affected_services": [
+      "unknown-service"
+    ],
+    "log_signatures": [
+      "unknown_service_signal"
+    ],
     "trace_signatures": [],
     "metric_ratios": {
       "unknown_service_error_rate_5m": 2.5
@@ -141,6 +177,56 @@
       {
         "action_id": "page_oncall",
         "target": "platform-team",
+        "outcome": "success"
+      }
+    ]
+  },
+  {
+    "case": "frontend_proxy_flood_latency",
+    "description": "frontend-proxy p99 latency breach during load-generator flood; golden action is scale frontend-proxy replicas.",
+    "owner": "frontend-oncall",
+    "source": "reviewed-seed",
+    "incident_id": "seed-frontend-proxy-flood-latency-001",
+    "affected_services": [
+      "frontend-proxy"
+    ],
+    "log_signatures": [
+      "threshold_breached"
+    ],
+    "trace_signatures": [],
+    "metric_ratios": {
+      "frontend_proxy_p99_latency_5m": 7.0
+    },
+    "actions_taken": [
+      {
+        "action_id": "scale_frontend_proxy",
+        "target": "frontend-proxy",
+        "outcome": "success"
+      }
+    ]
+  },
+  {
+    "case": "frontend_proxy_resource_flood",
+    "description": "frontend-proxy RCA resource pressure during load-generator flood; golden action is scale frontend-proxy replicas.",
+    "owner": "frontend-oncall",
+    "source": "reviewed-seed",
+    "incident_id": "seed-frontend-proxy-resource-flood-001",
+    "affected_services": [
+      "frontend-proxy"
+    ],
+    "log_signatures": [
+      "rca_root_cause"
+    ],
+    "trace_signatures": [],
+    "metric_ratios": {
+      "frontend_proxy_memory_usage_bytes": 1.8,
+      "frontend_proxy_cpu_millicores": 1.4,
+      "frontend_proxy_socket_io_bytes_per_second": 1.4
+    },
+    "actions_taken": [
+      {
+        "action_id": "scale_frontend_proxy",
+        "target": "frontend-proxy",
         "outcome": "success"
       }
     ]
