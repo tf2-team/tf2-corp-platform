@@ -489,10 +489,6 @@ nhắc lại `$110`; Copilot vẫn lọc kết quả trong ngân sách, trả So
 `$69.95` và National Park Foundation Explorascope `$101.96`.*
 
 
-> **Evidence gap:** các screenshot store/recall trên UI không hiển thị UUID
-> session hoặc user identity. Cần raw replay
-> với cùng `user_id`, session A/B khác nhau để dùng làm bằng chứng máy kiểm tra.
-
 ### Scenario D — Cross-User Isolation and PII Boundary
 
 **Mục tiêu:** chứng minh User B không thể đọc dữ liệu của User A.
