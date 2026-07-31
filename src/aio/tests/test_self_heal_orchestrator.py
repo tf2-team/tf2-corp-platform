@@ -7,6 +7,7 @@ from __future__ import annotations
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
+from aiops.live_executor.app import ActionRequest, RollbackRequest, VerificationRequest
 from aiops.remediation import SelfHealConfig, SelfHealOrchestrator
 from aiops.schemas import (
     ActionCatalogItem,
@@ -68,6 +69,7 @@ class FakeExecutorClient:
         ]
 
     def plan(self, action: dict) -> dict:
+        ActionRequest.model_validate(action)
         self.plan_calls += 1
         return {
             "allowed": True,
@@ -80,6 +82,7 @@ class FakeExecutorClient:
         }
 
     def execute(self, action: dict) -> dict:
+        ActionRequest.model_validate(action)
         return {
             "allowed": True,
             "executed": True,
@@ -94,6 +97,7 @@ class FakeExecutorClient:
         }
 
     def record_verification(self, execution_id: str, verification: dict) -> dict:
+        VerificationRequest.model_validate(verification)
         self.verifications.append(verification)
         return {
             "execution_id": execution_id,
@@ -102,6 +106,7 @@ class FakeExecutorClient:
         }
 
     def rollback(self, execution_id: str, request: dict) -> dict:
+        RollbackRequest.model_validate(request)
         self.rollbacks.append(request)
         if not self.rollback_succeeds:
             return {
