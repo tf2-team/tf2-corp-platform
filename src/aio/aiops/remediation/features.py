@@ -11,12 +11,7 @@ class RemediationFeatureExtractor:
         affected = {incident.service}
         if incident.likely_dependency != "unknown":
             affected.add(incident.likely_dependency)
-        is_rca_root_incident = any(event.detector_id == "rca_root_cause" for event in incident.events)
-        affected.update(
-            root.service
-            for root in rca_result.root_causes
-            if not is_rca_root_incident or root.service == incident.service
-        )
+        affected.update(root.service for root in rca_result.root_causes)
 
         log_signatures: set[str] = set()
         trace_signatures: set[str] = set()

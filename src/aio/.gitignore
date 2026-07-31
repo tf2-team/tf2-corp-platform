@@ -3,8 +3,11 @@ __pycache__/
 .test-tmp/
 .test-tmp-*.sqlite3
 .test-tmp-*.sqlite3-*
-state/
-evaluate/*_report.json
+state/*.sqlite3
+state/*.sqlite3-*
+state/*/*/*.sqlite3
+state/*/*/*.sqlite3-*
+state/*.jsonl
 /evidence/
 /dataset/
 .env

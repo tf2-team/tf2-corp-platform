@@ -17,8 +17,6 @@ class RemediationDecisionEngine:
         confidence_threshold: float,
         downtime_cost_multiplier: float,
         outcome_weights: dict[str, float],
-        fallback_action_id: str,
-        fallback_target: str,
     ):
         self.ood_threshold = ood_threshold
         self.cost_page = cost_page
@@ -26,8 +24,6 @@ class RemediationDecisionEngine:
         self.confidence_threshold = confidence_threshold
         self.downtime_cost_multiplier = downtime_cost_multiplier
         self.outcome_weights = outcome_weights
-        self.fallback_action_id = fallback_action_id
-        self.fallback_target = fallback_target
 
     def decide(
         self,
@@ -117,8 +113,8 @@ class RemediationDecisionEngine:
     def _page(self, incident_id: str, reasons: list[str], matched_ids: list[str] | None = None) -> RemediationDecision:
         return RemediationDecision(
             incident_id=incident_id,
-            selected_action=self.fallback_action_id,
-            target=self.fallback_target,
+            selected_action="page_oncall",
+            target="platform-team",
             confidence=0.0,
             expected_cost=self.cost_page,
             decision="fallback-page-oncall",

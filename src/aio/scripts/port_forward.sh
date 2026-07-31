@@ -7,12 +7,7 @@ fi
 
 set -euo pipefail
 
-script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-if [[ -n "${AIOPS_SMOKE_NAMESPACE:-}" ]]; then
-  namespace="$AIOPS_SMOKE_NAMESPACE"
-else
-  namespace="$(python -c 'import json,sys; print(json.load(open(sys.argv[1], encoding="utf-8"))["environment"])' "$script_dir/../config/runtime.json")"
-fi
+namespace="${AIOPS_SMOKE_NAMESPACE:-techx-corp-prod}"
 startup_timeout_seconds="${STARTUP_TIMEOUT_SECONDS:-20}"
 proxy_port=8001
 pids=()
@@ -22,7 +17,6 @@ forwards=(
   "jaeger 16686 16686 http"
   "opensearch 9200 9200 https"
   "grafana 3000 80 http"
-  "aiops-live-executor 18081 8080 http"
 )
 
 has_port() {
@@ -113,7 +107,6 @@ printf '\nCredential requirements:\n'
 printf '  Prometheus, Jaeger, Kubernetes proxy, Grafana health: no service credential\n'
 printf '  OpenSearch: Basic Auth username/password is required\n'
 printf '  Grafana inbound webhook: shared secret must match the AIOps process\n'
-printf '  AIOps live executor: bearer token from aiops-live-executor-token is required\n'
 printf '  Notification: external webhook URL; it cannot be port-forwarded\n'
 printf '\nPress Ctrl+C to stop only the processes created by this script.\n'
 

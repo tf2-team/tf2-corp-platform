@@ -28,9 +28,9 @@ Writes two files with the same data:
 Typical flow for one real-incident case (see
 docs/mandates/15/LIVE-CAPTURE-RUNBOOK.md for the full runbook):
 
-    1. `kubectl port-forward` to the configured runtime environment is
-       running and AIOPS_PROMETHEUS_BASE_URL points at the configured local
-       Prometheus endpoint (see the operator runbook and port-forward script).
+    1. `kubectl port-forward` to techx-corp-prod is running and
+       AIOPS_PROMETHEUS_BASE_URL in `.env` points at localhost:9090
+       (see docs/test_environment_note.md / scripts/port_forward.ps1).
     2. Keep normal traffic running (loadgen/Locust) for a few minutes so
        there is a real baseline before the fault.
     3. Note the wall-clock unix timestamp the moment you toggle the flagd

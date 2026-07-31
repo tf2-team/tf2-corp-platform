@@ -152,47 +152,5 @@
         "outcome": "success"
       }
     ]
-  },
-  {
-    "incident_id": "seed-frontend-proxy-flood-latency-001",
-    "affected_services": [
-      "frontend-proxy"
-    ],
-    "log_signatures": [
-      "threshold_breached"
-    ],
-    "trace_signatures": [],
-    "metric_ratios": {
-      "frontend_proxy_p99_latency_5m": 7.0
-    },
-    "actions_taken": [
-      {
-        "action_id": "scale_frontend_proxy",
-        "target": "frontend-proxy",
-        "outcome": "success"
-      }
-    ]
-  },
-  {
-    "incident_id": "seed-frontend-proxy-resource-flood-001",
-    "affected_services": [
-      "frontend-proxy"
-    ],
-    "log_signatures": [
-      "rca_root_cause"
-    ],
-    "trace_signatures": [],
-    "metric_ratios": {
-      "frontend_proxy_memory_usage_bytes": 1.8,
-      "frontend_proxy_cpu_millicores": 1.4,
-      "frontend_proxy_socket_io_bytes_per_second": 1.4
-    },
-    "actions_taken": [
-      {
-        "action_id": "scale_frontend_proxy",
-        "target": "frontend-proxy",
-        "outcome": "success"
-      }
-    ]
   }
 ]

@@ -416,6 +416,23 @@ def traffic_growth_decision(
     )
 
 
+def traffic_explained_metrics(
+    series: list[MetricSeries],
+    detection_window_seconds: int | None,
+    start: int,
+    traffic_shape_max_lag_buckets: int = 0,
+    traffic_explanation: dict | None = None,
+) -> set[str]:
+    request = [metric for metric in series if metric_group(metric.metric) == "request_rate"]
+    if not request:
+        return set()
+    config = traffic_explanation or {}
+    threshold = float(config["threshold"])
+    dtw_onset_threshold = float(config["dtw_onset_threshold"])
+    dtw_cost_scale = float(config["dtw_cost_scale"])
+    return {metric for metric, score in _traffic_metric_scores(series, request, detection_window_seconds, start, traffic_shape_max_lag_buckets, dtw_onset_threshold, dtw_cost_scale).items() if score >= threshold}
+
+
 def _traffic_metric_scores(
     series: list[MetricSeries],
     request: list[MetricSeries],

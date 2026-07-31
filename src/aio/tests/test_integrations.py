@@ -74,12 +74,12 @@ class IntegrationClientTest(unittest.TestCase):
         JaegerClient(cfg, transport=transport).search_traces(service="checkout")
         OpenSearchClient(cfg, transport=transport).search(index="logs-*", body={"query": {"match_all": {}}})
         KubernetesClient(cfg, transport=transport).get_deployment(namespace="tf2", name="checkout")
-        LiveExecutorClient(cfg, transport=transport).plan({"action_id": "act-1"})
+        LiveExecutorClient(cfg, transport=transport).submit_action({"action_id": "act-1"})
 
         self.assertIn(("GET", "/jaeger/ui/api/traces"), calls)
         self.assertIn(("POST", "/logs-*/_search"), calls)
         self.assertIn(("GET", "/apis/apps/v1/namespaces/tf2/deployments/checkout"), calls)
-        self.assertIn(("POST", "/v1/actions/plan"), calls)
+        self.assertIn(("POST", "/actions"), calls)
 
     def test_live_executor_accepts_contract_blocking_response_with_http_409(self):
         def handler(request: httpx.Request) -> httpx.Response:
@@ -105,75 +105,6 @@ class IntegrationClientTest(unittest.TestCase):
 
         self.assertEqual(response["status"], "blocked")
         self.assertEqual(response["reasons"], ["target_cooldown"])
-
-    def test_live_executor_logs_context_without_sending_runbook(self):
-        seen: list[httpx.Request] = []
-
-        def handler(request: httpx.Request) -> httpx.Response:
-            seen.append(request)
-            return httpx.Response(200, json={"status": "planned"})
-
-        client = LiveExecutorClient(
-            fixed_settings(live_executor_url="https://executor.example"),
-            transport=httpx.MockTransport(handler),
-        )
-
-        with self.assertLogs("aiops.integrations.live_executor", level="INFO") as logs:
-            client.plan(
-                {
-                    "incident_id": "inc-1",
-                    "runbook_id": "RB-SERVICE-RESOURCE",
-                    "action_type": "scale",
-                    "target": "checkout",
-                }
-            )
-
-        self.assertIn(
-            "operation=plan incident=inc-1 runbook=RB-SERVICE-RESOURCE action_type=scale target=checkout",
-            logs.output[0],
-        )
-        self.assertNotIn("runbook_id", json.loads(seen[0].content))
-
-    def test_live_executor_strips_verification_and_rollback_log_context(self):
-        seen: list[httpx.Request] = []
-
-        def handler(request: httpx.Request) -> httpx.Response:
-            seen.append(request)
-            return httpx.Response(200, json={"status": "ok"})
-
-        client = LiveExecutorClient(
-            fixed_settings(live_executor_url="https://executor.example"),
-            transport=httpx.MockTransport(handler),
-        )
-        context = {
-            "incident_id": "inc-1",
-            "runbook_id": "RB-SERVICE-RESOURCE",
-            "action_type": "scale",
-            "target": "frontend-proxy",
-        }
-
-        client.record_verification("exec-1", {**context, "passed": True})
-        client.rollback(
-            "exec-1",
-            {
-                **context,
-                "reason": "verification_failed",
-                "policy_id": "phase3-scale-policy-v1",
-                "policy_approved": True,
-                "policy_expires_at": "2026-08-31T23:59:59Z",
-            },
-        )
-
-        verification = json.loads(seen[0].content)
-        rollback = json.loads(seen[1].content)
-        for body in (verification, rollback):
-            self.assertNotIn("runbook_id", body)
-            self.assertNotIn("action_type", body)
-            self.assertNotIn("target", body)
-        for field in ("policy_id", "policy_approved", "policy_expires_at"):
-            self.assertNotIn(field, rollback)
-        self.assertTrue(verification["passed"])
-        self.assertEqual(rollback["reason"], "verification_failed")
 
     def test_live_executor_readiness_calls_ready_endpoint(self):
         seen: list[httpx.Request] = []

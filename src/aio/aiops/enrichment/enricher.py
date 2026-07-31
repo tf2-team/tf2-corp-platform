@@ -10,10 +10,9 @@ from pathlib import Path
 from typing import Any, Protocol
 
 from aiops.config.hyperparameters import load_hyperparameters
-from aiops.anomaly.v001 import LogTemplateMetricBuilder
 from aiops.schemas import AnomalyFinding, CandidateEvent, EvidenceItem, Feature, TelemetryCorroboration
 from aiops.schemas import RuntimeConfig
-from aiops.shared.evidence import trace_summary
+from aiops.shared.evidence import log_search_summary, trace_summary
 from aiops.shared.features import index_features
 
 
@@ -41,7 +40,7 @@ class Enricher:
         opensearch: OpenSearchClientLike | None = None,
         kubernetes: KubernetesClientLike | None = None,
         opensearch_index: str = "otel-logs-*",
-        hyperparameters: dict[str, Any] | None = None,
+        hyperparameters: dict[str, int | float] | None = None,
     ):
         hyperparameters = hyperparameters or load_hyperparameters(Path("config/hyperparameters.json"))["enrichment"]
         self.runtime_config = runtime_config
@@ -55,9 +54,6 @@ class Enricher:
         self.trace_evidence_limit = int(hyperparameters["trace_evidence_limit"])
         self.log_evidence_hits = int(hyperparameters["log_evidence_hits"])
         self.log_excerpt_max_chars = int(hyperparameters["log_excerpt_max_chars"])
-        self.log_window_seconds = int(hyperparameters["log_window_seconds"])
-        self.log_search_hits = int(hyperparameters["log_search_hits"])
-        self.log_templates = LogTemplateMetricBuilder(hyperparameters["log_drain3_config_path"])
 
     def close(self) -> None:
         for client in (self.jaeger, self.opensearch, self.kubernetes):
@@ -98,18 +94,35 @@ class Enricher:
         update: dict[str, Any] = {"service": service, "available_sources": set()}
         if self.opensearch is not None:
             try:
-                data = self.opensearch.search(self.opensearch_index, self._log_query(service, end))
+                data = self.opensearch.search(
+                    self.opensearch_index,
+                    {
+                        "size": self.corroboration_log_hits,
+                        "query": {
+                            "bool": {
+                                "must": [
+                                    {"multi_match": {"query": service, "fields": ["service.name", "k8s.deployment.name"]}},
+                                    {"simple_query_string": {"query": "exception | timeout | failed | failure | connection refused | oom | retry exhausted", "fields": ["message", "body", "log"]}},
+                                ],
+                                "filter": [{"range": {"@timestamp": {"gte": _iso_utc(end - window_seconds), "lte": _iso_utc(end)}}}],
+                            }
+                        },
+                    },
+                )
                 update["available_sources"].add("log")
                 hits = data.get("hits", {})
-                ranked = self._ranked_logs(hits.get("hits", []), service, self.corroboration_log_hits)
-                top = ranked[0] if ranked else None
+                total = hits.get("total", 0)
+                count = int(total.get("value", 0) if isinstance(total, dict) else total)
+                hit = next(iter(hits.get("hits", [])), {})
+                excerpt = _redact(_hit_text(hit, self.log_excerpt_max_chars)) if hit else None
+                classification = _classify_log(excerpt or "") if count else None
                 update.update(
-                    log_failure=bool(top and top["severity"] == "ERROR"),
-                    log_classification="hard_failure" if top and top["severity"] == "ERROR" else "soft_signal" if top else None,
-                    log_failure_count=int(top["count"]) if top else 0,
-                    log_failure_timestamp=int(top["timestamp"]) if top else None,
-                    log_reference=str(top["reference"]) if top else None,
-                    log_excerpt=str(top["template"]) if top else None,
+                    log_failure=classification == "hard_failure",
+                    log_classification=classification,
+                    log_failure_count=count,
+                    log_failure_timestamp=_log_timestamp(hit, end) if hit else None,
+                    log_reference=f"{hit.get('_index', self.opensearch_index)}/{hit.get('_id', 'unknown')}" if hit else None,
+                    log_excerpt=excerpt,
                 )
             except Exception:
                 pass
@@ -137,7 +150,7 @@ class Enricher:
                         trace_duration_ms=float(span.get("duration", 0)) / 1000,
                     )
                     if self.opensearch is not None:
-                        trace_log = self._trace_log_failure(trace_id, timestamp)
+                        trace_log = self._trace_log_failure(trace_id, timestamp, window_seconds)
                         if trace_log.get("log_failure") or not update.get("log_failure"):
                             update.update(trace_log)
                 elif traces:
@@ -157,36 +170,35 @@ class Enricher:
                 pass
         return TelemetryCorroboration(**update)
 
-    def _trace_log_failure(self, trace_id: str, timestamp: int) -> dict[str, Any]:
+    def _trace_log_failure(self, trace_id: str, timestamp: int, window_seconds: int) -> dict[str, Any]:
         data = self.opensearch.search(
             self.opensearch_index,
             {
-                "size": self.log_search_hits,
-                "sort": [{"@timestamp": {"order": "desc"}}],
+                "size": self.corroboration_log_hits,
                 "query": {
                     "bool": {
                         "must": [
                             {"multi_match": {"query": trace_id, "fields": ["trace_id", "traceid", "trace.id", "span_id", "spanid", "message", "body", "log"]}},
-                        ],
-                        "should": [
-                            {"simple_query_string": {"query": "WARN | WARNING | ERROR | FATAL", "fields": ["severity_text", "severityText", "severity", "level", "log.level"]}},
                             {"simple_query_string": {"query": "exception | timeout | failed | failure | connection refused | oom | retry exhausted", "fields": ["message", "body", "log"]}},
                         ],
-                        "minimum_should_match": 1,
-                        "filter": [{"range": {"@timestamp": {"gte": _iso_utc(timestamp - self.log_window_seconds), "lte": _iso_utc(timestamp + self.log_window_seconds)}}}],
+                        "filter": [{"range": {"@timestamp": {"gte": _iso_utc(timestamp - window_seconds), "lte": _iso_utc(timestamp + window_seconds)}}}],
                     }
                 },
             },
         )
-        ranked = self._ranked_logs(data.get("hits", {}).get("hits", []), trace_id, self.corroboration_log_hits)
-        top = ranked[0] if ranked else None
+        hits = data.get("hits", {})
+        total = hits.get("total", 0)
+        count = int(total.get("value", 0) if isinstance(total, dict) else total)
+        hit = next(iter(hits.get("hits", [])), {})
+        excerpt = _redact(_hit_text(hit, self.log_excerpt_max_chars)) if hit else None
+        classification = _classify_log(excerpt or "") if count else None
         return {
-            "log_failure": bool(top and top["severity"] == "ERROR"),
-            "log_classification": "hard_failure" if top and top["severity"] == "ERROR" else "soft_signal" if top else None,
-            "log_failure_count": int(top["count"]) if top else 0,
-            "log_failure_timestamp": int(top["timestamp"]) if top else None,
-            "log_reference": str(top["reference"]) if top else None,
-            "log_excerpt": str(top["template"]) if top else None,
+            "log_failure": classification == "hard_failure",
+            "log_classification": classification,
+            "log_failure_count": count,
+            "log_failure_timestamp": _log_timestamp(hit, timestamp) if hit else None,
+            "log_reference": f"{hit.get('_index', self.opensearch_index)}/{hit.get('_id', 'unknown')}" if hit else None,
+            "log_excerpt": excerpt,
         }
 
     def _external_evidence(self, candidate: CandidateEvent) -> list[EvidenceItem]:
@@ -238,70 +250,34 @@ class Enricher:
 
     def _opensearch_evidence(self, candidate: CandidateEvent) -> list[EvidenceItem]:
         try:
-            end = candidate.timestamp or int(time.time())
-            service = candidate.likely_dependency if candidate.likely_dependency != "unknown" else candidate.service
-            data = self.opensearch.search(self.opensearch_index, self._log_query(service, end))
-            ranked = self._ranked_logs(data.get("hits", {}).get("hits", []), candidate.signal_id, self.log_evidence_hits)
-            return [
-                EvidenceItem(
-                    source="log",
-                    reference=str(item["reference"]),
-                    summary=(
-                        f"log_template severity={item['severity']} count={item['count']} relevance={item['relevance']} "
-                        f"template={item['template']} excerpt={item['excerpt']} reference={item['reference']}"
-                    ),
-                )
-                for item in ranked
-            ]
-        except Exception as exc:
-            return [EvidenceItem(source="enrichment_failure", reference="opensearch", summary=type(exc).__name__)]
-
-    def _log_query(self, service: str, end: int) -> dict:
-        return {
-            "size": self.log_search_hits,
-            "sort": [{"@timestamp": {"order": "desc"}}],
-            "query": {
-                "bool": {
-                    "must": [{"multi_match": {"query": service, "fields": ["service.name", "k8s.deployment.name", "message", "body"]}}],
-                    "should": [
-                        {"simple_query_string": {"query": "WARN | WARNING | ERROR | FATAL", "fields": ["severity_text", "severityText", "severity", "level", "log.level"]}},
-                        {"simple_query_string": {"query": "exception | timeout | failed | failure | connection refused | oom | retry exhausted", "fields": ["message", "body", "log"]}},
-                    ],
-                    "minimum_should_match": 1,
-                    "filter": [{"range": {"@timestamp": {"gte": _iso_utc(end - self.log_window_seconds), "lte": _iso_utc(end)}}}],
-                }
-            },
-        }
-
-    def _ranked_logs(self, hits: list[dict], context: str, limit: int) -> list[dict[str, Any]]:
-        groups: dict[str, dict[str, Any]] = {}
-        tokens = {token for token in re.split(r"[^a-z0-9]+", context.lower()) if len(token) > 2}
-        for hit in hits:
-            excerpt = _redact(_hit_text(hit, self.log_excerpt_max_chars))
-            template = self.log_templates.template(excerpt)
-            severity = _log_severity(hit, excerpt)
-            timestamp = _log_timestamp(hit, 0)
-            item = groups.setdefault(
-                template,
+            start, end = _time_bounds(candidate)
+            data = self.opensearch.search(
+                self.opensearch_index,
                 {
-                    "template": template,
-                    "severity": severity,
-                    "count": 0,
-                    "timestamp": timestamp,
-                    "excerpt": excerpt,
-                    "reference": f"{hit.get('_index', self.opensearch_index)}/{hit.get('_id', 'unknown')}",
+                    "size": self.log_evidence_hits,
+                    "query": {
+                        "bool": {
+                            "must": [
+                                {
+                                    "multi_match": {
+                                        "query": candidate.likely_dependency if candidate.likely_dependency != "unknown" else candidate.service,
+                                        "fields": ["service.name", "k8s.deployment.name", "message", "body"],
+                                    }
+                                },
+                                {"range": {"@timestamp": {"gte": _iso_utc(start), "lte": _iso_utc(end)}}},
+                            ]
+                        },
+                    },
                 },
             )
-            item["count"] += 1
-            if (_severity_rank(severity), timestamp) > (_severity_rank(item["severity"]), item["timestamp"]):
-                item.update(severity=severity, timestamp=timestamp, excerpt=excerpt, reference=f"{hit.get('_index', self.opensearch_index)}/{hit.get('_id', 'unknown')}")
-        for item in groups.values():
-            item["relevance"] = sum(token in item["template"].lower() for token in tokens)
-        return sorted(
-            groups.values(),
-            key=lambda item: (_severity_rank(item["severity"]), item["relevance"], item["count"], item["timestamp"]),
-            reverse=True,
-        )[:limit]
+            hits = data.get("hits", {})
+            total = hits.get("total", 0)
+            if isinstance(total, dict):
+                total = total.get("value", 0)
+            excerpts = [_redact(_hit_text(hit, self.log_excerpt_max_chars)) for hit in hits.get("hits", [])[: self.log_evidence_hits]]
+            return [EvidenceItem(source="log", reference=f"{self.opensearch_index}:bounded-search", summary=log_search_summary(int(total), excerpts))]
+        except Exception as exc:
+            return [EvidenceItem(source="enrichment_failure", reference="opensearch", summary=type(exc).__name__)]
 
     def _kubernetes_evidence(self, candidate: CandidateEvent) -> list[EvidenceItem]:
         service = self._service(candidate)
@@ -417,19 +393,6 @@ def _hit_text(hit: dict, limit: int) -> str:
 def _classify_log(text: str) -> str:
     hard_markers = ("exception", "timeout", "timed out", "failed", "failure", "connection refused", "oom", "panic", "fatal", "unavailable", "retry exhausted")
     return "hard_failure" if any(marker in text.lower() for marker in hard_markers) else "soft_failure"
-
-
-def _log_severity(hit: dict, text: str) -> str:
-    source = hit.get("_source", {})
-    value = next((source.get(key) for key in ("severity_text", "severityText", "severity", "level", "log.level") if source.get(key)), "")
-    severity = str(value).upper()
-    if "ERROR" in severity or "FATAL" in severity or _classify_log(text) == "hard_failure":
-        return "ERROR"
-    return "WARNING"
-
-
-def _severity_rank(severity: str) -> int:
-    return 2 if severity == "ERROR" else 1
 
 
 def _log_timestamp(hit: dict, fallback: int) -> int:

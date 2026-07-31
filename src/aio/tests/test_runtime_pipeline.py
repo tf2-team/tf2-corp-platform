@@ -27,7 +27,7 @@ from aiops.schemas import (
 )
 from aiops.pipeline import AiopsPipeline
 from aiops.notifications import is_slo_notification
-from aiops.pipeline.runtime import _add_trace_log_enrichment_fallback, _algorithm_service_scores, _apply_corroboration, _filter_normal_growth_root_metrics, _rca_remediation_reason, _slo_impact_findings
+from aiops.pipeline.runtime import _add_trace_log_enrichment_fallback, _algorithm_service_scores, _apply_corroboration, _filter_normal_growth_root_metrics, _slo_impact_findings
 from aiops.remediation import (
     ActionCatalog,
     HistoryRetriever,
@@ -79,7 +79,6 @@ def runtime_kwargs(settings: Settings) -> dict:
         "qualification_dev": settings.qualification_gate_dev,
         "qualification_max_sample_age_seconds": hyperparameters["qualification"]["max_sample_age_seconds"],
         "correlation_hyperparameters": hyperparameters["correlation"],
-        "remediation_hyperparameters": hyperparameters["remediation"],
     }
 
 
@@ -277,25 +276,6 @@ class RecordingCorroborator:
 
 
 class RuntimePipelineTest(unittest.TestCase):
-    def test_rca_remediation_reason_is_selected_from_configuration(self):
-        reason = _rca_remediation_reason(
-            RootCauseCandidate(
-                service="inventory",
-                score=0.8,
-                root_cause_metrics=["memory_usage_bytes"],
-            ),
-            [
-                {
-                    "service": "inventory",
-                    "metric_group": "memory",
-                    "reason": "inventory_memory_pressure",
-                }
-            ],
-            "generic_root_cause",
-        )
-
-        self.assertEqual(reason, "inventory_memory_pressure")
-
     def test_pipeline_wraps_same_service_signals_into_one_notification(self):
         settings = Settings()
         with TemporaryDirectory() as tmp:
@@ -2059,8 +2039,6 @@ class RuntimePipelineTest(unittest.TestCase):
                         confidence_threshold=hyperparameters["remediation"]["confidence_threshold"],
                         downtime_cost_multiplier=hyperparameters["remediation"]["downtime_cost_multiplier"],
                         outcome_weights=hyperparameters["remediation"]["outcome_weights"],
-                        fallback_action_id=hyperparameters["remediation"]["fallback_action_id"],
-                        fallback_target=hyperparameters["remediation"]["fallback_target"],
                     ),
                     ActionCatalog(actions_path),
                     IncidentHistoryStore(history_path),

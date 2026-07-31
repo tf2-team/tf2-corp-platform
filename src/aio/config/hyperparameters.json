@@ -12,12 +12,7 @@
   "self_heal": {
     "min_incident_occurrences": 3,
     "min_incident_score": 0.24,
-    "min_occurrence_interval_seconds": 60,
-    "queue_ttl_seconds": 900,
-    "verification_callback_max_attempts": 3,
-    "rollback_max_attempts": 3,
-    "rollback_after_executions": 3,
-    "rollback_failure_runbook_id": "RB-AIOPS-RUNTIME"
+    "rollback_after_executions": 3
   },
   "notification": {
     "user_rca_medium_confidence_score": 0.3,
@@ -48,10 +43,7 @@
     "corroboration_trace_max_request_seconds": 300,
     "trace_evidence_limit": 1,
     "log_evidence_hits": 3,
-    "log_excerpt_max_chars": 240,
-    "log_window_seconds": 300,
-    "log_search_hits": 100,
-    "log_drain3_config_path": "config/drain3.ini"
+    "log_excerpt_max_chars": 240
   },
   "correlation": {
     "window_seconds": 300,
@@ -129,44 +121,6 @@
     "max_sample_age_seconds": 300
   },
   "remediation": {
-    "fallback_action_id": "page_oncall",
-    "fallback_target": "platform-team",
-    "rca_reason_default": "rca_root_cause",
-    "rca_reason_rules": [
-      {
-        "service": "product-catalog",
-        "metric_group": "cpu",
-        "reason": "cpu_saturation"
-      }
-    ],
-    "rca_runbook_default": "RB-SERVICE-RESOURCE",
-    "rca_runbook_rules": [
-      {
-        "service": "cart",
-        "metric_group": "error",
-        "runbook_id": "RB-CART-ERROR-RATE"
-      },
-      {
-        "service": "*",
-        "metric_group": "error",
-        "runbook_id": "RB-SERVICE-ERROR-RATE"
-      },
-      {
-        "service": "checkout",
-        "metric_group": "latency",
-        "runbook_id": "RB-CHECKOUT-LATENCY"
-      },
-      {
-        "service": "*",
-        "metric_group": "latency",
-        "runbook_id": "RB-SERVICE-LATENCY"
-      },
-      {
-        "service": "product-catalog",
-        "metric_group": "cpu",
-        "runbook_id": "RB-PRODUCT-CATALOG-CPU"
-      }
-    ],
     "history_top_k": 3,
     "ood_threshold": 0.2,
     "confidence_threshold": 0.7,

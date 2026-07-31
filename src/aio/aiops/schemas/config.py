@@ -70,7 +70,6 @@ class RuntimePolicyConfig(AiopsModel):
     protected_targets: set[str]
     stateful_kinds: set[str]
     non_actionable_flows: set[str]
-    rca_allowed_protected_roots: set[str] = Field(default_factory=set)
 
 
 class RcaConfig(AiopsModel):
@@ -89,7 +88,6 @@ class RuntimeConfig(AiopsModel):
     auto_detector_generation_enabled: bool = True
     detector_thresholds: dict[str, float] = Field(default_factory=dict)
     detector_confidences: dict[str, float] = Field(default_factory=dict)
-    auto_detector_runbooks: dict[str, object] = Field(default_factory=dict)
     policy: RuntimePolicyConfig
     rca: RcaConfig = Field(default_factory=RcaConfig)
 
