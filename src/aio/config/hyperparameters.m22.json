@@ -1,0 +1,342 @@
+{
+  "incident": {
+    "count_reset_seconds": 900,
+    "recovery_consecutive_buckets": 30,
+    "notification_cooldown_seconds": 900,
+    "rca_dedup_seconds": 900,
+    "slo_dedup_seconds": 900,
+    "notification_retry_base_seconds": 60,
+    "notification_retry_max_seconds": 3600,
+    "notification_error_max_chars": 512
+  },
+  "self_heal": {
+    "min_incident_occurrences": 3,
+    "min_incident_score": 0.24,
+    "min_occurrence_interval_seconds": 60,
+    "queue_ttl_seconds": 900,
+    "verification_callback_max_attempts": 3,
+    "rollback_max_attempts": 3,
+    "rollback_after_executions": 3,
+    "rollback_failure_runbook_id": "RB-AIOPS-RUNTIME"
+  },
+  "notification": {
+    "user_rca_medium_confidence_score": 0.3,
+    "user_rca_high_confidence_score": 0.42,
+    "important_evidence_limit": 20,
+    "important_evidence_markers": [
+      "Trace/log enrichment",
+      "log_",
+      "trace_",
+      "graph_score",
+      "earliest_drift_score",
+      "shape_correlation_score",
+      "downstream_coverage_score",
+      "weighted_rrf_score",
+      "evidence_strength",
+      "support_score"
+    ]
+  },
+  "api": {
+    "grafana_annotation_max_chars": 5024
+  },
+  "replay": {
+    "explanation_finding_limit": 5
+  },
+  "enrichment": {
+    "corroboration_log_hits": 1,
+    "corroboration_trace_limit": 20,
+    "corroboration_trace_max_request_seconds": 300,
+    "trace_evidence_limit": 1,
+    "log_evidence_hits": 3,
+    "log_excerpt_max_chars": 240,
+    "log_window_seconds": 300,
+    "log_search_hits": 100,
+    "log_drain3_config_path": "config/drain3.ini"
+  },
+  "correlation": {
+    "window_seconds": 300,
+    "confidence_threshold": 0.5,
+    "topology_max_hops": 2,
+    "suppress_min_root_score": 0.45,
+    "rca_notification_min_score": 0.24,
+    "rca_notification_min_metric_score": 1.8,
+    "rca_notification_strong_shape_correlation_score": 0.95,
+    "rca_notification_require_current_tail_change": true,
+    "rca_notification_allow_default_metric_without_series": true,
+    "suppress_breakout_multiplier": 1.5,
+    "allow_direct_anomaly_breakout": false,
+    "allow_slo_breakout": false,
+    "rca_dedup_require_same_service": true,
+    "suppress_window_seconds": 900,
+    "weights": {
+      "verified_primary_signal": 0.25,
+      "temporal_precedence": 0.2,
+      "topology_path": 0.25,
+      "operation_specificity": 0.1,
+      "trace_log_kubernetes_corroboration": 0.2,
+      "stale_or_missing_evidence_penalty": -0.3
+    }
+  },
+  "detectors": {
+    "default_error_rate": 0.01,
+    "default_burn_rate_slo": 1.0,
+    "default_latency_slo": 1.0,
+    "latency_slo_overrides": {
+      "frontend": 1,
+      "frontend-proxy": 1.5,
+      "checkout": 2,
+      "payment": 1.5,
+      "cart": 1,
+      "currency": 0.3,
+      "product-catalog": 1,
+      "product-reviews": 1.2,
+      "recommendation": 1.0,
+      "ad": 1.0,
+      "shipping": 1.0,
+      "email": 1.0,
+      "quote": 1.0,
+      "fraud-detection": 1.0,
+      "accounting": 1.0
+    },
+    "thresholds": {
+      "ops01_checkout_slo_burn_rate": 1.0,
+      "ops03_checkout_payment_dependency": 0.05,
+      "auto_checkout_error_rate": 0.05,
+      "auto_payment_error_rate": 0.05,
+      "auto_frontend_proxy_error_rate": 0.05,
+      "auto_frontend_error_rate": 0.05,
+      "auto_product_catalog_error_rate": 0.05,
+      "auto_product_reviews_error_rate": 0.05,
+      "auto_recommendation_error_rate": 0.05,
+      "auto_cart_error_rate": 0.005,
+      "auto_ad_error_rate": 0.05,
+      "auto_currency_error_rate": 0.05,
+      "auto_shipping_error_rate": 0.05,
+      "auto_email_error_rate": 0.05,
+      "auto_quote_error_rate": 0.05,
+      "auto_fraud_detection_error_rate": 0.05,
+      "auto_accounting_error_rate": 0.05    },
+    "confidences": {
+      "ops03_checkout_payment_dependency": 0.8
+    }
+  },
+  "no_data": {
+    "missing_confidence": 1.0,
+    "stale_confidence": 1.0,
+    "unknown_confidence": 0.7
+  },
+  "qualification": {
+    "max_sample_age_seconds": 300
+  },
+  "remediation": {
+    "fallback_action_id": "page_oncall",
+    "fallback_target": "platform-team",
+    "rca_reason_default": "rca_root_cause",
+    "rca_reason_rules": [
+      {
+        "service": "product-catalog",
+        "metric_group": "cpu",
+        "reason": "cpu_saturation"
+      }
+    ],
+    "rca_runbook_default": "RB-SERVICE-RESOURCE",
+    "rca_runbook_rules": [
+      {
+        "service": "cart",
+        "metric_group": "error",
+        "runbook_id": "RB-CART-ERROR-RATE"
+      },
+      {
+        "service": "*",
+        "metric_group": "error",
+        "runbook_id": "RB-SERVICE-ERROR-RATE"
+      },
+      {
+        "service": "checkout",
+        "metric_group": "latency",
+        "runbook_id": "RB-CHECKOUT-LATENCY"
+      },
+      {
+        "service": "*",
+        "metric_group": "latency",
+        "runbook_id": "RB-SERVICE-LATENCY"
+      },
+      {
+        "service": "product-catalog",
+        "metric_group": "cpu",
+        "runbook_id": "RB-PRODUCT-CATALOG-CPU"
+      }
+    ],
+    "history_top_k": 3,
+    "ood_threshold": 0.2,
+    "confidence_threshold": 0.7,
+    "blast_radius_limit": 5,
+    "cost_page": 20.0,
+    "downtime_cost_multiplier": 2.0,
+    "outcome_weights": {
+      "success": 1.0,
+      "partial": 0.5,
+      "failed": 0.0
+    },
+    "similarity_weights": {
+      "service": 0.35,
+      "log": 0.25,
+      "trace": 0.2,
+      "metric": 0.2
+    },
+    "metric_similarity_epsilon": 1.0e-9
+  },
+  "rca": {
+    "enabled": true,
+    "top_k": 5,
+    "min_points": 30,
+    "seasonal_period": 1,
+    "ewma_alpha": 0.1,
+    "ewma_z_threshold": 4.0,
+    "isolation_score_threshold": 5.0,
+    "anomaly": {
+      "algorithm_weights": {
+        "robust_drift": 0.8,
+        "ewma_stl": 0.8,
+        "isolation_forest": 0.2,
+        "slow_drift": 1.0
+      },
+      "weighted_score_threshold": 1.0,
+      "single_algorithm_min_normalized_score": 2.0,
+      "robust_drift_threshold": 4.0,
+      "robust_drift_min_baseline_points": 30,
+      "isolation_score_scale": 10.0,
+      "robust_scaling": {
+        "mad_scale": 1.4826,
+        "iqr_scale": 1.349,
+        "min_spread": 1.0
+      },
+      "page_hinkley_min_bucket_factor": 2.0,
+      "detection_window_seconds": 1800,
+      "normal_growth_detection_window_seconds": 1800,
+      "evidence_window_seconds": 900,
+      "oom_recent_buckets": 3,
+      "no_evidence_multiplier": 0.5,
+      "single_evidence_bonus": 0.15,
+      "dual_evidence_bonus": 0.3,
+      "drain3_config_path": "config/drain3.ini",
+      "log_bucket_seconds": 60,
+      "log_correlation_window_seconds": 300,
+      "log_history_buckets": 45,
+      "log_min_nonzero_buckets": 3,
+      "log_max_templates_per_service": 20,
+      "log_max_events_per_evidence": 100,
+      "min_tail_anomaly_buckets": {
+        "error": 1,
+        "latency": 3,
+        "cpu": 3,
+        "memory": 6,
+        "disk": 3,
+        "socket_io": 3,
+        "request_rate": 3,
+        "default": 4
+      },
+      "min_relative_change_ratio": {
+        "error": 0.0,
+        "latency": 0.25,
+        "cpu": 0.1,
+        "memory": 0.05,
+        "disk": 0.1,
+        "socket_io": 0.1,
+        "request_rate": 0.3,
+        "default": 0.1
+      },
+      "min_absolute_change": {
+        "error": 0.005,
+        "latency": 0.05,
+        "cpu": 10.0,
+        "memory": 10485760.0,
+        "disk": 1048576.0,
+        "socket_io": 1048576.0,
+        "request_rate": 5.0,
+        "default": 1.0
+      },
+      "slow_drift": {
+        "enabled": true,
+        "window_seconds": 3600,
+        "min_points": 12,
+        "positive_bucket_ratio": 0.45,
+        "metrics": {
+          "memory": {
+            "direction": "up",
+            "min_total_change": 5242880.0
+          },
+          "cpu": {
+            "direction": "up",
+            "min_total_change": 100.0
+          },
+          "socket_io": {
+            "direction": "up",
+            "min_total_change": 512000.0,
+            "positive_bucket_ratio": 0.45
+          },
+          "disk": {
+            "direction": "up",
+            "min_total_change": 1048576.0
+          },
+          "latency": {
+            "direction": "up",
+            "min_total_change": 0.05
+          },
+          "error": {
+            "direction": "up",
+            "min_total_change": 0.002
+          },
+          "burn_rate": {
+            "direction": "up",
+            "min_total_change": 0.2
+          },
+          "kafka_lag": {
+            "direction": "up",
+            "min_total_change": 100.0
+          },
+          "active_connections": {
+            "direction": "up",
+            "min_total_change": 5.0
+          },
+          "queue_saturation": {
+            "direction": "up",
+            "min_total_change": 0.05
+          }
+        }
+      },
+      "traffic_shape_max_lag_buckets": 5,
+      "traffic_explanation": {
+        "threshold": 0.65,
+        "min_primary_shape": 0.55,
+        "dtw_onset_threshold": 0.1,
+        "dtw_cost_scale": 2.0,
+        "weights": {
+          "cpu": 0.45,
+          "socket_io": 0.35
+        }
+      }
+    },
+    "graph": {
+      "damping": 0.85,
+      "pagerank_weight": 0.7,
+      "timestamp_weight": 0.3,
+      "pagerank_max_iter": 100,
+      "pagerank_tolerance": 1.0e-8
+    },
+    "combined": {
+      "rrf_k": 20,
+      "drift_min_points": 30,
+      "drift_score_threshold": 4.0,
+      "detection_window_seconds": 1800,
+      "canonical_service_suffixes": [],
+      "metric_aliases": {},
+      "ranker_weights": {
+        "graph": 0.15,
+        "earliest_drift": 0.55,
+        "shape_correlation": 0.15,
+        "downstream_coverage": 0.15
+      }
+    }
+  }
+}
