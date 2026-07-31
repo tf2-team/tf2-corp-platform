@@ -74,12 +74,12 @@ class IntegrationClientTest(unittest.TestCase):
         JaegerClient(cfg, transport=transport).search_traces(service="checkout")
         OpenSearchClient(cfg, transport=transport).search(index="logs-*", body={"query": {"match_all": {}}})
         KubernetesClient(cfg, transport=transport).get_deployment(namespace="tf2", name="checkout")
-        LiveExecutorClient(cfg, transport=transport).plan({"action_id": "act-1"})
+        LiveExecutorClient(cfg, transport=transport).submit_action({"action_id": "act-1"})
 
         self.assertIn(("GET", "/jaeger/ui/api/traces"), calls)
         self.assertIn(("POST", "/logs-*/_search"), calls)
         self.assertIn(("GET", "/apis/apps/v1/namespaces/tf2/deployments/checkout"), calls)
-        self.assertIn(("POST", "/v1/actions/plan"), calls)
+        self.assertIn(("POST", "/actions"), calls)
 
     def test_live_executor_accepts_contract_blocking_response_with_http_409(self):
         def handler(request: httpx.Request) -> httpx.Response:
@@ -105,27 +105,6 @@ class IntegrationClientTest(unittest.TestCase):
 
         self.assertEqual(response["status"], "blocked")
         self.assertEqual(response["reasons"], ["target_cooldown"])
-
-    def test_live_executor_logs_runbook_and_action_type(self):
-        client = LiveExecutorClient(
-            fixed_settings(live_executor_url="https://executor.example"),
-            transport=httpx.MockTransport(lambda request: httpx.Response(200, json={"status": "planned"})),
-        )
-
-        with self.assertLogs("aiops.integrations.live_executor", level="INFO") as logs:
-            client.plan(
-                {
-                    "incident_id": "inc-1",
-                    "runbook_id": "RB-SERVICE-RESOURCE",
-                    "action_type": "scale",
-                    "target": "checkout",
-                }
-            )
-
-        self.assertIn(
-            "operation=plan incident=inc-1 runbook=RB-SERVICE-RESOURCE action_type=scale target=checkout",
-            logs.output[0],
-        )
 
     def test_live_executor_readiness_calls_ready_endpoint(self):
         seen: list[httpx.Request] = []

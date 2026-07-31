@@ -70,49 +70,9 @@ class FastApiAppTest(unittest.TestCase):
 
         self.assertEqual(raised.exception.status_code, 503)
 
-    def test_readiness_checks_prometheus_query_dependency_for_automatic_runs(self):
-        settings = Settings().model_copy(
-            update={
-                "auto_run_enabled": True,
-                "prometheus_base_url": "http://prometheus:9090",
-                "notification_webhook_url": "https://notification.test",
-                "grafana_webhook_secret": "configured",
-            }
-        )
-
-        with patch("aiops.api.app.PrometheusClient") as client_type:
-            client_type.return_value.query.return_value = {
-                "status": "success",
-                "data": {"result": [{"value": [0, "1"]}]},
-            }
-            response = readiness(settings)
-
-        self.assertEqual(response.status, "ready")
-        client_type.return_value.query.assert_called_once_with("vector(1)")
-        client_type.return_value.close.assert_called_once_with()
-
-    def test_readiness_fails_when_prometheus_query_dependency_is_unavailable(self):
-        settings = Settings().model_copy(
-            update={
-                "auto_run_enabled": True,
-                "prometheus_base_url": "http://prometheus:9090",
-                "notification_webhook_url": "https://notification.test",
-                "grafana_webhook_secret": "configured",
-            }
-        )
-
-        with patch("aiops.api.app.PrometheusClient") as client_type:
-            client_type.return_value.query.side_effect = RuntimeError("gateway timeout")
-            with self.assertRaises(HTTPException) as raised:
-                readiness(settings)
-
-        self.assertEqual(raised.exception.status_code, 503)
-        client_type.return_value.close.assert_called_once_with()
-
     def test_readiness_requires_explicit_live_self_heal_approval(self):
         settings = Settings().model_copy(
             update={
-                "auto_run_enabled": False,
                 "self_heal_enabled": True,
                 "policy_mode": "live-approved",
                 "live_executor_url": "http://aiops-live-executor:8080",
@@ -130,7 +90,6 @@ class FastApiAppTest(unittest.TestCase):
     def test_readiness_checks_live_executor_dependency(self):
         settings = Settings().model_copy(
             update={
-                "auto_run_enabled": False,
                 "self_heal_enabled": True,
                 "policy_mode": "live-approved",
                 "live_executor_url": "http://aiops-live-executor:8080",
@@ -151,7 +110,6 @@ class FastApiAppTest(unittest.TestCase):
     def test_readiness_fails_when_live_executor_is_unavailable(self):
         settings = Settings().model_copy(
             update={
-                "auto_run_enabled": False,
                 "self_heal_enabled": True,
                 "policy_mode": "live-approved",
                 "live_executor_url": "http://aiops-live-executor:8080",
@@ -172,7 +130,6 @@ class FastApiAppTest(unittest.TestCase):
     def test_readiness_requires_escalation_webhook_for_self_heal(self):
         settings = Settings().model_copy(
             update={
-                "auto_run_enabled": False,
                 "self_heal_enabled": True,
                 "policy_mode": "live-approved",
                 "live_executor_url": "http://aiops-live-executor:8080",

@@ -10,7 +10,6 @@ import os
 import time
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime
-from threading import Lock
 from urllib.parse import urlparse
 
 from fastapi import FastAPI, Header, HTTPException
@@ -42,8 +41,6 @@ from aiops.topology import TopologyGraph
 
 
 logger = logging.getLogger(__name__)
-# ponytail: process-local lock; use a distributed lease if the API runs with multiple workers.
-_LIVE_PIPELINE_LOCK = Lock()
 
 
 def configure_logging() -> None:
@@ -69,20 +66,19 @@ def run_static_pipeline(request: PipelineRunRequest, settings: Settings | None =
 
 
 def run_live_pipeline(settings: Settings | None = None) -> PipelineResult:
-    with _LIVE_PIPELINE_LOCK:
-        settings = settings or Settings()
-        runtime_config = load_runtime_config(settings.runtime_config_path, settings.prometheus_registry_path)
-        collector = PrometheusCollector(
-            PrometheusClient(settings),
-            runtime_config,
-            cache_namespace=settings.prometheus_base_url,
-        )
-        try:
-            metric_series = collector.collect_metric_series()
-        except Exception:
-            collector.close()
-            raise
-        return run_pipeline_with_collector(collector, settings, runtime_config, metric_series=metric_series)
+    settings = settings or Settings()
+    runtime_config = load_runtime_config(settings.runtime_config_path, settings.prometheus_registry_path)
+    collector = PrometheusCollector(
+        PrometheusClient(settings),
+        runtime_config,
+        cache_namespace=settings.prometheus_base_url,
+    )
+    try:
+        metric_series = collector.collect_metric_series()
+    except Exception:
+        collector.close()
+        raise
+    return run_pipeline_with_collector(collector, settings, runtime_config, metric_series=metric_series)
 
 
 def run_pipeline_with_collector(collector, settings: Settings, runtime_config, metric_series=None) -> PipelineResult:
@@ -136,12 +132,7 @@ def run_pipeline_with_collector(collector, settings: Settings, runtime_config, m
                 failure_samples=settings.self_heal_failure_samples,
                 min_incident_occurrences=int(hyperparameters["self_heal"]["min_incident_occurrences"]),
                 min_incident_score=float(hyperparameters["self_heal"]["min_incident_score"]),
-                min_occurrence_interval_seconds=int(hyperparameters["self_heal"]["min_occurrence_interval_seconds"]),
-                queue_ttl_seconds=int(hyperparameters["self_heal"]["queue_ttl_seconds"]),
-                verification_callback_max_attempts=int(hyperparameters["self_heal"]["verification_callback_max_attempts"]),
-                rollback_max_attempts=int(hyperparameters["self_heal"]["rollback_max_attempts"]),
                 rollback_after_executions=int(hyperparameters["self_heal"]["rollback_after_executions"]),
-                rollback_failure_runbook_id=str(hyperparameters["self_heal"]["rollback_failure_runbook_id"]),
             ),
         )
     pipeline = AiopsPipeline(
@@ -164,7 +155,6 @@ def run_pipeline_with_collector(collector, settings: Settings, runtime_config, m
         qualification_max_sample_age_seconds=int(hyperparameters["qualification"]["max_sample_age_seconds"]),
         rca_hyperparameters=hyperparameters["rca"],
         correlation_hyperparameters=hyperparameters["correlation"],
-        remediation_hyperparameters=hyperparameters["remediation"],
         enricher=enricher,
         remediation=(
             RemediationFeatureExtractor(),
@@ -180,8 +170,6 @@ def run_pipeline_with_collector(collector, settings: Settings, runtime_config, m
                 confidence_threshold=hyperparameters["remediation"]["confidence_threshold"],
                 downtime_cost_multiplier=hyperparameters["remediation"]["downtime_cost_multiplier"],
                 outcome_weights=hyperparameters["remediation"]["outcome_weights"],
-                fallback_action_id=hyperparameters["remediation"]["fallback_action_id"],
-                fallback_target=hyperparameters["remediation"]["fallback_target"],
             ),
             ActionCatalog(settings.actions_catalog_path),
             IncidentHistoryStore(settings.incidents_history_path),
@@ -236,13 +224,11 @@ def print_rca_result(result: PipelineResult) -> None:
 
 async def auto_run_loop(settings: Settings) -> None:
     while True:
-        started = asyncio.get_running_loop().time()
         try:
             await asyncio.to_thread(run_live_pipeline, settings)
         except Exception:
             logger.exception("AIOps live pipeline run failed")
-        elapsed = asyncio.get_running_loop().time() - started
-        await asyncio.sleep(max(0.0, settings.auto_run_interval_seconds - elapsed))
+        await asyncio.sleep(settings.auto_run_interval_seconds)
 
 
 def build_enricher(settings: Settings, runtime_config, enrichment_hyperparameters: dict | None = None) -> Enricher:
@@ -309,14 +295,6 @@ def readiness(settings: Settings) -> HealthResponse:
             raise RuntimeError("automatic runs require Prometheus")
         if settings.auto_run_enabled and not _notification_configured(settings):
             raise RuntimeError("automatic runs require an incident notification webhook")
-        if settings.auto_run_enabled:
-            prometheus_client = PrometheusClient(settings)
-            try:
-                response = prometheus_client.query("vector(1)")
-                if response.get("status") != "success" or not (response.get("data") or {}).get("result"):
-                    raise RuntimeError("Prometheus query dependency is not ready")
-            finally:
-                prometheus_client.close()
         if settings.self_heal_enabled and settings.policy_mode != "live-approved":
             raise RuntimeError("self-heal requires live-approved policy mode")
         if settings.self_heal_enabled and not _configured_url(settings.live_executor_url):

@@ -9,11 +9,9 @@ from pathlib import Path
 from threading import RLock
 from typing import Any
 
-from runbooks.actions import plan_scale_deployment, restore_deployment_replicas, scale_deployment
+from runbooks.actions import page_oncall, plan_scale_deployment, restore_deployment_replicas, scale_deployment
 from runbooks.actions.common import (
     ALLOWLIST,
-    AUTHORIZED_REQUESTER,
-    DEFAULT_ENVIRONMENT,
     POLICY_EXPIRES_AT,
     POLICY_ID,
     PROTECTED_NAMESPACES,
@@ -49,9 +47,9 @@ class LiveExecutorService:
         action_budget_window_seconds: int = 3600,
         action_budget_max_executions: int = 10,
         policy_id: str = POLICY_ID,
-        policy_expires_at: str = POLICY_EXPIRES_AT,
+        policy_expires_at: str = "2026-08-31T23:59:59Z",
         approval_id: str = "",
-        environment: str = DEFAULT_ENVIRONMENT,
+        environment: str = "techx-corp-prod",
         capability_catalog_path: Path | None = None,
         service_support_catalog_path: Path | None = None,
     ):
@@ -80,9 +78,9 @@ class LiveExecutorService:
         action_budget_window_seconds: int = 3600,
         action_budget_max_executions: int = 10,
         policy_id: str = POLICY_ID,
-        policy_expires_at: str = POLICY_EXPIRES_AT,
+        policy_expires_at: str = "2026-08-31T23:59:59Z",
         approval_id: str = "",
-        environment: str = DEFAULT_ENVIRONMENT,
+        environment: str = "techx-corp-prod",
         capability_catalog_path: Path | None = None,
         service_support_catalog_path: Path | None = None,
     ) -> "LiveExecutorService":
@@ -429,7 +427,7 @@ class LiveExecutorService:
                 "_executor_approval_id": self.approval_id,
                 "idempotency_key": request.get("idempotency_key"),
                 "reason": request.get("reason", "rollback_requested"),
-                "requested_by": request.get("requested_by", AUTHORIZED_REQUESTER),
+                "requested_by": request.get("requested_by", "aiops-runtime"),
                 "root_cause_metrics": [],
                 "rollback_token": request.get("rollback_token"),
                 "execution": script_execution,
@@ -482,6 +480,15 @@ class LiveExecutorService:
         self._audit(request, response, "rollback_submitted" if response["executed"] else "rollback_blocked")
         self._save_idempotency(request, "rollback", response, execution_id)
         return response
+
+    def legacy_submit(self, request: dict[str, Any]) -> dict[str, Any]:
+        if request.get("action_type") == "page":
+            response = _script_response_to_api(page_oncall.run(request), STATUS_PLANNED)
+            self._audit(request, response, "page_recorded")
+            return response
+        if request.get("dry_run") is True or not request.get("plan_hash"):
+            return self.plan(request)
+        return self.execute_action(request)
 
     def _idempotent(
         self,
@@ -589,7 +596,7 @@ class LiveExecutorService:
                 "action_id": response.get("action_id"),
                 "event_type": event_type,
                 "actor_type": "service",
-                "actor_id": request.get("requested_by", AUTHORIZED_REQUESTER),
+                "actor_id": request.get("requested_by", "aiops-runtime"),
                 "policy_id": request.get("policy_id"),
                 "allowed": response.get("allowed", False),
                 "executed": response.get("executed", False),
@@ -634,7 +641,7 @@ def _request_to_script_context(request: dict[str, Any], plan_response: dict[str,
         "dry_run": False,
         "policy_id": request.get("policy_id"),
         "policy_approved": request.get("policy_approved"),
-        "policy_expires_at": request.get("policy_expires_at") or request.get("_executor_policy_expires_at"),
+        "policy_expires_at": request.get("policy_expires_at", "2026-08-31T23:59:59Z"),
         "approval_id": request.get("approval_id"),
         "_executor_policy_id": request.get("_executor_policy_id"),
         "_executor_policy_expires_at": request.get("_executor_policy_expires_at"),
@@ -642,7 +649,7 @@ def _request_to_script_context(request: dict[str, Any], plan_response: dict[str,
         "_executor_environment": request.get("_executor_environment"),
         "idempotency_key": request.get("idempotency_key"),
         "reason": request.get("reason"),
-        "requested_by": request.get("requested_by", AUTHORIZED_REQUESTER),
+        "requested_by": request.get("requested_by", "aiops-runtime"),
         "root_cause_metrics": (request.get("root_cause") or {}).get("metrics", []),
         "plan": plan,
         "plan_hash": request.get("plan_hash"),
@@ -721,7 +728,7 @@ def _load_service_support_catalog(path: Path) -> list[dict[str, Any]]:
 
 
 def _resolve_namespace(namespace: Any, environment: str) -> Any:
-    return environment if namespace is not None else None
+    return environment if namespace == "techx-corp-prod" else namespace
 
 
 def _action_with_runtime_state(action: dict[str, Any], allow_live_apply: bool, environment: str) -> dict[str, Any]:

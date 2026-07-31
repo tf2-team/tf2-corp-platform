@@ -13,8 +13,8 @@ from aiops.correlation import Correlator
 from aiops.detectors import DependencyDetector, DetectorEngine, NoDataDetector, ThresholdDetector
 from aiops.features import FeatureBuilder
 from aiops.notifications import NotificationBuilder
-from aiops.schemas import ActionCatalogItem, ActionProposal, CandidateEvent, EvidenceItem, Feature, HistoryAction, Incident, IncidentFeatures, IncidentHistoryRecord, Observation, RcaResult, RootCauseCandidate, SignalQuality
-from aiops.remediation import HistoryRetriever, PolicyEngine, RemediationDecisionEngine, RemediationFeatureExtractor
+from aiops.schemas import ActionCatalogItem, ActionProposal, CandidateEvent, EvidenceItem, Feature, HistoryAction, Incident, IncidentFeatures, IncidentHistoryRecord, Observation, SignalQuality
+from aiops.remediation import HistoryRetriever, PolicyEngine, RemediationDecisionEngine
 from aiops.storage import SQLiteIncidentStore
 from aiops.topology import TopologyGraph
 
@@ -67,55 +67,6 @@ class PydanticModelTest(unittest.TestCase):
         self.assertNotIn("suppress_window_seconds", parameters)
         self.assertNotIn("suppress_min_root_score", parameters)
         self.assertIn("topology_max_hops", parameters)
-
-
-class RemediationFeatureExtractorTest(unittest.TestCase):
-    def test_rca_incident_does_not_include_competing_roots_in_affected_services(self):
-        incident = Incident(
-            incident_id="inc-product-catalog",
-            fingerprint="fp-product-catalog",
-            state="open",
-            severity="SEV2",
-            flow="catalog",
-            service="product-catalog",
-            likely_dependency="unknown",
-            events=[
-                CandidateEvent(
-                    detector_id="rca_root_cause",
-                    flow="catalog",
-                    service="product-catalog",
-                    severity="SEV2",
-                    signal_id="product_catalog_cpu_millicores",
-                    value=0.36,
-                    unit="score",
-                    window="rca",
-                    threshold=0.24,
-                    quality=SignalQuality.FALLBACK_ONLY,
-                    reason="cpu_saturation",
-                    runbook_id="RB-PRODUCT-CATALOG-CPU",
-                )
-            ],
-        )
-        rca_result = RcaResult(
-            root_causes=[
-                RootCauseCandidate(
-                    service="product-catalog",
-                    score=0.36,
-                    root_cause_metrics=["cpu_millicores"],
-                ),
-                RootCauseCandidate(
-                    service="checkout",
-                    score=0.30,
-                    root_cause_metrics=["p95_latency_5m"],
-                ),
-            ]
-        )
-
-        features = RemediationFeatureExtractor().extract(incident, rca_result)
-
-        self.assertEqual(features.affected_services, {"product-catalog"})
-        self.assertEqual(features.log_signatures, {"cpu_saturation"})
-        self.assertEqual(features.metric_ratios, {"product_catalog_cpu_millicores": 1.5})
 
 
 class NotificationBuilderTest(unittest.TestCase):
@@ -738,8 +689,6 @@ class RemediationEngineTest(unittest.TestCase):
             confidence_threshold=0.7,
             downtime_cost_multiplier=hyperparameters["downtime_cost_multiplier"],
             outcome_weights=hyperparameters["outcome_weights"],
-            fallback_action_id=hyperparameters["fallback_action_id"],
-            fallback_target=hyperparameters["fallback_target"],
         ).decide(
             "inc-1",
             IncidentFeatures(affected_services={"postgresql"}, log_signatures={"database deadlock detected"}),
@@ -804,8 +753,6 @@ class RemediationEngineTest(unittest.TestCase):
             confidence_threshold=0.7,
             downtime_cost_multiplier=hyperparameters["downtime_cost_multiplier"],
             outcome_weights=hyperparameters["outcome_weights"],
-            fallback_action_id=hyperparameters["fallback_action_id"],
-            fallback_target=hyperparameters["fallback_target"],
         ).decide(
             "inc-1",
             IncidentFeatures(affected_services={"payment-v2"}),

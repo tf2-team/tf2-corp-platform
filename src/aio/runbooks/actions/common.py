@@ -8,37 +8,114 @@ import copy
 import hashlib
 import json
 from datetime import UTC, datetime, timedelta
-from pathlib import Path
 from typing import Any
 
-_CONFIG_ROOT = Path(__file__).resolve().parents[2] / "config"
-_EXECUTOR_POLICY = json.loads((_CONFIG_ROOT / "executor_policy.json").read_text(encoding="utf-8"))
-_EXECUTOR_ACTIONS = json.loads((_CONFIG_ROOT / "executor_supported_actions.json").read_text(encoding="utf-8"))
-
-SCHEMA_VERSION = str(_EXECUTOR_POLICY["schema_version"])
-POLICY_ID = str(_EXECUTOR_POLICY["policy_id"])
-POLICY_EXPIRES_AT = str(_EXECUTOR_POLICY["policy_expires_at"])
-PLAN_TTL_SECONDS = int(_EXECUTOR_POLICY["plan_ttl_seconds"])
-DEFAULT_ENVIRONMENT = str(_EXECUTOR_POLICY["default_environment"])
-DEFAULT_KUBERNETES_API_URL = str(_EXECUTOR_POLICY["kubernetes_api_url"])
-DEFAULT_KUBERNETES_CA_CERT_PATH = str(_EXECUTOR_POLICY["kubernetes_ca_cert_path"])
-AUTHORIZED_REQUESTER = str(_EXECUTOR_POLICY["authorized_requester"])
-MOCK_RESOURCE_VERSION = str(_EXECUTOR_POLICY["mock_resource_version"])
-PROTECTED_TARGETS = set(_EXECUTOR_POLICY["protected_targets"])
-PROTECTED_NAMESPACES = set(_EXECUTOR_POLICY["protected_namespaces"])
+SCHEMA_VERSION = "1.0"
+POLICY_ID = "phase3-scale-policy-v1"
+POLICY_EXPIRES_AT = "2026-08-31T23:59:59Z"
+PLAN_TTL_SECONDS = 600
 
 ALLOWLIST = {
-    action["action_id"]: {
-        **action,
-        "rollback_action_type": action.get("rollback_action_id"),
+    "scale_frontend_proxy": {
+        "action_id": "scale_frontend_proxy",
+        "action_type": "scale_deployment",
+        "rollback_action_type": "restore_deployment_replicas",
+        "rollback_action_id": "restore_deployment_replicas",
+        "target": "frontend-proxy",
+        "target_kind": "Deployment",
+        "namespace": "techx-corp-prod",
+        "min_replicas": 1,
+        "max_replicas": 3,
+        "target_replicas": 3,
+        "owner": "platform-edge-owner",
+        "blast_radius_services": ["frontend", "checkout", "product-catalog", "cart"],
+        "verification_query_id": "frontend-proxy.p95_latency_5m",
+        "verification_signal_id": "frontend_proxy_p95_latency_5m",
+        "verification_threshold": 1.5,
+    },
+    "scale_frontend": {
+        "action_id": "scale_frontend",
+        "action_type": "scale_deployment",
+        "rollback_action_type": "restore_deployment_replicas",
+        "rollback_action_id": "restore_deployment_replicas",
+        "target": "frontend",
+        "target_kind": "Deployment",
+        "namespace": "techx-corp-prod",
+        "min_replicas": 1,
+        "max_replicas": 3,
+        "target_replicas": 3,
+        "owner": "frontend-owner",
+        "blast_radius_services": ["frontend-proxy", "checkout", "product-catalog", "cart"],
+        "verification_query_id": "frontend.p95_latency_5m",
+        "verification_signal_id": "frontend_p95_latency_5m",
+        "verification_threshold": 1.0,
+    },
+    "scale_checkout": {
+        "action_id": "scale_checkout",
+        "action_type": "scale_deployment",
+        "rollback_action_type": "restore_deployment_replicas",
+        "rollback_action_id": "restore_deployment_replicas",
+        "target": "checkout",
+        "target_kind": "Deployment",
+        "namespace": "techx-corp-prod",
+        "min_replicas": 1,
+        "max_replicas": 3,
+        "target_replicas": 3,
+        "owner": "checkout-owner",
+        "blast_radius_services": ["frontend", "frontend-proxy", "cart", "payment", "shipping", "email"],
+        "verification_query_id": "checkout.p95_latency_5m",
+        "verification_signal_id": "checkout_p95_latency_5m",
+        "verification_threshold": 2.0,
+    },
+    "scale_cart": {
+        "action_id": "scale_cart",
+        "action_type": "scale_deployment",
+        "rollback_action_type": "restore_deployment_replicas",
+        "rollback_action_id": "restore_deployment_replicas",
+        "target": "cart",
+        "target_kind": "Deployment",
+        "namespace": "techx-corp-prod",
+        "min_replicas": 1,
+        "max_replicas": 3,
+        "target_replicas": 3,
+        "owner": "cart-owner",
+        "blast_radius_services": ["checkout", "frontend"],
+        "verification_query_id": "cart.error_rate_5m",
+        "verification_signal_id": "cart_error_rate_5m",
+        "verification_threshold": 0.005,
+    },
+    "scale_product_catalog": {
+        "action_id": "scale_product_catalog",
+        "action_type": "scale_deployment",
+        "rollback_action_type": "restore_deployment_replicas",
+        "rollback_action_id": "restore_deployment_replicas",
+        "target": "product-catalog",
+        "target_kind": "Deployment",
+        "namespace": "techx-corp-prod",
+        "min_replicas": 2,
+        "max_replicas": 12,
+        "target_replicas": 3,
+        "owner": "product-catalog-owner",
+        "blast_radius_services": ["frontend", "recommendation", "product-reviews", "checkout"],
+        "verification_query_id": "product-catalog.cpu_millicores",
+        "verification_signal_id": "product_catalog_cpu_millicores",
+        "verification_max_ratio": 0.9,
     }
-    for action in _EXECUTOR_ACTIONS
-    if (
-        action.get("action_type") == "scale_deployment"
-        and action.get("executor_supported") is True
-        and action.get("execute_supported") is True
-    )
 }
+
+PROTECTED_TARGETS = {
+    "postgresql",
+    "kafka",
+    "valkey-cart",
+    "redis",
+    "flagd",
+    "openfeature",
+    "aiops-runtime",
+    "observability",
+    "payment",
+}
+
+PROTECTED_NAMESPACES = {"kube-system", "kube-public", "kube-node-lease", "linkerd", "monitoring", "observability"}
 
 
 def utc_now() -> datetime:
@@ -73,7 +150,7 @@ def default_snapshot(config: dict[str, Any]) -> dict[str, Any]:
         "ready_replicas": config["min_replicas"],
         "scaling_controller": "Deployment",
         "control_replicas": config["min_replicas"],
-        "resource_version": MOCK_RESOURCE_VERSION,
+        "resource_version": "phase2-mock-resource-version",
     }
 
 
@@ -106,8 +183,7 @@ def resolved_config(context: dict[str, Any]) -> dict[str, Any] | None:
                 if candidate.get("target") == target:
                     action_id = candidate["action_id"]
                     break
-        if not action_id:
-            return None
+        action_id = action_id or "scale_product_catalog"
     config = copy.deepcopy(ALLOWLIST.get(action_id))
     if config is not None:
         executor_environment = context.get("_executor_environment")
@@ -129,7 +205,7 @@ def block_response(context: dict[str, Any], message: str, reasons: list[str], co
         "namespace": namespace,
         "message": message,
         "reasons": reasons,
-        "verification": {"defined": True, "passed": None, "owner": AUTHORIZED_REQUESTER},
+        "verification": {"defined": True, "passed": None, "owner": "aiops-runtime"},
         "rollback": {"defined": True, "action_type": "restore_deployment_replicas"},
     }
 
@@ -189,7 +265,7 @@ def validate_common(context: dict[str, Any], *, expected_action_type: str, allow
         reasons.append("missing_incident_id")
     if not context.get("reason"):
         reasons.append("missing_reason")
-    if context.get("requested_by") not in (None, AUTHORIZED_REQUESTER):
+    if context.get("requested_by") not in (None, "aiops-runtime"):
         reasons.append("invalid_requester")
 
     idempotency_key = context.get("idempotency_key")
@@ -307,7 +383,7 @@ def base_success(context: dict[str, Any], config: dict[str, Any], *, executed: b
         "verification": {
             "defined": True,
             "passed": None,
-            "owner": AUTHORIZED_REQUESTER,
+            "owner": "aiops-runtime",
             "query_id": config.get("verification_query_id"),
             "signal_id": config.get("verification_signal_id"),
             "threshold": config.get("verification_threshold"),

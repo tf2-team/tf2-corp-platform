@@ -10,8 +10,6 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
-from runbooks.actions.common import AUTHORIZED_REQUESTER
-
 
 def utc_now_text() -> str:
     return datetime.now(UTC).replace(microsecond=0).isoformat().replace("+00:00", "Z")
@@ -280,7 +278,7 @@ class LiveExecutorStore:
                     event.get("action_id"),
                     event["event_type"],
                     event.get("actor_type", "service"),
-                    event.get("actor_id", AUTHORIZED_REQUESTER),
+                    event.get("actor_id", "aiops-runtime"),
                     event.get("policy_id"),
                     1 if event.get("allowed") else 0,
                     1 if event.get("executed") else 0,

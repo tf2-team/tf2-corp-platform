@@ -7,12 +7,7 @@ fi
 
 set -euo pipefail
 
-script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-if [[ -n "${AIOPS_SMOKE_NAMESPACE:-}" ]]; then
-  namespace="$AIOPS_SMOKE_NAMESPACE"
-else
-  namespace="$(python -c 'import json,sys; print(json.load(open(sys.argv[1], encoding="utf-8"))["environment"])' "$script_dir/../config/runtime.json")"
-fi
+namespace="${AIOPS_SMOKE_NAMESPACE:-techx-corp-prod}"
 startup_timeout_seconds="${STARTUP_TIMEOUT_SECONDS:-20}"
 proxy_port=8001
 pids=()

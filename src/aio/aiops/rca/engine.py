@@ -408,10 +408,7 @@ class V001RcaEngine:
             return False
         if item.flow in self.config.policy.non_actionable_flows:
             return True
-        return (
-            service in self.config.policy.protected_targets
-            and service not in self.config.policy.rca_allowed_protected_roots
-        )
+        return service in self.config.policy.protected_targets and service != "postgresql"
 
     def _metric_aliases(self, metric: str) -> tuple[str, ...]:
         aliases = [metric]

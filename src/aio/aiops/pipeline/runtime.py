@@ -71,7 +71,6 @@ class AiopsPipeline:
         qualification_dev: bool = False,
         qualification_max_sample_age_seconds: int = 300,
         correlation_hyperparameters: dict | None = None,
-        remediation_hyperparameters: dict | None = None,
         remediation: RemediationComponents | None = None,
         enricher: Enricher | None = None,
         notification_sender=None,
@@ -104,7 +103,6 @@ class AiopsPipeline:
         self.runtime_config = runtime_config
         self.rca_hyperparameters = rca_hyperparameters or {}
         self.correlation_hyperparameters = correlation_hyperparameters or {}
-        self.remediation_hyperparameters = remediation_hyperparameters or {}
         self.remediation = remediation
         self.notification_sender = notification_sender
         self.rca_history_path = rca_history_path
@@ -128,7 +126,7 @@ class AiopsPipeline:
             len(features),
             _counts(feature.status for feature in features),
         )
-        self_heal_verification: list[VerificationResult] = []
+        self_heal_verification = self.self_heal.reconcile(features) if self.self_heal is not None else []
         candidates = self.detector_engine.evaluate(features)
         (logger.info if candidates else logger.debug)("AIOPS_BLOCK detect candidates=%s ids=%s", len(candidates), [candidate.detector_id for candidate in candidates])
         correlated = self.correlator.correlate(candidates)
@@ -166,28 +164,6 @@ class AiopsPipeline:
                 *analysis_incidents,
                 *(incident for incident in lifecycle_incidents if incident.state != "recovered"),
             ])
-        if self.self_heal is not None:
-            self_heal_verification = self.self_heal.reconcile(features)
-            recovered_ids = {
-                result.incident_id
-                for result in self_heal_verification
-                if result.status == "recovered"
-            }
-            self.self_heal.sync_queue({incident.incident_id for incident in incidents} - recovered_ids)
-            if recovered_ids:
-                persisted = {incident.incident_id: incident for incident in self.store.list_incidents()}
-                incidents = [persisted.get(incident.incident_id, incident) for incident in incidents]
-                analysis_incidents = [persisted.get(incident.incident_id, incident) for incident in analysis_incidents]
-                present_ids = {incident.incident_id for incident in incidents}
-                incidents.extend(persisted[incident_id] for incident_id in recovered_ids - present_ids if incident_id in persisted)
-                analysis_ids = {incident.incident_id for incident in analysis_incidents}
-                analysis_incidents.extend(persisted[incident_id] for incident_id in recovered_ids - analysis_ids if incident_id in persisted)
-                regular_incidents = [
-                    incident
-                    for incident in incidents
-                    if incident.state != "recovered" and not is_slo_notification(incident.events[-1])
-                ]
-                deduped_incidents = _unique_incidents(incidents)
         logger.info(
             "AIOPS_DEDUP_RESULT input_candidates=%s rca_incidents=%s incidents=%s ids=%s services=%s occurrences=%s",
             len(enriched),
@@ -242,7 +218,7 @@ class AiopsPipeline:
                 for decision in remediation_decisions
             ]
         for decision in remediation_decisions:
-            if decision.execution_status != "verifying" or not decision.would_execute:
+            if decision.execution_status != "verifying":
                 continue
             verification_results = [
                 result for result in verification_results if result.incident_id != decision.incident_id
@@ -392,16 +368,8 @@ class AiopsPipeline:
                         window="rca",
                         threshold=threshold,
                         quality=SignalQuality.FALLBACK_ONLY,
-                        reason=_rca_remediation_reason(
-                            root,
-                            self.remediation_hyperparameters.get("rca_reason_rules", []),
-                            str(self.remediation_hyperparameters["rca_reason_default"]),
-                        ),
-                        runbook_id=_rca_runbook_id(
-                            root,
-                            self.remediation_hyperparameters.get("rca_runbook_rules", []),
-                            str(self.remediation_hyperparameters["rca_runbook_default"]),
-                        ),
+                        reason="rca_root_cause",
+                        runbook_id=_rca_runbook_id(root),
                         likely_dependency="unknown",
                         confidence=root.score,
                         contributing_signals=tuple(root.root_cause_metrics),
@@ -410,6 +378,9 @@ class AiopsPipeline:
                 )
             )
         return rows
+
+    def _rca_root_metric_can_notify(self, service: str, metric: str, metric_series: list[MetricSeries]) -> bool:
+        return self._rca_root_metric_notify_reason(service, metric, metric_series)[0]
 
     def _rca_root_metric_notify_reason(self, service: str, metric: str, metric_series: list[MetricSeries]) -> tuple[bool, str]:
         if not is_root_cause_metric(metric):
@@ -1017,40 +988,15 @@ def _score(value: float | None) -> str:
     return "NA" if value is None else f"{value:.3f}"
 
 
-def _rca_runbook_id(
-    root: RootCauseCandidate,
-    rules: list[dict],
-    default_runbook_id: str,
-) -> str:
-    return _root_rule_value(root, rules, "runbook_id", default_runbook_id)
-
-
-def _rca_remediation_reason(
-    root: RootCauseCandidate,
-    rules: list[dict],
-    default_reason: str,
-) -> str:
-    return _root_rule_value(root, rules, "reason", default_reason)
-
-
-def _root_rule_value(
-    root: RootCauseCandidate,
-    rules: list[dict],
-    value_field: str,
-    default_value: str,
-) -> str:
-    root_metric_groups = {metric_group(metric) for metric in root.root_cause_metrics}
-    for rule in rules:
-        service = str(rule.get("service", ""))
-        configured_metric_group = str(rule.get("metric_group", ""))
-        value = str(rule.get(value_field, ""))
-        if (
-            service in {"*", root.service}
-            and configured_metric_group in {"*", *root_metric_groups}
-            and value
-        ):
-            return value
-    return default_value
+def _rca_runbook_id(root: RootCauseCandidate) -> str:
+    metrics = " ".join(root.root_cause_metrics).lower()
+    if "error" in metrics:
+        return "RB-CART-ERROR-RATE" if root.service == "cart" else "RB-SERVICE-ERROR-RATE"
+    if "latency" in metrics or "duration" in metrics:
+        return "RB-CHECKOUT-LATENCY" if root.service == "checkout" else "RB-SERVICE-LATENCY"
+    if root.service == "product-catalog" and "cpu" in metrics:
+        return "RB-PRODUCT-CATALOG-CPU"
+    return "RB-SERVICE-RESOURCE"
 
 
 def _log_excerpts(summary: str, max_events: int) -> list[str]:

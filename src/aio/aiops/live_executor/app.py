@@ -15,8 +15,7 @@ from fastapi import Depends, FastAPI, Header, HTTPException
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from aiops.live_executor.kubernetes import KubernetesDeploymentGateway
-from aiops.live_executor.service import DEFAULT_ENVIRONMENT, POLICY_EXPIRES_AT, POLICY_ID, LiveExecutorService
-from runbooks.actions.common import AUTHORIZED_REQUESTER, DEFAULT_KUBERNETES_API_URL, DEFAULT_KUBERNETES_CA_CERT_PATH
+from aiops.live_executor.service import LiveExecutorService
 
 
 DEFAULT_STORE_PATH = Path("state/live_executor.sqlite3")
@@ -81,7 +80,7 @@ class ActionRequest(BaseModel):
     @field_validator("requested_by")
     @classmethod
     def validate_requester(cls, value: str) -> str:
-        if value != AUTHORIZED_REQUESTER:
+        if value != "aiops-runtime":
             raise ValueError("unsupported requester")
         return value
 
@@ -102,7 +101,7 @@ class VerificationRequest(BaseModel):
     passed: bool
     query_id: str | None = None
     message: str | None = None
-    requested_by: str = AUTHORIZED_REQUESTER
+    requested_by: str = "aiops-runtime"
 
 
 class RollbackRequest(BaseModel):
@@ -112,7 +111,7 @@ class RollbackRequest(BaseModel):
     incident_id: str = Field(min_length=1)
     rollback_token: str = Field(min_length=1)
     reason: str = Field(min_length=1)
-    requested_by: str = AUTHORIZED_REQUESTER
+    requested_by: str = "aiops-runtime"
     idempotency_key: str = Field(min_length=16)
 
 
@@ -136,7 +135,7 @@ def _build_service() -> LiveExecutorService:
     gateway = None
     if allow_live_apply:
         gateway = KubernetesDeploymentGateway(
-            os.getenv("AIOPS_KUBERNETES_API_URL", DEFAULT_KUBERNETES_API_URL),
+            os.getenv("AIOPS_KUBERNETES_API_URL", "https://kubernetes.default.svc"),
             bearer_token=os.getenv("AIOPS_KUBERNETES_BEARER_TOKEN", ""),
             bearer_token_file=Path(
                 os.getenv(
@@ -147,7 +146,7 @@ def _build_service() -> LiveExecutorService:
             ca_cert_path=Path(
                 os.getenv(
                     "AIOPS_KUBERNETES_CA_CERT_PATH",
-                    DEFAULT_KUBERNETES_CA_CERT_PATH,
+                    "/var/run/secrets/kubernetes.io/serviceaccount/ca.crt",
                 )
             ),
             timeout_seconds=float(os.getenv("AIOPS_LIVE_EXECUTOR_KUBERNETES_TIMEOUT_SECONDS", "10")),
@@ -159,10 +158,10 @@ def _build_service() -> LiveExecutorService:
         cooldown_seconds=int(os.getenv("AIOPS_LIVE_EXECUTOR_COOLDOWN_SECONDS", "900")),
         action_budget_window_seconds=int(os.getenv("AIOPS_LIVE_EXECUTOR_ACTION_BUDGET_WINDOW_SECONDS", "3600")),
         action_budget_max_executions=int(os.getenv("AIOPS_LIVE_EXECUTOR_ACTION_BUDGET_MAX_EXECUTIONS", "10")),
-        policy_id=os.getenv("AIOPS_LIVE_EXECUTOR_POLICY_ID", POLICY_ID),
-        policy_expires_at=os.getenv("AIOPS_LIVE_EXECUTOR_POLICY_EXPIRES_AT", POLICY_EXPIRES_AT),
+        policy_id=os.getenv("AIOPS_LIVE_EXECUTOR_POLICY_ID", "phase3-scale-policy-v1"),
+        policy_expires_at=os.getenv("AIOPS_LIVE_EXECUTOR_POLICY_EXPIRES_AT", "2026-08-31T23:59:59Z"),
         approval_id=os.getenv("AIOPS_LIVE_EXECUTOR_APPROVAL_ID", ""),
-        environment=os.getenv("AIOPS_ENVIRONMENT", DEFAULT_ENVIRONMENT),
+        environment=os.getenv("AIOPS_ENVIRONMENT", "techx-corp-prod"),
     )
 
 
@@ -195,7 +194,7 @@ def create_app(service: LiveExecutorService | None = None, token: str | None = N
                 raise HTTPException(status_code=401, detail="invalid executor token")
         if expected_token and (not x_aiops_account or not x_request_id):
             raise HTTPException(status_code=400, detail="missing executor auth context")
-        if expected_token and x_aiops_account != AUTHORIZED_REQUESTER:
+        if expected_token and x_aiops_account != "aiops-runtime":
             raise HTTPException(status_code=403, detail="invalid executor account")
 
     def require_matching_request_id(header_request_id: str, body_request_id: str) -> None:
@@ -258,4 +257,10 @@ def create_app(service: LiveExecutorService | None = None, token: str | None = N
         require_matching_request_id(x_request_id, request.request_id)
         return service.rollback(execution_id, request.model_dump())
 
+    @app.post("/actions", dependencies=[Depends(require_auth)])
+    def legacy_actions(request: dict[str, Any], x_request_id: str = Header(default="")) -> dict[str, Any]:
+        require_matching_request_id(x_request_id, str(request.get("request_id") or ""))
+        return service.legacy_submit(request)
+
     return app
+

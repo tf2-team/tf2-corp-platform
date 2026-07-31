@@ -42,6 +42,7 @@ class Settings(BaseSettings):
     qualification_gate_dev: bool = False
     qualification_schema_path: Path = Path("config/signal_qualification_schema.json")
     normalization_schema_path: Path = Path("config/signal_normalization_schema.json")
+    qualification_max_sample_age_seconds: int = 300
     auto_run_enabled: bool = False
     auto_run_interval_seconds: int = 60
 
@@ -77,6 +78,14 @@ class Settings(BaseSettings):
     notification_token: str = ""
     notification_account: str = ""
     notification_provider: Literal["auto", "generic", "grafana", "discord"] = "auto"
+
+    aie_status_url: str = ""
+    aie_token: str = ""
+    aie_account: str = ""
+
+    cdo_cost_url: str = ""
+    cdo_cost_token: str = ""
+    cdo_cost_account: str = ""
 
     live_executor_url: str = ""
     live_executor_token: str = ""
